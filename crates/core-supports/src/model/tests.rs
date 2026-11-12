@@ -196,6 +196,37 @@ fn a_model_moved_off_its_trees_has_nothing_built_until_they_grow_again() {
 }
 
 #[test]
+fn columns_drawn_while_trees_regrow_are_carried_by_a_move_and_a_turn_about_up() {
+    let mut supports = with_one_support(Transform::default());
+    let placed = Transform {
+        translation: Vec3::new(5.0, 0.0, 0.0),
+        rotation: Quat::from_rotation_z(FRAC_PI_2),
+        ..Transform::default()
+    };
+    assert!(supports.outgrown(placed, &[profile()]));
+
+    // A quarter turn about z maps (10, 10) onto (-10, 10), then 5 mm along x.
+    let carried =
+        (supports.drawn_shift(placed).to_matrix()).transform_point3(Vec3::new(10.0, 10.0, 20.0));
+    assert!(
+        carried.abs_diff_eq(Vec3::new(-5.0, 10.0, 20.0), 1e-4),
+        "expected the drawn tip at (-5, 10, 20), got {carried}"
+    );
+}
+
+#[test]
+fn columns_drawn_while_trees_regrow_stay_put_when_the_model_is_tilted() {
+    let mut supports = with_one_support(Transform::default());
+    let tilted = Transform {
+        rotation: Quat::from_rotation_x(FRAC_PI_2 / 3.0),
+        ..Transform::default()
+    };
+    assert!(supports.outgrown(tilted, &[profile()]));
+
+    assert_eq!(supports.drawn_shift(tilted), Transform::default());
+}
+
+#[test]
 fn a_placed_support_becomes_a_column_with_geometry() {
     let supports = with_one_support(Transform::default());
     assert_eq!(supports.point_count(), 1);

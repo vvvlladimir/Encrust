@@ -591,7 +591,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   branches share takes a neck of its own and leaves them as they were, and no drag turns a head
   more than 33° off the face it holds. Supports grown later may stand on the ones you edited,
   and are grown again if those go. Raising or turning a model keeps its edited supports on the
-  plate; tilting or resizing it grows them again from the same contacts. A small pillar moves
+  plate; tilting or resizing it grows them again from the same contacts. While supports grow
+  again after a model is moved or turned about the vertical, they are shown moving with it,
+  not where it stood. A small pillar moves
   by where it touches: whichever part you drag, its tip goes along the face it holds, and it is
   built again there as Grow would build it, a small pillar where one fits and a whole support
   where none does, never half of each. Dragged out from under every face, it stays put.

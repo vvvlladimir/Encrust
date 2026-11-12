@@ -159,7 +159,7 @@ impl ModelSupports {
             ..
         } = grown;
         self.built = (frozen == self.frozen).then(|| {
-            let meshes = self.draw(meshes);
+            let meshes = self.draw(meshes, forest.transform);
             Built {
                 trees: with_frozen(&forest.trees, &frozen, forest.transform),
                 grown: forest.trees.len(),

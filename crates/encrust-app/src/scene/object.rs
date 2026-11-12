@@ -190,12 +190,22 @@ impl SceneObject {
         self.hollow.shell().unwrap_or(&self.mesh)
     }
 
-    /// What its printed supports are built from: its groups, its cuts and where it stands.
+    /// What its printed supports are built from: its groups, its cuts and where it stood when
+    /// the groups were built, so columns drawn while trees regrow are drilled where they stand.
     pub fn supports_under(&self) -> SupportsUnder<'_> {
         SupportsUnder {
             groups: self.supports.drawn(),
             cuts: self.hollow.cut_bodies(),
-            transform: self.transform,
+            transform: self.drawn_at(),
+        }
+    }
+
+    /// Where the model stood when its drawn columns were built; where it stands without any.
+    fn drawn_at(&self) -> Transform {
+        if self.supports.drawn().is_empty() {
+            self.transform
+        } else {
+            self.supports.drawn_at()
         }
     }
 
@@ -205,8 +215,12 @@ impl SceneObject {
         self.printed_supports.shown(self.supports_under())
     }
 
-    /// The support groups as they print and their hierarchies, once built for them.
+    /// The support groups as they print and their hierarchies, once built for them where the
+    /// model stands; none while columns built elsewhere are carried to it.
     pub fn supports_built(&self) -> Option<(&[core_supports::Shaded], &[Arc<Bvh>])> {
+        if self.drawn_at() != self.transform {
+            return None;
+        }
         self.printed_supports.built(self.supports_under())
     }
 

@@ -2,7 +2,7 @@ use super::ModelSupports;
 use crate::column::MIN_PILLAR_HEIGHT_MM;
 use crate::space::Space;
 use crate::{Landing, Profiles};
-use core_geometry::{Mat4, Scalar, Transform, Vec3};
+use core_geometry::{Mat3, Mat4, Quat, Scalar, Transform, Vec3};
 
 /// How far off the plate a foot may stand and still stand on it, mm: float noise.
 const PLANTED_MM: Scalar = 1e-4;
@@ -12,6 +12,23 @@ const PLANTED_MM: Scalar = 1e-4;
 const UPRIGHT: Scalar = 1e-5;
 
 impl ModelSupports {
+    /// What carries [`Self::drawn`] to the model at `transform` while its trees grow there:
+    /// the move or turn about up since they were built, the identity for any other change.
+    pub fn drawn_shift(&self, transform: Transform) -> Transform {
+        let Some(from) = self.drawn_at.inverse_matrix() else {
+            return Transform::default();
+        };
+        let shift = transform.to_matrix() * from;
+        if !keeps_upright(shift) {
+            return Transform::default();
+        }
+        Transform::from_scale_rotation_translation(
+            Vec3::ONE,
+            Quat::from_mat3(&Mat3::from_mat4(shift)),
+            shift.w_axis.truncate(),
+        )
+    }
+
     /// Stands the frozen trees again as `transform` now places the model: moved or turned about
     /// up, feet back on the plate; tilted or resized, back to growth (ADR 0439).
     pub(super) fn follow(&mut self, transform: Transform, profiles: Profiles) {

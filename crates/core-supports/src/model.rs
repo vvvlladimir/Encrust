@@ -52,6 +52,8 @@ pub struct ModelSupports {
     /// The column meshes as they were last built. `built` is dropped by every edit and
     /// rebuilt a frame later, and what is drawn in between is this; see [`Self::drawn`].
     drawn: Vec<Shaded>,
+    /// Where the model stood when `drawn` was built; see [`Self::drawn_shift`].
+    drawn_at: Transform,
     /// How much of the height the model stands at is its raft's doing, millimetres: what
     /// has to be taken back when the raft goes. See `docs/decisions/0238`.
     raft_lift_mm: Scalar,
@@ -184,10 +186,17 @@ impl ModelSupports {
         &self.drawn
     }
 
-    /// Draws `shaded` from now on and answers its meshes, for [`Built`] to keep.
-    fn draw(&mut self, shaded: Vec<Shaded>) -> Vec<Arc<Mesh>> {
+    /// Where the model stood when [`Self::drawn`] was built.
+    pub fn drawn_at(&self) -> Transform {
+        self.drawn_at
+    }
+
+    /// Draws `shaded`, built with the model at `transform`, from now on and answers its
+    /// meshes, for [`Built`] to keep.
+    fn draw(&mut self, shaded: Vec<Shaded>, transform: Transform) -> Vec<Arc<Mesh>> {
         let meshes = shaded.iter().map(|group| Arc::clone(&group.mesh)).collect();
         self.drawn = shaded;
+        self.drawn_at = transform;
         meshes
     }
 }

@@ -71,7 +71,7 @@ impl ModelSupports {
             blocked: self.blocked.clone(),
         });
         let meshed = self.meshed_of(&trees, standing);
-        let meshes = self.draw(shaded(mesh_groups(&meshed, &placed, profiles)));
+        let meshes = self.draw(shaded(mesh_groups(&meshed, &placed, profiles)), transform);
         self.built = Some(Built {
             meshes,
             trees,
@@ -156,7 +156,7 @@ impl ModelSupports {
         let trees = with_frozen(&grown_trees, &self.frozen, transform);
 
         let meshed = self.meshed_of(&trees, grown);
-        let meshes = self.draw(shaded(mesh_groups(&meshed, &placed, profiles)));
+        let meshes = self.draw(shaded(mesh_groups(&meshed, &placed, profiles)), transform);
         self.built = Some(Built {
             meshes,
             trees,

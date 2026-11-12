@@ -253,7 +253,8 @@ impl Draws {
     }
 
     /// Patches and columns are already in plate coordinates: they were built against the
-    /// placed model, not alongside it. `resin` draws every group in it rather than its tint.
+    /// placed model; columns still growing for a new placement are carried to it meanwhile.
+    /// `resin` draws every group in it rather than its tint.
     fn supports(&mut self, object: &SceneObject, hidden: &[bool], resin: Option<Color32>) {
         let (painted, blocked) = object.supports.patches();
         for (patch, colour) in [
@@ -266,6 +267,7 @@ impl Draws {
         }
 
         let groups = object.supports_shown();
+        let shift = object.supports.drawn_shift(object.transform);
         for (group, shaded) in groups
             .iter()
             .enumerate()
@@ -274,10 +276,10 @@ impl Draws {
             // A column holds nothing up but the model, so marking its own overhangs would
             // only paint the scaffolding red.
             let tint = resin.unwrap_or_else(|| theme::support_tint(group));
-            let instance = ModelInstance::new(Transform::default(), tint, NOT_MARKED)
+            let instance = ModelInstance::new(shift, tint, NOT_MARKED)
                 .pulled(GROUP_PULL * (groups.len() - group) as f32);
             self.models.push(ModelDraw::smooth(shaded, instance));
-            self.solid(Arc::clone(&shaded.mesh), Transform::default());
+            self.solid(Arc::clone(&shaded.mesh), shift);
         }
     }
 
