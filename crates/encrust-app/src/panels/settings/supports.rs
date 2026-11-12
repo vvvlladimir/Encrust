@@ -140,7 +140,7 @@ pub(super) fn page(ui: &mut Ui, content: Rect, window: &mut Window) {
         &mut action,
     );
     if let Some(action) = action {
-        apply(window.machine, action);
+        apply(window, action);
     }
 }
 
@@ -371,7 +371,8 @@ fn delete_action(
     }
 }
 
-fn apply(machine: &mut Machine, action: Action) {
+fn apply(window: &mut Window, action: Action) {
+    let machine = &mut *window.machine;
     let settings = &mut machine.settings;
     let catalogue = &machine.slicing.catalogue;
     match action {
@@ -384,16 +385,16 @@ fn apply(machine: &mut Machine, action: Action) {
         Action::Export(id) => export_profile(machine, Kind::Support, &id),
         Action::Delete(id) => forget_profile(machine, Kind::Support, &id),
         Action::Save => {
-            save(machine);
+            save(window);
         }
     }
 }
 
 /// Writes the profile open in the form, automatic or not. Answers whether it is written.
-pub(super) fn save(machine: &mut Machine) -> bool {
-    match machine.settings.auto {
-        Some(_) => auto::save(machine),
-        None => form::save(machine),
+pub(super) fn save(window: &mut Window) -> bool {
+    match window.machine.settings.auto {
+        Some(_) => auto::save(window),
+        None => form::save(window.machine),
     }
 }
 

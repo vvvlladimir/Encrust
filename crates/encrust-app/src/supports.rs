@@ -294,6 +294,19 @@ impl SupportTool {
         })
     }
 
+    /// Takes up `saved` for the automatic profile in hand or set aside wherever it still
+    /// reads as `was`, the copy `saved` replaced in the catalogue.
+    pub fn follow_saved_auto(&mut self, was: &AutoProfile, saved: &AutoProfile) {
+        for kept in [&mut self.auto, &mut self.parked_auto]
+            .into_iter()
+            .flatten()
+        {
+            if kept == was {
+                kept.clone_from(saved);
+            }
+        }
+    }
+
     /// Takes up automatic sizing as `sizing` left it, or none chosen at all.
     pub fn set_sizing(&mut self, sizing: Option<AutoSizing>) {
         (self.auto, self.parked_auto) = match sizing {

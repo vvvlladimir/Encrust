@@ -506,7 +506,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   hand, the automatic profile and its edited numbers are saved with the project and
   remembered between runs, and Undo takes them back. **Save** writes an edited Auto over the
   one that ships; Auto cannot be saved as a new preset, and no other automatic preset can be
-  added.
+  added. Auto saved in Settings, edited or reset to defaults, carries to a plate whose Auto
+  was not edited; a plate with numbers of its own keeps them, marked edited.
 - Every placement then reads what the film pulls on each tip, layer by layer, and
   strengthens a tip left with less than half again what it holds: Auto builds it one size
   heavier, and at its heaviest, or under one preset, puts a second tip beside it on the same

@@ -325,7 +325,7 @@ fn ask_unsaved(ctx: &egui::Context, window: &mut Window) {
                         false
                     }
                 },
-                _ => supports::save(window.machine),
+                _ => supports::save(window),
             };
             if !saved {
                 window.machine.settings.leaving = None;

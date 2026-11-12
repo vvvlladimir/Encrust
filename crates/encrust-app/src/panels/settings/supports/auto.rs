@@ -10,7 +10,6 @@ use crate::panels::settings::jump::{self, Tab};
 use crate::panels::settings::{form_card, report};
 use crate::panels::support_fields::{held_up, islands, sizes, steadying, steps};
 use crate::settings::Draft;
-use crate::state::Machine;
 use crate::ui::{row_name, title_line};
 
 /// The cards of the form, one under another.
@@ -119,22 +118,70 @@ fn shape_names(catalogue: &Catalogue, auto: &AutoProfile) -> [String; AUTO_SIZES
     })
 }
 
-/// Writes the profile open in the form when it holds anything unsaved. Answers whether it
-/// is written, the status saying why where it is not.
-pub(super) fn save(machine: &mut Machine) -> bool {
+/// Writes the profile open in the form when unsaved, a plate still on the copy it replaces
+/// following. Answers whether it is written, the status saying why where it is not.
+pub(super) fn save(window: &mut Window) -> bool {
+    let machine = &mut *window.machine;
     let Some(draft) = machine.settings.auto.as_mut() else {
         return false;
     };
     if !draft.is_dirty() {
         return true;
     }
-    let outcome = machine
-        .slicing
-        .catalogue
-        .save_auto(&draft.id, &draft.values);
+    let catalogue = &mut machine.slicing.catalogue;
+    let was = catalogue
+        .autos()
+        .find(|entry| entry.id == draft.id)
+        .map(|entry| entry.profile.clone());
+    let outcome = catalogue.save_auto(&draft.id, &draft.values);
     let saved = report(&mut machine.status, &tr!("support-cannot-save"), outcome).is_some();
     if saved {
+        if let Some(was) = was {
+            window.tools.supports.follow_saved_auto(&was, &draft.values);
+        }
         draft.mark_saved();
     }
     saved
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::panels::fixtures::Parts;
+    use crate::panels::settings::supports::save;
+    use crate::settings::fixtures::writable;
+    use crate::state::Doc;
+    use crate::workspace::Tool;
+
+    fn sized_by_auto(name: &str) -> Parts {
+        let mut parts = Parts::of(Doc::default(), Tool::Supports);
+        parts.machine.slicing.catalogue = writable(name);
+        let catalogue = &parts.machine.slicing.catalogue;
+        parts.tools.supports.set_automatic(true, catalogue);
+        parts.machine.settings.pick_auto(catalogue, "default");
+        parts
+    }
+
+    fn save_with_density(parts: &mut Parts, density: f32) {
+        let draft = parts.machine.settings.auto.as_mut().expect("Auto is open");
+        draft.values.density = density;
+        assert!(save(&mut parts.window()), "the profile is written");
+    }
+
+    #[test]
+    fn a_plate_left_on_auto_as_saved_takes_up_what_settings_saves() {
+        let mut parts = sized_by_auto("auto-follows");
+        save_with_density(&mut parts, 2.0);
+        let plate = parts.tools.supports.auto.as_ref().expect("sizing stays on");
+        assert_eq!(plate.density, 2.0, "the plate follows the saved Auto");
+    }
+
+    #[test]
+    fn a_plate_with_numbers_of_its_own_keeps_them_when_settings_saves() {
+        let mut parts = sized_by_auto("auto-keeps");
+        let plate = parts.tools.supports.auto.as_mut().expect("sizing is on");
+        plate.density = 1.5;
+        save_with_density(&mut parts, 2.0);
+        let plate = parts.tools.supports.auto.as_ref().expect("sizing stays on");
+        assert_eq!(plate.density, 1.5, "the plate's own density 1.5 is kept");
+    }
 }

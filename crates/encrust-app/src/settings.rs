@@ -427,4 +427,6 @@ impl Settings {
 }
 
 #[cfg(test)]
+pub(crate) mod fixtures;
+#[cfg(test)]
 mod tests;
