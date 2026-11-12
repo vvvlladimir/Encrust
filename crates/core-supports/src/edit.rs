@@ -15,6 +15,7 @@ mod footing;
 mod give_way;
 mod held;
 mod joint;
+mod pillar;
 mod refused;
 mod riders;
 pub use give_way::eased;
@@ -25,6 +26,7 @@ pub use riders::{followed, standing_on};
 use column::carry_column;
 use footing::{footing_near, footing_under};
 use joint::{carry_node, settle, shift};
+use pillar::{is_pillar, regrown};
 
 /// Whether every body of `tree` (plate coordinates) keeps out of the model, tip apart: swept as
 /// beams with the profile's clearance (ADR 0077), then drawn bodies are tested too (ADR 0337).
@@ -197,13 +199,13 @@ fn landing_through(landing: Landing, matrix: Mat4) -> Landing {
 
 /// `tree` (model space, as the answer) with tip `tip` put down at `to` (plate coordinates, nearest
 /// surface), or why not; the neck goes with the tip, the rest follows [`carried`] and the joints
-/// beside it give way as [`eased`] lets them.
+/// beside it give way as [`eased`] lets them. A small pillar is grown again from there (ADR 0442).
 pub fn tip_carried(
     tree: &SupportTree,
     tip: usize,
     to: Vec3,
     placed: &Placed,
-    profile: &SupportProfile,
+    profiles: Profiles,
 ) -> Result<SupportTree, Refused> {
     let inverse = placed.transform.inverse_matrix().ok_or(Refused::NoHold)?;
     let node = tree
@@ -212,6 +214,10 @@ pub fn tip_carried(
         .filter(|node| node.is_leaf())
         .ok_or(Refused::NoHold)?;
     let contact = on_model(placed, to).ok_or(Refused::NoHold)?;
+    if is_pillar(tree, placed, profiles) {
+        return regrown(tree, contact, placed, profiles);
+    }
+    let profile = profiles.of(tree.group());
     let neck = neck_of(placed, contact, profile).ok_or(Refused::Collides)?;
 
     let mut carried = tree.clone();

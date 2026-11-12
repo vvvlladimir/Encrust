@@ -252,8 +252,14 @@ fn a_tip_carried_along_the_surface_takes_its_neck_and_its_trunk_with_it() {
     let tip = tip_of(&tree);
 
     // Aimed 3 mm along and well under the shelf: the cursor need not be on the model.
-    let moved = tip_carried(&tree, tip, Vec3::new(8.0, 5.0, 6.0), &placed, &profile())
-        .expect("the underside of the shelf is clear at x = 8");
+    let moved = tip_carried(
+        &tree,
+        tip,
+        Vec3::new(8.0, 5.0, 6.0),
+        &placed,
+        Profiles::single(&profile()),
+    )
+    .expect("the underside of the shelf is clear at x = 8");
 
     let at = moved.nodes()[tip].position;
     assert!(
@@ -281,7 +287,14 @@ fn only_a_tip_is_carried_as_one() {
     let root = tree.root_index();
 
     assert_eq!(
-        tip_carried(&tree, root, Vec3::new(8.0, 5.0, 10.0), &placed, &profile()).err(),
+        tip_carried(
+            &tree,
+            root,
+            Vec3::new(8.0, 5.0, 10.0),
+            &placed,
+            Profiles::single(&profile())
+        )
+        .err(),
         Some(Refused::NoHold)
     );
 }

@@ -11,6 +11,7 @@ use crate::column::{Column, MAX_LEAN_PER_DROP, has_head, landing};
 use crate::group::Profiles;
 use crate::tree::{SupportTree, TreeNode};
 
+mod alone;
 mod carriers;
 mod ground;
 mod harvest;
@@ -20,6 +21,7 @@ mod shortcut;
 mod small;
 mod sound;
 mod speculate;
+pub(crate) use alone::grown_alone;
 use carriers::{Carriers, THICKER_BY_MM};
 use rescue::rescue;
 use small::tidy_small_pillars;

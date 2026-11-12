@@ -583,7 +583,10 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   move is refused, the joints next to what you hold step aside or down by up to 5 mm to make room. The trunk, its foot and the joint on top move as one: the trunk
   stays upright and what it carries leans down to it at 45 degrees, onto the plate or the
   model, and goes no further than that lean reaches; no drag leaves a strut flatter than
-  45 degrees. Supports that stand on the one you move go with it.
+  45 degrees. Supports that stand on the one you move go with it. A small pillar moves by
+  where it touches: whichever part you drag, its tip goes along the face it holds, and it is
+  built again there as Grow would build it, a small pillar where one fits and a whole support
+  where none does, never half of each. Dragged out from under every face, it stays put.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports

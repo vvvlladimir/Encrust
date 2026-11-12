@@ -402,11 +402,10 @@ fn tip_carried(window: &Window, tip: Picked, targets: &[Vec3]) -> Result<Found, 
     let standing = frozen.get(tip.frozen).ok_or(gone)?;
     let keep_out = object.supports.keep_out(&object.mesh, object.transform);
     let placed = object.support_placed().blocking(keep_out.as_ref());
-    let profile = profiles.of(standing.group());
     let mut why = gone;
     let mut carried = None;
     for to in targets {
-        match core_supports::tip_carried(standing, node, *to, &placed, profile) {
+        match core_supports::tip_carried(standing, node, *to, &placed, profiles) {
             Ok(tree) => {
                 carried = Some(tree);
                 break;
