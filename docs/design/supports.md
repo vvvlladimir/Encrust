@@ -551,7 +551,8 @@ heavier trunk is still built as its own group's. `mesh_groups` puts each strut i
 mesh of the heaviest head hanging from it, and the trunk and foot in the tree's.
 
 Families are grown thickest first, and the struts and trunks a family has stood are
-carriers for the families after it (ADR 0248): while those merge, a front may run into a
+carriers for the families after it (ADR 0248), as are those of every frozen support, which
+`grow_beside` is handed and never grows again (ADR 0444): while those merge, a front may run into a
 carrier at least 0.05 mm wider than itself — by one strut within its own branch angle and
 half its merge distance, at the highest point it reaches — in the same heap its merges
 with other fronts sit in, and ahead of every one of them, so a front goes straight to a
@@ -566,6 +567,10 @@ pillar stands on a support and never the other way round (ADR 0251, 0340). Last,
 pillar on the part is replaced by what that search finds from its contact where that turns
 five degrees less, and squared onto both its faces where that is sound and leans no strut
 past 45 degrees (ADR 0340). `grow` hands the forest back in group order.
+What a trunk carries is counted across the whole growth: `Carriers` counts the tips of each
+tree it takes on standing on an earlier one, every merge starts from that count, small pillars
+are seated one at a time on the highest seat with room, and a rescue running into a support
+filled before it is grown once more (ADR 0444).
 
 Any group can be dropped but the last, and the one after the first takes its place and the
 raft with it. A secondary click on a group's row builds the whole group to another saved
@@ -609,7 +614,9 @@ A support taken hold of is frozen: the tree as it stands is copied into the obje
 model's own space, and the points its tips grew from leave the automatic run (ADR 0095).
 A rebuild then maps it back into plate coordinates and meshes it with the grown ones —
 `ObjectSupports::trees` hands over the grown trees first and the frozen ones after them,
-and `frozen_of` says which is which.
+and `frozen_of` says which is which. The model keeps the placement its frozen trees last stood
+at: moved, or turned about the plate's up, each foot on the plate stands on it again; tilted or
+resized, they go back to growth with their tips kept as points (`follow`, ADR 0444).
 
 Growing is the costly half of a rebuild — about a second for fifteen hundred heavy tips —
 and meshing the cheap one, so the grown trees are kept apart from the meshes and grown again

@@ -172,10 +172,10 @@ impl Forest<'_> {
     /// groups' tips a trunk carries.
     pub(super) fn has_room(&self, a: usize, carrier: usize) -> bool {
         let tree = self.carriers.all[carrier].tree;
-        let (own, most) = self.carriers.trunks[tree];
         let mine = self.profile(a).branching.max_tips_per_trunk as usize;
-        let landed = self.carried.get(&tree).copied().unwrap_or(0);
-        own + landed + self.fronts[a].tips <= most.min(mine)
+        let here = self.carried.get(&tree).copied().unwrap_or(0);
+        self.carriers
+            .has_room(tree, here + self.fronts[a].tips, mine)
     }
 
     /// Ends a front on the carrier of `candidate`: it needs no trunk and no foot.

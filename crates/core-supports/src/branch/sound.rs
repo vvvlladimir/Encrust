@@ -8,46 +8,84 @@ use crate::group::Profiles;
 use crate::mesher::{Fault, faults, is_small, sound};
 use crate::placed::Placed;
 use crate::tree::SupportTree;
-use core_geometry::{FastMap, Vec2};
+use core_geometry::{FastMap, Vec2, Vec3};
 use rayon::prelude::*;
 
-/// Runs every small-pillar tree on the model into a wider support in reach, no further off than
-/// the part under it, and builds it thin all the way up; asked last of all groups (ADR 0251).
+/// Runs every small pillar on the model into a wider support with room in reach, no further off
+/// than the part under it, thin all the way up; asked last of all groups (ADR 0251, 0444).
 pub(super) fn stand_small_pillars_on_supports(
     forest: &mut [SupportTree],
-    carriers: &Carriers,
+    carriers: &mut Carriers,
     placed: &Placed,
     profiles: Profiles,
 ) {
-    forest.par_iter_mut().for_each(|tree| {
-        let profile = profiles.of(tree.group());
-        let root = *tree.root();
-        if !profile.branching.enabled || root.is_leaf() || !is_small(tree, profile) {
-            return;
-        }
-        let radius_mm = profile.small_pillar.radius_mm().min(root.radius_mm);
-        // A thin strut longer than the drop to the part sways and marks no less.
-        let own_mm = root.position.distance(tree.landing().base);
-        let met = carriers
-            .near(root.position)
+    let seats: Vec<Vec<(usize, SupportTree)>> = forest
+        .par_iter()
+        .map(|tree| seats(tree, carriers, placed, profiles))
+        .collect();
+    // In order, so which pillar a full support turns away does not depend on the threads.
+    for (tree, seats) in forest.iter_mut().zip(seats) {
+        let most = profiles.of(tree.group()).branching.max_tips_per_trunk as usize;
+        if let Some((host, seated)) = seats
             .into_iter()
-            .map(|index| &carriers.all[index])
-            .filter(|carrier| carrier.radius_mm >= radius_mm + THICKER_BY_MM)
-            .filter_map(|carrier| meeting_on(root.position, carrier, profile))
+            .find(|(host, _)| carriers.has_room(*host, 1, most))
+        {
+            *carriers.landed.entry(host).or_default() += 1;
+            *tree = seated;
+        }
+    }
+}
+
+/// Where small-pillar `tree` may stand on a support of `carriers`: the highest sound seat on each
+/// tree in reach, highest first, each with the tree it stands on.
+fn seats(
+    tree: &SupportTree,
+    carriers: &Carriers,
+    placed: &Placed,
+    profiles: Profiles,
+) -> Vec<(usize, SupportTree)> {
+    let profile = profiles.of(tree.group());
+    let root = *tree.root();
+    if !profile.branching.enabled || root.is_leaf() || !is_small(tree, profile) {
+        return Vec::new();
+    }
+    let radius_mm = profile.small_pillar.radius_mm().min(root.radius_mm);
+    // A thin strut longer than the drop to the part sways and marks no less.
+    let own_mm = root.position.distance(tree.landing().base);
+    let mut highest: Vec<(usize, Vec3)> = Vec::new();
+    for carrier in carriers
+        .near(root.position)
+        .into_iter()
+        .map(|index| &carriers.all[index])
+    {
+        let Some(meet) = (carrier.radius_mm >= radius_mm + THICKER_BY_MM)
+            .then(|| meeting_on(root.position, carrier, profile))
+            .flatten()
             .filter(|meet| root.position.distance(*meet) <= own_mm)
-            .filter(|meet| {
-                let strut = Beam {
-                    from: root.position,
-                    to: *meet,
-                    from_radius_mm: radius_mm,
-                    to_radius_mm: radius_mm,
-                }
-                .with_clearance(profile.clearance_mm)
-                .trimmed(radius_mm + profile.clearance_mm);
-                clear(placed, &strut)
-            })
-            .max_by(|a, b| a.z.total_cmp(&b.z));
-        if let Some(meet) = met {
+        else {
+            continue;
+        };
+        let strut = Beam {
+            from: root.position,
+            to: meet,
+            from_radius_mm: radius_mm,
+            to_radius_mm: radius_mm,
+        }
+        .with_clearance(profile.clearance_mm)
+        .trimmed(radius_mm + profile.clearance_mm);
+        if !clear(placed, &strut) {
+            continue;
+        }
+        match highest.iter_mut().find(|(host, _)| *host == carrier.tree) {
+            Some((_, best)) if best.z < meet.z => *best = meet,
+            Some(_) => {}
+            None => highest.push((carrier.tree, meet)),
+        }
+    }
+    highest.sort_by(|a, b| b.1.z.total_cmp(&a.1.z));
+    highest
+        .into_iter()
+        .map(|(host, meet)| {
             let mut moved = tree.clone();
             moved.set_radius_mm(radius_mm);
             moved.stand_on(Landing {
@@ -58,11 +96,10 @@ pub(super) fn stand_small_pillars_on_supports(
                 on_support: true,
                 in_plate: false,
             });
-            if sound(&moved, profiles, placed) {
-                *tree = moved;
-            }
-        }
-    });
+            (host, moved)
+        })
+        .filter(|(_, moved)| sound(moved, profiles, placed))
+        .collect()
 }
 
 /// `trees` with every tree whose bodies meet the model past their tips mended: faulty heads stand

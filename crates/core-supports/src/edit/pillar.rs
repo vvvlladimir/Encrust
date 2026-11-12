@@ -7,6 +7,7 @@ use crate::group::Profiles;
 use crate::mesher::is_small;
 use crate::pick::Part;
 use crate::placed::Placed;
+use crate::space::Space;
 use crate::tree::SupportTree;
 
 /// Whether `tree` (model space) is a small pillar, which a hand moves by its contact alone and
@@ -18,15 +19,20 @@ pub(super) fn is_pillar(tree: &SupportTree, placed: &Placed, profiles: Profiles)
     )
 }
 
-/// Small pillar `tree` (model space) grown again from its contact put down at `contact`
-/// (plate): a small pillar where one stands there, else a whole support (ADR 0442).
+/// Small pillar `index` of `frozen` (model space) grown again from `contact` (plate) beside the
+/// other frozen trees: a small pillar where one stands, else a whole support (ADR 0442, 0444).
 pub(super) fn regrown(
-    tree: &SupportTree,
+    (frozen, index): (&[SupportTree], usize),
     contact: Vec3,
     placed: &Placed,
     profiles: Profiles,
 ) -> Result<SupportTree, Refused> {
-    let inverse = placed.transform.inverse_matrix().ok_or(Refused::NoHold)?;
+    let tree = frozen.get(index).ok_or(Refused::NoHold)?;
+    let space = Space::of(placed).ok_or(Refused::NoHold)?;
+    let beside: Vec<SupportTree> = (frozen.iter().enumerate())
+        .filter(|(other, _)| *other != index)
+        .map(|(_, other)| space.plate_tree(other))
+        .collect();
     let tip = tree
         .nodes()
         .iter()
@@ -34,17 +40,17 @@ pub(super) fn regrown(
         .ok_or(Refused::NoHold)?;
     let point = tip.point.ok_or(Refused::NoHold)?;
     let group = tip.head.unwrap_or(tree.group());
-    let grown = grown_alone(contact, point, group, placed, profiles)
-        .ok_or(Refused::NoFooting)?
-        .moved(inverse);
+    let grown =
+        grown_alone(contact, point, group, &beside, placed, profiles).ok_or(Refused::NoFooting)?;
+    let grown = space.model_tree(&grown);
     allowed(tree, &grown, placed, profiles.of(grown.group()))?;
     Ok(grown)
 }
 
-/// Small pillar `tree` (model space) with whichever `parts` held carried by `step` (plate mm):
-/// its contact carried, onto a face looking down, and the pillar grown again from there.
+/// Small pillar `index` of `frozen` (model space) with whichever `parts` held carried by `step`
+/// (plate mm): its contact carried, onto a face looking down, and the pillar grown again there.
 pub(super) fn pillar_carried(
-    tree: &SupportTree,
+    (frozen, index): (&[SupportTree], usize),
     parts: &[Part],
     step: Vec3,
     placed: &Placed,
@@ -56,15 +62,13 @@ pub(super) fn pillar_carried(
     } else {
         step
     };
-    let matrix = placed.transform.to_matrix();
-    let tip = tree
-        .nodes()
-        .iter()
+    let space = Space::of(placed).ok_or(Refused::NoHold)?;
+    let tip = (frozen.get(index).ok_or(Refused::NoHold)?.nodes().iter())
         .find(|node| node.is_leaf())
         .ok_or(Refused::NoHold)?;
-    let at = matrix.transform_point3(tip.position) + step;
+    let at = space.plate(tip.position) + step;
     let contact = held_over(placed, at).ok_or(Refused::NoHold)?;
-    regrown(tree, contact, placed, profiles)
+    regrown((frozen, index), contact, placed, profiles)
 }
 
 /// The point of a face looking down that a contact carried to `at` (plate) holds: the nearest

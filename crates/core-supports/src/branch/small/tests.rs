@@ -192,3 +192,71 @@ fn two_nodes_in_one_place_on_a_straight_run_are_no_turn() {
         turn_rad(&tree)
     );
 }
+
+/// How many trees of `trees` stand on another, counted by their tips.
+fn tips_on_supports(trees: &[SupportTree]) -> usize {
+    trees
+        .iter()
+        .filter(|tree| tree.landing().on_support)
+        .map(SupportTree::tip_count)
+        .sum()
+}
+
+#[test]
+fn small_pillars_stand_on_a_column_no_more_than_its_trunk_carries() {
+    let (block, [pillar, mut column], points) = crate::fixtures::pillar_beside_column();
+    let alone = trees_on(
+        &points,
+        &block,
+        Transform::default(),
+        Profiles::new(&[pillar.clone(), column.clone()]).expect("two groups"),
+    );
+    assert_eq!(
+        tips_on_supports(&alone),
+        1,
+        "the one pillar stands on the column"
+    );
+    // Two more beside the first, and a column that carries one tip of others beside its own.
+    column.branching.max_tips_per_trunk = 2;
+    let mut more = points.to_vec();
+    for y in [4.0, 6.0] {
+        more.push(SupportPoint::new(Vec3::new(9.0, y, 20.0)));
+    }
+
+    let trees = trees_on(
+        &more,
+        &block,
+        Transform::default(),
+        Profiles::new(&[pillar, column]).expect("two groups"),
+    );
+
+    assert_eq!(
+        tips_on_supports(&trees),
+        1,
+        "the column carries its own tip and one more"
+    );
+}
+
+#[test]
+fn a_small_pillar_grown_again_alone_stands_on_a_support_left_beside_it() {
+    let (block, table, points) = crate::fixtures::pillar_beside_column();
+    let profiles = Profiles::new(&table).expect("two groups");
+    let column = trees_on(&points[1..], &block, Transform::default(), profiles);
+    let bvh = Bvh::build(&block);
+    let placed = Placed::new(&block, &bvh, Transform::default());
+    let (contact, group) = (points[0].contact, points[0].group);
+
+    let beside = super::super::grown_alone(contact, 0, group, &column, &placed, profiles)
+        .expect("the pillar stands");
+    let apart = super::super::grown_alone(contact, 0, group, &[], &placed, profiles)
+        .expect("the pillar stands");
+
+    assert!(
+        beside.landing().on_support,
+        "it runs into the column beside it"
+    );
+    assert!(
+        !apart.landing().on_support,
+        "with nothing beside it, it stands on the cube"
+    );
+}

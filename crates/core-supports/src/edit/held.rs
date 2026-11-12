@@ -35,7 +35,7 @@ pub fn carried_held(
             .find(|(taken, _)| taken == index)
             .map_or_else(|| was.landing(), |(_, tree)| tree.landing());
         let now = if is_pillar(was, placed, profiles) {
-            out.regrow(was, parts, step, placed, profiles)
+            out.regrow((standing, *index), parts, step, placed, profiles)
         } else {
             let now = carried(was, stood, parts, step, placed, profile)?;
             out.ease(was, now, placed, profile)
@@ -87,19 +87,19 @@ impl Carried {
         Some(())
     }
 
-    /// Small pillar `was` with `parts` carried by `step` and grown again; else as it was, its
-    /// refusal kept.
+    /// Small pillar `index` of `standing` with `parts` carried by `step` and grown again; else
+    /// as it was, its refusal kept.
     fn regrow(
         &mut self,
-        was: &SupportTree,
+        (standing, index): (&[SupportTree], usize),
         parts: &[Part],
         step: core_geometry::Vec3,
         placed: &Placed,
         profiles: Profiles,
     ) -> SupportTree {
-        pillar_carried(was, parts, step, placed, profiles).unwrap_or_else(|why| {
+        pillar_carried((standing, index), parts, step, placed, profiles).unwrap_or_else(|why| {
             self.refused.get_or_insert(why);
-            was.clone()
+            standing[index].clone()
         })
     }
 

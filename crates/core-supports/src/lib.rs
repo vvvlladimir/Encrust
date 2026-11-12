@@ -32,12 +32,13 @@ mod raft;
 mod region;
 mod sample;
 mod shaded;
+mod space;
 mod step;
 mod trapped;
 mod tree;
 
 pub use base::{BraceBand, BraceLevel, SKATE_BEVEL, SKATE_LENGTH, SKATE_WIDTH, brace_levels};
-pub use branch::grow;
+pub use branch::{grow, grow_beside};
 pub use clearances::Clearances;
 pub use column::{Column, Landing, SupportPoint, columns, landing, neck_of};
 pub use edit::{

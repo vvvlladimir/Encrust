@@ -253,7 +253,8 @@ fn a_tip_carried_along_the_surface_takes_its_neck_and_its_trunk_with_it() {
 
     // Aimed 3 mm along and well under the shelf: the cursor need not be on the model.
     let moved = tip_carried(
-        &tree,
+        std::slice::from_ref(&tree),
+        0,
         tip,
         Vec3::new(8.0, 5.0, 6.0),
         &placed,
@@ -288,7 +289,8 @@ fn only_a_tip_is_carried_as_one() {
 
     assert_eq!(
         tip_carried(
-            &tree,
+            std::slice::from_ref(&tree),
+            0,
             root,
             Vec3::new(8.0, 5.0, 10.0),
             &placed,
@@ -773,7 +775,8 @@ fn a_tip_carried_from_a_neck_others_hang_from_leaves_their_branches_alone() {
     let other_neck = tree.nodes()[other].parent.expect("a headed tip has a neck");
 
     let moved = tip_carried(
-        &tree,
+        std::slice::from_ref(&tree),
+        0,
         tip_holding(&tree, 0),
         Vec3::new(-4.0, 0.0, 15.0),
         &placed,
@@ -882,7 +885,8 @@ fn a_tip_carried_onto_a_face_looking_up_holds_nothing() {
 
     assert_eq!(
         tip_carried(
-            &tree,
+            std::slice::from_ref(&tree),
+            0,
             tip_of(&tree),
             Vec3::new(5.0, 5.0, 22.0),
             &placed,
@@ -891,5 +895,36 @@ fn a_tip_carried_onto_a_face_looking_up_holds_nothing() {
         .err(),
         Some(Refused::NoHold),
         "the shelf's top looks up: nothing hangs there to hold"
+    );
+}
+
+#[test]
+fn a_tip_carried_from_its_neck_may_not_turn_its_head_past_33_degrees_off_its_face() {
+    let model = shelf();
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let tree = under_the_shelf(&model);
+    let tip = tip_of(&tree);
+    let carry = |step: Vec3| {
+        carried(
+            &tree,
+            tree.landing(),
+            &[Part::Node(tip)],
+            step,
+            &placed,
+            &profile(),
+        )
+        .expect("the shelf is over it")
+    };
+
+    assert_eq!(
+        allowed(&tree, &carry(Vec3::X * 2.0), &placed, &profile()),
+        Err(Refused::Leans),
+        "2 mm along on a 2 mm head turns it 45 degrees off the underside's normal"
+    );
+    assert_eq!(
+        allowed(&tree, &carry(Vec3::X * 0.5), &placed, &profile()),
+        Ok(()),
+        "half a millimetre turns it 14 degrees"
     );
 }

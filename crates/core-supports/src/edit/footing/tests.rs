@@ -113,7 +113,8 @@ fn a_root_on_the_model_is_lowered_to_make_room() {
         .expect("the root carries a neck");
     assert!(tree.landing().on_model, "the pair stands on the cube's top");
     let away = (tree.nodes()[neck].position - tree.root().position).with_z(0.0);
-    let step = away.normalize() * 2.0;
+    // A millimetre turns the 2 mm head 27 degrees, within the 33 a head may turn.
+    let step = away.normalize() * 1.0;
     let moved = carried(
         &tree,
         tree.landing(),

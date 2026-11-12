@@ -26,9 +26,8 @@ impl ModelSupports {
             .flatten()
     }
 
-    /// [`Self::freeze`] for `tree`, every support standing on it, which a hand carries with it
-    /// (ADR 0433), and every one it stands on, which a regrowth must not move from under it
-    /// (ADR 0443); answers `tree`'s index in [`ModelSupports::frozen`].
+    /// [`Self::freeze`] for `tree`, what stands on it (ADR 0433) and what it stands on (ADR 0443);
+    /// answers `tree`'s index in [`ModelSupports::frozen`].
     pub fn freeze_with_riders(
         &mut self,
         tree: usize,
@@ -80,6 +79,7 @@ impl ModelSupports {
             }
         }
         self.lift_out_of_forest(&lifted, grown, &taken);
+        self.frozen_at = Some(transform);
         self.revision = next_revision();
         self.frozen.extend(standing);
         self.built = None;
@@ -130,9 +130,8 @@ impl ModelSupports {
         self.points_changed();
     }
 
-    /// Hands every frozen support standing on no other frozen one back to the automatic run,
-    /// so none is left in the air once what it stood on went or regrew (ADR 0443); answers how
-    /// many went back.
+    /// Hands every frozen support standing on no other frozen one back to the automatic run, so
+    /// none is left in the air (ADR 0443); answers how many.
     pub fn thaw_unseated(&mut self, transform: Transform, profiles: Profiles) -> usize {
         let matrix = transform.to_matrix();
         let mut thawed = 0;
@@ -155,7 +154,8 @@ impl ModelSupports {
     pub fn remove_frozen(&mut self, frozen: usize) {
         if frozen < self.frozen.len() {
             self.frozen.remove(frozen);
-            self.built = None;
+            // What grew standing on it grows again (ADR 0444).
+            self.points_changed();
         }
     }
 
@@ -177,7 +177,8 @@ impl ModelSupports {
             .collect();
         let left = if whole { None } else { tree.without(&cut) };
 
-        self.built = None;
+        // What grew standing on what went grows again (ADR 0444).
+        self.points_changed();
         if let Some(left) = left {
             self.frozen[frozen] = left;
             return true;

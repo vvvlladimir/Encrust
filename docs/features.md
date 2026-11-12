@@ -589,7 +589,10 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   they would lean further than 45 degrees, and taking hold of one freezes what it stands on
   too. Removing a support, or growing it again, grows again the ones that stood on it, so
   none is left in the air. A tip dragged off a joint other branches share takes a neck of its
-  own and leaves them as they were. A small pillar moves by
+  own and leaves them as they were, and no drag turns a head more than 33° off the face it
+  holds. Supports grown later may stand on the ones you edited, and are grown again if those
+  go. Raising or turning a model keeps its edited supports on the plate; tilting or resizing
+  it grows them again from the same contacts. A small pillar moves by
   where it touches: whichever part you drag, its tip goes along the face it holds, and it is
   built again there as Grow would build it, a small pillar where one fits and a whole support
   where none does, never half of each. Dragged out from under every face, it stays put.
@@ -604,7 +607,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - A bin asks twice: the first click turns it red, the second removes. The bin beside the
   preset removes the group in hand with its supports, the one beside **Grow** every support.
 - A thin support may stand on a thicker one from another group, and goes to it directly
-  rather than first joining a thin neighbour. Tips of groups as thick as
+  rather than first joining a thin neighbour, never past the tips the thicker one's trunk
+  may carry. Tips of groups as thick as
   each other merge into one trunk, built to the group with the heavier tip; each tip keeps
   its own.
 - Bundled profiles: **light**, **medium**, **heavy**, and the four shapes **Auto** builds

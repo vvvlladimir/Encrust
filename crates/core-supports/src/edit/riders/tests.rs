@@ -273,3 +273,38 @@ fn a_column_carried_by_its_trunk_leaves_its_tip_where_it_holds() {
         "a tip the hand did not carry is not pulled onto the cube's corner"
     );
 }
+
+#[test]
+fn a_support_grown_again_stands_on_a_frozen_one_beside_it_and_off_it_once_that_goes() {
+    let (block, table, points) = pillar_beside_column();
+    let mut supports = ModelSupports::default();
+    supports.add(points[1].contact, Transform::default(), points[1].group);
+    let bvh = Bvh::build(&block);
+    supports.refresh(&block, &bvh, Transform::default(), &table);
+    let column = supports
+        .freeze(0, Transform::default())
+        .expect("the column is there to freeze");
+
+    supports.add(points[0].contact, Transform::default(), points[0].group);
+    supports.refresh(&block, &bvh, Transform::default(), &table);
+    let on_support = |supports: &ModelSupports| {
+        supports
+            .trees()
+            .iter()
+            .filter(|tree| tree.landing().on_support)
+            .count()
+    };
+    assert_eq!(
+        on_support(&supports),
+        1,
+        "the pillar grown after the column froze stands on it"
+    );
+
+    supports.remove_frozen(column);
+    supports.refresh(&block, &bvh, Transform::default(), &table);
+    assert_eq!(
+        on_support(&supports),
+        0,
+        "and grows again off it once it went"
+    );
+}

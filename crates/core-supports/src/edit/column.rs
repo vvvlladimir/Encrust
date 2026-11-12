@@ -1,10 +1,10 @@
-use core_geometry::{Mat4, Scalar, Vec3};
+use core_geometry::{Scalar, Vec3};
 use printer_profiles::SupportProfile;
 
 use super::joint::{highest_under_branches, shift};
-use super::landing_through;
 use crate::Landing;
 use crate::column::{MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM};
+use crate::space::Space;
 use crate::tree::SupportTree;
 
 /// Carries the column of `tree` by `step`: across the plate its foot, its trunk upright over it
@@ -13,28 +13,27 @@ use crate::tree::SupportTree;
 /// allow and no lower than the shortest pillar.
 pub(super) fn carry_column(
     tree: &mut SupportTree,
-    space: (Mat4, Mat4),
+    space: Space,
     step: Vec3,
     profile: &SupportProfile,
 ) {
-    let (matrix, inverse) = space;
     let across = step.with_z(0.0);
     // A head hangs from a root that is its neck: slid whole, it would turn off its face.
     if across != Vec3::ZERO && tree.landing().on_model && !holds_a_head(tree) {
         slide_column(tree, space, across);
     } else if across != Vec3::ZERO {
         // A joint carried rigidly would lean its branches past 45 degrees (ADR 0432, 0437).
-        let from = matrix.transform_point3(tree.landing().base);
-        move_foot(tree, matrix, inverse, across);
+        let from = space.plate(tree.landing().base);
+        move_foot(tree, space, across);
         knee_over_foot(tree, space, from, profile);
     }
     if step.z == 0.0 || holds_a_head(tree) {
         return;
     }
     let root = tree.root_index();
-    let top = matrix.transform_point3(tree.root().position);
-    let highest = highest_under_branches(tree, root, top.truncate(), matrix);
-    let lowest = lowest_top_mm(&landing_through(tree.landing(), matrix), profile);
+    let top = space.node(tree, root);
+    let highest = highest_under_branches(tree, root, top.truncate(), space);
+    let lowest = lowest_top_mm(&space.plate_landing(tree.landing()), profile);
     let z = (top.z + step.z).min(highest).max(lowest);
     shift(tree, root, space, Vec3::Z * (z - top.z));
 }
@@ -57,50 +56,45 @@ pub(super) fn lowest_top_mm(landing: &Landing, profile: &SupportProfile) -> Scal
 
 /// Carries the column of `tree` standing on the model `across` the plate whole: its trunk
 /// stays upright and `carried` stands it again on whatever is under it there.
-fn slide_column(tree: &mut SupportTree, (matrix, inverse): (Mat4, Mat4), across: Vec3) {
-    shift(tree, tree.root_index(), (matrix, inverse), across);
-    let base = matrix.transform_point3(tree.landing().base) + across;
-    tree.move_landing(inverse.transform_point3(base));
+fn slide_column(tree: &mut SupportTree, space: Space, across: Vec3) {
+    shift(tree, tree.root_index(), space, across);
+    let base = space.plate(tree.landing().base) + across;
+    space.put_foot(tree, base);
 }
 
 /// Carries a tree's foot by `step`, keeping it on the plate: a foot in the air holds
 /// nothing up.
-fn move_foot(tree: &mut SupportTree, matrix: Mat4, inverse: Mat4, step: Vec3) {
-    let standing = matrix.transform_point3(tree.landing().base) + step;
-    tree.move_landing(inverse.transform_point3(Vec3::new(standing.x, standing.y, 0.0)));
+fn move_foot(tree: &mut SupportTree, space: Space, step: Vec3) {
+    let standing = space.plate(tree.landing().base) + step;
+    space.put_foot(tree, standing.with_z(0.0));
 }
 
 /// Stands the trunk of `tree` straight over its foot, moved from `from` (plate mm), on a knee
 /// the rest leans down to at 45 degrees: the knee that stood over `from`, or a new one.
-fn knee_over_foot(
-    tree: &mut SupportTree,
-    (matrix, inverse): (Mat4, Mat4),
-    from: Vec3,
-    profile: &SupportProfile,
-) {
-    let base = matrix.transform_point3(tree.landing().base);
+fn knee_over_foot(tree: &mut SupportTree, space: Space, from: Vec3, profile: &SupportProfile) {
+    let base = space.plate(tree.landing().base);
     let root = tree.root_index();
     let nodes = tree.nodes();
-    let plate = |node: usize| matrix.transform_point3(nodes[node].position);
     let mut children = (0..nodes.len()).filter(|node| nodes[*node].parent == Some(root));
     let only = children.next().filter(|_| children.next().is_none());
     let knee = only.filter(|child| {
-        !nodes[*child].is_leaf() && (plate(root) - from).truncate().length() < KNEE_OVER_FOOT_MM
+        !nodes[*child].is_leaf()
+            && (space.node(tree, root) - from).truncate().length() < KNEE_OVER_FOOT_MM
     });
-    let top = knee.map_or_else(|| plate(root), plate);
+    let top = space.node(tree, knee.unwrap_or(root));
     if knee.is_none() {
         let radius_mm = tree.root().radius_mm;
         tree.stand_on_knee(tree.root().position, radius_mm);
     }
     // A foot dragged further than a 45-degree lean reaches stops where it does.
     let across = (base - top).truncate();
-    let lowest = lowest_top_mm(&landing_through(tree.landing(), matrix), profile);
+    let lowest = lowest_top_mm(&space.plate_landing(tree.landing()), profile);
     let most_mm = (top.z - lowest).max(0.0) * MAX_LEAN_PER_DROP;
     let across = across.clamp_length_max(most_mm);
     let base = top.truncate() + across;
-    tree.move_landing(inverse.transform_point3(base.extend(0.0)));
+    space.put_foot(tree, base.extend(0.0));
     let z = (top.z - across.length() / MAX_LEAN_PER_DROP).min(top.z);
-    tree.move_node(tree.root_index(), inverse.transform_point3(base.extend(z)));
+    space.put(tree, tree.root_index(), base.extend(z));
 }
 
 /// How near straight over its foot a root must stand to be the knee a drag moves with it, mm.

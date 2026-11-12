@@ -1,6 +1,6 @@
 use super::ModelSupports;
 use super::growth::{Forest, with_frozen};
-use crate::{Placed, Profiles, SupportTree, columns, grow, lost, mesh_groups, shaded};
+use crate::{Placed, Profiles, SupportTree, columns, grow_beside, lost, mesh_groups, shaded};
 use core_geometry::{Bvh, Mesh, Region, Transform};
 use printer_profiles::SupportProfile;
 use std::sync::Arc;
@@ -54,6 +54,7 @@ impl ModelSupports {
         let Some(profiles) = Profiles::new(table) else {
             return;
         };
+        self.frozen_at = Some(transform);
         let matrix = transform.to_matrix();
         let standing = grown.len();
         let stood: Vec<SupportTree> = grown.iter().map(|tree| tree.moved(matrix)).collect();
@@ -116,6 +117,7 @@ impl ModelSupports {
         let Some(profiles) = Profiles::new(table) else {
             return;
         };
+        self.follow(transform, profiles);
         let fresh = self.built.as_ref().is_some_and(|built| {
             built.transform == transform
                 && built.table == table
@@ -135,7 +137,9 @@ impl ModelSupports {
                 forest.trees.clone()
             }
             _ => {
-                let trees = grow(&columns(&self.points, &placed, profiles), &placed, profiles);
+                let columns = columns(&self.points, &placed, profiles);
+                let standing = with_frozen(&[], &self.frozen, transform);
+                let trees = grow_beside(&columns, &standing, &placed, profiles);
                 self.forest = Some(Forest {
                     lost: lost(&self.points, &trees, &placed, profiles),
                     trees: trees.clone(),

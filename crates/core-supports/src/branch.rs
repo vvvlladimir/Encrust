@@ -39,12 +39,24 @@ const MOST_BRANCHES: usize = 3;
 /// Merges the tips of `columns` (plate coordinates) into shared trunks, highest meeting point
 /// first (ADR 0040); same-width groups grow together, thickest first (ADR 0325, 0248).
 pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<SupportTree> {
+    grow_beside(columns, &[], placed, profiles)
+}
+
+/// [`grow`] beside `standing` (plate), frozen supports a thinner front may run into as into a
+/// thicker group's, never grown again (ADR 0444).
+pub fn grow_beside(
+    columns: &[Column],
+    standing: &[SupportTree],
+    placed: &Placed,
+    profiles: Profiles,
+) -> Vec<SupportTree> {
     let reach_mm = profiles
         .groups()
         .map(|(_, profile)| profile.branching.max_merge_distance_mm)
         .fold(SAME_PLACE_MM, Scalar::max);
 
     let mut carriers = Carriers::new(reach_mm);
+    carriers.take(standing, profiles);
     let mut forest = Vec::new();
     for family in families(profiles) {
         let mine: Vec<Column> = columns
@@ -62,9 +74,9 @@ pub fn grow(columns: &[Column], placed: &Placed, profiles: Profiles) -> Vec<Supp
         carriers.take(&trees, profiles);
         forest.extend(trees);
     }
-    stand_small_pillars_on_supports(&mut forest, &carriers, placed, profiles);
+    stand_small_pillars_on_supports(&mut forest, &mut carriers, placed, profiles);
     tidy_small_pillars(&mut forest, placed, profiles);
-    rescue(&mut forest, columns, placed, profiles, &carriers);
+    rescue(&mut forest, columns, placed, profiles, &mut carriers);
     forest.sort_by_key(SupportTree::group);
     forest
 }
@@ -217,7 +229,7 @@ struct Forest<'a> {
     /// The fronts that ran into a carrier, each with where: trees with no trunk of their
     /// own.
     landed: Vec<(usize, Landing)>,
-    /// Tips landed on each tree of `carriers` so far, on top of its own.
+    /// Tips this forest landed on each tree of `carriers`, on top of what trees stood before it did.
     carried: FastMap<usize, usize>,
     /// Fronts bucketed by plate square so a new one asks nine buckets; dead fronts stay and are
     /// skipped, so entries never exceed twice the number of tips.

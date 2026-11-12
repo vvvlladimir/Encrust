@@ -57,8 +57,15 @@ fn a_small_pillar_tip_carried_over_open_plate_becomes_the_support_growing_builds
     assert!(is_small(&pillar, &fixture), "over the block it grows thin");
 
     let to = Vec3::new(14.0, 0.0, 10.0);
-    let moved = tip_carried(&pillar, tip_of(&pillar), to, &placed, profiles)
-        .expect("a whole support stands on the plate under x = 14");
+    let moved = tip_carried(
+        std::slice::from_ref(&pillar),
+        0,
+        tip_of(&pillar),
+        to,
+        &placed,
+        profiles,
+    )
+    .expect("a whole support stands on the plate under x = 14");
 
     assert_eq!(
         moved,
@@ -79,7 +86,8 @@ fn a_headless_small_pillar_tip_carried_out_of_its_slot_becomes_a_whole_support()
 
     let to = Vec3::new(14.0, 0.0, 10.0);
     let moved = tip_carried(
-        &pillar,
+        std::slice::from_ref(&pillar),
+        0,
         tip_of(&pillar),
         to,
         &placed,
@@ -100,7 +108,8 @@ fn a_small_pillar_tip_carried_along_the_block_stays_a_small_pillar() {
 
     let to = Vec3::new(2.0, 0.0, 10.0);
     let moved = tip_carried(
-        &pillar,
+        std::slice::from_ref(&pillar),
+        0,
         tip_of(&pillar),
         to,
         &placed,

@@ -5,6 +5,7 @@ use crate::branch::{Carrier, meeting_on};
 use crate::column::{MAX_LEAN_PER_DROP, MIN_PILLAR_HEIGHT_MM};
 use crate::group::Profiles;
 use crate::placed::Placed;
+use crate::space::Space;
 use crate::tree::SupportTree;
 
 /// How far off a host's axis a landing may lie and still be on it, mm: growth puts it
@@ -85,14 +86,13 @@ pub fn followed(
     placed: &Placed,
     profiles: Profiles,
 ) -> Option<Vec<(usize, SupportTree)>> {
-    let matrix = placed.transform.to_matrix();
-    let inverse = placed.transform.inverse_matrix()?;
-    let plate: Vec<SupportTree> = frozen.iter().map(|tree| tree.moved(matrix)).collect();
+    let space = Space::of(placed)?;
+    let plate: Vec<SupportTree> = frozen.iter().map(|tree| space.plate_tree(tree)).collect();
 
     let mut moved = vec![(host, carried.clone())];
     let mut seen = FastSet::default();
     seen.insert(host);
-    let mut hosts = vec![(plate.get(host)?.clone(), carried.moved(matrix))];
+    let mut hosts = vec![(plate.get(host)?.clone(), space.plate_tree(carried))];
     // Each tree is taken once, so the walk ends within as many rounds as there are trees.
     while let Some((before, after)) = hosts.pop() {
         for (rider, seat) in seated_on(&plate, &before, profiles) {
@@ -102,7 +102,7 @@ pub fn followed(
             let base = seat_point(&after, seat, profiles)?;
             let carried = reseated(&plate[rider], base);
             let carried = within_lean(&carried, &after, seat, profiles).unwrap_or(carried);
-            moved.push((rider, carried.moved(inverse)));
+            moved.push((rider, space.model_tree(&carried)));
             hosts.push((plate[rider].clone(), carried));
         }
     }
@@ -159,9 +159,8 @@ fn axes<'a>(
     struts.chain(trunk)
 }
 
-/// `rider` seated where growth would seat it on `seat`'s axis of `host`, all plate coordinates:
-/// the highest point it reaches leaning no further than growth leans, where the seat it kept
-/// leans past 45 degrees (ADR 0443); `None` where it leans no further or no point is reached.
+/// `rider` (plate) seated as growth seats it on `seat`'s axis of `host` where the seat it kept
+/// leans past 45 degrees (ADR 0443); `None` where it does not, or no point is in reach.
 fn within_lean(
     rider: &SupportTree,
     host: &SupportTree,

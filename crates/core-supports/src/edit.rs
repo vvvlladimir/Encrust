@@ -1,9 +1,12 @@
-use core_geometry::{Mat4, Scalar, Vec3};
+use core_geometry::{Scalar, Vec3};
 use printer_profiles::SupportProfile;
 
 use crate::Landing;
 use crate::clear::{Beam, clear};
-use crate::column::{MAX_LEAN_PER_DROP, foot_clear, has_head, head_of, swept_bottom_z};
+use crate::column::{
+    MAX_HEAD_LEAN_DEG, MAX_LEAN_PER_DROP, face_normal, foot_clear, has_head, head_of,
+    swept_bottom_z,
+};
 use crate::group::Profiles;
 use crate::lost::Unstood;
 use crate::mesher::sound;
@@ -25,6 +28,7 @@ pub use refused::Refused;
 pub(crate) use riders::{carrying, unseated};
 pub use riders::{followed, standing_on};
 
+use crate::space::Space;
 use column::carry_column;
 use footing::{footing_near, footing_under};
 use joint::{carry_node, settle, shift};
@@ -60,6 +64,7 @@ pub fn allowed(
 ) -> Result<(), Refused> {
     let matrix = placed.transform.to_matrix();
     let (was, now) = (before.moved(matrix), after.moved(matrix));
+    heads_kept(&was, &now, placed)?;
     let fitted = fit(&now, placed, profile);
     if fitted.is_ok() || fits(&was, placed, profile) {
         return fitted;
@@ -78,6 +83,35 @@ pub fn allowed(
     }
     Ok(())
 }
+
+/// Whether every head `now` keeps from `was` (plate), same tip on same neck, leans off its face
+/// no further than [`MAX_HEAD_LEAN_DEG`] or than it already did (ADR 0339, 0443).
+fn heads_kept(was: &SupportTree, now: &SupportTree, placed: &Placed) -> Result<(), Refused> {
+    let square_cos = |tree: &SupportTree, tip: usize, neck: usize| {
+        let (contact, neck) = (tree.nodes()[tip].position, tree.nodes()[neck].position);
+        face_normal(placed, contact).map(|normal| (neck - contact).normalize_or_zero().dot(normal))
+    };
+    let least_cos = MAX_HEAD_LEAN_DEG.to_radians().cos();
+    for (tip, neck) in now.struts().filter(|(tip, _)| now.nodes()[*tip].is_leaf()) {
+        let kept = was
+            .nodes()
+            .get(tip)
+            .is_some_and(|head| head.point == now.nodes()[tip].point && head.parent == Some(neck));
+        if !kept {
+            continue;
+        }
+        if let (Some(before), Some(after)) =
+            (square_cos(was, tip, neck), square_cos(now, tip, neck))
+            && after < before.min(least_cos) - HEAD_SLACK_COS
+        {
+            return Err(Refused::Leans);
+        }
+    }
+    Ok(())
+}
+
+/// How much further off its face than allowed a head may turn, as a cosine: float noise.
+const HEAD_SLACK_COS: Scalar = 1e-4;
 
 /// Whether the strut from `child` down to `parent` of `tree` (plate) keeps out of the model and,
 /// under a head, leans no further than [`MAX_LEAN_PER_DROP`] (ADR 0437).
@@ -107,9 +141,8 @@ fn strut_fit(
     clear(placed, &beam).then_some(()).ok_or(Refused::Collides)
 }
 
-/// Whether the trunk of `tree` (plate) keeps out of the model, stands straight over a foot on
-/// the plate (ADR 0437) or runs into a support within 45 degrees (ADR 0443), and that foot has
-/// room.
+/// Whether the trunk of `tree` (plate) keeps out of the model, stands straight over a foot with
+/// room on the plate (ADR 0437) or runs into a support within 45 degrees (ADR 0443).
 fn trunk_fit(tree: &SupportTree, placed: &Placed, profile: &SupportProfile) -> Result<(), Refused> {
     let root = tree.root();
     let landing = tree.landing();
@@ -154,9 +187,8 @@ const LEAN_SLACK_MM: Scalar = 1e-3;
 /// The nearest point of the model to `at`, in plate coordinates, for a tip that must keep touching
 /// what it holds; `None` if nowhere near or the surface is painted out (ADR 0093).
 pub fn on_model(placed: &Placed, at: Vec3) -> Option<Vec3> {
-    let matrix = placed.transform.to_matrix();
-    let inverse = placed.transform.inverse_matrix()?;
-    let closest = matrix.transform_point3(placed.bvh.closest(inverse.transform_point3(at))?.point);
+    let space = Space::of(placed)?;
+    let closest = space.plate(placed.bvh.closest(space.model(at))?.point);
     (!placed.blocks_at(closest)).then_some(closest)
 }
 
@@ -172,49 +204,36 @@ pub fn carried(
     placed: &Placed,
     profile: &SupportProfile,
 ) -> Option<SupportTree> {
-    let matrix = placed.transform.to_matrix();
-    let inverse = placed.transform.inverse_matrix()?;
-
+    let space = Space::of(placed)?;
     let mut carried = tree.clone();
     for part in parts {
-        carry_part(&mut carried, *part, (matrix, inverse), step, profile);
+        carry_part(&mut carried, *part, space, step, profile);
     }
-    snap_tips(&mut carried, tree, placed, matrix, inverse);
+    snap_tips(&mut carried, tree, placed, space);
     if carried.landing() != tree.landing() {
         // A column carried stands on whatever is under it there or just beside, as growing would.
-        let root = matrix.transform_point3(carried.root().position);
+        let root = carried.root_index();
         let width = (carried.root().radius_mm, carried.tip_count());
-        let last = landing_through(last, matrix);
-        let (at, under) = footing_near(placed, root, width, profile, last)?;
-        carried.move_node(carried.root_index(), inverse.transform_point3(at));
-        carried.stand_on(landing_through(under, inverse));
+        let last = space.plate_landing(last);
+        let (at, under) = footing_near(placed, space.node(&carried, root), width, profile, last)?;
+        space.put(&mut carried, root, at);
+        carried.stand_on(space.model_landing(under));
     }
     Some(carried)
 }
 
-/// `landing` moved through `matrix`: between plate coordinates and the model's own space.
-fn landing_through(landing: Landing, matrix: Mat4) -> Landing {
-    Landing {
-        base: matrix.transform_point3(landing.base),
-        pad_offset: matrix
-            .transform_vector3(landing.pad_offset.extend(0.0))
-            .truncate(),
-        pad_cut: landing.pad_cut.map(|cut| cut.moved(matrix)),
-        ..landing
-    }
-}
-
-/// `tree` (model space, as the answer) with tip `tip` put down at `to` (plate coordinates, nearest
-/// surface), or why not; the neck goes with the tip, the rest follows [`carried`] and the joints
-/// beside it give way as [`eased`] lets them. A small pillar is grown again from there (ADR 0442).
+/// Tree `index` of `frozen` (model space) with tip `tip` put down at `to` (plate), neck and all,
+/// or why not; a small pillar is grown again there (ADR 0244, 0440, 0442, 0444).
 pub fn tip_carried(
-    tree: &SupportTree,
+    frozen: &[SupportTree],
+    index: usize,
     tip: usize,
     to: Vec3,
     placed: &Placed,
     profiles: Profiles,
 ) -> Result<SupportTree, Refused> {
-    let inverse = placed.transform.inverse_matrix().ok_or(Refused::NoHold)?;
+    let tree = frozen.get(index).ok_or(Refused::NoHold)?;
+    let space = Space::of(placed).ok_or(Refused::NoHold)?;
     let node = tree
         .nodes()
         .get(tip)
@@ -222,7 +241,7 @@ pub fn tip_carried(
         .ok_or(Refused::NoHold)?;
     let contact = on_model(placed, to).ok_or(Refused::NoHold)?;
     if is_pillar(tree, placed, profiles) {
-        return regrown(tree, contact, placed, profiles);
+        return regrown((frozen, index), contact, placed, profiles);
     }
     let profile = profiles.of(tree.group());
     let neck = head_of(placed, contact, profile).map_err(|why| match why {
@@ -231,7 +250,7 @@ pub fn tip_carried(
     })?;
 
     let mut carried = tree.clone();
-    carried.move_node(tip, inverse.transform_point3(contact));
+    space.put(&mut carried, tip, contact);
     if let Some(parent) = node.parent {
         // A head with no room under it would run through the model.
         if !has_head(contact, neck) {
@@ -241,14 +260,14 @@ pub fn tip_carried(
             (tree.nodes().iter()).any(|other| other.parent == Some(parent) && other != node);
         if shared {
             // A neck other branches hang from is their joint: the tip takes a neck of its own.
-            carried.bend_under(tip, inverse.transform_point3(neck), node.radius_mm);
+            carried.bend_under(tip, space.model(neck), node.radius_mm);
         } else {
-            carried.move_node(parent, inverse.transform_point3(neck));
+            space.put(&mut carried, parent, neck);
         }
         let alone = parent == tree.root_index() && tree.tip_count() == 1;
         let radius_mm = tree.root().radius_mm;
         if alone && let Some(under) = footing_under(placed, neck, radius_mm, 1, profile) {
-            carried.stand_on(landing_through(under, inverse));
+            carried.stand_on(space.model_landing(under));
         }
     }
     eased(tree, &carried, placed, profile)
@@ -259,7 +278,7 @@ pub fn tip_carried(
 fn carry_part(
     tree: &mut SupportTree,
     part: Part,
-    space: (Mat4, Mat4),
+    space: Space,
     step: Vec3,
     profile: &SupportProfile,
 ) {
@@ -287,16 +306,9 @@ fn carry_part(
     }
 }
 
-/// Pulls every tip the carry moved from where it stood in `was` back onto the surface it holds
-/// up: a support that has stopped touching the model holds nothing, and one carried into it is
-/// not printable.
-fn snap_tips(
-    tree: &mut SupportTree,
-    was: &SupportTree,
-    placed: &Placed,
-    matrix: Mat4,
-    inverse: Mat4,
-) {
+/// Pulls every tip the carry moved off where it stood in `was` back onto the surface it holds:
+/// one off it holds nothing, one in it does not print.
+fn snap_tips(tree: &mut SupportTree, was: &SupportTree, placed: &Placed, space: Space) {
     let tips: Vec<(usize, Vec3)> = tree
         .nodes()
         .iter()
@@ -307,8 +319,8 @@ fn snap_tips(
         .map(|(index, node)| (index, node.position))
         .collect();
     for (index, position) in tips {
-        if let Some(on) = on_model(placed, matrix.transform_point3(position)) {
-            tree.move_node(index, inverse.transform_point3(on));
+        if let Some(on) = on_model(placed, space.plate(position)) {
+            space.put(tree, index, on);
         }
     }
 }

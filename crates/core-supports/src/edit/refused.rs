@@ -3,7 +3,8 @@
 pub enum Refused {
     /// A body would run into the model or keep less than its clearance from it.
     Collides,
-    /// A strut would lean past 45 degrees, or a trunk on the plate off its foot.
+    /// A strut would lean past 45 degrees, a trunk on the plate off its foot, or a head past
+    /// 33 degrees off the face it holds.
     Leans,
     /// The foot has no plate or face of the model it may stand on there.
     NoFooting,

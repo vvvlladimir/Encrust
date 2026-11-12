@@ -6,6 +6,7 @@ use core_geometry::{Mesh, Region, Scalar, Transform, Vec3};
 use crate::{Clearances, Shaded, SupportPoint, SupportTree};
 
 mod build;
+mod follow;
 mod frozen;
 mod growth;
 mod lifted;
@@ -38,6 +39,9 @@ pub struct ModelSupports {
     frozen: Vec<SupportTree>,
     /// The frozen trees a hand is carrying, which the meshes leave out (ADR 0438).
     lifted: Vec<usize>,
+    /// Where the model stood when the frozen trees last stood under it, for a rebuild at
+    /// another placement to stand them again (ADR 0444); `None` until a first rebuild.
+    frozen_at: Option<Transform>,
     /// The two patches as geometry, apart from the columns so a stroke shows in its own frame;
     /// columns take too long to rebuild per frame.
     patches: Patches,

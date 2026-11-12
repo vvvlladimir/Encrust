@@ -21,6 +21,8 @@ never builds:
 - Freezing a support standing on a grown one left its host to the automatic run, which may
   regrow it elsewhere. Removing a frozen host, or growing it again, left what stood on it in
   the air (ADR 0433 named this as a consequence).
+- A neck or a tip carried by hand turned its head as far as the hand took it: growth turns
+  none past 33 degrees off its face (ADR 0339, 0431), and a head laid on its face is that scar.
 - `carried` pulled every tip onto its nearest surface, those the hand did not carry included.
 - A tip carried onto a face looking up was refused as `Collides`.
 
@@ -29,6 +31,10 @@ never builds:
 - **No edit moves the neck a head hangs from unless the hand holds that tip or neck.** A
   column on the model whose root holds a head is carried as a column on the plate is: on a knee
   its head leans down to at 45 degrees. A neck never gives way.
+- **No edit turns a head it keeps past 33 degrees off its face**, `MAX_HEAD_LEAN_DEG`, nor
+  further than it already was: `allowed` refuses it as `Leans`. A head is kept when the same tip
+  hangs from the same neck before and after; one a carry builds anew, a regrown small pillar's
+  or a carried tip's from `head_of`, is growth's and held to growth's rules.
 - **A tip carried off a shared neck takes a neck of its own**, hung from the old one, which is
   now a joint and may give way.
 - **A trunk into a support leans no further than 45 degrees**, as growth builds it. A support
@@ -44,7 +50,7 @@ never builds:
 
 ## Consequences
 
-Every head an edit leaves keeps the lean of the face it holds, and no support an edit leaves
+Every head an edit leaves keeps the lean of the face it holds, within 33 degrees, and no support an edit leaves
 stands in the air or leans onto another past 45 degrees. A host carried further than its
 riders can follow within growth's reach is refused as `Leans`, where before they lay flat. A
 touch freezes more: the hosts under what was taken, and those cannot regrow until **Grow these

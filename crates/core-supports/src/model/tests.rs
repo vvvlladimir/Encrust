@@ -558,3 +558,53 @@ fn a_lifted_support_is_left_out_of_the_meshes_and_carried_without_building_again
         "set down, it is meshed with the rest"
     );
 }
+
+#[test]
+fn a_frozen_support_stands_on_the_plate_again_when_its_model_rises() {
+    let mut supports = with_one_support(Transform::default());
+    supports
+        .freeze(0, Transform::default())
+        .expect("the one tree is there to freeze");
+    let risen = Transform {
+        translation: Vec3::new(3.0, 0.0, 2.0),
+        rotation: Quat::from_rotation_z(FRAC_PI_2),
+        ..Transform::default()
+    };
+
+    refresh(&mut supports, &nothing(), risen);
+
+    let tree = &supports.trees()[0];
+    assert!(
+        tree.landing().base.z.abs() < 1e-4,
+        "its foot is back on the plate, got {}",
+        tree.landing().base
+    );
+    assert!(
+        (tree.root().position.truncate() - tree.landing().base.truncate()).length() < 1e-4,
+        "its trunk stands upright over it"
+    );
+}
+
+#[test]
+fn a_frozen_support_goes_back_to_growth_when_its_model_tilts() {
+    let mut supports = with_one_support(Transform::default());
+    supports
+        .freeze(0, Transform::default())
+        .expect("the one tree is there to freeze");
+    let tilted = Transform {
+        rotation: Quat::from_rotation_x(0.3),
+        ..Transform::default()
+    };
+
+    refresh(&mut supports, &nothing(), tilted);
+
+    assert!(
+        supports.frozen().is_empty(),
+        "a tilted trunk is no hand's shape"
+    );
+    assert_eq!(supports.points().len(), 1, "its tip is grown again");
+    assert!(
+        supports.trees()[0].landing().base.z.abs() < 1e-4,
+        "and stands on the plate"
+    );
+}

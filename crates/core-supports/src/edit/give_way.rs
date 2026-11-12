@@ -1,10 +1,11 @@
-use core_geometry::{Mat4, Scalar, Vec2, Vec3};
+use core_geometry::{Scalar, Vec2, Vec3};
 use printer_profiles::SupportProfile;
 
 use super::column::lowest_top_mm;
 use super::{Refused, allowed, strut_fit, trunk_fit};
 use crate::column::MAX_LEAN_PER_DROP;
 use crate::placed::Placed;
+use crate::space::Space;
 use crate::tree::SupportTree;
 
 /// `after`, carried from `before` (both model space), with the joints beside what the carry
@@ -19,11 +20,10 @@ pub fn eased(
     let Err(refused) = allowed(before, after, placed, profile) else {
         return Ok(after.clone());
     };
-    let matrix = placed.transform.to_matrix();
-    let inverse = placed.transform.inverse_matrix().ok_or(refused)?;
+    let space = Space::of(placed).ok_or(refused)?;
     let mut eased = after.clone();
-    for joint in giving(before, after, placed, profile, matrix).ok_or(refused)? {
-        give_way(&mut eased, joint, placed, profile, (matrix, inverse)).ok_or(refused)?;
+    for joint in giving(before, after, placed, profile, space).ok_or(refused)? {
+        give_way(&mut eased, joint, placed, profile, space).ok_or(refused)?;
     }
     allowed(before, &eased, placed, profile).map(|()| eased)
 }
@@ -35,9 +35,9 @@ fn giving(
     after: &SupportTree,
     placed: &Placed,
     profile: &SupportProfile,
-    matrix: Mat4,
+    space: Space,
 ) -> Option<Vec<usize>> {
-    let (was, now) = (before.moved(matrix), after.moved(matrix));
+    let (was, now) = (space.plate_tree(before), space.plate_tree(after));
     let at = |tree: &SupportTree, node: usize| tree.nodes().get(node).map(|node| node.position);
     let moved = |node: usize| at(&was, node) != at(&now, node);
     let mut joints = Vec::new();
@@ -59,9 +59,8 @@ fn giving(
     (!joints.is_empty() && joints.len() <= MOST_JOINTS).then_some(joints)
 }
 
-/// Whether `node` of `tree` may be shifted to make room: a joint no head hangs from, since a
-/// neck moved turns its head off the face; the root too unless a head sunk in the plate ends
-/// there; one on the model is only lowered, see [`give_way`].
+/// Whether `node` of `tree` may be shifted to make room: a joint no head hangs from, the root
+/// unless a head sunk in the plate ends there; one on the model only lowers, see [`give_way`].
 fn may_give(tree: &SupportTree, node: usize) -> bool {
     let nodes = tree.nodes();
     let is_joint = nodes.get(node).is_some_and(|node| !node.is_leaf());
@@ -79,9 +78,9 @@ fn give_way(
     joint: usize,
     placed: &Placed,
     profile: &SupportProfile,
-    (matrix, inverse): (Mat4, Mat4),
+    space: Space,
 ) -> Option<()> {
-    let plate = tree.moved(matrix);
+    let plate = space.plate_tree(tree);
     let from = plate.nodes()[joint].position;
     let is_root = joint == plate.root_index();
     let level = if is_root && plate.landing().on_model {
@@ -100,11 +99,11 @@ fn give_way(
         shift_joint(&mut trial, joint, *to);
         holds(&trial, joint, placed, profile)
     })?;
-    tree.move_node(joint, inverse.transform_point3(to));
+    space.put(tree, joint, to);
     // A foot on the model stays on it: the root over it was only lowered.
     if is_root && !tree.landing().on_model {
-        let base = matrix.transform_point3(tree.landing().base);
-        tree.move_landing(inverse.transform_point3(to.truncate().extend(base.z)));
+        let base = space.plate(tree.landing().base);
+        space.put_foot(tree, to.truncate().extend(base.z));
     }
     Some(())
 }
