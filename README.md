@@ -21,7 +21,6 @@ account and no cloud.
 &nbsp;·&nbsp; [Report a bug](https://github.com/vvvlladimir/Encrust/issues)
 
 [![Latest release](https://img.shields.io/github/v/release/vvvlladimir/Encrust?display_name=tag&color=brightgreen)](https://github.com/vvvlladimir/Encrust/releases/latest)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](CHANGELOG.md)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Browser-lightgrey.svg)](#get-it)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
