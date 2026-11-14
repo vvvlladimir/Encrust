@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0](https://github.com/vvvlladimir/Encrust/compare/v0.8.0...v0.9.0) (2026-11-14)
+
+
+### ✨ New
+
+* **app:** give macOS an Encrust menu and an About that names the ([58ca7f7](https://github.com/vvvlladimir/Encrust/commit/58ca7f75ff7d61e3882e0dca27f154d1d4092dd4))
+* **app:** offer the panic the window closed on at the next start & ([cc01f4a](https://github.com/vvvlladimir/Encrust/commit/cc01f4a52200308efc6073ce4ee394d89bae1919))
+* **app:** open an .encrust project from the file manager ([447571f](https://github.com/vvvlladimir/Encrust/commit/447571ff676597e49e53a552de8828ae2651af8a))
+
+
+### 🐛 Fixed
+
+* **app:** a plate left on Auto follows Auto saved or reset in Settings ([7d842bf](https://github.com/vvvlladimir/Encrust/commit/7d842bf059ad5b49c41586de33ccc160c482d113))
+
 ## [0.8.0](https://github.com/vvvlladimir/Encrust/compare/v0.7.0...v0.8.0) (2026-11-12)
 
 
