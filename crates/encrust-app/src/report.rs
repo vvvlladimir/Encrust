@@ -5,21 +5,23 @@
 //! carried into a prefilled issue by the user; see `docs/decisions/0212`.
 
 use std::fmt::Write as _;
-use std::net::IpAddr;
 use std::path::Path;
 
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::tool_settings::ToolSettings;
+use scrub::scrubbed;
 
 /// The issue form a report is carried into, and the field ids it prefills, are those of
 /// `.github/ISSUE_TEMPLATE/bug.yml`.
 const NEW_ISSUE: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/issues/new");
 const TEMPLATE: &str = "bug.yml";
 
+/// What the form's report field says when the report is too long for the URL.
+const PASTE_HERE: &str = "Paste the report from Encrust here: it is on your clipboard.";
+
 /// How long the issue URL may grow. GitHub answers a longer one with `414 URI Too Long`
-/// around eight kilobytes, so the report never travels in the URL: it goes to the
-/// clipboard, and the form gets the fields that fit.
+/// around eight kilobytes, so a report that does not fit is left to the clipboard.
 const MAX_URL: usize = 6_000;
 
 /// The file a saved report is offered under.
@@ -35,15 +37,6 @@ const PLATFORM: &str = if cfg!(target_arch = "wasm32") {
 } else {
     "Linux"
 };
-
-/// Characters cut off the end of a word before it is read as a path, so that
-/// `cannot open /home/ada/boat.stl:` is scrubbed along with the plain name.
-const TRAILING: [char; 7] = ['.', ',', ':', ';', ')', '"', '\''];
-
-/// The hosts a failure may name in full: the project's own, which stand in a message only
-/// because the window put them there. Every other host in a message is a machine on the
-/// user's own network, and the report states none of them.
-const OURS: [&str; 3] = ["encrust.app", "github.com", "objects.githubusercontent.com"];
 
 /// Which parts of the window the report carries. Each is the user's to leave out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +73,8 @@ pub struct Facts<'a> {
     pub printer: Option<&'a PrinterProfile>,
     /// The catalogue id of that printer, when it came from the catalogue.
     pub printer_id: Option<&'a str>,
+    /// Whether that printer is exactly as this build ships it, so its id alone says it.
+    pub printer_shipped: bool,
     pub resin: &'a MaterialProfile,
     pub resin_id: Option<&'a str>,
     /// The extension the next file would be written under.
@@ -102,9 +97,20 @@ pub struct Report {
     /// The clicks or the command that bring it back.
     pub steps: String,
     pub include: Include,
+    /// The panic the last run closed on, offered once at this start and dropped with the
+    /// sheet.
+    pub crash: Option<String>,
+    /// Whether the report went to the issue form since the sheet opened.
+    pub handed: bool,
 }
 
 impl Report {
+    /// Opens the sheet on the panic the last run closed on, if it closed on one.
+    pub fn offer_crash(&mut self) {
+        self.crash = crash::take();
+        self.open |= self.crash.is_some();
+    }
+
     /// The whole report, which is what the sheet shows and what every button hands over.
     pub fn markdown(&self, facts: &Facts<'_>) -> String {
         let mut text = String::new();
@@ -114,7 +120,21 @@ impl Report {
             &self.what,
         );
         told(&mut text, "How to reproduce it", &self.steps);
+        text + &self.attached(facts)
+    }
 
+    /// What the window adds to what the user typed: the issue form's report field, whose
+    /// own fields already carry the typed answers.
+    fn attached(&self, facts: &Facts<'_>) -> String {
+        let mut text = String::new();
+        if let Some(crash) = &self.crash {
+            fenced(
+                &mut text,
+                "The crash it closed on",
+                "text",
+                &trimmed::trimmed_crash(crash),
+            );
+        }
         text.push_str("## Encrust\n\n");
         for (key, value) in environment(facts) {
             let _ = writeln!(text, "- **{key}:** {value}");
@@ -132,26 +152,23 @@ impl Report {
             );
         }
         if self.include.profiles {
-            if let Some(printer) = facts.printer {
-                fenced(&mut text, "Printer profile", "toml", &printer_toml(printer));
-            }
+            printer_part(&mut text, facts);
             fenced(&mut text, "Resin profile", "toml", &resin_toml(facts.resin));
         }
         if self.include.settings {
             fenced(
                 &mut text,
-                "Tool settings",
+                "Tool settings changed from a fresh window",
                 "json",
-                &settings_json(facts.settings),
+                &trimmed::changed_settings(facts.settings),
             );
         }
-
         text.push_str(FOOTER);
         text
     }
 
-    /// The issue form, prefilled with the fields that fit in a URL. The report itself does
-    /// not fit, so whatever opens this puts it on the clipboard as well.
+    /// The issue form, prefilled with the fields that fit in a URL; whatever opens it puts
+    /// the report on the clipboard as well, for a report too long to travel in it.
     pub fn issue_url(&self, facts: &Facts<'_>) -> String {
         let fields = [
             ("version", env!("CARGO_PKG_VERSION").to_owned()),
@@ -159,15 +176,22 @@ impl Report {
             ("printer", facts.printer.map(machine).unwrap_or_default()),
             (
                 "log",
-                facts
-                    .message
-                    .as_deref()
-                    .map(|message| scrubbed(message, facts.hosts))
-                    .unwrap_or_default(),
+                self.crash.as_deref().map_or_else(
+                    || {
+                        facts
+                            .message
+                            .as_deref()
+                            .map(|message| scrubbed(message, facts.hosts))
+                            .unwrap_or_default()
+                    },
+                    crash_head,
+                ),
             ),
             ("what", self.what.clone()),
             ("steps", self.steps.clone()),
         ];
+        let paste_here = format!("&report={}", encoded(PASTE_HERE));
+        let budget = MAX_URL - paste_here.len();
         let mut url = format!("{NEW_ISSUE}?template={TEMPLATE}");
         for (key, value) in fields {
             if value.is_empty() {
@@ -176,12 +200,26 @@ impl Report {
             let pair = format!("&{key}={}", encoded(&value));
             // Skipped rather than cut off: a field whose text is too long is in the
             // clipboard whole, and the short fields after it still fit.
-            if url.len() + pair.len() <= MAX_URL {
+            if url.len() + pair.len() <= budget {
                 url.push_str(&pair);
             }
         }
+        // Last, so the short fields are in first: the whole of it if it fits, else the
+        // place to paste it.
+        let whole = format!("&report={}", encoded(&self.attached(facts)));
+        if url.len() + whole.len() <= MAX_URL {
+            url.push_str(&whole);
+        } else {
+            url.push_str(&paste_here);
+        }
         url
     }
+}
+
+/// A crash as the issue form's log field takes it: the panic without its backtrace, which
+/// is in the report on the clipboard.
+fn crash_head(crash: &str) -> String {
+    crash.split("\n\n").next().unwrap_or(crash).to_owned()
 }
 
 /// The line every report ends on, so a reader of the issue knows what it cannot contain.
@@ -244,6 +282,23 @@ fn machine(printer: &PrinterProfile) -> String {
     }
 }
 
+/// The printer as the report carries it: by its id when it is the shipped profile, which
+/// a reader can open, else whole.
+fn printer_part(text: &mut String, facts: &Facts<'_>) {
+    let Some(printer) = facts.printer else {
+        return;
+    };
+    match facts.printer_id {
+        Some(id) if facts.printer_shipped => {
+            let _ = writeln!(
+                text,
+                "## Printer profile\n\nThe shipped `{id}`, unchanged.\n"
+            );
+        }
+        _ => fenced(text, "Printer profile", "toml", &printer_toml(printer)),
+    }
+}
+
 /// A profile that cannot be written out says so inside its own fence: the reason is itself
 /// worth reporting, and a report with a gap in it is worse than one with a comment.
 fn printer_toml(printer: &PrinterProfile) -> String {
@@ -256,91 +311,6 @@ fn resin_toml(resin: &MaterialProfile) -> String {
     resin
         .to_toml_string(Path::new("resin.toml"))
         .unwrap_or_else(|error| format!("# this profile could not be written out: {error}"))
-}
-
-fn settings_json(settings: &ToolSettings) -> String {
-    serde_json::to_string_pretty(settings)
-        .unwrap_or_else(|error| format!("\"these settings could not be written out: {error}\""))
-}
-
-/// A message as the report states it, on one line: a path or a file name in it is cut to
-/// its extension, because the name is the user's and the extension is what the bug needs,
-/// and an address or host name is cut away altogether, because it is the user's network.
-fn scrubbed(message: &str, hosts: &[String]) -> String {
-    message
-        .split_whitespace()
-        .map(|word| scrubbed_word(word, hosts))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn scrubbed_word(word: &str, hosts: &[String]) -> String {
-    let kept = word.trim_end_matches(TRAILING);
-    let tail = &word[kept.len()..];
-    // A URL keeps only its scheme unless it points at the project: the authority is a
-    // printer on the user's network more often than not, and the path can carry a name.
-    if let Some((scheme, rest)) = kept.split_once("://") {
-        let authority = rest.split(['/', '?', '#']).next().unwrap_or(rest);
-        return if ours(authority) {
-            word.to_owned()
-        } else {
-            format!("{scheme}://...{tail}")
-        };
-    }
-    if is_host(kept, hosts) {
-        return format!("...{tail}");
-    }
-    let extension = Path::new(kept)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .map(str::to_ascii_lowercase);
-    let path = kept.contains('/') || kept.contains('\\');
-    let cut = match (path, extension) {
-        (false, None) => return word.to_owned(),
-        (false, Some(extension)) if !is_ours(&extension) => return word.to_owned(),
-        (false, Some(extension)) => format!("*.{extension}"),
-        (true, Some(extension)) => format!(".../*.{extension}"),
-        (true, None) => ".../*".to_owned(),
-    };
-    format!("{cut}{tail}")
-}
-
-/// Whether an authority belongs to the project itself, credentials and port aside.
-fn ours(authority: &str) -> bool {
-    let host = authority.rsplit('@').next().unwrap_or(authority);
-    let name = host.split(':').next().unwrap_or(host).to_ascii_lowercase();
-    OURS.contains(&name.as_str())
-}
-
-/// Whether a bare word names a machine rather than says something: an address of any
-/// shape, an mDNS name, or one of the addresses the window knows a printer by. All three
-/// are the user's own network, and a name such as `ada-macbook.local` is the user. A
-/// four-part version number is cut along with the addresses it cannot be told apart from;
-/// the version that matters is stated on its own line above.
-fn is_host(word: &str, hosts: &[String]) -> bool {
-    let bare = word.trim_start_matches('[');
-    let bare = bare.split_once(']').map_or(bare, |(inside, _)| inside);
-    if bare.parse::<IpAddr>().is_ok() {
-        return true;
-    }
-    let named = bare.split(':').next().unwrap_or(bare);
-    if named.parse::<IpAddr>().is_ok() || named.to_ascii_lowercase().ends_with(".local") {
-        return true;
-    }
-    hosts.iter().any(|host| {
-        let host = host.trim();
-        !host.is_empty() && (host.eq_ignore_ascii_case(word) || host.eq_ignore_ascii_case(named))
-    })
-}
-
-/// Whether an extension is one of the files the window opens or writes, which is what
-/// makes a bare word a file name rather than a version or a number.
-fn is_ours(extension: &str) -> bool {
-    let mut known = crate::files::MESHES
-        .iter()
-        .chain(&crate::files::PROJECTS)
-        .chain(&crate::sliced::EXTENSIONS);
-    extension == "toml" || known.any(|known| *known == extension)
 }
 
 /// Percent-encodes everything but the unreserved characters of RFC 3986, so that the
@@ -360,5 +330,8 @@ fn encoded(text: &str) -> String {
     out
 }
 
+pub mod crash;
+mod scrub;
 #[cfg(test)]
 mod tests;
+mod trimmed;

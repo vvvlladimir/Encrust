@@ -1,7 +1,7 @@
 //! The sheet that writes a bug report: what the user types, what the window adds, and the
 //! clipboard, file or prefilled issue. Recomposed every frame, see `docs/decisions/0212`.
 
-use egui::RichText;
+use egui::{Align, Layout};
 
 use crate::i18n::tr;
 use crate::report::{FILE_NAME, Facts, Plate, Report};
@@ -10,13 +10,12 @@ use crate::state::{Machine, Tools};
 use crate::status::Status;
 use crate::tool_settings::ToolSettings;
 use crate::ui::theme::layout::report::{
-    ANSWER_H, BODY_MAX_H, BODY_MIN_H, CHROME_H, REPORT_MARGIN, REPORT_MIN_H, SCREEN_MARGIN,
-    SHEET_MIN_W, SHEET_W,
+    ANSWER_H, BODY_MAX_H, BODY_MIN_H, CHROME_H, SCREEN_MARGIN, SHEET_MIN_W, SHEET_W,
 };
-use crate::ui::{Inline, dialog, dialog_head, hairline, hint, icon, inline_button, switch, theme};
-
-/// The report pane's share of the body, and the least it is left with on a short window.
-const REPORT_SHARE: f32 = 0.45;
+use crate::ui::{
+    Inline, dialog, dialog_head, hairline, heading, hint, icon, inline_button, notice,
+    quiet_button, section, switch, text_area, text_block, theme,
+};
 
 /// Shows the sheet over the window, and closes it on Escape or a click outside.
 pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machine) {
@@ -40,6 +39,7 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
     let facts = Facts {
         printer: slicing.printer.as_ref(),
         printer_id: slicing.printer_id.as_deref(),
+        printer_shipped: shipped(slicing),
         resin: &slicing.material,
         resin_id: slicing.resin_id.as_deref(),
         format: slicing.format.extension(),
@@ -49,137 +49,128 @@ pub fn ui(ctx: &egui::Context, scene: &Scene, tools: &Tools, machine: &mut Machi
         settings: &settings,
     };
 
-    // The sheet is sized to the window first: it is capped well short of the full height so
-    // it stays a sheet, and shrinks with its panes on a screen that cannot hold the cap.
+    // Sized to the window: capped well short of the full height so it stays a sheet, and
+    // shrinking on a screen that cannot hold the cap.
     let screen = ctx.viewport_rect();
     let sheet_w = (screen.width() - SCREEN_MARGIN).clamp(SHEET_MIN_W, SHEET_W);
     let body_h = (screen.height() - SCREEN_MARGIN - CHROME_H).clamp(BODY_MIN_H, BODY_MAX_H);
-    let report_h = (body_h * REPORT_SHARE).max(REPORT_MIN_H);
     let sheet = dialog(ctx, egui::Id::new("report"), 18).show(ctx, |ui| {
         ui.set_width(sheet_w);
-        header(ui, report);
-        ui.add_space(theme::LINE_GAP);
-
+        let close = dialog_head(ui, icon::BUG, &tr!("report-title"));
+        hairline(ui);
         let text = egui::ScrollArea::vertical()
             .max_height(body_h)
             .auto_shrink([false, true])
-            .show(ui, |ui| {
-                // The privacy notice as well, so it says what does not happen first (ADR 0212).
-                hint(ui, &tr!("report-nothing-sent"));
-                ui.add_space(theme::PANEL_PAD);
-                asked(ui, &tr!("report-what-happened"), &mut report.what);
-                asked(ui, &tr!("report-steps"), &mut report.steps);
-                carried(ui, report);
-                ui.add_space(theme::ITEM_GAP);
-                hint(ui, &tr!("report-no-model"));
-                ui.add_space(theme::PANEL_PAD);
-
-                // Drawn after the fields so that a key pressed this frame is already in it.
-                let text = report.markdown(&facts);
-                shown(ui, &text, report_h);
-                text
-            })
+            .show(ui, |ui| body(ui, report, &facts))
             .inner;
-        ui.add_space(theme::PANEL_PAD);
+        hairline(ui);
         handed_over(ui, report, &facts, &text, status);
+        close
     });
 
-    if sheet.should_close() {
+    if sheet.inner || sheet.should_close() {
         report.open = false;
+        report.handed = false;
+        report.crash = None;
     }
 }
 
-fn header(ui: &mut egui::Ui, report: &mut Report) {
-    if dialog_head(ui, icon::BUG, &tr!("report-title")) {
-        report.open = false;
-    }
+/// What the user writes and what goes with it, then the report itself; returns the report.
+fn body(ui: &mut egui::Ui, report: &mut Report, facts: &Facts<'_>) -> String {
     ui.add_space(theme::ITEM_GAP);
-    hairline(ui);
-}
-
-/// One of the two questions the issue form asks, and the room to answer it in.
-fn asked(ui: &mut egui::Ui, question: &str, answer: &mut String) {
-    crate::ui::paragraph(
-        ui,
-        RichText::new(question)
-            .font(theme::small())
-            .color(theme::colors().text_mid),
-    );
-    ui.add_space(theme::NOTE_GAP);
-    ui.add_sized(
-        egui::vec2(ui.available_width(), ANSWER_H),
-        egui::TextEdit::multiline(answer)
-            .font(theme::label())
-            .background_color(theme::colors().raised),
-    );
+    // The privacy line first, so it says what does not happen before anything is typed
+    // (ADR 0212).
+    hint(ui, &tr!("report-stays-here"));
+    ui.add_space(theme::ITEM_GAP);
+    told_state(ui, report);
+    text_area(ui, &tr!("report-what-happened"), &mut report.what, ANSWER_H);
     ui.add_space(theme::LINE_GAP);
-}
+    text_area(ui, &tr!("report-steps"), &mut report.steps, ANSWER_H);
+    ui.add_space(theme::PANEL_PAD);
 
-/// The three switches over what the window adds of its own.
-fn carried(ui: &mut egui::Ui, report: &mut Report) {
-    let include = &mut report.include;
-    switch(ui, &mut include.profiles, &tr!("report-include-profiles"));
-    switch(ui, &mut include.settings, &tr!("report-include-settings"));
-    switch(ui, &mut include.plate, &tr!("report-include-plate"));
-}
-
-/// The report itself, whole and scrollable: a user who can read what they are handing
-/// over does not have to trust this window about it.
-fn shown(ui: &mut egui::Ui, text: &str, height: f32) {
-    crate::ui::heading(ui, &tr!("report-the-report"), None);
+    section(ui, &tr!("report-include"), None, |ui| {
+        let include = &mut report.include;
+        switch(ui, &mut include.profiles, &tr!("report-include-profiles"));
+        switch(ui, &mut include.settings, &tr!("report-include-settings"));
+        switch(ui, &mut include.plate, &tr!("report-include-plate"));
+    });
+    // Composed after the fields, so that a key pressed this frame is already in it.
+    let text = report.markdown(facts);
+    // A heading, not a section: a section's rule under it would double the one over the foot.
+    ui.add_space(theme::ITEM_GAP);
+    heading(ui, &tr!("report-the-report"), None);
     ui.add_space(theme::NOTE_GAP);
-    egui::Frame::new()
-        .fill(theme::colors().base)
-        .stroke(egui::Stroke::new(1.0, theme::colors().hairline))
-        .corner_radius(theme::R_CONTROL)
-        .inner_margin(REPORT_MARGIN)
-        .show(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .max_height(height)
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    crate::ui::paragraph(
-                        ui,
-                        RichText::new(text)
-                            .font(theme::code(11.0))
-                            .color(theme::colors().text_mid),
-                    );
-                });
-        });
+    text_block(ui, &text);
+    ui.add_space(theme::ITEM_GAP);
+    text
 }
 
-/// The three ways out. Opening an issue copies the report as well: the form has room for
-/// what the user typed, and the rest has to be pasted into it.
+/// A verdict over the questions: the report went to the issue form, or the last run
+/// crashed and the crash is already in it.
+fn told_state(ui: &mut egui::Ui, report: &Report) {
+    let colors = theme::colors();
+    let (glyph, tint, title, why) = if report.handed {
+        (
+            icon::CLIPBOARD,
+            colors.ok,
+            tr!("report-copied"),
+            tr!("report-handed-why"),
+        )
+    } else if report.crash.is_some() {
+        (
+            icon::WARNING,
+            colors.warn,
+            tr!("report-crashed"),
+            tr!("report-crashed-why"),
+        )
+    } else {
+        return;
+    };
+    notice(ui, glyph, tint, &title, &why);
+    ui.add_space(theme::PANEL_PAD);
+}
+
+/// The three ways out: a file at the left, the clipboard and the issue form at the right.
+/// Opening an issue copies the report as well, for the form's field when it does not fit.
 fn handed_over(
     ui: &mut egui::Ui,
-    report: &Report,
+    report: &mut Report,
     facts: &Facts<'_>,
     text: &str,
     status: &mut Status,
 ) {
+    ui.add_space(theme::ITEM_GAP);
     ui.horizontal(|ui| {
-        if inline_button(
-            ui,
-            Inline::new(&tr!("report-open-issue"))
-                .glyph(icon::BUG)
-                .primary(),
-        )
-        .clicked()
-        {
-            ui.ctx().copy_text(text.to_owned());
-            ui.ctx()
-                .open_url(egui::OpenUrl::new_tab(report.issue_url(facts)));
-            *status = Status::Info(tr!("report-copied-for-issue"));
-        }
-        ui.add_space(theme::ROW_GAP);
-        if inline_button(ui, Inline::new(&tr!("report-copy")).glyph(icon::CLIPBOARD)).clicked() {
-            ui.ctx().copy_text(text.to_owned());
-            *status = Status::Info(tr!("report-copied"));
-        }
-        if inline_button(ui, Inline::new(&tr!("report-save")).glyph(icon::SAVE)).clicked() {
+        if quiet_button(ui, icon::SAVE, &tr!("report-save"), false, true).clicked() {
             save(text, status);
         }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            let label = tr!("report-open-issue");
+            let issue = Inline::new(&label).glyph(icon::ELSEWHERE).primary();
+            if inline_button(ui, issue)
+                .on_hover_text(tr!("report-open-issue-tooltip"))
+                .clicked()
+            {
+                ui.ctx().copy_text(text.to_owned());
+                ui.ctx()
+                    .open_url(egui::OpenUrl::new_tab(report.issue_url(facts)));
+                report.handed = true;
+            }
+            if inline_button(ui, Inline::new(&tr!("report-copy")).glyph(icon::CLIPBOARD)).clicked()
+            {
+                ui.ctx().copy_text(text.to_owned());
+                *status = Status::Info(tr!("report-copied"));
+            }
+        });
     });
+}
+
+/// Whether the printer in hand is the one this build ships under its id.
+fn shipped(slicing: &crate::slicing::Slicing) -> bool {
+    let (Some(printer), Some(id)) = (&slicing.printer, &slicing.printer_id) else {
+        return false;
+    };
+    slicing.catalogue.shipped_printer(id).as_ref() == Some(printer)
 }
 
 /// What stands on the plate being edited, as the report counts it: a hollowed model counts

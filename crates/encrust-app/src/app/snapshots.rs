@@ -427,6 +427,26 @@ fn an_update_found_told_and_installed() {
     results.extend(picture("update_download", downloading));
 }
 
+/// The report sheet: as a crash opens it, and once the report went to the issue form.
+#[test]
+fn the_report_sheet_after_a_crash_and_handed_over() {
+    let mut results = SnapshotResults::new();
+    let mut crashed = pictured();
+    crashed.machine.report.open = true;
+    crashed.machine.report.crash = Some(
+        "Encrust 0.9.0, thread 'main' panicked at crates/core-slicer/src/a.rs:1:2:\n\
+         index out of bounds\n\n   0: core_slicer::slice::layer"
+            .to_owned(),
+    );
+    results.extend(picture("report_crashed", crashed));
+
+    let mut handed = pictured();
+    handed.machine.report.open = true;
+    handed.machine.report.handed = true;
+    handed.machine.report.what = "The supports stand off the model.".to_owned();
+    results.extend(picture("report_handed", handed));
+}
+
 /// Prepare for print waiting in its row: at a pause, and at a gate that stopped it.
 #[test]
 fn prepare_for_print_waiting_in_its_row() {

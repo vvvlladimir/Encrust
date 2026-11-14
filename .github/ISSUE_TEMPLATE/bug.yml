@@ -18,6 +18,15 @@ body:
         if it is yours to share — otherwise describe it, or make a small shape that reproduces it.
     validations:
       required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Report from Encrust
+      description: >
+        Report a problem in Encrust fills this in, or puts the report on your clipboard to paste
+        here (⌘V on macOS, Ctrl V elsewhere). Leave it empty if you did not start from there.
+    validations:
+      required: false
   - type: input
     id: version
     attributes:

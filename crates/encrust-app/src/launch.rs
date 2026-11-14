@@ -14,6 +14,7 @@ pub fn run(initial_model: Option<&std::path::Path>) -> anyhow::Result<()> {
         ..Default::default()
     };
     crate::render::ask_for_timestamps(&mut options.wgpu_options);
+    crate::report::crash::install();
     #[cfg(target_os = "macos")]
     crate::system_open::listen();
 

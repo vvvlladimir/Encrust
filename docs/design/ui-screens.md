@@ -40,7 +40,7 @@ stripe or a border of its own.
 
 Left to right: on macOS 72 for the system's buttons, File, Edit, View as quiet text
 buttons; in the centre the printer ring (while a printer prints; idle ones are reached from the plate card) and the chip; at the right
-the Alpha pill, Find (as wide as its word and `⌘K` at its right), the key sheet and the gear as 30
+the Beta pill, Find (as wide as its word and `⌘K` at its right), the key sheet and the gear as 30
 squares.
 
 On macOS the system's menu under the app's name is AppKit's own, not drawn here (ADR 0444):
@@ -366,6 +366,14 @@ a 60 tall tile on `panel` of a 44 picture beside the file and its outcome in `ok
 hairline, results grouped under capital names as Tools, Actions, Models with their keys,
 the lit row on `picked_wash`, Esc as a keycap at the field's right, and a strip over a
 hairline at its foot with the keys to move and open (`key_row`).
+
+**Report a problem**, 560 wide: its head; the line that nothing is sent; a `notice` when
+there is something to say — `warn` *Encrust closed because of an error last time* after a
+crash, `ok` *The report is on your clipboard* once the issue form was opened; the two
+questions as 72 tall `text_area`s; *Add to the report* (three `switch`es) as a `section`;
+*The report* under a `heading`, the whole of it in a `text_block`, the body scrolling; the
+foot Save it as a file (quiet) left, Copy the report and Open an issue (accent, ↗) right.
+Closing the sheet drops the crash it was opened on.
 
 **Update**, 640 wide, carries a release through: its head, then a `release_hero` (*Encrust
 0.15.0* over *0.14.2 → 0.15.0*) with Release page ↗ at the

@@ -217,6 +217,7 @@ paints from tokens only.
 | `axis_label` | The same, the name an axis letter in its axis colour: `X (mm)` |
 | `number_field` | The one box a number is typed or dragged in: sunken, `FIELD_H` tall, the figure at its right |
 | `text_box` | The shape of every box text is typed in: `FIELD_H` tall, as a button is, the text centred in it |
+| `text_area`, `text_block` | Several lines typed into a full-width `sunken` box under its `field_label`; text shown to be read whole, in the code face on `base` in a hairline box as tall as the text, scrolling with what holds it |
 | `number_row`, `count_row` | The name on the left, a `FIELD_W` box on the right with the unit inside it after the figure, in a slot as wide as the widest short unit, so a column's figures stand on one line |
 | `carried_row` | A `number_row` the window changed for the user: its name in `warn` and a button that puts the old value back |
 | `limited_row`, `limit_verdict` | A `number_row` held to a machine's limit (ADR 0368): its box takes only what the machine takes, a value that strays is boxed in `danger` with the span under it |

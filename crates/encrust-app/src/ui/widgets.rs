@@ -61,8 +61,8 @@ pub use dropdown::{
 pub use entry_row::{EntryRow, ModelRow, entry_row, model_row};
 pub use field::{
     Carried, ConditionName, ConditionRow, address_field, axis_label, carried_row, condition_row,
-    count_row, field_error, field_label, number_field, number_row, picker_row, row_name, text_box,
-    text_row, unit_field,
+    count_row, field_error, field_label, number_field, number_row, picker_row, row_name, text_area,
+    text_block, text_box, text_row, unit_field,
 };
 pub use figures::{Figure, details_fold, figure_grid, split_readings};
 pub use hint_bar::{hint_bar, hint_bar_names};

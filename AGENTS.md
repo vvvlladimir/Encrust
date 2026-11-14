@@ -1,7 +1,7 @@
 # Working on Encrust
 
 Offline MSLA/SLA resin slicer in Rust: mesh in, layers out, masks rasterised, printer file
-written. Pre-alpha; import, orient, hollow, support, slice, rasterise, analyse, write and send
+written. Beta; import, orient, hollow, support, slice, rasterise, analyse, write and send
 run end to end.
 
 ```sh

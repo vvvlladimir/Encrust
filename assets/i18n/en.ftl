@@ -1032,8 +1032,8 @@ updates-looking-block = Looking
 updates-every-change = Every change
 updates-and-more = And { $count } more.
 updates-last-looked = Last looked { $when }
-bar-alpha = Alpha
-bar-alpha-tooltip = Encrust is in alpha: say what went wrong
+bar-beta = Beta
+bar-beta-tooltip = Encrust is in beta: say what went wrong
 menu-new-plate = New plate
 menu-new-project = New project
 menu-open-project = Open project...
@@ -2153,17 +2153,21 @@ confirm-delete = Delete
 
 ## panels/report.rs
 
-report-nothing-sent = Encrust is in alpha, and a report is how a bug gets fixed. Nothing is sent from here: what you see below stays on this machine until you hand it over yourself.
-report-no-model = Your model is never in the report. Attach it to the issue yourself only if it is yours to share — a small shape that shows the same bug is better for everyone.
 report-what-happened = What happened, and what you expected instead
 report-steps = How to reproduce it
 report-title = Report a problem
+report-stays-here = Nothing is sent from here, and your model is never in the report.
+report-crashed = Encrust closed because of an error last time
+report-crashed-why = Say below what you did just before. The error is already in the report.
+report-include = Add to the report
+report-handed-why = The issue form opened in your browser. If its Report from Encrust field is empty, paste the report there.
+# The tooltip of Open an issue.
+report-open-issue-tooltip = Opens the issue form on GitHub with the report filled in, and copies the report as well
 report-include-profiles = The printer and resin profiles
 report-include-settings = What the tool panels are set to
 report-include-plate = How much stands on the plate
 report-the-report = The report
 report-open-issue = Open an issue
-report-copied-for-issue = The report is on your clipboard: paste it into the issue
 report-copy = Copy the report
 report-copied = The report is on your clipboard
 report-save = Save it as a file

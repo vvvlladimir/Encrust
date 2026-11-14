@@ -8,7 +8,7 @@ Encrust is a free, open-source slicer for MSLA and SLA resin printers. It takes 
 and turns it into the file your printer prints. Everything runs on your own computer: no
 account, no cloud, nothing uploaded.
 
-**Status: alpha.** Every step works end to end, from opening a model to starting the print,
+**Status: beta.** Every step works end to end, from opening a model to starting the print,
 but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrote.
 
 ---
@@ -1015,9 +1015,12 @@ address in a video player).
   the Microsoft Store is updated by the Store instead: it says when the Store has a new
   version, and its button opens Encrust in the Store app to update.
 - **Find a setting** at the top of Settings narrows its pages as you type (`⌘F`).
-- **Bug report:** builds a Markdown report (what happened, how to reproduce it, settings,
-  profiles) and gives it to you to copy or save. Encrust never sends it itself, and network
-  addresses are removed from it.
+- **Bug report:** builds a Markdown report (what happened, how to reproduce it, the
+  settings you changed, profiles) and gives it to you to copy, save or carry into a new
+  GitHub issue, filled in when it fits and on your clipboard to paste when it does not.
+  Encrust never sends it itself, and network addresses are removed from it. After the
+  window closes on an error, the next start opens the report with that error already in it
+  (not in the browser).
 - Choose where sliced files are saved and whether the window opens on the start page.
 - **File name** in Settings → General: a template a sliced file is named by, saved or sent
   to the printer — `{model}`, `{ext}` (the model's file type), `{printer}`, `{resin}`, `{layer}` (µm), `{plate}`, `{date}`,
@@ -1128,4 +1131,4 @@ is a recipe's `check` step (`retry`, `hold_levers`, `drill_cups`).
 - **Camera:** the address only, no video inside Encrust.
 - **Translations:** messages from inside the slicing engine (a file that cannot be read, a
   format it does not know) stay in English under a translated first line.
-- It is alpha: before a long print, compare the output with a slicer you already trust.
+- It is beta: before a long print, compare the output with a slicer you already trust.

@@ -105,21 +105,18 @@ pub mod printer_card_sheet {
 
 /// `panels/report.rs`.
 pub mod report {
-    /// Inside the box the report stands in.
-    pub const REPORT_MARGIN: egui::Margin = egui::Margin::same(8);
     /// The sheet's width where there is room for it, and the narrowest it is still drawn at.
-    pub const SHEET_W: f32 = 520.0;
+    pub const SHEET_W: f32 = 560.0;
     pub const SHEET_MIN_W: f32 = 300.0;
     /// Left around the sheet so it never reaches the window's own edges.
     pub const SCREEN_MARGIN: f32 = 96.0;
-    /// How tall a typed answer is drawn before it scrolls.
-    pub const ANSWER_H: f32 = 56.0;
+    /// How tall a typed answer is drawn, three lines, before it scrolls.
+    pub const ANSWER_H: f32 = 72.0;
     /// The scrolling body between the header and the buttons: its bounds, and the height those
     /// two take out of the window before it is measured.
-    pub const BODY_MAX_H: f32 = 420.0;
+    pub const BODY_MAX_H: f32 = 560.0;
     pub const BODY_MIN_H: f32 = 160.0;
     pub const CHROME_H: f32 = 110.0;
-    pub const REPORT_MIN_H: f32 = 120.0;
 }
 
 /// `panels/scene_panel.rs`.

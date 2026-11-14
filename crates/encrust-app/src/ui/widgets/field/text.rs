@@ -24,6 +24,40 @@ pub fn text_box(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
         .margin(egui::Margin::symmetric(10, 0))
 }
 
+/// A box several lines of text are typed into, full width and `height` points tall, named
+/// over it in the form's label look.
+pub fn text_area(ui: &mut Ui, label: &str, text: &mut String, height: f32) -> egui::Response {
+    field_label(ui, label, theme::colors().text_mid, "");
+    ui.add_space(theme::NOTE_GAP);
+    let edit = egui::TextEdit::multiline(text)
+        .font(theme::label())
+        .margin(egui::Margin::symmetric(10, 8))
+        .background_color(theme::colors().sunken);
+    let response = ui.add_sized(vec2(ui.available_width(), height), edit);
+    name_for_reader(ui, response.id, label);
+    response
+}
+
+/// Text shown to be read whole, not typed: set in the code face on `base` in a hairline box
+/// as tall as the text, so it scrolls with what holds it.
+pub fn text_block(ui: &mut Ui, text: &str) {
+    let colors = theme::colors();
+    egui::Frame::new()
+        .fill(colors.base)
+        .stroke(egui::Stroke::new(1.0, colors.hairline))
+        .corner_radius(theme::R_CONTROL)
+        .inner_margin(egui::Margin::same(8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            crate::ui::paragraph(
+                ui,
+                egui::RichText::new(text)
+                    .font(theme::code(11.0))
+                    .color(colors.text_mid),
+            );
+        });
+}
+
 /// The name of a row whose box takes what is left, in a column of `ROW_NAME_W` so every
 /// such box of a form starts on one line; a longer name is cut.
 pub fn row_name(ui: &mut Ui, text: &str) {

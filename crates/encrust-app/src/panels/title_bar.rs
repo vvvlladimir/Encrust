@@ -11,7 +11,7 @@ mod chip;
 mod menus;
 use crate::ui::theme;
 use crate::ui::theme::layout::title_bar::{COMPACT_BAR_W, ENDS_GAP, PAD};
-use badges::{alpha_badge, update_badge};
+use badges::{beta_badge, update_badge};
 use chip::centred_chip;
 pub use chip::layers_and_exposure;
 use menus::menu;
@@ -45,7 +45,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) {
                 window_controls(ui, window);
                 find_button(ui, window, compact);
                 update_badge(ui, window.machine, compact);
-                alpha_badge(ui, window.machine, compact);
+                beta_badge(ui, window.machine, compact);
             },
         )
         .response

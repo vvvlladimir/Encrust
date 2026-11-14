@@ -84,6 +84,7 @@ impl SlicerApp {
             .supports
             .start_automatic_unless_chosen(&app.doc.scene, &app.machine.slicing.catalogue);
         prefs.restore_panels(&cc.egui_ctx);
+        app.machine.report.offer_crash();
         project::mark_saved(&mut app.window());
         if let Some(path) = initial_model {
             open_by_what_it_is(&mut app.window(), Handed::Path(path.to_path_buf()));
@@ -484,6 +485,7 @@ impl eframe::App for SlicerApp {
 
     fn on_exit(&mut self) {
         self.machine.updates.on_exit();
+        crate::report::crash::forget();
         // Dropping the window resets its view's class under AppKit's Touch Bar observers,
         // which aborts the process: https://github.com/AccessKit/accesskit/issues/823
         #[cfg(target_os = "macos")]

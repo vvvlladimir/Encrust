@@ -1071,8 +1071,8 @@ updates-looking-block = Проверка
 updates-every-change = Все изменения
 updates-and-more = И ещё { $count }.
 updates-last-looked = Последняя проверка: { $when }
-bar-alpha = Альфа
-bar-alpha-tooltip = Encrust в альфа-версии: расскажите, что пошло не так
+bar-beta = Бета
+bar-beta-tooltip = Encrust в бета-версии: расскажите, что пошло не так
 menu-new-plate = Новая платформа
 menu-new-project = Новый проект
 menu-open-project = Открыть проект…
@@ -2205,17 +2205,20 @@ confirm-delete = Удалить
 
 ## panels/report.rs
 
-report-nothing-sent = Encrust пока в альфа-версии, и отчёты помогают исправлять ошибки. Отсюда ничего не отправляется: то, что вы видите ниже, остаётся на этом компьютере, пока вы сами его не передадите.
-report-no-model = Ваша модель никогда не попадает в отчёт. Прикрепляйте её к обращению сами и только если вправе ею делиться: небольшая модель, на которой воспроизводится та же ошибка, подойдёт ещё лучше.
 report-what-happened = Что произошло и чего вы ожидали
 report-steps = Как воспроизвести
 report-title = Сообщить о проблеме
+report-stays-here = Отсюда ничего не отправляется, а вашей модели в отчёте нет.
+report-crashed = В прошлый раз Encrust закрылся из-за ошибки
+report-crashed-why = Опишите ниже, что вы делали перед этим. Сама ошибка уже в отчёте.
+report-include = Добавить в отчёт
+report-handed-why = Форма обращения открылась в браузере. Если поле «Report from Encrust» в ней пустое, вставьте туда отчёт.
+report-open-issue-tooltip = Открывает форму обращения на GitHub с заполненным отчётом и заодно копирует отчёт
 report-include-profiles = Профили принтера и смолы
 report-include-settings = Настройки панелей инструментов
 report-include-plate = Сколько стоит на платформе
 report-the-report = Отчёт
 report-open-issue = Создать обращение
-report-copied-for-issue = Отчёт в буфере обмена: вставьте его в обращение
 report-copy = Копировать отчёт
 report-copied = Отчёт в буфере обмена
 report-save = Сохранить в файл
