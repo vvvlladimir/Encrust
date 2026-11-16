@@ -22,6 +22,7 @@ mod highlight;
 mod hollow;
 mod i18n;
 mod import;
+mod interface_scale;
 mod job;
 mod landing;
 mod launch;

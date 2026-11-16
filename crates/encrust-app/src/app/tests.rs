@@ -319,6 +319,21 @@ fn the_view_key_runs_through_the_three_views_and_back() {
     );
 }
 
+#[test]
+fn the_interface_keys_size_it_even_over_the_settings_window() {
+    let mut app = SlicerApp::default();
+    app.machine.settings.open = true;
+    let press = |app: &mut SlicerApp, by| {
+        shortcuts::act(&mut app.window(), shortcuts::Action::Scale(by));
+        app.machine.general.interface_scale_percent
+    };
+
+    assert_eq!(press(&mut app, 1), 110);
+    assert_eq!(press(&mut app, 1), 125);
+    assert_eq!(press(&mut app, -1), 110);
+    assert_eq!(press(&mut app, 0), 100, "back to the system's size");
+}
+
 /// Only the layer strip switches the view; a tool opens in the inspector beside it.
 #[test]
 fn picking_a_tool_leaves_the_view_alone() {

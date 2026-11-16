@@ -285,7 +285,9 @@ and the one that applies right.
   Application (Appearance, General, Updates, an accent `1` while a release waits) and Help
   (Keyboard shortcuts ↗) under 10.5 capital group names, and Machine and resin ↗ at the foot.
 - *Appearance*: Theme as three `theme_card`s, System (both halves, *Now light* or *Now
-  dark*), Light, Dark, the hint under them; Language; Motion. *General*: Start, Viewport,
+  dark*), Light, Dark, the hint under them; Language; Interface size, a dropdown of the
+  steps in percent, *This screen is too small for a larger window, so it is shown at 150%*
+  under it when capped, the keys behind the question mark; Motion. *General*: Start, Viewport,
   Recovery (a switch and its hint), Sliced files, File name and Profiles, each folder a read-only path box (`~` for home) with its button
   beside it and a hint under; File name an editable box in code type, the reset arrow beside
   it once it differs from `{model}`, *Now saved as …* under it, an unknown `{tag}` named

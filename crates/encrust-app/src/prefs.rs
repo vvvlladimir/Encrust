@@ -159,6 +159,8 @@ pub struct General {
     pub appearance: Appearance,
     /// Whether an unsaved plate is copied aside, to be restored after a run that did not close.
     pub autosave: bool,
+    /// How large the interface is drawn, in percent of the system's own size.
+    pub interface_scale_percent: u16,
 }
 
 /// The palette the user asked for. `System` follows the platform's own setting as it
@@ -194,6 +196,7 @@ impl Default for General {
             reduce_motion: false,
             appearance: Appearance::System,
             autosave: true,
+            interface_scale_percent: crate::interface_scale::SYSTEM_PERCENT,
         }
     }
 }

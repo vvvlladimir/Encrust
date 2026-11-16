@@ -1044,8 +1044,12 @@ address in a video player).
   `{time}` — with the name it makes now shown under it; `encrust batch --name` takes the same.
   Slicing every plate at once fills it for each plate, its own number and first model; a name
   typed over the proposal is kept for all, each plate's name after it.
-- **Reduce motion** in Settings → General stops every animation in the window.
-- **Appearance** in Settings → General: Light, Dark, or System, which follows the computer's own light or dark setting as it changes — on macOS, Windows and in a browser; on Linux where the desktop reports it, otherwise dark.
+- **Reduce motion** in Settings → Appearance stops every animation in the window.
+- **Interface size** in Settings → Appearance draws text, panels and buttons from 75 to 200 %
+  of the system's size, kept between runs; `⌘ =` / `Ctrl =` and `⌘ -` / `Ctrl -` step it from
+  anywhere, a text box too, `⌘ 0` / `Ctrl 0` returns to 100 %. A screen too small for the window at a size
+  holds it at the largest that fits, and says so.
+- **Appearance** in Settings → Appearance: Light, Dark, or System, which follows the computer's own light or dark setting as it changes — on macOS, Windows and in a browser; on Linux where the desktop reports it, otherwise dark.
 - **Hint bar:** while a tool does something with the pointer in the viewport — Measure,
   Hollow, Drain, Relief's text and brush, Supports' pick, place and area, Repair's faces and
   edges, Cut's part mark — a pill under the tool row names the keys and what each does,

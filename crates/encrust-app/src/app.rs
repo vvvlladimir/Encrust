@@ -62,6 +62,9 @@ impl SlicerApp {
         #[cfg(target_arch = "wasm32")]
         crate::web::hold_context(&cc.egui_ctx);
         theme::apply(&cc.egui_ctx);
+        // Cmd + and Cmd - are the table's, so the size they set is kept with the preferences.
+        cc.egui_ctx
+            .options_mut(|options| options.zoom_with_keyboard = false);
         crate::updates::sweep();
 
         let prefs = crate::prefs::load();
@@ -448,6 +451,7 @@ impl eframe::App for SlicerApp {
         let started = web_time::Instant::now();
         crate::i18n::choose(self.machine.general.language);
         crate::ui::theme::motion::reduce(ui.ctx(), self.machine.general.reduce_motion);
+        crate::interface_scale::apply(ui.ctx(), self.machine.general.interface_scale_percent);
         #[cfg(target_os = "macos")]
         if !ui.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
             crate::traffic_lights::centre(frame, crate::ui::theme::TOP_BAR_H);
