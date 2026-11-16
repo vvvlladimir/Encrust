@@ -1,4 +1,4 @@
-use core_geometry::{Mesh, Scalar, Winding, split};
+use core_geometry::{Mesh, Scalar, Winding, signed_volume, split};
 
 /// Faces of a shell asked whether something else stands around it.
 const SAMPLES: usize = 64;
@@ -6,6 +6,10 @@ const SAMPLES: usize = 64;
 /// How far past its face a sample stands, as a fraction of the shell's own diagonal: off
 /// the face, and far short of any wall that could be around it.
 const STAND_OFF: Scalar = 1e-3;
+
+/// A shell enclosing less than this over its area, in millimetres, is a sheet with no
+/// inside: a fiftieth of the finest lattice, and a body's ratio is a third of its radius.
+const FLAT_MM: Scalar = 1e-3;
 
 /// The shells of `mesh` that bound the solid, or `None` when that is all of them.
 ///
@@ -23,7 +27,7 @@ pub(crate) fn outer_shells(mesh: &Mesh) -> Option<Mesh> {
     let total = pieces.len();
     let outer: Vec<Mesh> = pieces
         .into_iter()
-        .filter(|piece| !is_enclosed(piece, mesh, &winding))
+        .filter(|piece| !is_flat(piece) && !is_enclosed(piece, mesh, &winding))
         .collect();
     if outer.len() == total || outer.is_empty() {
         return None;
@@ -69,6 +73,11 @@ fn is_one_piece(mesh: &Mesh) -> bool {
     mesh.faces
         .iter()
         .all(|face| find(&mut parent, face[0]) == root)
+}
+
+/// Whether `piece` encloses next to nothing for the surface it has.
+fn is_flat(piece: &Mesh) -> bool {
+    signed_volume(piece).abs() < FLAT_MM * piece.surface_area()
 }
 
 /// Whether most of `piece` has the rest of `mesh` standing around it: just outside its
@@ -145,6 +154,15 @@ mod tests {
         let surface =
             outer_shells(&joined(&[outer.clone(), resting])).expect("the floor is shared");
         assert_eq!(surface.faces.len(), outer.faces.len());
+    }
+
+    #[test]
+    fn a_sheet_with_no_thickness_is_left_out() {
+        let body = cube(Vec3::ZERO, Vec3::splat(20.0));
+        let sheet = cube(Vec3::new(10.0, 5.0, 15.0), Vec3::new(10.0, 15.0, 25.0));
+        let surface =
+            outer_shells(&joined(&[body.clone(), sheet])).expect("the sheet has no inside");
+        assert_eq!(surface.faces.len(), body.faces.len());
     }
 
     #[test]

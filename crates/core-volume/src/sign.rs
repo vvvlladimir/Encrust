@@ -13,12 +13,12 @@ const WELL_SHAPED: Scalar = 1e-2;
 
 /// How a field decides which side of the surface a point is on.
 ///
-/// The two answers differ only on a mesh that is not watertight, and that is the whole
-/// point of having both; see
-/// `docs/decisions/0055-the-sign-is-pseudonormal-with-winding-behind-it.md`.
+/// The two answers differ only on a mesh that is not one closed manifold shell, and that is
+/// the whole point of having both; see ADR 0055 and 0448.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SignMode {
-    /// The pseudonormal on a mesh [`diagnose`] calls closed, the winding number otherwise.
+    /// The pseudonormal on one closed shell with no branching edge, the winding number
+    /// on anything else, where the pseudonormal is not defined (ADR 0448).
     #[default]
     Auto,
     /// The angle-weighted pseudonormal of the nearest point. Nearly free, and exact only
@@ -38,7 +38,7 @@ pub(crate) enum Signer {
 impl Signer {
     pub(crate) fn new(mesh: &Mesh, mode: SignMode) -> Self {
         let resolved = match mode {
-            SignMode::Auto if diagnose(mesh).is_closed() => SignMode::Pseudonormal,
+            SignMode::Auto if is_one_manifold_shell(mesh) => SignMode::Pseudonormal,
             SignMode::Auto => SignMode::Winding,
             picked => picked,
         };
@@ -64,6 +64,13 @@ impl Signer {
             Self::Winding(winding) => winding.is_inside(mesh, point),
         }
     }
+}
+
+/// Whether `mesh` is what the pseudonormal signs exactly: a single shell, closed, every edge
+/// shared by two faces. Shells that cross or a sheet with no inside are not.
+fn is_one_manifold_shell(mesh: &Mesh) -> bool {
+    let found = diagnose(mesh);
+    found.is_closed() && found.shells == 1 && found.non_manifold_edges == 0
 }
 
 /// The angle-weighted normals of Baerentzen and Aanaes: one per face, one per vertex and
@@ -428,6 +435,22 @@ mod tests {
             !Signer::new(&mesh, SignMode::Pseudonormal).is_inside(&mesh, point, &found),
             "the point stands off the ridge, outside both faces"
         );
+    }
+
+    /// A sheet with no thickness standing out of a face, as a model carries a stray film:
+    /// its two sides cancel along its rim, where the pseudonormal is noise.
+    #[test]
+    fn a_closed_mesh_of_two_shells_is_signed_by_the_winding_number() {
+        let mut mesh = cube(10.0);
+        mesh.append(&core_geometry::cuboid(
+            Vec3::new(5.0, 2.0, 8.0),
+            Vec3::new(5.0, 8.0, 14.0),
+        ));
+        assert!(diagnose(&mesh).is_closed(), "the sheet is walked both ways");
+        assert!(matches!(
+            Signer::new(&mesh, SignMode::Auto),
+            Signer::Winding(_)
+        ));
     }
 
     #[test]

@@ -21,6 +21,7 @@ use crate::shells::outer_shells;
 use crate::sign::SignMode;
 
 mod floor;
+mod kept;
 mod opening;
 
 /// How far past its own surface a hollowing field reaches.
@@ -524,7 +525,7 @@ fn shelled(
     let open = opened.as_ref().unwrap_or(&field.offset);
     let blocked = blocked(open, blockers);
     let cavity = blocked.as_ref().unwrap_or(open);
-    let cavity_mesh = extract(cavity, cancel);
+    let cavity_mesh = kept::kept(extract(cavity, cancel), mesh, blockers, field.voxel_mm);
     cancel.begin(Step::Shaping, 0);
     let Carved { void, solid } = match &infill {
         Some(infill) => cut(cavity, cavity_mesh, infill, field.budget_bytes, cancel)?,

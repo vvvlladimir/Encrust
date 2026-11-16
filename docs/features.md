@@ -383,6 +383,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 
 ### Hollow
 - Hollow a model with a wall thickness and precision you choose.
+- The cavity holds only what can drain: a pocket smaller than a 3 mm drain hole's ball is
+  left solid, and nothing of the cavity lands outside the model or loose inside it, even on
+  a mesh with a stray film or shells crossing each other.
 - **Inside** grows the wall inward and leaves the outside untouched. **Outside** grows it
   outward, which gives you a mould of the model; a mould takes no infill and keeps no
   wall solid, so the panel hides both.

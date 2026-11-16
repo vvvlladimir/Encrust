@@ -83,7 +83,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0036](0036-rays-go-through-a-bounding-volume-hierarchy.md) | Every ray is cast through a bounding volume hierarchy | Accepted |
 | [0053](0053-nearest-surface-queries-live-beside-the-ray-ones.md) | Nearest-surface queries live beside the ray ones, in `core-geometry` | Accepted |
 | [0054](0054-inside-is-decided-by-the-generalised-winding-number.md) | Inside is decided by the generalised winding number | Accepted |
-| [0055](0055-the-sign-is-pseudonormal-with-winding-behind-it.md) | The sign is the pseudonormal, with the winding number behind it | Accepted |
+| [0055](0055-the-sign-is-pseudonormal-with-winding-behind-it.md) | The sign is the pseudonormal, with the winding number behind it | Accepted; what `Auto` takes the pseudonormal on is superseded by 0448 |
+| [0448](0448-a-cavity-keeps-only-what-lies-inside-the-model.md) | Sign by pseudonormal only on one manifold shell, and keep only the cavity inside the model | Accepted |
 | [0075](0075-a-cut-is-its-own-operation.md) | A cut is its own operation, not part of hollowing | Accepted; amended by 0346 for a hole drilled before the cavity, by 0414 for one set by hand |
 | [0086](0086-an-edit-is-taken-back-by-restoring-a-scene.md) | An edit is taken back by restoring a scene, not by inverting it | Accepted |
 | [0089](0089-a-cut-is-exact-on-the-mesh.md) | A cut is exact on the mesh, capped with `earcutr` | Accepted |

@@ -7,12 +7,13 @@
 )]
 
 use core_geometry::{
-    Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, ball, diagnose, signed_volume,
+    Bvh, Mat3, Mesh, Quat, Scalar, Transform, Vec3, ball, cuboid, diagnose, signed_volume, split,
 };
 use core_volume::{
-    Blocker, CUT_WEIGHT, Cancel, Channel, DrainHole, HoleKind, HoleSize, HollowMode,
-    HollowSettings, Hollowed, InfillPattern, InfillSettings, Progress, Step, VolumeError, carve,
-    cavity_field, drill, hole_at, hollow, hollow_at_scale, pierce, plate_down, sleeves,
+    Blocker, CUT_WEIGHT, Cancel, Channel, DrainHole, FieldSettings, HoleKind, HoleSize, HollowMode,
+    HollowSettings, Hollowed, InfillPattern, InfillSettings, Progress, SignMode, Step, VolumeError,
+    build, carve, cavity_field, drill, extract, hole_at, hollow, hollow_at_scale, pierce,
+    plate_down, sleeves,
 };
 
 const PI: Scalar = std::f32::consts::PI;
@@ -186,6 +187,74 @@ fn hollowing_leaves_the_outside_of_the_model_alone() {
         "the model's own vertices come through untouched"
     );
     assert_eq!(&hollowed.mesh.faces[..mesh.faces.len()], &mesh.faces[..]);
+}
+
+/// A 20 mm cube with a sheet of no thickness standing out of its top through its middle, as
+/// a model carries a stray film: a seam no pseudonormal can sign.
+fn cube_with_a_sheet() -> Mesh {
+    let mut mesh = cube(20.0, 0.031);
+    let nudge = Vec3::new(0.017, 0.023, 0.031);
+    mesh.append(&cuboid(
+        nudge + Vec3::new(10.0, 5.0, 15.0),
+        nudge + Vec3::new(10.0, 15.0, 25.0),
+    ));
+    mesh
+}
+
+/// The faces of `hollowed` that bound its cavity, as a mesh of their own.
+fn cavity_of(hollowed: &Hollowed) -> Mesh {
+    Mesh::new(
+        hollowed.mesh.vertices.clone(),
+        hollowed.mesh.faces[hollowed.cavity.clone()].to_vec(),
+    )
+}
+
+#[test]
+fn a_stray_sheet_leaves_the_cavity_one_box_inside_the_model() {
+    let mesh = cube_with_a_sheet();
+    let bvh = Bvh::build(&mesh);
+    let hollowed = hollow(
+        &mesh,
+        &bvh,
+        &settings(1.3, HollowMode::Internal),
+        Cancel::never(),
+    )
+    .expect("a cube with a sheet hollows");
+
+    let cavity = cavity_of(&hollowed);
+    assert_eq!(split(&cavity).len(), 1, "one cavity, nothing outside");
+    let bounds = cube(20.0, 0.031).aabb().expect("the cube has faces");
+    let room = bounds.mins + Vec3::splat(1.0)..=bounds.maxs - Vec3::splat(1.0);
+    assert!(
+        cavity.faces.iter().flatten().all(|corner| {
+            let vertex = cavity.vertices[*corner as usize];
+            vertex.cmpge(*room.start()).all() && vertex.cmple(*room.end()).all()
+        }),
+        "every cavity vertex stands at least 1 mm inside the cube"
+    );
+    let held: Scalar = 17.4 * 17.4 * 17.4;
+    assert!(
+        (hollowed.cavity_mm3 - held).abs() / held < 0.01,
+        "17.4^3 is {held} mm3, got {}",
+        hollowed.cavity_mm3
+    );
+}
+
+/// The pseudonormal is wrong somewhere along the sheet's rim; that answer must stay in its
+/// own tile rather than be handed on until it wraps a second cavity round the model.
+#[test]
+fn a_wrong_side_in_one_tile_is_not_carried_into_a_second_cavity() {
+    let mesh = cube_with_a_sheet();
+    let bvh = Bvh::build(&mesh);
+    let settings = FieldSettings {
+        voxel_mm: 0.087,
+        band_voxels: 2.0,
+        iso_mm: -1.3,
+        sign: SignMode::Pseudonormal,
+        ..FieldSettings::default()
+    };
+    let field = build(&mesh, &bvh, &settings, Cancel::never()).expect("the field builds");
+    assert_eq!(split(&extract(&field, Cancel::never())).len(), 1);
 }
 
 #[test]

@@ -44,7 +44,15 @@ stray part left inside a sculpt — is left out of them. A field over it reads i
 as air and cuts a wall around it. It stays in the model, so under the non-zero rule it
 prints solid wherever it is, in the wall or standing in the cavity. A mould turns the
 bounding shells inside out, not the stray ones, which would print as resin in its void
-(ADR 0186).
+(ADR 0186). A shell with no volume, a stray film, is left out too: it bounds nothing and
+gives the field a seam no side can be read off (ADR 0448).
+
+A shell's cavity is split into pieces once meshed, and only what can hold resin a drain
+reaches is kept (`hollow/kept.rs`, ADR 0448): a piece wound against the rest is solid left
+loose in the cavity and goes unless it touches a blocker; one smaller than a ball of the
+default 3 mm drain stays solid; and where two or more are left, one the model's winding
+number puts outside is a wrong side in the field and goes. The largest is always kept, and
+`cavity_mm3` counts what was kept.
 
 An open floor carries the cavity out through the floor the model stands on (ADR 0313).
 `HollowSettings::open_toward` is the way to the plate in the space the wall is measured in,

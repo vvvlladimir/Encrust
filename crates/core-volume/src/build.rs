@@ -147,7 +147,11 @@ fn built<T: Copy + Send + Sync>(
     let signer = Signer::new(mesh, settings.sign);
     let keep = settings.clip.map(|clip| clipped_tiles(grid, clip));
 
-    let (rings, candidates) = reach(
+    let Walked {
+        rings,
+        found: candidates,
+        sides,
+    } = reach(
         mesh,
         bvh,
         &signer,
@@ -189,10 +193,17 @@ fn built<T: Copy + Send + Sync>(
         return Err(VolumeError::Cancelled);
     }
 
+    // A gap takes the side the walk gave its lowest tile, so it cannot part from its
+    // neighbours on a second, independent question.
     let solid = gap_runs(walls(tiles.keys().copied(), settings.clip, grid), |tile| {
-        let point = grid.tile_center(tile);
-        bvh.closest(point)
-            .is_some_and(|found| signed(&signer, mesh, point, &found) < iso_mm)
+        sides.get(&tile).map_or_else(
+            || {
+                let point = grid.tile_center(tile);
+                bvh.closest(point)
+                    .is_some_and(|found| signed(&signer, mesh, point, &found) < iso_mm)
+            },
+            |distance| *distance < iso_mm,
+        )
     });
 
     Ok(Built { grid, tiles, solid })
@@ -306,7 +317,6 @@ fn clipped_tiles(grid: VoxelGrid, clip: Aabb) -> (IVec3, IVec3) {
 ///
 /// The shell comes back as the rings the walk found it in, because that is the order the
 /// sweep has to take it in: every tile of a ring has a neighbour in the ring before it.
-/// The tiles worth filling come with the signed distance at their centres.
 #[allow(clippy::too_many_arguments)]
 fn reach(
     mesh: &Mesh,
@@ -317,7 +327,7 @@ fn reach(
     iso_mm: Scalar,
     seeds: FastSet<IVec3>,
     keep: Option<(IVec3, IVec3)>,
-) -> (Vec<Vec<IVec3>>, Vec<(IVec3, Scalar)>) {
+) -> Walked {
     let edge_mm = band_mm + grid.tile_radius();
     let worth_filling = |distance: Scalar| (distance - iso_mm).abs() <= edge_mm;
     // A tile this much further from the mesh than the isosurface cannot lead to one that
@@ -342,28 +352,33 @@ fn reach(
         seeds.into_iter().map(|tile| (tile, None)).collect();
     let mut rings: Vec<Vec<IVec3>> = Vec::new();
     let mut found: Vec<(IVec3, Scalar)> = Vec::new();
+    let mut sides: FastMap<IVec3, Scalar> = FastMap::default();
 
     while !frontier.is_empty() {
         let measured: Vec<(IVec3, Scalar)> = frontier
             .par_iter()
-            .filter_map(|(tile, inside)| {
+            .filter_map(|(tile, inherited)| {
                 let center = grid.tile_center(*tile);
                 let found = bvh.closest(center)?;
-                let inside = inside.unwrap_or_else(|| signer.is_inside(mesh, center, &found));
-                Some((
-                    *tile,
-                    if inside {
-                        -found.distance
-                    } else {
-                        found.distance
-                    },
-                ))
+                // A tile either side could store asks its own side: an inherited one carries
+                // a single wrong answer on through every tile the walk reaches from it.
+                let stored = worth_filling(found.distance) || worth_filling(-found.distance);
+                let inside = inherited
+                    .filter(|_| !stored)
+                    .unwrap_or_else(|| signer.is_inside(mesh, center, &found));
+                let distance = if inside {
+                    -found.distance
+                } else {
+                    found.distance
+                };
+                Some((*tile, distance))
             })
             .collect();
 
         frontier = Vec::new();
         rings.push(measured.iter().map(|(tile, _)| *tile).collect());
         for (tile, distance) in measured {
+            sides.insert(tile, distance);
             if worth_filling(distance) {
                 found.push((tile, distance));
             }
@@ -378,7 +393,19 @@ fn reach(
             }
         }
     }
-    (rings, found)
+    Walked {
+        rings,
+        found,
+        sides,
+    }
+}
+
+/// What [`reach`] walked: its rings, the tiles worth filling with the signed distance at
+/// their centres, and that distance at the centre of every tile it measured.
+struct Walked {
+    rings: Vec<Vec<IVec3>>,
+    found: Vec<(IVec3, Scalar)>,
+    sides: FastMap<IVec3, Scalar>,
 }
 
 /// The twenty-six tiles touching one, so the walk crosses a corner as well as a face.
