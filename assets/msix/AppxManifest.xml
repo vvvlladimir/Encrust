@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The Store's package of the Windows build, ADR 0286. Identity is what Partner Center reserved
-     for the app; release.yml fills in @VERSION@ and builds the package. -->
+     for the app; release.yml fills in @VERSION@ and @ARCH@ and bundles x64 and arm64 (ADR 0454). -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -14,7 +14,7 @@
     Name="VladimirVarvorkin.Encrust"
     Publisher="CN=F64887AD-0FF2-40A1-B4DF-B7CA789E97BD"
     Version="@VERSION@"
-    ProcessorArchitecture="x64" />
+    ProcessorArchitecture="@ARCH@" />
 
   <Properties>
     <DisplayName>Encrust</DisplayName>

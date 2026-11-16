@@ -47,14 +47,15 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0209](0209-a-front-end-names-a-container-through-core-pipeline.md) | A front end names a container through `core-pipeline` | Accepted |
 | [0129](0129-what-a-model-carries-lives-in-its-core.md) | What a model carries lives in the core that makes it | Accepted |
 | [0159](0159-agpl-with-a-contributor-licence-agreement.md) | AGPL-3.0 with a contributor licence agreement | Accepted |
-| [0160](0160-a-release-is-an-installer-per-platform.md) | A release is an installer per platform, built in CI | Superseded by 0162 (the trigger only) |
+| [0160](0160-a-release-is-an-installer-per-platform.md) | A release is an installer per platform, built in CI | Superseded by 0162 (the trigger only); the targets amended by 0454 |
 | [0161](0161-the-readers-are-fuzzed-outside-the-workspace.md) | The readers are fuzzed from a crate outside the workspace | Superseded by 0173 (the CI trigger only) |
 | [0162](0162-release-please-cuts-the-release.md) | release-please cuts the release, and the build workflow is called by it | Accepted |
 | [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted; the default of the daily check is amended by 0213 |
 | [0213](0213-the-daily-update-check-is-on-by-default.md) | The daily update check is on by default | Accepted |
 | [0389](0389-a-support-profile-is-saved-by-a-press.md) | Save a support profile's form by a press, and ask before leaving it unsaved | Accepted |
 | [0388](0388-the-update-feed-dates-its-release-and-sizes-each-archive.md) | Date the release and size each archive in the update feed | Accepted |
-| [0286](0286-the-windows-build-also-ships-through-the-microsoft-store.md) | The Windows build also ships through the Microsoft Store | Accepted; the manual upload replaced by `store.yml`, the Store copy hearing of no update amended by 0292 |
+| [0286](0286-the-windows-build-also-ships-through-the-microsoft-store.md) | The Windows build also ships through the Microsoft Store | Accepted; the manual upload replaced by `store.yml`, the Store copy hearing of no update amended by 0292, the package bundled with ARM64 by 0454 |
+| [0454](0454-windows-and-linux-also-ship-for-arm64.md) | Windows and Linux also ship for ARM64, and the Store takes a bundle | Accepted |
 | [0292](0292-the-store-copy-asks-the-store-for-its-update.md) | The Store copy asks the Store for its update and sends the user there | Accepted |
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Superseded by 0273 |
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |

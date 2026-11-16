@@ -2,8 +2,8 @@ name: CI
 
 # Everything that must hold before a change reaches main: the three checks from AGENTS.md, the
 # rustdoc rules and the rust-version floor. Linux runs on a pull request and on main, skipped for a
-# tree that already passed; macOS, Windows, the threaded web build and the floor run nightly when
-# main moved, or on demand before a merge. See ADR-0273.
+# tree that already passed; macOS, Windows, ARM64, the threaded web build and the floor run nightly
+# when main moved, or on demand before a merge. See ADR-0273.
 
 on:
   # What nothing here builds or reads; the nightly gate below filters the same list.
@@ -238,9 +238,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        # ARM64 Windows and Linux are released (ADR 0454), so they are checked before a tag is.
+        os: [macos-latest, windows-latest, windows-11-arm, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@v7
+
+      - name: Linux windowing headers
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/linux-gui-deps
 
       - name: Install the pinned toolchain
         run: rustup show

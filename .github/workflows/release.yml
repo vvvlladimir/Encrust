@@ -10,10 +10,11 @@ name: Release
 #
 # Each platform gets an installer people download and an archive the window's own update reads:
 # `.dmg`, `-setup.exe`, `.AppImage` and `.deb` from `cargo packager`, configured in
-# crates/encrust-app/Cargo.toml, and a `.msixupload` for the Microsoft Store. Nothing is code-signed;
+# crates/encrust-app/Cargo.toml; Windows and Linux are built for x86_64 and ARM64 alike, and the
+# Microsoft Store gets one `.msixupload` bundling both Windows builds. Nothing is code-signed;
 # each archive is signed with the project's release key, and `latest.json` names them for the
 # window's update check. Publishing the draft is what makes that feed visible. See ADR-0160,
-# ADR-0162, ADR-0172 and ADR-0286.
+# ADR-0162, ADR-0172, ADR-0286 and ADR-0454.
 
 on:
   workflow_call:
@@ -40,11 +41,11 @@ on:
         type: boolean
         default: true
       linux:
-        description: Linux (.AppImage, .deb and the update archive)
+        description: Linux, x86_64 and ARM64 (.AppImage, .deb and the update archives)
         type: boolean
         default: true
       windows:
-        description: Windows (-setup.exe and the update archive)
+        description: Windows, x86_64 and ARM64 (-setup.exe and the update archives)
         type: boolean
         default: true
       store:
@@ -71,7 +72,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # One job owns the draft, so the four build legs never race over it. It also refuses a tag naming
+  # One job owns the draft, so the build legs never race over it. It also refuses a tag naming
   # a version the binaries do not carry: `--version` would then disagree with the page the user
   # downloaded from.
   draft:
@@ -104,8 +105,8 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
             --title "$TAG" --generate-notes
 
-      # The build legs the ticked boxes ask for. The Windows leg also runs for the Store alone,
-      # which needs its binaries but not its installer. Linux is built on the oldest supported
+      # The build legs the ticked boxes ask for. The Windows legs also run for the Store alone,
+      # which needs their binaries but not their installers. Linux is built on the oldest supported
       # runner: a binary cannot run against a glibc older than the one it was built on.
       - id: legs
         env:
@@ -122,8 +123,12 @@ jobs:
              "archive": "encrust-macos-x86_64.tar.gz", "formats": "dmg"},
             {"platform": "linux", "os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu",
              "archive": "encrust-linux-x86_64.tar.gz", "formats": "appimage,deb"},
+            {"platform": "linux", "os": "ubuntu-22.04-arm", "target": "aarch64-unknown-linux-gnu",
+             "archive": "encrust-linux-aarch64.tar.gz", "formats": "appimage,deb"},
             {"platform": "windows", "os": "windows-latest", "target": "x86_64-pc-windows-msvc",
-             "archive": "encrust-windows-x86_64.zip", "formats": "nsis"}
+             "archive": "encrust-windows-x86_64.zip", "formats": "nsis"},
+            {"platform": "windows", "os": "windows-11-arm", "target": "aarch64-pc-windows-msvc",
+             "archive": "encrust-windows-aarch64.zip", "formats": "nsis"}
           ]
           EOF
           )
@@ -206,13 +211,16 @@ jobs:
           ARCHIVE: ${{ matrix.archive }}
           TARGET: ${{ matrix.target }}
         run: |
+          arch="${TARGET%%-*}"
+          # Debian names the architectures its own way.
+          case "$arch" in x86_64) deb=amd64 ;; aarch64) deb=arm64 ;; esac
           mkdir installers
           for path in packages/*; do
             case "$path" in
-              *.dmg) name="Encrust-macos-${TARGET%%-*}.dmg" ;;
-              *-setup.exe) name=Encrust-windows-x86_64-setup.exe ;;
-              *.AppImage) name=Encrust-linux-x86_64.AppImage ;;
-              *.deb) name=encrust_amd64.deb ;;
+              *.dmg) name="Encrust-macos-$arch.dmg" ;;
+              *-setup.exe) name="Encrust-windows-$arch-setup.exe" ;;
+              *.AppImage) name="Encrust-linux-$arch.AppImage" ;;
+              *.deb) name="encrust_$deb.deb" ;;
               *) continue ;;
             esac
             cp "$path" "installers/$name"
@@ -220,26 +228,50 @@ jobs:
           ls installers
           gh release upload "$TAG" "$ARCHIVE" installers/* --clobber --repo "$GITHUB_REPOSITORY"
 
+      # The Store takes both Windows architectures in one bundle, which the `store` job packs.
+      - name: Collect the Store's binaries
+        if: matrix.store
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          mkdir store
+          cp "target/$TARGET/release/encrust-gui.exe" "target/$TARGET/release/encrust.exe" \
+            LICENSE THIRD-PARTY-LICENSES.md store/
+      - if: matrix.store
+        uses: actions/upload-artifact@v7
+        with:
+          name: store-${{ matrix.target }}
+          path: store/
+          retention-days: 1
+
+  # The Store's package of the same binaries: an MSIX per architecture in one bundle, since a Store
+  # app that once took a bundle takes nothing else. The Store signs it, so `store.yml` sends it there
+  # and nobody installs it from the release page. A failure costs only this file (ADR 0286, 0454).
+  store:
+    needs: [draft, build]
+    if: ${{ !cancelled() && inputs.store && needs.draft.result == 'success' }}
+    continue-on-error: true
+    runs-on: windows-latest
+    steps:
       # The manifest and logos come from the revision this workflow runs from, not the tag, so an
       # older tag can still be packaged for the Store.
-      - name: Check out the Store packaging
-        if: matrix.store
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
-          path: workflow
           sparse-checkout: assets/msix
 
-      # The Store's package of the same two binaries. The Store signs it, so `store.yml` sends it there
-      # and nobody installs it from the release page. A failure here costs only this file (ADR 0286).
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: store-*
+          path: binaries
+
+      # Both architectures or no bundle: one without ARM64 would drop it from the Store.
       - name: Package for the Store
-        if: matrix.store
-        continue-on-error: true
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
-          TARGET: ${{ matrix.target }}
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
@@ -247,16 +279,23 @@ jobs:
             Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1).DirectoryName
           if (-not $sdk) { throw 'no makeappx.exe in any Windows SDK on this runner' }
           Write-Host "SDK tools: $sdk"
-          Copy-Item -Recurse workflow/assets/msix msix
-          (Get-Content workflow/assets/msix/AppxManifest.xml -Raw).Replace('@VERSION@', "$($env:TAG.TrimStart('v')).0") |
-            Set-Content msix/AppxManifest.xml -NoNewline
-          Copy-Item "target/$env:TARGET/release/encrust-gui.exe", "target/$env:TARGET/release/encrust.exe",
-            LICENSE, THIRD-PARTY-LICENSES.md msix
+          $version = "$($env:TAG.TrimStart('v')).0"
           & "$sdk\makepri.exe" createconfig /cf priconfig.xml /dq en-US /pv 10.0.0 /o
-          & "$sdk\makepri.exe" new /pr msix /cf priconfig.xml /mn msix/AppxManifest.xml /of msix/resources.pri /o
-          & "$sdk\makeappx.exe" pack /d msix /p Encrust.msix /o
-          Compress-Archive Encrust.msix Encrust.zip
-          $upload = 'Encrust-windows-x86_64-store.msixupload'
+          New-Item -ItemType Directory packages | Out-Null
+          $archs = @{ 'x86_64-pc-windows-msvc' = 'x64'; 'aarch64-pc-windows-msvc' = 'arm64' }
+          foreach ($target in $archs.Keys) {
+            $arch = $archs[$target]
+            if (-not (Test-Path "binaries/store-$target/encrust-gui.exe")) { throw "no $target binaries" }
+            Copy-Item -Recurse assets/msix "msix-$arch"
+            (Get-Content assets/msix/AppxManifest.xml -Raw).Replace('@VERSION@', $version).Replace('@ARCH@', $arch) |
+              Set-Content "msix-$arch/AppxManifest.xml" -NoNewline
+            Copy-Item "binaries/store-$target/*" "msix-$arch"
+            & "$sdk\makepri.exe" new /pr "msix-$arch" /cf priconfig.xml /mn "msix-$arch/AppxManifest.xml" /of "msix-$arch/resources.pri" /o
+            & "$sdk\makeappx.exe" pack /d "msix-$arch" /p "packages/Encrust-$arch.msix" /o
+          }
+          & "$sdk\makeappx.exe" bundle /d packages /p Encrust.msixbundle /bv $version /o
+          Compress-Archive Encrust.msixbundle Encrust.zip
+          $upload = 'Encrust-windows-store.msixupload'
           Move-Item Encrust.zip $upload
           gh release upload $env:TAG $upload --clobber --repo $env:GITHUB_REPOSITORY
 

@@ -21,7 +21,9 @@ release each time it opens, and `ureq` panics on wasm reading a clock it does no
                         "signature": "<the whole .minisig file>", "size": 39845888 },
     "macos-x86_64":   { "...": "..." },
     "linux-x86_64":   { "...": "..." },
-    "windows-x86_64": { "url": ".../encrust-windows-x86_64.zip", "signature": "..." }
+    "linux-aarch64":  { "...": "..." },
+    "windows-x86_64": { "url": ".../encrust-windows-x86_64.zip", "signature": "..." },
+    "windows-aarch64": { "...": "..." }
   }
 }
 ```
