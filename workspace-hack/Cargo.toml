@@ -40,7 +40,7 @@ once_cell = { version = "1" }
 proc-macro2 = { version = "1" }
 quote = { version = "1" }
 syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "full", "visit", "visit-mut"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "full", "visit-mut"] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "full", "visit", "visit-mut"] }
 
 [target.aarch64-apple-darwin.dependencies]
 bitflags = { version = "2", default-features = false, features = ["std"] }
@@ -48,12 +48,12 @@ flate2 = { version = "1", features = ["zlib-rs"] }
 half = { version = "2" }
 image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png", "tga", "tiff"] }
 libc = { version = "0.2", features = ["extra_traits"] }
-nix = { version = "0.31", default-features = false, features = ["fs", "signal"] }
 smallvec = { version = "1", default-features = false, features = ["union"] }
 tinystr = { version = "0.8", features = ["zerovec"] }
 ttf-parser = { version = "0.25", default-features = false, features = ["apple-layout", "glyph-names", "no-std-float", "opentype-layout", "std", "variable-fonts"] }
 yoke = { version = "0.8", default-features = false, features = ["derive"] }
 zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
+zeroize = { version = "1", features = ["derive"] }
 zerovec = { version = "0.11", default-features = false, features = ["alloc", "derive", "yoke"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
@@ -83,6 +83,7 @@ ttf-parser = { version = "0.25", default-features = false, features = ["apple-la
 winnow = { version = "1" }
 yoke = { version = "0.8", default-features = false, features = ["derive"] }
 zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
+zeroize = { version = "1", features = ["derive"] }
 zerovec = { version = "0.11", default-features = false, features = ["alloc", "derive", "yoke"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
@@ -108,6 +109,7 @@ ttf-parser = { version = "0.25", default-features = false, features = ["apple-la
 windows-sys = { version = "0.61", features = ["Win32_Globalization", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_IO", "Win32_System_Memory", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging"] }
 yoke = { version = "0.8", default-features = false, features = ["derive"] }
 zerofrom = { version = "0.1", default-features = false, features = ["derive"] }
+zeroize = { version = "1", features = ["derive"] }
 zerovec = { version = "0.11", default-features = false, features = ["alloc", "derive", "yoke"] }
 
 [target.x86_64-pc-windows-msvc.build-dependencies]

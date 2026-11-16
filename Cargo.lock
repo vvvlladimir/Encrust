@@ -6452,7 +6452,6 @@ dependencies = [
  "linux-raw-sys 0.12.1",
  "log",
  "memchr",
- "nix 0.31.3",
  "num-traits",
  "once_cell",
  "phf_shared",
@@ -6477,6 +6476,7 @@ dependencies = [
  "winnow",
  "yoke",
  "zerofrom",
+ "zeroize",
  "zerovec",
 ]
 
