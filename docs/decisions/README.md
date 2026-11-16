@@ -84,7 +84,6 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0053](0053-nearest-surface-queries-live-beside-the-ray-ones.md) | Nearest-surface queries live beside the ray ones, in `core-geometry` | Accepted |
 | [0054](0054-inside-is-decided-by-the-generalised-winding-number.md) | Inside is decided by the generalised winding number | Accepted |
 | [0055](0055-the-sign-is-pseudonormal-with-winding-behind-it.md) | The sign is the pseudonormal, with the winding number behind it | Accepted; what `Auto` takes the pseudonormal on is superseded by 0448 |
-| [0448](0448-a-cavity-keeps-only-what-lies-inside-the-model.md) | Sign by pseudonormal only on one manifold shell, and keep only the cavity inside the model | Accepted |
 | [0075](0075-a-cut-is-its-own-operation.md) | A cut is its own operation, not part of hollowing | Accepted; amended by 0346 for a hole drilled before the cavity, by 0414 for one set by hand |
 | [0086](0086-an-edit-is-taken-back-by-restoring-a-scene.md) | An edit is taken back by restoring a scene, not by inverting it | Accepted |
 | [0089](0089-a-cut-is-exact-on-the-mesh.md) | A cut is exact on the mesh, capped with `earcutr` | Accepted |
@@ -349,6 +348,9 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0305](0305-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, offer the machine's fonts, and let it follow the surface | Accepted |
 | [0311](0311-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |
 | [0204](0204-a-field-build-is-given-up-on-between-tiles.md) | A field build is given up on between tiles | Accepted |
+| [0448](0448-a-cavity-keeps-only-what-lies-inside-the-model.md) | Sign by pseudonormal only on one manifold shell, and keep only the cavity inside the model | Accepted |
+| [0449](0449-the-wall-asked-for-is-the-thinnest.md) | Cut the cavity half a voxel past the wall, so the wall asked for is the thinnest | Accepted |
+| [0450](0450-faces-buried-in-another-body-are-left-out-of-the-field.md) | Leave out of the field the faces a closed body of the surface buries | Accepted |
 
 ### The plate
 

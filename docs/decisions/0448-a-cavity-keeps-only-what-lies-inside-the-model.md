@@ -34,7 +34,7 @@ cubic millimetre all went into the shell and into `cavity_mm3`.
   is dropped unless it touches a blocker. A piece smaller than a ball of the default drain
   hole, 3 mm across, 14.1 mm³, is dropped and that resin stays solid. When two pieces or
   more remain, a piece most of whose faces the model's winding number calls outside is
-  dropped. The largest piece wound the right way is always kept.
+  dropped, unless none is left, when the largest stays.
 
 ## Consequences
 

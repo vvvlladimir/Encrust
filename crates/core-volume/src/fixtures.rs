@@ -13,6 +13,15 @@ pub(crate) fn sealed(outer: (Vec3, Vec3), cavities: &[(Vec3, Vec3)]) -> Mesh {
     mesh
 }
 
+/// `parts` as one mesh, each keeping its own vertices.
+pub(crate) fn joined(parts: &[Mesh]) -> Mesh {
+    let mut whole = Mesh::default();
+    for part in parts {
+        whole.append(part);
+    }
+    whole
+}
+
 /// Two 30 mm cubes 30 mm apart along X, joined through their middles by a 4 mm square bar,
 /// nudged off the lattice.
 pub(crate) fn dumbbell() -> Mesh {

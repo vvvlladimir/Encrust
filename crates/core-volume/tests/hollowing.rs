@@ -55,6 +55,12 @@ fn settings(thickness_mm: Scalar, mode: HollowMode) -> HollowSettings {
     }
 }
 
+/// How far off the mesh the cavity of a `thickness_mm` wall was cut: half a voxel past the
+/// wall, so that the wall asked for is its thinnest (ADR 0449).
+fn cut_mm(thickness_mm: Scalar, hollowed: &Hollowed) -> Scalar {
+    thickness_mm + hollowed.voxel_mm / 2.0
+}
+
 /// What the whole hollowed mesh encloses: the outer surface less the cavity and the
 /// drains wound the other way, which is exactly what the positive winding rule will fill.
 fn enclosed(mesh: &Mesh) -> Scalar {
@@ -109,11 +115,40 @@ fn a_hollowed_ball_is_a_wall_of_the_thickness_it_asked_for() {
     )
     .expect("a closed ball hollows");
 
-    let wall = 4.0 / 3.0 * PI * (10.0 as Scalar).powi(3) - 4.0 / 3.0 * PI * (8.0 as Scalar).powi(3);
+    let inner = 10.0 - cut_mm(2.0, &hollowed);
+    let wall = 4.0 / 3.0 * PI * ((10.0 as Scalar).powi(3) - inner.powi(3));
     let measured = enclosed(&hollowed.mesh);
     assert!(
         (measured - wall).abs() / wall < 0.03,
-        "4/3 pi (10^3 - 8^3) is {wall} mm3, got {measured}"
+        "4/3 pi (10^3 - {inner}^3) is {wall} mm3, got {measured}"
+    );
+}
+
+/// On the coarsest lattice meshing pulls a vertex half a voxel off the surface it was cut
+/// on; the cut stands far enough past the wall that what is asked for is the thinnest.
+#[test]
+fn the_wall_asked_for_is_the_thinnest_even_on_the_coarsest_lattice() {
+    let nudge = Vec3::new(0.017, 0.023, 0.031);
+    let mesh = cuboid(nudge, nudge + Vec3::new(30.0, 30.0, 7.0));
+    let bvh = Bvh::build(&mesh);
+    let coarse = HollowSettings {
+        precision: 0.0,
+        ..settings(2.0, HollowMode::Internal)
+    };
+    let hollowed = hollow(&mesh, &bvh, &coarse, Cancel::never()).expect("a closed slab hollows");
+
+    let cavity = cavity_of(&hollowed);
+    let thinnest = cavity
+        .faces
+        .iter()
+        .flatten()
+        .filter_map(|corner| bvh.closest(cavity.vertices[*corner as usize]))
+        .map(|found| found.distance)
+        .fold(Scalar::INFINITY, Scalar::min);
+    assert!(
+        thinnest > 0.98 * 2.0,
+        "a 2 mm wall on a {} mm lattice is at least 1.96 mm everywhere, got {thinnest}",
+        hollowed.voxel_mm
     );
 }
 
@@ -129,10 +164,11 @@ fn the_cavity_is_the_ball_the_wall_left_room_for() {
     )
     .expect("a closed ball hollows");
 
-    let cavity = 4.0 / 3.0 * PI * (8.0 as Scalar).powi(3);
+    let radius = 10.0 - cut_mm(2.0, &hollowed);
+    let cavity = 4.0 / 3.0 * PI * radius.powi(3);
     assert!(
         (hollowed.cavity_mm3 - cavity).abs() / cavity < 0.03,
-        "4/3 pi 8^3 is {cavity} mm3, got {}",
+        "4/3 pi {radius}^3 is {cavity} mm3, got {}",
         hollowed.cavity_mm3
     );
 }
@@ -161,11 +197,12 @@ fn the_cavity_range_is_the_space_the_wall_left_room_for() {
         hollowed.mesh.vertices.clone(),
         hollowed.mesh.faces[hollowed.cavity.clone()].to_vec(),
     );
-    let held = 4.0 / 3.0 * PI * (8.0 as Scalar).powi(3);
+    let radius = 10.0 - cut_mm(2.0, &hollowed);
+    let held = 4.0 / 3.0 * PI * radius.powi(3);
     let measured = signed_volume(&cavity);
     assert!(
         (measured + held).abs() / held < 0.03,
-        "the cavity is wound inward around 4/3 pi 8^3 = {held} mm3, got {measured}"
+        "the cavity is wound inward around 4/3 pi {radius}^3 = {held} mm3, got {measured}"
     );
 }
 
@@ -232,10 +269,40 @@ fn a_stray_sheet_leaves_the_cavity_one_box_inside_the_model() {
         }),
         "every cavity vertex stands at least 1 mm inside the cube"
     );
-    let held: Scalar = 17.4 * 17.4 * 17.4;
+    let side = 20.0 - 2.0 * cut_mm(1.3, &hollowed);
+    let held = side.powi(3);
     assert!(
         (hollowed.cavity_mm3 - held).abs() / held < 0.01,
-        "17.4^3 is {held} mm3, got {}",
+        "{side}^3 is {held} mm3, got {}",
+        hollowed.cavity_mm3
+    );
+}
+
+/// Two boxes overlapping by half, as a model built of parts is: one cavity runs through
+/// both, with no wall left along the faces each buries in the other.
+#[test]
+fn overlapping_bodies_share_one_cavity() {
+    let nudge = Vec3::new(0.017, 0.023, 0.031);
+    let mut mesh = cuboid(nudge, nudge + Vec3::splat(20.0));
+    mesh.append(&cuboid(
+        nudge + Vec3::new(10.0, 0.0, 0.0),
+        nudge + Vec3::new(30.0, 20.0, 20.0),
+    ));
+    let bvh = Bvh::build(&mesh);
+    let hollowed = hollow(
+        &mesh,
+        &bvh,
+        &settings(2.0, HollowMode::Internal),
+        Cancel::never(),
+    )
+    .expect("two overlapping boxes hollow");
+
+    assert_eq!(split(&cavity_of(&hollowed)).len(), 1, "one cavity");
+    let cut = cut_mm(2.0, &hollowed);
+    let held = (30.0 - 2.0 * cut) * (20.0 - 2.0 * cut).powi(2);
+    assert!(
+        (hollowed.cavity_mm3 - held).abs() / held < 0.03,
+        "the 30 by 20 by 20 mm union holds {held} mm3, got {}",
         hollowed.cavity_mm3
     );
 }
@@ -665,7 +732,7 @@ fn a_shell_inside_the_model_gets_no_wall_of_its_own() {
     )
     .expect("a closed cube hollows");
 
-    let cavity = 16.0 * 16.0 * 16.0;
+    let cavity = (20.0 - 2.0 * cut_mm(2.0, &hollowed)).powi(3);
     assert!(
         (hollowed.cavity_mm3 - cavity).abs() / cavity < 0.03,
         "the cavity of a 20 mm cube with a 2 mm wall is {cavity} mm3, with no wall cut around \
@@ -691,11 +758,12 @@ fn a_mould_grows_a_wall_outside_the_model() {
     )
     .expect("a closed ball hollows");
 
-    let wall = 4.0 / 3.0 * PI * ((10.0 as Scalar).powi(3) - (8.0 as Scalar).powi(3));
+    let outer = 8.0 + cut_mm(2.0, &hollowed);
+    let wall = 4.0 / 3.0 * PI * (outer.powi(3) - (8.0 as Scalar).powi(3));
     let measured = enclosed(&hollowed.mesh);
     assert!(
         (measured - wall).abs() / wall < 0.03,
-        "4/3 pi (10^3 - 8^3) is {wall} mm3, got {measured}"
+        "4/3 pi ({outer}^3 - 8^3) is {wall} mm3, got {measured}"
     );
 
     let bounds = hollowed.mesh.aabb().expect("the mould has vertices");
@@ -967,9 +1035,10 @@ fn an_open_floor_is_cut_out_of_the_shell_and_nothing_else_is() {
         "no face of the floor is left under the cavity"
     );
 
-    // A 20 mm cube less a 16 mm square void from its roof's underside down through the
-    // floor: 8000 - 16 * 16 * 18 mm3, within what the lattice rounds the void's edges by.
-    let expected = 8000.0 - 16.0 * 16.0 * 18.0;
+    // A 20 mm cube less a square void from its roof's underside down through the floor,
+    // within what the lattice rounds the void's edges by.
+    let cut = cut_mm(2.0, &open);
+    let expected = 8000.0 - (20.0 - 2.0 * cut).powi(2) * (20.0 - cut);
     let got = enclosed(&open.mesh);
     assert!(
         (got - expected).abs() < 0.03 * expected,

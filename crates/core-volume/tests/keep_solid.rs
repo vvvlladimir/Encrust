@@ -38,9 +38,10 @@ fn a_blocker_smaller_than_the_wall_still_reaches_into_the_cavity() {
     let mesh = ball(Vec3::ZERO, 10.0, 48, 48);
     let bvh = Bvh::build(&mesh);
     let asked = shell_of(2.0);
-    let open = hollow(&mesh, &bvh, &asked, Cancel::never())
-        .expect("a closed ball hollows")
-        .cavity_mm3;
+    let open = hollow(&mesh, &bvh, &asked, Cancel::never()).expect("a closed ball hollows");
+    // The cavity is cut half a voxel past the wall (ADR 0449).
+    let cavity_radius = 10.0 - 2.0 - open.voxel_mm / 2.0;
+    let open = open.cavity_mm3;
 
     let mut model = ModelHollow::default();
     model.place_blocker(
@@ -51,9 +52,9 @@ fn a_blocker_smaller_than_the_wall_still_reaches_into_the_cavity() {
         .expect("a closed ball hollows")
         .cavity_mm3;
 
-    // A ball of 4 about the surface point shares a lens with the cavity, a ball of 8 at 10
-    // mm from it; a lens 2 mm thick is a few voxels, so its volume is good to 15 %.
-    let expected = lens_mm3(8.0, 4.0, 10.0);
+    // A ball of 4 about the surface point shares a lens with the cavity, a ball 10 mm from
+    // it; a lens 2 mm thick is a few voxels, so its volume is good to 15 %.
+    let expected = lens_mm3(cavity_radius, 4.0, 10.0);
     let kept = open - blocked;
     assert!(
         (kept - expected).abs() / expected < 0.15,

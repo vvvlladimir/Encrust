@@ -84,9 +84,22 @@ pub fn build(
     settings: &FieldSettings,
     cancel: Cancel<'_>,
 ) -> Result<Sdf, VolumeError> {
+    build_signed(mesh, bvh, settings, None, cancel)
+}
+
+/// [`build`], its sides asked of `signer` where one is given rather than of one of its own.
+pub(crate) fn build_signed(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    settings: &FieldSettings,
+    signer: Option<&Signer<'_>>,
+    cancel: Cancel<'_>,
+) -> Result<Sdf, VolumeError> {
     let (band_mm, iso_mm) = (settings.band_voxels * settings.voxel_mm, settings.iso_mm);
     let value = |signed: Scalar, _: Vec3, _: &ClosestPoint| encode(signed - iso_mm, band_mm);
-    let built = built(mesh, bvh, settings, (&value, Quantised::MAX), cancel)?;
+    // Nearer the mesh than an inward wall's band, every value is the band's own: the default.
+    let record = ((&value as _, Quantised::MAX), iso_mm < 0.0);
+    let built = built(mesh, bvh, settings, signer, record, cancel)?;
     Ok(Sdf::new(built.grid, band_mm, built.tiles, built.solid))
 }
 
@@ -115,14 +128,22 @@ pub(crate) fn build_nearest(
     let record = |signed: Scalar, _: Vec3, found: &ClosestPoint| {
         found.face as u32 | if signed < 0.0 { INSIDE } else { 0 }
     };
-    built(mesh, bvh, settings, (&record, NO_FACE), cancel)
+    built(
+        mesh,
+        bvh,
+        settings,
+        None,
+        ((&record, NO_FACE), false),
+        cancel,
+    )
 }
 
 fn built<T: Copy + Send + Sync>(
     mesh: &Mesh,
     bvh: &Bvh,
     settings: &FieldSettings,
-    record: sweep::Record<'_, T>,
+    signer: Option<&Signer<'_>>,
+    record: (sweep::Record<'_, T>, bool),
     cancel: Cancel<'_>,
 ) -> Result<Built<T>, VolumeError> {
     if mesh.aabb().is_none() {
@@ -144,7 +165,13 @@ fn built<T: Copy + Send + Sync>(
     let iso_mm = settings.iso_mm;
     let grid = VoxelGrid::new(settings.voxel_mm);
     cancel.begin(Step::Preparing, 0);
-    let signer = Signer::new(mesh, settings.sign);
+    let own;
+    let signer = if let Some(signer) = signer {
+        signer
+    } else {
+        own = Signer::new(mesh, settings.sign);
+        &own
+    };
     let keep = settings.clip.map(|clip| clipped_tiles(grid, clip));
 
     let Walked {
@@ -154,7 +181,7 @@ fn built<T: Copy + Send + Sync>(
     } = reach(
         mesh,
         bvh,
-        &signer,
+        signer,
         grid,
         band_mm,
         iso_mm,
@@ -179,7 +206,7 @@ fn built<T: Copy + Send + Sync>(
         mesh,
         &faces,
         bvh,
-        &signer,
+        signer,
         grid,
         band_mm,
         iso_mm,
@@ -193,20 +220,30 @@ fn built<T: Copy + Send + Sync>(
         return Err(VolumeError::Cancelled);
     }
 
-    // A gap takes the side the walk gave its lowest tile, so it cannot part from its
-    // neighbours on a second, independent question.
-    let solid = gap_runs(walls(tiles.keys().copied(), settings.clip, grid), |tile| {
+    let stored = walls(tiles.keys().copied(), settings.clip, grid);
+    let solid = solid_runs(stored, &sides, (mesh, bvh, signer), grid, iso_mm);
+    Ok(Built { grid, tiles, solid })
+}
+
+/// The runs of whole tiles below `iso_mm` between the `stored` ones of each column, each on
+/// the side the walk gave its lowest tile: no second question to part it from its neighbours.
+fn solid_runs(
+    stored: impl Iterator<Item = IVec3>,
+    sides: &FastMap<IVec3, Scalar>,
+    (mesh, bvh, signer): (&Mesh, &Bvh, &Signer<'_>),
+    grid: VoxelGrid,
+    iso_mm: Scalar,
+) -> HashMap<IVec2, Vec<(i32, i32)>> {
+    gap_runs(stored, |tile| {
         sides.get(&tile).map_or_else(
             || {
                 let point = grid.tile_center(tile);
                 bvh.closest(point)
-                    .is_some_and(|found| signed(&signer, mesh, point, &found) < iso_mm)
+                    .is_some_and(|found| signed(signer, mesh, point, &found) < iso_mm)
             },
             |distance| *distance < iso_mm,
         )
-    });
-
-    Ok(Built { grid, tiles, solid })
+    })
 }
 
 /// The stored tiles, with a tile just outside each end of a clipped column added to them.

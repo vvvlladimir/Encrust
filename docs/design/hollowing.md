@@ -15,8 +15,8 @@ meshes appended in one buffer and nothing else.
 
 | | Internal | External |
 |---|---|---|
-| outside | the model, byte for byte | the surface grown by `t` |
-| void, wound inward | the surface `d = -t` | the model, wound inward |
+| outside | the model, byte for byte | the surface grown by `t + v/2` |
+| void, wound inward | the surface `d = -(t + v/2)` | the model, wound inward |
 | solid, wound outward | a hive's or grid's walls, or a scaffold's struts, clipped to the cavity | — |
 
 Nothing is welded, so the model's triangles never pass through the cavity and the outside
@@ -26,16 +26,19 @@ node (ADR 0071).
 
 ## The cavity
 
-The isosurface `d = -t`, extracted from a field built around *that* surface rather than
-the mesh (ADR 0058), so the cost is the mesh's own field whatever the wall thickness. What
-comes out is clustered onto the lattice, so a smooth cavity is a few large facets rather
-than a triangle per voxel face (ADR 0084); its triangle count follows its own shape.
+The isosurface `d = -(t + v/2)`, `v` the lattice, extracted from a field built around
+*that* surface rather than the mesh (ADR 0058), so the cost is the mesh's own field whatever
+the wall thickness. What comes out is clustered onto the lattice, so a smooth cavity is a
+few large facets rather than a triangle per voxel face (ADR 0084); its triangle count
+follows its own shape. Clustering pulls a vertex up to half a voxel and interpolation adds
+to it, so the cut stands half a voxel past the wall: `t` is the wall at its thinnest, not on
+average (ADR 0449).
 
 A wall thicker than the model leaves the field empty, `extract` returns nothing and the
 model comes back unchanged with `cavity_mm3` at zero — the honest answer to "hollow this
 3 mm spar with a 2 mm wall", and the CLI reports it as a defect.
 
-`External` is the same build at `iso_mm = +t`: a mould. Infill and blockers do not apply;
+`External` is the same build at `iso_mm = +(t + v/2)`: a mould. Infill and blockers do not apply;
 thin parts kept solid do.
 
 The fields are built from the shells that bound the solid, not from every shell of the
@@ -47,12 +50,19 @@ bounding shells inside out, not the stray ones, which would print as resin in it
 (ADR 0186). A shell with no volume, a stray film, is left out too: it bounds nothing and
 gives the field a seam no side can be read off (ADR 0448).
 
+Where bodies overlap, a face of one inside another bounds nothing, and the field would cut
+a wall along it. A face a closed bounding shell holds just outside its middle and corners
+is left out (`shells/buried.rs`, ADR 0450), so overlapping parts share one cavity. The field
+is then built over an open surface, which only the whole mesh's winding number can sign,
+so a forced pseudonormal keeps every face. One sign serves every field of a run: the
+winding hierarchy `outer_shells` builds over the whole mesh (`Signer::of_shells`).
+
 A shell's cavity is split into pieces once meshed, and only what can hold resin a drain
 reaches is kept (`hollow/kept.rs`, ADR 0448): a piece wound against the rest is solid left
 loose in the cavity and goes unless it touches a blocker; one smaller than a ball of the
 default 3 mm drain stays solid; and where two or more are left, one the model's winding
-number puts outside is a wrong side in the field and goes. The largest is always kept, and
-`cavity_mm3` counts what was kept.
+number puts outside is a wrong side in the field and goes, unless none reads inside, when
+the largest stays. `cavity_mm3` counts what was kept.
 
 An open floor carries the cavity out through the floor the model stands on (ADR 0313).
 `HollowSettings::open_toward` is the way to the plate in the space the wall is measured in,

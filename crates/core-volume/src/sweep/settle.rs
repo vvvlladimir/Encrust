@@ -1,10 +1,10 @@
 use super::values::{at, tile_voxels};
-use super::{BLOCK_VALUES, Carried, SIDE, Work, cell_voxels, cells, gather, swept_block};
+use super::{BLOCK_VALUES, Carried, Refined, SIDE, Work, cell_voxels, cells, gather, swept_block};
 use crate::cancel::Cancel;
 use crate::grid::{TILE, VoxelGrid, index_in_tile, tile_of};
 use crate::scatter::{Faces, Nearest, UNSET};
 use crate::sdf::TILE_VALUES;
-use core_geometry::{Bvh, FastMap, Scalar, glam::IVec3};
+use core_geometry::{Bvh, ClosestPoint, FastMap, Scalar, glam::IVec3};
 use rayon::prelude::*;
 
 /// How many times the shell is swept over.
@@ -137,16 +137,21 @@ pub(super) fn refine(
     (grid, carry, shared): (VoxelGrid, i32, bool),
     carrier: &FastMap<IVec3, Work>,
     tile: IVec3,
-    band: (Scalar, Scalar),
-) -> Work {
-    let (band_mm, iso_mm) = band;
+    (band_mm, iso_mm, near_reads_default): (Scalar, Scalar, bool),
+) -> Refined {
     let trust_mm = TRUST_VOXELS * carry as Scalar * grid.voxel_mm;
     // Past the band the value is the band's own whatever the distance was, so a voxel
     // there is never worth a traversal however far off the carrier might be.
     let told_mm = band_mm + 2.0 * grid.voxel_mm;
     let matters = |distance: Scalar| (distance - iso_mm.abs()).abs() < told_mm;
+    // A cell no further off the mesh than this reads the record's default, unmeasured.
+    let near_mm = if near_reads_default {
+        iso_mm.abs() - told_mm - Scalar::sqrt(3.0) * carry as Scalar * grid.voxel_mm
+    } else {
+        Scalar::NEG_INFINITY
+    };
     let base = tile * TILE;
-    let mut work = vec![UNSET; TILE_VALUES];
+    let mut work: Vec<Option<ClosestPoint>> = vec![None; TILE_VALUES];
     let mut held: Option<(IVec3, &Work)> = None;
     let mut offered: Vec<Nearest> = Vec::with_capacity(8);
     let mut doubted: Vec<Doubted> = Vec::with_capacity((carry * carry * carry) as usize);
@@ -154,42 +159,31 @@ pub(super) fn refine(
 
     for cell in cells(carry) {
         let low = base.div_euclid(IVec3::splat(carry)) + cell;
-        offered.clear();
-        for corner in 0..8 {
-            let at = low + IVec3::new(corner & 1, (corner >> 1) & 1, (corner >> 2) & 1);
-            let source = tile_of(at);
-            if held.is_none_or(|(tile, _)| tile != source) {
-                held = carrier.get(&source).map(|work| (source, work));
-            }
-            if let Some((_, held)) = held {
-                let carried = held[index_in_tile(at)];
-                if carried != UNSET && !offered.contains(&carried) {
-                    offered.push(carried);
-                }
-            }
+        let corner_mm = offer(faces, (grid, carry), carrier, &mut held, low, &mut offered);
+        if corner_mm < near_mm {
+            continue;
         }
 
         doubted.clear();
         for step in cell_voxels(carry) {
             let voxel = base + cell * carry + step;
             let point = grid.position(voxel);
-            let (mut nearest, mut carried) = (Scalar::INFINITY, UNSET);
+            let mut best: Option<ClosestPoint> = None;
             for face in &offered {
-                let Some(distance) = faces.distance(*face, point) else {
+                let Some(found) = faces.closest(*face, point) else {
                     continue;
                 };
-                if distance < nearest {
-                    nearest = distance;
-                    carried = *face;
+                if best
+                    .as_ref()
+                    .is_none_or(|best| found.distance < best.distance)
+                {
+                    best = Some(found);
                 }
             }
-            work[index_in_tile(voxel)] = carried;
+            let nearest = best.as_ref().map_or(Scalar::INFINITY, |best| best.distance);
+            work[index_in_tile(voxel)] = best;
             if nearest < trust_mm && matters(nearest) {
-                doubted.push(Doubted {
-                    voxel,
-                    nearest,
-                    carried,
-                });
+                doubted.push(Doubted { voxel, nearest });
             }
         }
         if shared {
@@ -199,6 +193,41 @@ pub(super) fn refine(
         }
     }
     work.into_boxed_slice()
+}
+
+/// Fills `offered` with the faces the eight carrier points around the cell at `low` hold,
+/// and says how far the nearest point is from its own face, an upper bound on its distance, mm.
+fn offer<'a>(
+    faces: &Faces,
+    (grid, carry): (VoxelGrid, i32),
+    carrier: &'a FastMap<IVec3, Work>,
+    held: &mut Option<(IVec3, &'a Work)>,
+    low: IVec3,
+    offered: &mut Vec<Nearest>,
+) -> Scalar {
+    offered.clear();
+    let mut nearest = Scalar::INFINITY;
+    for corner in 0..8 {
+        let at = low + IVec3::new(corner & 1, (corner >> 1) & 1, (corner >> 2) & 1);
+        let source = tile_of(at);
+        if held.is_none_or(|(tile, _)| tile != source) {
+            *held = carrier.get(&source).map(|work| (source, work));
+        }
+        let Some((_, work)) = *held else {
+            continue;
+        };
+        let carried = work[index_in_tile(at)];
+        if carried == UNSET {
+            continue;
+        }
+        if let Some(distance) = faces.distance(carried, grid.position(at * carry)) {
+            nearest = nearest.min(distance);
+        }
+        if !offered.contains(&carried) {
+            offered.push(carried);
+        }
+    }
+    nearest
 }
 
 /// Most faces one walk for a whole carrier cell may bring back before each voxel is
@@ -214,7 +243,6 @@ pub(super) struct Doubted {
     pub(super) voxel: IVec3,
     /// How far the offered face is, which no nearer face can be beyond, mm.
     pub(super) nearest: Scalar,
-    pub(super) carried: Nearest,
 }
 
 /// The true nearest face of each doubted voxel of one carrier cell, from one walk of the
@@ -229,7 +257,7 @@ pub(super) fn settle_doubted(
     grid: VoxelGrid,
     doubted: &[Doubted],
     nearby: &mut Vec<u32>,
-    work: &mut [Nearest],
+    work: &mut [Option<ClosestPoint>],
 ) {
     let Some(first) = doubted.first() else {
         return;
@@ -252,26 +280,33 @@ pub(super) fn settle_doubted(
         let point = grid.position(at.voxel);
         // Only a face nearer than the one carried can replace it, measured squared as the
         // hierarchy's own search does.
-        let mut best = (at.nearest * at.nearest, at.carried);
+        let mut best = (at.nearest * at.nearest, None);
         for face in nearby.iter() {
             if let Some(found) = faces.closest(*face, point) {
                 let squared = (found.point - point).length_squared();
                 if squared < best.0 {
-                    best = (squared, *face);
+                    best = (squared, Some(found));
                 }
             }
         }
-        work[index_in_tile(at.voxel)] = best.1;
+        if let Some(found) = best.1 {
+            work[index_in_tile(at.voxel)] = Some(found);
+        }
     }
 }
 
 /// The true nearest face of each doubted voxel, from a walk of the hierarchy of its own.
-pub(super) fn settle_each(bvh: &Bvh, grid: VoxelGrid, doubted: &[Doubted], work: &mut [Nearest]) {
+pub(super) fn settle_each(
+    bvh: &Bvh,
+    grid: VoxelGrid,
+    doubted: &[Doubted],
+    work: &mut [Option<ClosestPoint>],
+) {
     for at in doubted {
         // Only a face nearer than the one carried can replace it, which bounds the search
         // from its first node.
-        work[index_in_tile(at.voxel)] = bvh
-            .closest_within(grid.position(at.voxel), at.nearest)
-            .map_or(at.carried, |found| found.face as Nearest);
+        if let Some(found) = bvh.closest_within(grid.position(at.voxel), at.nearest) {
+            work[index_in_tile(at.voxel)] = Some(found);
+        }
     }
 }

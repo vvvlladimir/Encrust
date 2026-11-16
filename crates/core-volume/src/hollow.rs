@@ -8,7 +8,7 @@ use core_geometry::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build};
+use crate::build::{DEFAULT_BUDGET_BYTES, FieldSettings, build_signed};
 use crate::cancel::{Cancel, Step};
 use crate::csg::assemble;
 use crate::drain::{Channel, DrainHole, HoleKind};
@@ -18,7 +18,7 @@ use crate::grid::tile_of;
 use crate::infill::{Carved, InfillSettings, cut};
 use crate::sdf::Sdf;
 use crate::shells::outer_shells;
-use crate::sign::SignMode;
+use crate::sign::{SignMode, Signer};
 
 mod floor;
 mod kept;
@@ -359,14 +359,22 @@ pub fn cavity_field(
     cancel: Cancel<'_>,
 ) -> Result<CavityField, VolumeError> {
     let placed = placed(mesh, shape)?;
-    let shells = outer_shells(&placed);
-    let (surface, surface_bvh) = match &shells {
+    cancel.begin(Step::Preparing, 0);
+    // A surface left open where bodies overlap is signed only by the winding number.
+    let shells = outer_shells(&placed, settings.sign != SignMode::Pseudonormal);
+    let (surface, surface_bvh) = match &shells.surface {
         Some(surface) => (surface, Cow::Owned(Bvh::build(surface))),
         None if shape == Mat3::IDENTITY => (&*placed, Cow::Borrowed(bvh)),
         None => (&*placed, Cow::Owned(Bvh::build(&placed))),
     };
-    let (offset, voxel_mm, coarsened) = field_to_budget(surface, &surface_bvh, settings, cancel)?;
-    let opened = opening::opened(surface, &surface_bvh, settings, voxel_mm, cancel)?;
+    // One signer for every field of the run, through the hierarchy the shells were told by.
+    let signer = match &shells.winding {
+        Some(winding) => Signer::of_shells(surface, settings.sign, (&placed, winding)),
+        None => Signer::new(surface, settings.sign),
+    };
+    let fields = (surface, &*surface_bvh, &signer);
+    let (offset, voxel_mm, coarsened) = field_to_budget(fields, settings, cancel)?;
+    let opened = opening::opened(fields, settings, voxel_mm, cancel)?;
     let (offset, void) = match settings.mode {
         HollowMode::Internal => (opening::kept_inside(offset, opened.as_ref())?, None),
         HollowMode::External => (offset, opened),
@@ -401,7 +409,7 @@ pub fn carve(
         .collect();
 
     let mut hollowed = match field.mode {
-        HollowMode::External => match outer_shells(&placed) {
+        HollowMode::External => match outer_shells(&placed, false).surface {
             Some(surface) => mould(&surface, field, cancel),
             None => mould(&placed, field, cancel),
         },
@@ -442,8 +450,7 @@ fn placed(mesh: &Mesh, shape: Mat3) -> Result<Cow<'_, Mesh>, VolumeError> {
 /// The cavity's field over `surface`, on the finest lattice that fits the budget, with the
 /// lattice it settled on and whether that is coarser than precision asked for.
 fn field_to_budget(
-    surface: &Mesh,
-    bvh: &Bvh,
+    (surface, bvh, signer): Fields<'_>,
     settings: &HollowSettings,
     cancel: Cancel<'_>,
 ) -> Result<(Sdf, Scalar, bool), VolumeError> {
@@ -454,7 +461,7 @@ fn field_to_budget(
 
     let asked_mm = settings.voxel_mm(surface.surface_area());
     coarsening(asked_mm, |voxel_mm| {
-        offset_field(surface, bvh, settings, voxel_mm, cancel)
+        offset_field((surface, bvh, signer), settings, voxel_mm, cancel)
     })
     .map(|(field, voxel_mm)| (field, voxel_mm, voxel_mm > asked_mm))
 }
@@ -485,10 +492,12 @@ pub(crate) fn coarsening<T>(
     build(voxel_mm).map(|built| (built, voxel_mm))
 }
 
+/// The surface a run's fields are built over, its hierarchy, and what signs them.
+pub(super) type Fields<'a> = (&'a Mesh, &'a Bvh, &'a Signer<'a>);
+
 /// The field of the surface a wall off `surface`, on a lattice of `voxel_mm`.
 fn offset_field(
-    surface: &Mesh,
-    bvh: &Bvh,
+    (surface, bvh, signer): Fields<'_>,
     settings: &HollowSettings,
     voxel_mm: Scalar,
     cancel: Cancel<'_>,
@@ -499,15 +508,25 @@ fn offset_field(
         // The wall is the distance from the mesh to the surface the cavity is cut on:
         // inward for a shell, outward for a mould.
         iso_mm: match settings.mode {
-            HollowMode::External => settings.thickness_mm,
-            HollowMode::Internal => -settings.thickness_mm,
+            HollowMode::External => wall_mm(settings.thickness_mm, voxel_mm),
+            HollowMode::Internal => -wall_mm(settings.thickness_mm, voxel_mm),
         },
         sign: settings.sign,
         clip: None,
         budget_bytes: settings.budget_bytes,
     };
-    build(surface, bvh, &field, cancel)
+    build_signed(surface, bvh, &field, Some(signer), cancel)
 }
+
+/// How far off the mesh the cavity is cut for a wall of `thickness_mm` on a lattice of
+/// `voxel_mm`: half a voxel past it, so the wall asked for is the thinnest (ADR 0449).
+fn wall_mm(thickness_mm: Scalar, voxel_mm: Scalar) -> Scalar {
+    thickness_mm + WALL_MARGIN_VOXELS * voxel_mm
+}
+
+/// What meshing the lattice takes off a wall at its thinnest, in voxels: the half voxel
+/// clustering pulls a vertex by, which covers the interpolation's slack on a corpus (ADR 0449).
+const WALL_MARGIN_VOXELS: Scalar = 0.5;
 
 /// The model with the void `field` bounds appended to it wound inward, and whatever lattice
 /// stands in it appended after. `floor`, where given, carries the void out through the

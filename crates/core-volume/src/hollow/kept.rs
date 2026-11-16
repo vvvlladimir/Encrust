@@ -3,9 +3,7 @@ use rayon::prelude::*;
 
 use super::Blocker;
 use crate::drain::HoleSize;
-
-/// Faces of a cavity piece asked whether the model stands around them.
-const SAMPLES: usize = 64;
+use crate::shells::{SAMPLES, most_faces};
 
 /// The pieces of a shell's cavity that hold resin a drain can reach, joined back into one;
 /// `voxel_mm` is how far off a blocker the lattice may put a piece. See `docs/design/hollowing.md`.
@@ -24,22 +22,32 @@ pub(super) fn kept(void: Mesh, model: &Mesh, blockers: &[Blocker], voxel_mm: Sca
 
     pieces.sort_unstable_by(|one, other| other.1.total_cmp(&one.1));
     let least = drain_ball_mm3();
-    let mut index = 0;
-    pieces.retain(|(piece, volume)| {
-        index += 1;
-        if *volume < 0.0 {
-            return is_blocked(piece, blockers, voxel_mm);
+    let (mut cavity, mut islands) = (Vec::new(), Vec::new());
+    for (rank, (piece, volume)) in pieces.into_iter().enumerate() {
+        if volume < 0.0 && is_blocked(&piece, blockers, voxel_mm) {
+            islands.push(piece);
+        } else if volume > 0.0 && (rank == 0 || volume >= least) {
+            cavity.push(piece);
         }
-        *volume > 0.0 && (*volume >= least || index == 1)
-    });
+    }
     // One piece left is the cavity itself; only a second one asks what the model holds.
-    if pieces.iter().filter(|(_, volume)| *volume > 0.0).count() > 1 {
+    if cavity.len() > 1 {
         let winding = Winding::build(model);
-        pieces.retain(|(piece, volume)| *volume < 0.0 || is_inside(piece, model, &winding));
+        let inside: Vec<bool> = cavity
+            .par_iter()
+            .map(|piece| is_inside(piece, model, &winding))
+            .collect();
+        // A wrong side only ever adds a piece: where none reads inside, the largest is the cavity.
+        if inside.contains(&true) {
+            let mut inside = inside.into_iter();
+            cavity.retain(|_| inside.next() == Some(true));
+        } else {
+            cavity.truncate(1);
+        }
     }
 
     let mut kept = Mesh::default();
-    for (piece, _) in &pieces {
+    for piece in cavity.iter().chain(&islands) {
         kept.append(piece);
     }
     kept
@@ -66,18 +74,7 @@ fn is_blocked(piece: &Mesh, blockers: &[Blocker], voxel_mm: Scalar) -> bool {
 
 /// Whether most of `piece` lies inside `model`, by the model's winding number at its faces.
 fn is_inside(piece: &Mesh, model: &Mesh, winding: &Winding) -> bool {
-    let step = (piece.faces.len() / SAMPLES).max(1);
-    let (asked, inside) = (0..piece.faces.len())
-        .step_by(step)
-        .filter_map(|face| piece.triangle(face))
-        .fold((0, 0), |(asked, inside), triangle| {
-            let centroid = (triangle.a + triangle.b + triangle.c) / 3.0;
-            (
-                asked + 1,
-                inside + usize::from(winding.is_inside(model, centroid)),
-            )
-        });
-    asked > 0 && 2 * inside > asked
+    most_faces(piece, |centroid, _| winding.is_inside(model, centroid))
 }
 
 #[cfg(test)]
@@ -86,14 +83,7 @@ mod tests {
     use core_geometry::{Vec3, ball, cuboid};
 
     use crate::drain::inward;
-
-    fn joined(parts: &[Mesh]) -> Mesh {
-        let mut whole = Mesh::default();
-        for part in parts {
-            whole.append(part);
-        }
-        whole
-    }
+    use crate::fixtures::joined;
 
     #[test]
     fn only_the_cavity_inside_the_model_is_kept() {
@@ -112,6 +102,15 @@ mod tests {
         );
         assert_eq!(kept.faces.len(), cavity.faces.len());
         assert_eq!(kept.aabb(), cavity.aabb(), "what is left is the 16 mm box");
+    }
+
+    #[test]
+    fn the_largest_piece_stays_when_none_reads_inside_the_model() {
+        let model = cuboid(Vec3::ZERO, Vec3::splat(20.0));
+        let larger = cuboid(Vec3::new(30.0, 0.0, 0.0), Vec3::new(40.0, 10.0, 10.0));
+        let smaller = cuboid(Vec3::new(50.0, 0.0, 0.0), Vec3::new(55.0, 5.0, 5.0));
+        let kept = kept(joined(&[smaller, larger.clone()]), &model, &[], 0.2);
+        assert_eq!(kept.aabb(), larger.aabb(), "the 10 mm box is what is left");
     }
 
     #[test]

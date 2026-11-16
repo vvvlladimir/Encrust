@@ -132,11 +132,12 @@ cannot tell them apart, which inverted 228 voxels on a ball before it was found.
 
 ## The sign
 
-`SignMode::Auto` runs `diagnose` once. A closed mesh is signed by the angle-weighted
+`SignMode::Auto` runs `diagnose` once. One closed shell with no branching edge is signed by
+the angle-weighted
 pseudonormal of Bærentzen and Aanæs — the nearest point's barycentrics choose the face,
-edge or vertex normal, and the sign is its dot with the offset. A mesh with a hole is
-signed by the generalised winding number, which degrades gracefully where the pseudonormal
-inverts (ADR 0055).
+edge or vertex normal, and the sign is its dot with the offset. Anything else is signed by
+the generalised winding number, which degrades gracefully where the pseudonormal inverts
+(ADR 0055, 0448).
 
 It is asked for only where values are written, once per 4³ block of a stored tile: a block
 the surface crosses no lattice edge of is all one side, and a band sitting a wall off the

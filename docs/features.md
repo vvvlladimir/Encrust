@@ -382,10 +382,14 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - The mode and the built-in texture chosen are remembered between runs.
 
 ### Hollow
-- Hollow a model with a wall thickness and precision you choose.
+- Hollow a model with a wall thickness and precision you choose. The thickness is the
+  wall at its thinnest: on a coarse precision the wall comes out up to half a lattice step
+  thicker rather than thinner than asked.
 - The cavity holds only what can drain: a pocket smaller than a 3 mm drain hole's ball is
   left solid, and nothing of the cavity lands outside the model or loose inside it, even on
   a mesh with a stray film or shells crossing each other.
+- A model made of overlapping parts gets one cavity through them rather than a cavity per
+  part with walls along the faces where they meet, so it needs fewer drain holes.
 - **Inside** grows the wall inward and leaves the outside untouched. **Outside** grows it
   outward, which gives you a mould of the model; a mould takes no infill and keeps no
   wall solid, so the panel hides both.

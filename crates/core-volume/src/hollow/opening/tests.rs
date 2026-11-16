@@ -49,11 +49,13 @@ fn a_bar_thinner_than_the_setting_stays_solid_between_hollowed_cubes() {
         !cavity_within(&shell, 40.0, 50.0),
         "no cavity in the 4 mm bar's middle third, 40 to 50 mm"
     );
-    // Each cube's cavity is 27 mm across: 19 683 mm3, less what the 3 mm ball rounds off.
-    let expected = 2.0 * 27.0_f32.powi(3);
+    // Each cube's cavity is its 30 mm less the wall and half a voxel each side (ADR 0449),
+    // less what the 3 mm ball rounds off.
+    let side = 30.0 - 2.0 * (1.5 + shell.voxel_mm / 2.0);
+    let expected = 2.0 * side.powi(3);
     assert!(
         (shell.cavity_mm3 - expected).abs() < expected * 0.02,
-        "two 26 mm cavities, {expected} mm3, got {}",
+        "two {side} mm cavities, {expected} mm3, got {}",
         shell.cavity_mm3
     );
 }

@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
-use core_geometry::{Bvh, Mesh, Scalar};
+use core_geometry::{Bvh, Scalar};
 
-use crate::build::{FieldSettings, build};
+use crate::build::{FieldSettings, build, build_signed};
 use crate::cancel::Cancel;
 use crate::csg::intersection;
 use crate::error::VolumeError;
@@ -12,13 +12,12 @@ use crate::extract::extract;
 use crate::grid::VoxelGrid;
 use crate::sdf::Sdf;
 
-use super::{BAND_VOXELS, HollowSettings};
+use super::{BAND_VOXELS, Fields, HollowSettings};
 
 /// The field of `surface` opened by a ball as wide as `settings.solid_under_mm`, on a lattice
 /// of `voxel_mm`: every part thinner than that gone from it. `None` where nothing is asked.
 pub(super) fn opened(
-    surface: &Mesh,
-    bvh: &Bvh,
+    (surface, bvh, signer): Fields<'_>,
     settings: &HollowSettings,
     voxel_mm: Scalar,
     cancel: Cancel<'_>,
@@ -39,7 +38,10 @@ pub(super) fn opened(
         budget_bytes: settings.budget_bytes,
     };
     // A band reaches two voxels, so each half is a band of its own around its surface.
-    let eroded = extract(&build(surface, bvh, &at(-radius_mm), cancel)?, cancel);
+    let eroded = extract(
+        &build_signed(surface, bvh, &at(-radius_mm), Some(signer), cancel)?,
+        cancel,
+    );
     if cancel.asked() {
         return Err(VolumeError::Cancelled);
     }
