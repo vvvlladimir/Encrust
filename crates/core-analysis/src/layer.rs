@@ -380,8 +380,8 @@ impl Roots {
 }
 
 /// Area and its first and second moments about the panel's corner, mm.
-#[derive(Debug, Clone, Copy, Default)]
-struct Moments {
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct Moments {
     area: f64,
     x: f64,
     y: f64,
@@ -393,7 +393,7 @@ struct Moments {
 impl Moments {
     /// Adds pixels `columns` of `row` as the rectangle of panel they cover, weighted by
     /// their grey.
-    fn add(&mut self, row: u32, columns: Range<u32>, weight: f64, pitch: PixelPitch) {
+    pub(crate) fn add(&mut self, row: u32, columns: Range<u32>, weight: f64, pitch: PixelPitch) {
         let (px, py) = (f64::from(pitch.x), f64::from(pitch.y));
         let (x0, x1) = (f64::from(columns.start) * px, f64::from(columns.end) * px);
         let (y0, y1) = (f64::from(row) * py, f64::from(row + 1) * py);
@@ -407,7 +407,15 @@ impl Moments {
         self.xy += weight * (x1 * x1 - x0 * x0) * (y1 * y1 - y0 * y0) / 4.0;
     }
 
-    fn merge(&mut self, other: &Self) {
+    pub(crate) fn area_mm2(&self) -> f64 {
+        self.area
+    }
+
+    pub(crate) fn centre_mm(&self) -> [f64; 2] {
+        [self.x / self.area, self.y / self.area]
+    }
+
+    pub(crate) fn merge(&mut self, other: &Self) {
         self.area += other.area;
         self.x += other.x;
         self.y += other.y;
@@ -428,7 +436,7 @@ impl Moments {
     }
 
     /// Second moments of the area about its own centre, `[xx, xy, yy]`, mm^4.
-    fn central(&self) -> [f64; 3] {
+    pub(crate) fn central(&self) -> [f64; 3] {
         [
             self.xx - self.x * self.x / self.area,
             self.xy - self.x * self.y / self.area,

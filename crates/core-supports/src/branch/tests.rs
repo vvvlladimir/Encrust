@@ -1267,3 +1267,29 @@ fn thin_tips_beside_a_thicker_trunk_run_into_it_rather_than_join_each_other_firs
         );
     }
 }
+
+#[test]
+fn a_low_tree_drawn_as_one_tube_offers_no_trunk_to_stand_on() {
+    // A contact 2.5 mm up over a 1 mm pad: its pillar is shorter than its head, so it is drawn
+    // as one tube from the contact to the pad, and the trunk under its neck is not there.
+    let profile = profile();
+    let profiles = Profiles::single(&profile);
+    let trees = trees_on(
+        &[SupportPoint::new(Vec3::new(10.0, 10.0, 2.5))],
+        &Mesh::default(),
+        Transform::default(),
+        profiles,
+    );
+    assert_eq!(
+        crate::mesher::drawn(&trees[0], &profile).nodes().len(),
+        1,
+        "the low tree is drawn as its tip alone"
+    );
+    let mut carriers = Carriers::new(profile.branching.max_merge_distance_mm);
+    carriers.take(&trees, profiles);
+    assert!(
+        carriers.all.is_empty(),
+        "nothing drawn under its neck can carry: {:?}",
+        carriers.all
+    );
+}

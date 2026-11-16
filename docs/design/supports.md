@@ -63,7 +63,9 @@ Less than `MIN_PILLAR_HEIGHT_MM` (0.2 mm) of room means no column; exactly that 
 A contact under the foot and that pillar runs its head straight down into the plate instead,
 whichever way its face leans: cut flat there,
 no foot, `in_plate` set (ADR 0427). A lone tip whose pillar is shorter than its head is drawn as
-one tube from its contact, with no joint at its neck. A point under the plate is kept — the model may move up —
+one tube from its contact, with no joint at its neck, so nothing stands on it. A trunk leaning
+onto its foot ends where the low rim of its last ring is as deep in the pad as a straight
+one's. A point under the plate is kept — the model may move up —
 and the inspector reports standing against placed.
 
 A front that cannot stand, nor lean within a merge's reach, searches further before it
@@ -290,7 +292,7 @@ the layer less the one below — which is a layer's only new underside.
 | On the layer | What it is | What is held |
 |---|---|---|
 | a new piece touching nothing below | an **island** | all of it, if at least `MIN_ISLAND_MM` (0.4 mm) across; a narrower one is a **speck** |
-| new material past the reach from the layer a millimetre below | an **overhang** | the part past the reach, if at least `min_overhang_mm` across |
+| new material past the reach from the layer a millimetre below | an **overhang** | the part past the reach, if it or the band its layer leans out by over that rise is at least `min_overhang_mm` across |
 | new material past `min_overhang_mm` from the layer directly below | a **step** | the part past it, held as an overhang (ADR 0080) |
 | a piece with no support and no plate under it or under anything it grew out of | **adrift** | the point it began at, once it is more than dust; else all of it, once it is `MIN_ISLAND_MM` across |
 | a contact that would sit under a foot and the shortest pillar | standing on the plate | nothing |
@@ -382,7 +384,9 @@ place and under a steep one is what spaces the supports.
 the knob counts supports over an area: doubling it puts down twice as many (ADR 0081), and
 widening a contact holds better without thinning the lattice (ADR 0131). The head's carry —
 a 0.4 mm head carries about 1.65 mm of island — is what `min_overhang_mm` is half of: a
-ledge that small is inside the head that would be put under it.
+ledge that small is inside the head that would be put under it. A face leaning just past the
+angle puts out a sliver a layer that the grid breaks into bits under that size; the band the
+whole layer leans out by over the rise is one piece, so a bit of it is held.
 
 **No doubling up.** A support holds a ball around itself — `coverage_radius_mm` (¾ of the
 spacing) under a level face, its own as above elsewhere — so its reach falls off as the part climbs away: `sqrt(r² − rise²)`, nothing
@@ -529,8 +533,9 @@ is one trunk circle within 5%.
 
 Merging is sequential, because the heap must drain in order for a run to be repeatable, and
 at microseconds against the milliseconds placement costs it has not been worth splitting.
-Volume figures read a little high, because an overlapping mesh counts its overlaps twice in
-`signed_volume` (ADR 0041).
+Volume figures read high, because an overlapping mesh counts its overlaps twice in
+`signed_volume` (ADR 0041): on a dense plate by a factor of ten, so `support-lab` takes its
+resin from the cured stack less the model cured alone.
 
 ## Groups
 

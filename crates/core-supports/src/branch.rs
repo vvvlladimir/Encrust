@@ -153,6 +153,7 @@ const GATHERED: Scalar = 0.75;
 /// 45 degrees, until one reaches; `settled` trunks count as neighbours (ADR 0240, 0250, 0252).
 fn gather(trees: &mut [SupportTree], settled: &[SupportTree], placed: &Placed, profiles: Profiles) {
     let at = |tree: &SupportTree| tree.root().position.truncate();
+    let mut roots = braceable_roots(trees, settled, profiles);
     for index in 0..trees.len() {
         let tree = &trees[index];
         let profile = profiles.of(tree.group());
@@ -165,15 +166,25 @@ fn gather(trees: &mut [SupportTree], settled: &[SupportTree], placed: &Placed, p
         // brace is a longer lever than the one the brace was to steady.
         let furthest = profile.branching.max_merge_distance_mm / 2.0;
         let here = at(tree);
-        let nearest = trees
-            .iter()
-            .enumerate()
-            .filter(|(other, _)| *other != index)
-            .map(|(_, tree)| tree)
-            .chain(settled)
-            .filter(|tree| braceable(tree, profiles.of(tree.group())))
-            .map(at)
-            .min_by(|a, b| (*a - here).length().total_cmp(&(*b - here).length()));
+        // Ties go to the lower index, so the buckets' order does not change a run.
+        let nearest = roots
+            .around(here)
+            .filter(|key| **key != index)
+            .map(|key| {
+                (
+                    *key,
+                    at(trees
+                        .get(*key)
+                        .unwrap_or_else(|| &settled[*key - trees.len()])),
+                )
+            })
+            .min_by(|(a, a_at), (b, b_at)| {
+                (*a_at - here)
+                    .length()
+                    .total_cmp(&(*b_at - here).length())
+                    .then(a.cmp(b))
+            })
+            .map(|(_, there)| there);
         let Some(there) = nearest.filter(|there| (*there - here).length() > reach) else {
             continue;
         };
@@ -200,9 +211,34 @@ fn gather(trees: &mut [SupportTree], settled: &[SupportTree], placed: &Placed, p
         let mut leaning = tree.clone();
         leaning.lean_to(knee, root.radius_mm, landing);
         if braceable(&leaning, profile) {
+            roots.retain_at(here, |key| *key != index);
+            roots.insert(at(&leaning), index);
             trees[index] = leaning;
         }
     }
+}
+
+/// The roots of the braceable trees of `trees` then `settled`, each by its index in that order,
+/// in buckets as wide as any group gathers across: further than that, [`gather`] leaves it.
+fn braceable_roots(
+    trees: &[SupportTree],
+    settled: &[SupportTree],
+    profiles: Profiles,
+) -> Buckets<usize> {
+    let cell_mm = profiles
+        .groups()
+        .map(|(_, profile)| {
+            profile.branching.max_merge_distance_mm / 2.0
+                + profile.bracing.max_spacing_mm * GATHERED
+        })
+        .fold(SAME_PLACE_MM, Scalar::max);
+    let mut roots = Buckets::new(cell_mm);
+    for (key, tree) in trees.iter().chain(settled).enumerate() {
+        if braceable(tree, profiles.of(tree.group())) {
+            roots.insert(tree.root().position.truncate(), key);
+        }
+    }
+    roots
 }
 
 /// A tip or a trunk that has not been merged into anything yet.

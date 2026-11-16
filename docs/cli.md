@@ -856,8 +856,8 @@ TOML list of models with how each stands — the axis that points up, the height
 at, its lean — and what a person expects of it. `--export DIR` writes each supported model
 and markers at every place the run names; `--json FILE` keeps the run, and `--baseline
 FILE` exits non-zero when anything got worse: a model that held fails or loses enough,
-contacts or resin grow by more than 15 %, or more tips land on faces looking up or on thin
-material.
+contacts or resin — the cured stack less the model cured alone — grow by more than 15 %, or
+more tips land on faces looking up or on thin material.
 
 ```sh
 cargo run --release -p encrust-cli --bin support-lab -- a.stl b.obj --profile light --profile medium

@@ -1,6 +1,6 @@
 # The everyday choice, and what a newly imported object starts with.
 #
-# Why the presets look like this: ADR 0323.
+# Why the presets look like this: ADR 0323, and their spacing ADR 0447.
 
 name = "Medium"
 
@@ -23,8 +23,8 @@ max_overhang_deg = 40.0
 # How far apart automatic placement puts contacts under a face looking straight down,
 # and under one leaning just past the overhang angle, before the density scales them.
 # Between the two the spacing follows the face's angle.
-contact_spacing_mm = 1.8
-steep_contact_spacing_mm = 3.3
+contact_spacing_mm = 3.5
+steep_contact_spacing_mm = 6.4
 
 [tip]
 # sphere or plane.

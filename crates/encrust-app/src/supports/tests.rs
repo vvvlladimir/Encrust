@@ -262,19 +262,20 @@ fn growing_the_group_in_hand_again_leaves_the_automatic_ones_standing() {
     let mut scene = one_big_cube();
     let (mut tool, _) = grown_by_auto(&mut scene);
     let automatic = scene.objects()[0].supports.point_count();
-    let medium = SupportProfile::shipped("medium").expect("the medium preset ships");
+    // Light places closer than Auto, so it has room beside Auto's supports.
+    let light = SupportProfile::shipped("light").expect("the light preset ships");
     tool.auto = None;
     tool.groups.push(SupportGroup {
-        name: medium.name.clone(),
-        profile: medium.clone(),
+        name: light.name.clone(),
+        profile: light.clone(),
         hidden: false,
     });
     let group = (tool.groups.len() - 1) as u16;
     tool.groups[tool.active as usize].profile = tool.profile.clone();
-    (tool.active, tool.profile) = (group, medium);
+    (tool.active, tool.profile) = (group, light);
     grown_again(&mut tool, &mut scene);
     let in_hand = scene.objects()[0].supports.group_count(group);
-    assert!(in_hand > 0, "medium stood supports of its own");
+    assert!(in_hand > 0, "light stood supports of its own");
 
     grown_again(&mut tool, &mut scene);
     let supports = &scene.objects()[0].supports;

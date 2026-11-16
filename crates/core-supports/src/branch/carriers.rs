@@ -1,7 +1,7 @@
 use super::{SAME_PLACE_MM, lean_per_drop};
 use crate::column::MIN_PILLAR_HEIGHT_MM;
 use crate::group::Profiles;
-use crate::mesher::is_small;
+use crate::mesher::{drawn, is_small};
 use crate::tree::SupportTree;
 use core_geometry::{Buckets, FastMap, Scalar, Vec3};
 use printer_profiles::SupportProfile;
@@ -68,6 +68,8 @@ impl Carriers {
             } else {
                 Scalar::INFINITY
             };
+            // What is met is what is meshed: a low tree drawn as its tip alone has no trunk.
+            let tree = &*drawn(tree, profile);
             let nodes = tree.nodes();
             for (child, parent) in tree.struts().filter(|(child, _)| !nodes[*child].is_leaf()) {
                 self.push(Carrier {

@@ -594,6 +594,26 @@ fn a_neck_shortened_over_the_plate_stops_where_the_body_begins() {
 }
 
 #[test]
+fn a_low_trunk_leaning_onto_its_foot_ends_above_the_plate() {
+    // A contact 2 mm up with its foot 1.5 mm aside on a 0.5 mm pad: the trunk leans about 40
+    // degrees, and its last ring, square to that lean, dips a radius times its sine.
+    let mut profile = profile();
+    profile.bottom.platform_thickness_mm = 0.5;
+    let mut trees = column_on_plate(2.0, &profile);
+    trees[0].move_landing(Vec3::new(11.5, 10.0, 0.0));
+    let mesh = meshed(&trees, Profiles::single(&profile));
+    let lowest = mesh
+        .vertices
+        .iter()
+        .map(|vertex| vertex.z)
+        .fold(Scalar::INFINITY, Scalar::min);
+    assert!(
+        lowest >= -1e-4,
+        "a support ends on the plate, and this one reaches {lowest} mm"
+    );
+}
+
+#[test]
 fn branching_uses_less_material_than_two_columns() {
     let profile = profile();
     let straight = SupportProfile {

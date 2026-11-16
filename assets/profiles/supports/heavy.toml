@@ -1,6 +1,6 @@
 # Thick supports for heavy parts and large flat overhangs, at the cost of scarring.
 #
-# Why the presets look like this: ADR 0323.
+# Why the presets look like this: ADR 0323, and their spacing ADR 0447.
 
 name = "Heavy"
 
@@ -26,8 +26,8 @@ max_overhang_deg = 45.0
 # How far apart automatic placement puts contacts under a face looking straight down,
 # and under one leaning just past the overhang angle, before the density scales them.
 # Between the two the spacing follows the face's angle.
-contact_spacing_mm = 1.8
-steep_contact_spacing_mm = 3.3
+contact_spacing_mm = 4.5
+steep_contact_spacing_mm = 8.2
 
 [tip]
 # sphere or plane.

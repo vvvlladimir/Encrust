@@ -29,7 +29,7 @@ fn the_supports_counted_bring_the_stress_under_the_limit() {
     assert!(count < MOST_NECK_HOLDS, "{count} is short of the cap");
     let area = 2.0 + count as f64 * tip_mm2;
     let lever = 6.0 * 2.0 / area + 2.0;
-    let stress = neck_stress_mpa(1.0, lever, area);
+    let stress = neck_stress_mpa(1.0, lever, area, disc_mm4(area));
     assert!(
         stress < NECK_LIMIT_MPA,
         "{count} supports leave {stress} MPa"
@@ -50,7 +50,7 @@ fn only_a_lever_is_counted_supports() {
 #[test]
 fn a_unit_pull_on_a_neck_of_one_mm_radius_bears_its_closed_form_stress() {
     let expected = 1.0 / PI + 4.0 / PI;
-    let stress = neck_stress_mpa(1.0, 1.0, PI);
+    let stress = neck_stress_mpa(1.0, 1.0, PI, disc_mm4(PI));
     assert!(
         (stress - expected).abs() < 1e-9,
         "1 N, 1 mm off a 1 mm radius neck: expected 5/π = {expected} MPa, got {stress}"
@@ -68,10 +68,48 @@ fn one_support_fewer_than_counted_leaves_the_neck_over_its_margin() {
     );
     let area = 2.0 + (count - 1) as f64 * tip_mm2;
     let lever = 6.0 * 2.0 / area + 2.0;
-    let stress = neck_stress_mpa(1.0, lever, area);
+    let stress = neck_stress_mpa(1.0, lever, area, disc_mm4(area));
     assert!(
         stress >= NECK_LIMIT_MPA * NECK_MARGIN,
         "{} supports already hold it at {stress} MPa",
         count - 1
     );
+}
+
+#[test]
+fn a_strip_bends_least_about_its_long_axis() {
+    let mut strip = crate::layer::Moments::default();
+    for row in 0..4 {
+        strip.add(row, 0..20, 1.0, crate::layer::tests::UNIT);
+    }
+    let neck = Neck {
+        area_mm2: strip.area_mm2(),
+        at_mm: strip.centre_mm(),
+        moments_mm4: strip.central(),
+        id: 0,
+    };
+    let expected = 20.0 * 4.0_f64.powi(3) / 12.0;
+    assert!(
+        (neck.least_mm4() - expected).abs() < 1e-9,
+        "a 20 by 4 mm strip: expected b h³ / 12 = {expected} mm⁴, got {}",
+        neck.least_mm4()
+    );
+}
+
+#[test]
+fn two_discs_side_by_side_bend_least_as_two_discs_about_the_line_through_them() {
+    let disc = |x: f64, id: u32| Neck {
+        area_mm2: PI,
+        at_mm: [x, 0.0],
+        moments_mm4: [disc_mm4(PI), 0.0, disc_mm4(PI)],
+        id,
+    };
+    let joined = Neck::joined(&[disc(-3.0, 1), disc(3.0, 2)], 2.0 * PI);
+    let expected = 2.0 * disc_mm4(PI);
+    assert!(
+        (joined.least_mm4() - expected).abs() < 1e-9,
+        "two 1 mm discs 6 mm apart: expected 2 π / 4 = {expected} mm⁴, got {}",
+        joined.least_mm4()
+    );
+    assert_eq!(joined.at_mm, [0.0, 0.0], "centred between them");
 }

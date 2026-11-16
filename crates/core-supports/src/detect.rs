@@ -1,3 +1,5 @@
+use std::cell::OnceCell;
+
 use crate::config::SampleConfig;
 use crate::field::{Field, Grid};
 
@@ -53,27 +55,24 @@ pub fn unsupported(
     if fresh.is_empty() {
         return Unsupported::default();
     }
-    let carried = layer.without(&fresh);
-
-    let mut islands = Vec::new();
-    let mut ledges = Vec::new();
-    let mut specks = Vec::new();
-    for piece in fresh.pieces() {
-        if piece.adjoins(&carried) {
-            ledges.push(piece);
-        } else if across_mm(&piece, grid) >= crate::config::MIN_ISLAND_MM {
-            islands.push(piece);
-        } else {
-            specks.push(piece);
-        }
-    }
+    let (islands, ledges, specks) = sorted(&fresh, &layer.without(&fresh), grid);
 
     // How far the surface is allowed to have moved over this rise, which is the angle.
     let reach = grid.cells_of(config.reach_mm * rise_mm / crate::config::REFERENCE_RISE_MM);
     // What one layer may step out by on its own: a lean is measured over a rise, but a
     // ledge that appears in a single layer is no lean, it is a shelf over nothing.
     let step = grid.cells_of(config.min_overhang_mm);
-    let worth = |piece: &Field| across_mm(piece, grid) >= config.min_overhang_mm;
+    let wide = |piece: &Field| across_mm(piece, grid) >= config.min_overhang_mm;
+    // A lean just past the angle puts out a sliver a layer, which the grid breaks into bits:
+    // a bit is worth a column when the band its layer leans out by over the rise is.
+    let bands = OnceCell::new();
+    let worth = |piece: &Field| {
+        wide(piece)
+            || bands
+                .get_or_init(|| leaning_bands(layer, reference, reach, wide))
+                .iter()
+                .any(|band: &Field| band.adjoins(piece))
+    };
     let Some([lean_deg, steady_deg]) = leans_deg else {
         let overhangs = ledges
             .iter()
@@ -101,7 +100,7 @@ pub fn unsupported(
         let shelf = ledge.uncarried_by(below, step);
         let leaning = ledge.uncarried_by(reference, reach);
         let held = leaning.with(&shelf);
-        steps.extend(shelf.pieces().into_iter().filter(worth));
+        steps.extend(shelf.pieces().into_iter().filter(wide));
         overhangs.extend(leaning.without(&shelf).pieces().into_iter().filter(worth));
         // The foot of a shelf, which the wall under it carries, is the shelf's own.
         let near = ledge
@@ -113,8 +112,8 @@ pub fn unsupported(
             .without(&near)
             .without(&held)
             .uncarried_by(&shelf, step);
-        gentle.extend(near.pieces().into_iter().filter(worth));
-        slopes.extend(sloped.pieces().into_iter().filter(worth));
+        gentle.extend(near.pieces().into_iter().filter(wide));
+        slopes.extend(sloped.pieces().into_iter().filter(wide));
     }
     Unsupported {
         islands,
@@ -124,6 +123,36 @@ pub fn unsupported(
         gentle,
         slopes,
     }
+}
+
+/// The pieces of `fresh` as islands, ledges grown off what `carried` already has, and specks.
+fn sorted(fresh: &Field, carried: &Field, grid: &Grid) -> (Vec<Field>, Vec<Field>, Vec<Field>) {
+    let (mut islands, mut ledges, mut specks) = (Vec::new(), Vec::new(), Vec::new());
+    for piece in fresh.pieces() {
+        if piece.adjoins(carried) {
+            ledges.push(piece);
+        } else if across_mm(&piece, grid) >= crate::config::MIN_ISLAND_MM {
+            islands.push(piece);
+        } else {
+            specks.push(piece);
+        }
+    }
+    (islands, ledges, specks)
+}
+
+/// The pieces of `layer` further than `reach` cells from `reference` that are `wide`.
+fn leaning_bands(
+    layer: &Field,
+    reference: &Field,
+    reach: i32,
+    wide: impl Fn(&Field) -> bool,
+) -> Vec<Field> {
+    layer
+        .uncarried_by(reference, reach)
+        .pieces()
+        .into_iter()
+        .filter(|band| wide(band))
+        .collect()
 }
 
 /// The longer side of a piece's bounding box, millimetres. What "smaller than" means to

@@ -489,7 +489,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   part and its mark is a circle of the contact's width, however its head leans.
 - A face looking straight down is held at the contact spacing, and one leaning just past
   the overhang angle at the wider **spacing on steep faces**; between them the spacing
-  follows the angle.
+  follows the angle. A long narrow part leaning just past the angle is held along its
+  length, not only at its foot.
 - **Auto**, the first preset in the Supports card's list and the one a new plate starts on,
   sizes every support by what it holds: the model above an island or overhang shared among
   the supports holding it, each one's share from 100 mm³ taking **Auto Medium**, from
@@ -627,9 +628,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   each other merge into one trunk, built to the group with the heavier tip; each tip keeps
   its own.
 - Bundled profiles: **light**, **medium**, **heavy**, and the four shapes **Auto** builds
-  to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light, medium and heavy all
-  place contacts 1.8 mm apart, hold surfaces leaning past 40° (heavy past 45°),
-  lift a part 2 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
+  to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light,
+  medium and heavy place contacts 1.8, 3.5 and 4.5 mm apart, each tip carrying a like share
+  of what it holds, hold surfaces leaning past 40° (heavy past 45°), lift a part 2 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
   export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
   shapes apart from the profiles chosen by hand. In a profile's form every group is there,
   from the tip down, tabs over it scrolling to each; branching, the grid, the raft and
@@ -743,7 +744,8 @@ smoothing, not the original model.
 - **Islands:** parts that start in mid-air with nothing under them.
 - **Suction cups:** closed hollows that pull on the film.
 - **Thin sections and weak necks:** places too thin to hold. A neck is weak past the stress
-  printed support tips were measured to tear at.
+  printed support tips were measured to tear at; tips spread under a part bend as the
+  separate tips they are, as placement reads them, not as one stem of their area.
 - **Hard peel:** the layers that pull the film hardest, the widest step and the levers. A
   section's pull follows its area, less for a thin strip than for a disc of the same area.
 

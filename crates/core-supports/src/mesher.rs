@@ -444,6 +444,7 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
         length,
         base_mm,
         into_foot,
+        direction,
     };
     let tail_mm = end.close(&mut rings, landing, profile, style);
     Tube {
@@ -456,12 +457,13 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
     }
 }
 
-/// Where a trunk ends, millimetres along it: its length, its base's radius, and how far
-/// it runs on into the foot.
+/// Where a trunk ends, millimetres along it: its length, its base's radius, how far it runs
+/// on into the foot, and which way it runs.
 struct TrunkEnd {
     length: Scalar,
     base_mm: Scalar,
     into_foot: Scalar,
+    direction: Vec3,
 }
 
 impl TrunkEnd {
@@ -492,8 +494,27 @@ impl TrunkEnd {
         }
         push(rings, self.length, self.base_mm);
         // A trunk run into another support ends plain, inside the trunk it joins.
-        push(rings, self.length + self.into_foot, self.base_mm);
+        let end_mm = if landing.on_support {
+            self.length
+        } else {
+            self.foot_end_mm()
+        };
+        if end_mm < self.length {
+            let radius_mm = radius_at(rings, end_mm);
+            rings.retain(|ring| ring.along_mm < end_mm - RING_EPSILON_MM);
+            push(rings, end_mm, radius_mm);
+        } else {
+            push(rings, end_mm, self.base_mm);
+        }
         None
+    }
+
+    /// How far along a trunk on a foot ends: where the low rim of its last ring, square to a
+    /// lean and so a radius times its sine under its centre, is as deep as a straight one's.
+    fn foot_end_mm(&self) -> Scalar {
+        let cos = (-self.direction.z).max(Scalar::EPSILON);
+        let sin = self.direction.truncate().length();
+        (self.length + (self.into_foot - self.base_mm * sin) / cos).max(0.0)
     }
 }
 

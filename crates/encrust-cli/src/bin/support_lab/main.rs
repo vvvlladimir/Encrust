@@ -335,13 +335,22 @@ fn run(
         setup.wall_mm,
         (layer_mm, setup.sizing),
     )?;
-    let shape = shape::read(&supported, &asked.placing(), &setup.limits, leant);
+    let mut shape = shape::read(&supported, &asked.placing(), &setup.limits, leant);
     let cured = cure::cure(
         &supported.model,
         &supported.supports,
         &setup.printer,
         &setup.material,
     )?;
+    // The tubes overlap and their own volume counts each overlap again (ADR 0041); the cured
+    // stack counts what prints once.
+    let bare = cure::cure(
+        &supported.model,
+        &Mesh::default(),
+        &setup.printer,
+        &setup.material,
+    )?;
+    shape.supports_ml = (cured.resin_ml - bare.resin_ml).max(0.0);
     Ok((supported, shape, cured))
 }
 

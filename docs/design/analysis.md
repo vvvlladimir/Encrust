@@ -60,12 +60,16 @@ the risks are read this way: ADR 0164.
   that touches only floating pieces floats too, and is not named again.
 - Each anchored piece carries its **neck**: the narrowest section between it and the
   plate. It is the piece's own contact where that is under 0.9 of the necks it stands on,
-  and otherwise those necks together, their areas summed and their centres weighted.
-- The layer's pull on a piece is its own `F`. On a neck of area `A` and
-  radius `r` the stress is `F / A + F L / (pi r^3 / 4)`: tension, and bending over a round
-  section. The lever `L` is how far off the neck the pull acts: the piece's centre off the
-  neck's, plus half the piece's own radius of gyration `sqrt(I_p / A)`, because the film
-  lets go from one edge and the pull is then carried by the half still stuck. Without that
+  its second moments read off its pixels, and otherwise those necks together, their areas
+  summed, their centres weighted and their second moments moved to the joint centre.
+- The layer's pull on a piece is its own `F`. On a neck of area `A` bending least about
+  `I` the stress is `F / A + 2 F L / sqrt(I A)`: tension, and bending with the farthest
+  fibre read as a disc's, `2 sqrt(I / A)`; on one round neck of radius `r` it is
+  `F / A + F L / (pi r^3 / 4)`. Tips spread under a part bend as the separate discs of
+  "What each tip carries", not as one disc of their area. The lever `L` is how far off the
+  neck the pull acts: the piece's centre off the neck's, plus half the piece's own radius of
+  gyration `sqrt(I_p / A)`, because the film lets go from one edge and the pull is then
+  carried by the half still stuck. Without that
   term a plate centred over a wire broke nothing. Past `NECK_LIMIT_MPA` it is a **lever**,
   kept once per neck at its worst.
 - A layer whose whole pull `F` passes `PEEL_LIMIT_N` is a **peel**; a run of them is
@@ -92,7 +96,9 @@ lies on that ellipse, far along a strip and near across it, at half the polar gy
 disc or a square, as for a neck. The peel is taken the way worst for that tip. One tip is
 exactly a neck's `F / A + F L / (π r³ / 4)`. Margin is the strength over this stress. It is
 rigid-body sharing: a thin arm is not softer than the body, and the film is not followed as
-it peels. Margins are read against `NECK_LIMIT_MPA` as calibrated below.
+it peels. Margins are read against `NECK_LIMIT_MPA` as calibrated below. A long arm held only
+near its root reads as held; placement holds an arm leaning past the angle along its length,
+and only Auto steadies one leaning less, so Light, Medium and Heavy may let it rock.
 
 Placement mends what it reads (ADR 0422): a tip under ×1.5 is built one size heavier where
 its plan has a wider tip; at the widest it gets a neighbour, which helps only if it seats

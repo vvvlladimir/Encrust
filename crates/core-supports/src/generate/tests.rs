@@ -1151,3 +1151,29 @@ fn every_toe_of_a_foot_is_held_near_its_end() {
         );
     }
 }
+
+#[test]
+fn a_long_rod_leaning_just_past_the_angle_is_held_along_its_length() {
+    // A rod 6 mm across and 60 mm long, 50 degrees off vertical against the profile's 40: each
+    // layer puts out a sliver the grid breaks into bits, the lean over the rise is a whole band.
+    let (sin, cos) = (50.0_f32.to_radians().sin(), 50.0_f32.to_radians().cos());
+    let foot = Vec3::new(50.0, 50.0, 2.0 + 3.0 * sin);
+    let rod = core_geometry::cylinder(foot, foot + Vec3::new(0.0, sin, cos) * 60.0, 3.0, 64);
+    let profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    let contacts = generate_supports(
+        &slice(&rod),
+        LAYER_HEIGHT_MM,
+        &profile,
+        &[],
+        &[],
+        None,
+        &mut |_| true,
+    );
+    let half_mm = f32::midpoint(foot.z, foot.z + 60.0 * cos);
+    let highest_mm = contacts.iter().map(|at| at.z).fold(0.0, Scalar::max);
+    assert!(
+        highest_mm > half_mm,
+        "the rod is held past half its height, {half_mm:.1} mm, and its highest contact is at \
+         {highest_mm:.1} mm"
+    );
+}

@@ -62,6 +62,7 @@ pub struct Shape {
     pub trees: usize,
     /// Supports whose foot stands on the model rather than the plate: a scar of its own.
     pub on_model: usize,
+    /// Resin the supports add to the cured model, ml; set from the cure, not the mesh.
     pub supports_ml: f32,
     pub model_ml: f32,
     /// Underside steeper than the profile's overhang angle, square millimetres.
@@ -148,7 +149,6 @@ pub fn read(
         contacts: supported.contacts.len(),
         standing: tips.len(),
         trees: supported.trees.len(),
-        supports_ml: signed_volume(&supported.supports).abs() / 1000.0,
         model_ml: signed_volume(&supported.model).abs() / 1000.0,
         scar_mm2: sections.iter().sum(),
         design_mm2: spacing * spacing,
