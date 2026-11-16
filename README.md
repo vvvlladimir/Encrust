@@ -6,10 +6,7 @@
 
 ### The fast resin slicer that checks every layer.
 
-Encrust is a free, open-source resin slicer that checks every layer of the file it writes for
-islands, suction cups and thin cross-sections before you print. Windows, macOS, Linux and browser.
-Supports, hollowing and 20-odd printer formats included — all of it on your own computer, with no
-account and no cloud.
+Encrust is a free, open-source slicer for MSLA and SLA resin printers. It checks every layer for islands, suction cups and weak necks before you print, and runs on Windows, macOS, Linux or in your browser.
 
 [**Download**](https://encrust.app/download/)
 &nbsp;·&nbsp; [**Try it in a browser**](https://encrust.app/app/)
