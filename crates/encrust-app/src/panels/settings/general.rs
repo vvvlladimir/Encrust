@@ -22,6 +22,12 @@ pub fn form(ui: &mut Ui, machine: &mut Machine, scene: &Scene) {
         switch(ui, &mut general.invert_zoom, &tr!("general-invert-zoom"));
     });
     #[cfg(not(target_arch = "wasm32"))]
+    form_card(ui, &tr!("general-recovery"), |ui| {
+        let general = &mut machine.general;
+        switch(ui, &mut general.autosave, &tr!("general-autosave"));
+        hint(ui, &tr!("general-autosave-hint"));
+    });
+    #[cfg(not(target_arch = "wasm32"))]
     sliced_folder(ui, machine);
     file_name(ui, machine, scene);
     #[cfg(not(target_arch = "wasm32"))]

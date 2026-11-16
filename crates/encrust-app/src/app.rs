@@ -85,6 +85,9 @@ impl SlicerApp {
             .start_automatic_unless_chosen(&app.doc.scene, &app.machine.slicing.catalogue);
         prefs.restore_panels(&cc.egui_ctx);
         app.machine.report.offer_crash();
+        app.machine.autosave = crate::autosave::Autosave::start();
+        // A copy to restore is offered over the plate, which the start page would hide.
+        app.view.options.started |= app.machine.autosave.offered().is_some();
         project::mark_saved(&mut app.window());
         if let Some(path) = initial_model {
             open_by_what_it_is(&mut app.window(), Handed::Path(path.to_path_buf()));
@@ -476,6 +479,7 @@ impl eframe::App for SlicerApp {
         self.carry_height();
         self.refresh_supports(ui.ctx().input(|input| input.pointer.any_down()));
         self.take_shortcuts();
+        crate::autosave::tick(&mut self.window(), ui.ctx());
 
         project::guard_close(ui, &mut self.window());
         self.window().show(ui);
@@ -485,6 +489,7 @@ impl eframe::App for SlicerApp {
 
     fn on_exit(&mut self) {
         self.machine.updates.on_exit();
+        self.machine.autosave.finish();
         crate::report::crash::forget();
         // Dropping the window resets its view's class under AppKit's Touch Bar observers,
         // which aborts the process: https://github.com/AccessKit/accesskit/issues/823

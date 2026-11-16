@@ -527,6 +527,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0444](0444-the-macos-app-menu-is-the-windows-own.md) | Build the macOS application menu in the window, and date About by the binary | Accepted |
 | [0445](0445-a-project-opens-from-the-system.md) | Register `.encrust` with each system, and take the files macOS hands over | Accepted |
 | [0446](0446-a-crash-is-offered-at-the-next-start-and-the-report-fills-the-issue-form.md) | Offer the panic a run closed on at the next start, and carry the report into the issue form | Accepted |
+| [0452](0452-an-unsaved-plate-is-copied-aside-and-offered-back.md) | Copy an unsaved plate aside every two minutes, and offer it back after a run that did not close | Proposed |
 | [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231, Paint and Shape on the rail by 0336, Export and the column of tools by 0348 |
 | [0219](0219-the-viewport-is-lit-shadowed-and-turned-by-a-cube.md) | Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube | Accepted; the hatching of overhangs is superseded by 0245 |
 | [0245](0245-an-overhang-is-filled-not-hatched.md) | Fill an overhang with its colour instead of hatching it | Accepted |

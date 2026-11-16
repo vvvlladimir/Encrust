@@ -252,6 +252,11 @@ track. With no stack it reads *No layers*.
   glyph in `danger`, what the row's box would say, *Continue* as its action and End as its
   close.
   No printer or no resin is a `danger` notice with the reason on a small line under it.
+  A plate a run left unsaved, while the plate is empty, is a `warn` notice with the recent
+  glyph: *The last run ended without saving*, its project and *copied 10 min ago*
+  on the small line, *Restore* as its action; the close discards it at a second press, the
+  words reading *Press the cross again to discard* while it is armed. A run that
+  finds such a copy opens on the plate, not the start page.
 - **Empty plate:** nothing over the stage; the inspector shows its heading alone, and the
   models card says *Nothing on the plate* and *Drop a model into the window* under a 30
   point cube-focus glyph, with Open a model as an inline button. Slice's reason is its tooltip.
@@ -281,7 +286,7 @@ and the one that applies right.
   (Keyboard shortcuts ↗) under 10.5 capital group names, and Machine and resin ↗ at the foot.
 - *Appearance*: Theme as three `theme_card`s, System (both halves, *Now light* or *Now
   dark*), Light, Dark, the hint under them; Language; Motion. *General*: Start, Viewport,
-  Sliced files, File name and Profiles, each folder a read-only path box (`~` for home) with its button
+  Recovery (a switch and its hint), Sliced files, File name and Profiles, each folder a read-only path box (`~` for home) with its button
   beside it and a hint under; File name an editable box in code type, the reset arrow beside
   it once it differs from `{model}`, *Now saved as …* under it, an unknown `{tag}` named
   under that, the placeholders behind the question mark. Browser: Start, Viewport, File name. *Updates*, its title followed by *This is 0.6.0* in `text_low`:

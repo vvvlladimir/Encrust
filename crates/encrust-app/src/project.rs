@@ -122,6 +122,18 @@ pub fn open(window: &mut Window, file: &Handed) {
 
 /// Opens a project over whatever the window was holding.
 fn open_now(window: &mut Window, file: &Handed) {
+    let Some(preview) = read_in(window, file) else {
+        return;
+    };
+    let path = file.path().to_path_buf();
+    remember(window, &path, preview);
+    window.doc.project.path = Some(path);
+    window.doc.project.saved = Some(digest(&captured(window).manifest));
+}
+
+/// Puts the plate of `file` in place of the one in hand, the undo history with it. Answers
+/// the file's picture, or `None` when it would not read.
+fn read_in(window: &mut Window, file: &Handed) -> Option<Option<Vec<u8>>> {
     let path = file.path().to_path_buf();
     let read = match file {
         Handed::Path(path) => load(path),
@@ -130,12 +142,10 @@ fn open_now(window: &mut Window, file: &Handed) {
     let read = read
         .map_err(anyhow::Error::new)
         .with_context(|| tr!("project-cannot-open", path = path.display().to_string()));
-    let Some(mut project) = window.machine.status.report(
+    let mut project = window.machine.status.report(
         &tr!("status-opened", path = path.display().to_string()),
         read,
-    ) else {
-        return;
-    };
+    )?;
     let preview = project.preview.take();
 
     let printer_before = window.machine.slicing.printer_id.clone();
@@ -161,9 +171,6 @@ fn open_now(window: &mut Window, file: &Handed) {
         .tools
         .supports
         .start_automatic_unless_chosen(&window.doc.scene, &window.machine.slicing.catalogue);
-    remember(window, &path, preview);
-    window.doc.project.path = Some(path);
-    window.doc.project.saved = Some(digest(&captured(window).manifest));
     crate::prepare::forget(window.tools);
     window.doc.history = History::default();
     frame_view(
@@ -171,6 +178,30 @@ fn open_now(window: &mut Window, file: &Handed) {
         &window.doc.plate,
         &mut window.view.camera,
     );
+    Some(preview)
+}
+
+/// Opens the recovery copy at `copy` as the unsaved plate it was, under the project file it
+/// `belonged` to, so Save writes there and closing asks first. Answers whether it read.
+pub fn recover(window: &mut Window, copy: &std::path::Path, belonged: Option<PathBuf>) -> bool {
+    if read_in(window, &Handed::Path(copy.to_path_buf())).is_none() {
+        return false;
+    }
+    window.doc.project.path = belonged;
+    window.doc.project.saved = None;
+    window.machine.status = Status::Info(tr!("project-recovered"));
+    true
+}
+
+/// The plate as a project, with its digest, while it holds models its file does not have
+/// as they stand; `None` for an empty plate or one that matches its file.
+pub fn unsaved(window: &Window) -> Option<(Project, u64)> {
+    if window.doc.scene.is_empty() {
+        return None;
+    }
+    let project = captured(window);
+    let digest = digest(&project.manifest);
+    (window.doc.project.saved != Some(digest)).then_some((project, digest))
 }
 
 /// Writes over the file the plate came from, or asks for a name when it came from none.

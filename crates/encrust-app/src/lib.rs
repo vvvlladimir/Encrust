@@ -6,6 +6,7 @@ mod app;
 #[cfg(target_os = "macos")]
 mod app_menu;
 mod arrange;
+mod autosave;
 mod boolean;
 mod camera;
 mod check;

@@ -60,11 +60,14 @@ settings-page-appearance = Appearance
 settings-group-help = Help
 settings-find = Find a setting
 settings-words-appearance = theme light dark system language motion animation
-settings-words-general = start page viewport zoom sliced files folder file name template profiles
+settings-words-general = start page viewport zoom recovery autosave copy crash sliced files folder file name template profiles
 settings-words-updates = update release version
 updates-this-build = This is { $version }
 general-viewport = Viewport
 general-invert-zoom = Scroll down to zoom in
+general-recovery = Recovery
+general-autosave = Keep a copy of an unsaved plate
+general-autosave-hint = Every two minutes, so an unsaved plate is not lost if Encrust stops unexpectedly. The copy is removed when you close the window.
 general-motion = Motion
 general-reduce-motion = Reduce motion
 general-sliced-files = Sliced files
@@ -2092,6 +2095,14 @@ notice-no-resin-why = Slicing needs exposure times.
 notice-no-printer-why = Slicing needs the screen and the volume of a machine.
 notice-set-up = Set up
 notice-put-away = Put away
+# Over a copy of a plate Encrust kept while it was not saved, from a run that ended without closing.
+notice-recover = The last run ended without saving
+notice-recover-when = Copied { $when }
+# The name of the project file the plate belonged to, and how long ago it was copied.
+notice-recover-of = { $name }, copied { $when }
+notice-recover-restore = Restore
+notice-recover-discard = Discard the copy
+notice-recover-discard-again = Press the cross again to discard
 
 ## project.rs
 
@@ -2106,6 +2117,7 @@ project-opened-note = Opened { $path }; { $note }
 project-cannot-draw = cannot draw the project's picture
 project-cannot-write = cannot write the project { $path }
 project-unsaved = This plate has changes that are not in a project file.
+project-recovered = Restored the plate as Encrust last copied it; it is not saved yet.
 project-keep-working = Keep working
 
 ## project/state.rs
@@ -2113,6 +2125,10 @@ project-keep-working = Keep working
 project-missing-printer = the printer { $printer } it names is not among yours, so yours stays
 project-missing-resin = the resin { $resin } it names is not among yours, so yours stays
 project-missing-both = the printer { $printer } and the resin { $resin } it names are not among yours, so yours stay
+
+## autosave.rs
+
+autosave-cannot-write = Could not keep a copy of the unsaved plate: { $reason }
 
 ## panels/section.rs
 

@@ -157,6 +157,8 @@ pub struct General {
     pub reduce_motion: bool,
     /// Whether the window is light, dark, or follows the system.
     pub appearance: Appearance,
+    /// Whether an unsaved plate is copied aside, to be restored after a run that did not close.
+    pub autosave: bool,
 }
 
 /// The palette the user asked for. `System` follows the platform's own setting as it
@@ -191,6 +193,7 @@ impl Default for General {
             language: None,
             reduce_motion: false,
             appearance: Appearance::System,
+            autosave: true,
         }
     }
 }

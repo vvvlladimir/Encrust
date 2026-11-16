@@ -60,11 +60,14 @@ settings-page-appearance = Оформление
 settings-group-help = Помощь
 settings-find = Найти настройку
 settings-words-appearance = тема светлая тёмная системная язык анимация движение
-settings-words-general = начальная страница область просмотра масштаб нарезанные файлы папка имя файла шаблон профили
+settings-words-general = восстановление автосохранение копия сбой начальная страница область просмотра масштаб нарезанные файлы папка имя файла шаблон профили
 settings-words-updates = обновление релиз выпуск версия
 updates-this-build = Установлена версия { $version }
 general-viewport = Область просмотра
 general-invert-zoom = Прокрутка вниз приближает
+general-recovery = Восстановление
+general-autosave = Хранить копию несохранённой платформы
+general-autosave-hint = Каждые две минуты, чтобы несохранённая платформа не пропала, если Encrust неожиданно остановится. При закрытии окна копия удаляется.
 general-motion = Анимация
 general-reduce-motion = Уменьшить движение
 general-sliced-files = Нарезанные файлы
@@ -2144,6 +2147,12 @@ notice-no-resin-why = Для нарезки нужно время экспози
 notice-no-printer-why = Для нарезки нужны экран и область печати принтера.
 notice-set-up = Настроить
 notice-put-away = Скрыть
+notice-recover = Прошлый сеанс прервался без сохранения
+notice-recover-when = Скопировано { $when }
+notice-recover-of = { $name }, скопировано { $when }
+notice-recover-restore = Восстановить
+notice-recover-discard = Удалить копию
+notice-recover-discard-again = Нажмите крестик ещё раз, чтобы удалить
 
 ## project.rs
 
@@ -2158,6 +2167,7 @@ project-opened-note = Открыто: { $path }; { $note }
 project-cannot-draw = не удалось создать миниатюру проекта
 project-cannot-write = не удалось записать проект { $path }
 project-unsaved = На этой платформе есть изменения, которых нет в файле проекта.
+project-recovered = Платформа восстановлена по последней копии; она ещё не сохранена.
 project-keep-working = Продолжить работу
 
 ## project/state.rs
@@ -2165,6 +2175,10 @@ project-keep-working = Продолжить работу
 project-missing-printer = принтера { $printer }, который в нём указан, нет среди ваших, поэтому остаётся ваш
 project-missing-resin = смолы { $resin }, которая в нём указана, нет среди ваших, поэтому остаётся ваша
 project-missing-both = принтера { $printer } и смолы { $resin }, которые в нём указаны, нет среди ваших, поэтому остаются ваши
+
+## autosave.rs
+
+autosave-cannot-write = Не удалось сделать копию платформы: { $reason }
 
 ## panels/section.rs
 

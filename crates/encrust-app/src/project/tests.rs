@@ -124,3 +124,51 @@ fn a_project_dropped_on_a_plate_without_models_opens_at_once() {
         "nothing to lose, nothing asked"
     );
 }
+
+fn plate_of_one_box() -> Parts {
+    let mut parts = Parts::of(Doc::default(), Tool::Supports);
+    parts.doc.scene = scene_of_boxes(&[(Vec3::ZERO, Vec3::ONE)]);
+    parts
+}
+
+#[test]
+fn a_recovered_plate_is_unsaved_under_the_file_it_belonged_to() {
+    let copy = std::env::temp_dir().join(format!("encrust-recover-{}.encrust", std::process::id()));
+    core_engine::project::save(&copy, &captured(&plate_of_one_box().window()))
+        .expect("the temporary folder is writable");
+    let mut parts = Parts::of(Doc::default(), Tool::Supports);
+    let mut window = parts.window();
+    let belonged = PathBuf::from("ring.encrust");
+
+    assert!(recover(&mut window, &copy, Some(belonged.clone())));
+
+    assert_eq!(window.doc.scene.objects().len(), 1, "the box comes back");
+    assert_eq!(
+        window.doc.project.path,
+        Some(belonged),
+        "Save writes to its file"
+    );
+    assert!(unsaved(&window).is_some(), "closing still asks");
+    assert!(
+        window
+            .machine
+            .recent
+            .files()
+            .iter()
+            .all(|file| file.path != copy),
+        "the copy is not a file the user opened"
+    );
+    let _ = std::fs::remove_file(copy);
+}
+
+#[test]
+fn a_plate_that_matches_its_file_or_holds_nothing_has_nothing_to_copy() {
+    let mut parts = Parts::of(Doc::default(), Tool::Supports);
+    assert!(unsaved(&parts.window()).is_none(), "an empty plate");
+
+    let mut parts = plate_of_one_box();
+    let mut window = parts.window();
+    assert!(unsaved(&window).is_some(), "a box never saved");
+    mark_saved(&mut window);
+    assert!(unsaved(&window).is_none(), "a box as it was saved");
+}

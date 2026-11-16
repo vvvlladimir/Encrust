@@ -18,7 +18,7 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 | | What you get | What you don't |
 |---|---|---|
 | **Desktop window** | Windows 10/11 (installer, or the Microsoft Store), macOS 12+ (Apple silicon and Intel), Linux (AppImage, `.deb`). Every feature. | Downloaded builds are not code-signed yet, so the first launch needs one extra step; the Store copy does not. Needs a GPU with Vulkan, Metal or DirectX 12. |
-| **Browser** | The same core, at encrust.app/app. Nothing to install, shows its progress while it loads, keeps working offline after the first visit, takes a new release on the next reload, and the model never leaves your machine. | Needs WebGPU (a recent Chrome or Edge, or Safari 26). It cannot send to a printer: the sliced file is downloaded instead. No Crustling test print. No self-update. A browser keeps Cmd N and Cmd Shift N for its own windows; use the menu for a new plate or project. |
+| **Browser** | The same core, at encrust.app/app. Nothing to install, shows its progress while it loads, keeps working offline after the first visit, takes a new release on the next reload, and the model never leaves your machine. | Needs WebGPU (a recent Chrome or Edge, or Safari 26). It cannot send to a printer: the sliced file is downloaded instead. No Crustling test print. No self-update. No recovery copy of an unsaved plate. A browser keeps Cmd N and Cmd Shift N for its own windows; use the menu for a new plate or project. |
 | **Command line** (`encrust`) | The same pipeline with no window, for scripts and batches. | No painting, no manual supports. Anything you would click on a model is done in the window and saved as a project, which the command line can then slice. |
 
 ---
@@ -1026,6 +1026,12 @@ address in a video player).
   the Microsoft Store is updated by the Store instead: it says when the Store has a new
   version, and its button opens Encrust in the Store app to update.
 - **Find a setting** at the top of Settings narrows its pages as you type (`⌘F`).
+- **Recovery:** while a plate holds models that are not saved, a copy of it is kept every two
+  minutes. If Encrust ends without closing — a crash, a forced quit, the power going — the
+  next start offers the copy over the empty plate, saying how long ago it was taken: Restore
+  opens it as it was, still unsaved and under its project's name, and the cross, pressed
+  twice, throws it away. Closing the window, saved or not, deletes the copy; several windows
+  each keep their own. Turned off in Settings → General. Not in the browser.
 - **Bug report:** builds a Markdown report (what happened, how to reproduce it, the
   settings you changed, profiles) and gives it to you to copy, save or carry into a new
   GitHub issue, filled in when it fits and on your clipboard to paste when it does not.

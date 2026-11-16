@@ -1,4 +1,5 @@
 mod jobs;
+mod recovered;
 
 use egui::{Align2, Id, Rect, RichText, pos2, vec2};
 
@@ -34,6 +35,7 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, room: Rect, middle: f32) {
     message(&mut stack, &mut window.machine.status, running, width);
     unready(&mut stack, window);
     release(&mut stack, window);
+    recovered::recovered(&mut stack, window);
     broken(&mut stack, window);
     unreadable(&mut stack, window);
     jobs::jobs(&mut stack, window);

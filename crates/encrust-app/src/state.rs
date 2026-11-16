@@ -148,4 +148,6 @@ pub struct Machine {
     pub fetches: crate::samples::remote::Fetches,
     /// How the window itself behaves, from the Settings window's General page.
     pub general: crate::prefs::General,
+    /// The copy of the unsaved plate, and those runs that did not close left.
+    pub autosave: crate::autosave::Autosave,
 }
