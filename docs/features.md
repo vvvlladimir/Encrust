@@ -55,6 +55,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 
 **You cannot:**
 - Open other 3D formats (STEP, PLY, AMF and so on).
+- Open a 3MF whose model is not UTF-8, such as an object named in Latin-1: it is refused
+  as malformed.
 - Open a project saved by version 3 or older of the project format.
 
 ---

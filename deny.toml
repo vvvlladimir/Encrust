@@ -8,7 +8,7 @@ yanked = "deny"
 # we chose ourselves: eframe pulls in unmaintained font parsing we have no upgrade for.
 unmaintained = "workspace"
 ignore = [
-    # Unmaintained, not unsound; fontdb ships the same copy to the window anyway (ADR 0305).
+    # Unmaintained, not unsound; core-text alone takes it since fontdb 0.24 (ADR 0305).
     { id = "RUSTSEC-2026-0192", reason = "core-text outlines with ttf-parser 0.25 until it moves to skrifa" },
 ]
 

@@ -127,7 +127,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0442](0442-an-import-can-be-cancelled-and-a-rebuild-stops.md) | Let an import be cancelled, and stop a sliced file's rebuild | Accepted |
 | [0111](0111-parse-obj-with-tobj.md) | OBJ is parsed with `tobj`, not by hand | Accepted |
 | [0112](0112-resolve-the-3mf-graph-ourselves.md) | 3MF is parsed with `threemf2`, and its graph resolved here | Superseded by 0395 |
-| [0395](0395-read-3mf-with-quick-xml-and-the-workspace-zip.md) | 3MF is read with `quick-xml` and the workspace's `zip` | Proposed |
+| [0395](0395-read-3mf-with-quick-xml-and-the-workspace-zip.md) | 3MF is read with `quick-xml` and the workspace's `zip` | Proposed; its `quick-xml` 0.41 is superseded by 0451 |
+| [0451](0451-read-3mf-with-quick-xml-0-42-and-refuse-what-is-not-utf-8.md) | 3MF is read with `quick-xml` 0.42, and a model part that is not UTF-8 is refused | Proposed |
 | [0115](0115-uvs-are-a-sidecar-beside-the-mesh.md) | UVs are a sidecar beside the mesh, and the OBJ loader reads `map_Kd` | Accepted |
 | [0121](0121-a-map-may-cover-part-of-a-mesh.md) | A UV map may cover part of a mesh; what it misses does not move | Accepted |
 | [0123](0123-a-face-names-its-own-image.md) | A face names its own image, so a model is textured by material | Accepted |

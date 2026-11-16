@@ -12,9 +12,9 @@ use quick_xml::{NsReader, XmlVersion};
 
 use super::model::{MeshPart, Model, Object, Placed, Shape, TextureGroup, Triangle};
 
-const CORE: &[u8] = b"http://schemas.microsoft.com/3dmanufacturing/core/2015/02";
-const MATERIAL: &[u8] = b"http://schemas.microsoft.com/3dmanufacturing/material/2015/02";
-const PRODUCTION: &[u8] = b"http://schemas.microsoft.com/3dmanufacturing/production/2015/06";
+const CORE: &str = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02";
+const MATERIAL: &str = "http://schemas.microsoft.com/3dmanufacturing/material/2015/02";
+const PRODUCTION: &str = "http://schemas.microsoft.com/3dmanufacturing/production/2015/06";
 
 #[derive(Clone, Copy)]
 enum Space {
@@ -88,34 +88,34 @@ impl Parser {
         names: &NamespaceResolver,
     ) -> Result<(), String> {
         match (space, element.local_name().as_ref()) {
-            (Space::Core, b"model") => self.model.mm_per_unit = mm_per_unit(element)?,
-            (Space::Core, b"object") => self.object = Some(object(element)?),
-            (Space::Core, b"mesh") => self.shape(Shape::Mesh(MeshPart::default())),
-            (Space::Core, b"components") => self.shape(Shape::Components(Vec::new())),
-            (Space::Core, b"vertex") => {
+            (Space::Core, "model") => self.model.mm_per_unit = mm_per_unit(element)?,
+            (Space::Core, "object") => self.object = Some(object(element)?),
+            (Space::Core, "mesh") => self.shape(Shape::Mesh(MeshPart::default())),
+            (Space::Core, "components") => self.shape(Shape::Components(Vec::new())),
+            (Space::Core, "vertex") => {
                 if let Some(mesh) = self.mesh() {
                     mesh.vertices.push(vertex(element)?);
                 }
             }
-            (Space::Core, b"triangle") => {
+            (Space::Core, "triangle") => {
                 if let Some(mesh) = self.mesh() {
                     mesh.triangles.push(triangle(element)?);
                 }
             }
-            (Space::Core, b"component") => self.component(placed(element, names, "component")?)?,
-            (Space::Core, b"item") => self.model.build.push(placed(element, names, "item")?),
-            (Space::Material, b"texture2d") => {
+            (Space::Core, "component") => self.component(placed(element, names, "component")?)?,
+            (Space::Core, "item") => self.model.build.push(placed(element, names, "item")?),
+            (Space::Material, "texture2d") => {
                 let (id, path) = texture(element)?;
                 self.model.textures.entry(id).or_insert(path);
             }
-            (Space::Material, b"texture2dgroup") => self.group = Some(texture_group(element)?),
-            (Space::Material, b"tex2coord") => {
+            (Space::Material, "texture2dgroup") => self.group = Some(texture_group(element)?),
+            (Space::Material, "tex2coord") => {
                 if let Some((_, group)) = &mut self.group {
                     group.coordinates.push(coordinate(element)?);
                 }
             }
-            (Space::Other, b"booleanshape") => self.shape(Shape::Unsupported("3MF boolean shapes")),
-            (Space::Other, b"displacementmesh") => {
+            (Space::Other, "booleanshape") => self.shape(Shape::Unsupported("3MF boolean shapes")),
+            (Space::Other, "displacementmesh") => {
                 self.shape(Shape::Unsupported("3MF displacement meshes"));
             }
             _ => {}
@@ -124,14 +124,14 @@ impl Parser {
     }
 
     /// Files the closed resource; of two sharing an id, the first is kept.
-    fn close(&mut self, space: Space, local: &[u8]) {
+    fn close(&mut self, space: Space, local: &str) {
         match (space, local) {
-            (Space::Core, b"object") => {
+            (Space::Core, "object") => {
                 if let Some((id, object)) = self.object.take() {
                     self.model.objects.entry(id).or_insert(object);
                 }
             }
-            (Space::Material, b"texture2dgroup") => {
+            (Space::Material, "texture2dgroup") => {
                 if let Some((id, group)) = self.group.take() {
                     self.model.groups.entry(id).or_insert(group);
                 }
@@ -177,13 +177,13 @@ fn mm_per_unit(element: &BytesStart<'_>) -> Result<f32, String> {
         return Ok(1.0);
     };
     match unit.value.as_ref() {
-        b"micron" => Ok(0.001),
-        b"millimeter" => Ok(1.0),
-        b"centimeter" => Ok(10.0),
-        b"inch" => Ok(25.4),
-        b"foot" => Ok(304.8),
-        b"meter" => Ok(1000.0),
-        other => Err(format!("the unit {}", String::from_utf8_lossy(other))),
+        "micron" => Ok(0.001),
+        "millimeter" => Ok(1.0),
+        "centimeter" => Ok(10.0),
+        "inch" => Ok(25.4),
+        "foot" => Ok(304.8),
+        "meter" => Ok(1000.0),
+        other => Err(format!("the unit {other}")),
     }
 }
 
@@ -192,9 +192,9 @@ fn object(element: &BytesStart<'_>) -> Result<(u32, Object), String> {
     for attribute in attributes(element) {
         let attribute = attribute?;
         match attribute.key.as_ref() {
-            b"id" => id = Some(number(&attribute, "object")?),
-            b"pid" => object.pid = Some(number(&attribute, "object")?),
-            b"pindex" => object.pindex = Some(number(&attribute, "object")?),
+            "id" => id = Some(number(&attribute, "object")?),
+            "pid" => object.pid = Some(number(&attribute, "object")?),
+            "pindex" => object.pindex = Some(number(&attribute, "object")?),
             _ => {}
         }
     }
@@ -206,9 +206,9 @@ fn vertex(element: &BytesStart<'_>) -> Result<Vec3, String> {
     for attribute in attributes(element) {
         let attribute = attribute?;
         let axis = match attribute.key.as_ref() {
-            b"x" => 0,
-            b"y" => 1,
-            b"z" => 2,
+            "x" => 0,
+            "y" => 1,
+            "z" => 2,
             _ => continue,
         };
         at[axis] = Some(finite(&attribute, "vertex")?);
@@ -225,13 +225,13 @@ fn triangle(element: &BytesStart<'_>) -> Result<Triangle, String> {
     for attribute in attributes(element) {
         let attribute = attribute?;
         let slot = match attribute.key.as_ref() {
-            b"v1" => &mut vertices[0],
-            b"v2" => &mut vertices[1],
-            b"v3" => &mut vertices[2],
-            b"p1" => &mut properties[0],
-            b"p2" => &mut properties[1],
-            b"p3" => &mut properties[2],
-            b"pid" => &mut pid,
+            "v1" => &mut vertices[0],
+            "v2" => &mut vertices[1],
+            "v3" => &mut vertices[2],
+            "p1" => &mut properties[0],
+            "p2" => &mut properties[1],
+            "p3" => &mut properties[2],
+            "pid" => &mut pid,
             _ => continue,
         };
         *slot = Some(number(&attribute, "triangle")?);
@@ -253,13 +253,13 @@ fn placed(element: &BytesStart<'_>, names: &NamespaceResolver, of: &str) -> Resu
     for attribute in attributes(element) {
         let attribute = attribute?;
         match names.resolve_attribute(attribute.key) {
-            (ResolveResult::Unbound, local) if local.as_ref() == b"objectid" => {
+            (ResolveResult::Unbound, local) if local.as_ref() == "objectid" => {
                 objectid = Some(number(&attribute, of)?);
             }
-            (ResolveResult::Unbound, local) if local.as_ref() == b"transform" => {
+            (ResolveResult::Unbound, local) if local.as_ref() == "transform" => {
                 transform = matrix(&attribute.value)?;
             }
-            (ResolveResult::Bound(Namespace(PRODUCTION)), local) if local.as_ref() == b"path" => {
+            (ResolveResult::Bound(Namespace(PRODUCTION)), local) if local.as_ref() == "path" => {
                 path = Some(text(&attribute)?);
             }
             _ => {}
@@ -277,8 +277,8 @@ fn texture(element: &BytesStart<'_>) -> Result<(u32, String), String> {
     for attribute in attributes(element) {
         let attribute = attribute?;
         match attribute.key.as_ref() {
-            b"id" => id = Some(number(&attribute, "texture2d")?),
-            b"path" => path = Some(text(&attribute)?),
+            "id" => id = Some(number(&attribute, "texture2d")?),
+            "path" => path = Some(text(&attribute)?),
             _ => {}
         }
     }
@@ -293,8 +293,8 @@ fn texture_group(element: &BytesStart<'_>) -> Result<(u32, TextureGroup), String
     for attribute in attributes(element) {
         let attribute = attribute?;
         match attribute.key.as_ref() {
-            b"id" => id = Some(number(&attribute, "texture2dgroup")?),
-            b"texid" => texture = Some(number(&attribute, "texture2dgroup")?),
+            "id" => id = Some(number(&attribute, "texture2dgroup")?),
+            "texid" => texture = Some(number(&attribute, "texture2dgroup")?),
             _ => {}
         }
     }
@@ -310,8 +310,8 @@ fn coordinate(element: &BytesStart<'_>) -> Result<Vec2, String> {
     for attribute in attributes(element) {
         let attribute = attribute?;
         match attribute.key.as_ref() {
-            b"u" => u = Some(finite(&attribute, "tex2coord")?),
-            b"v" => v = Some(finite(&attribute, "tex2coord")?),
+            "u" => u = Some(finite(&attribute, "tex2coord")?),
+            "v" => v = Some(finite(&attribute, "tex2coord")?),
             _ => {}
         }
     }
@@ -322,10 +322,9 @@ fn coordinate(element: &BytesStart<'_>) -> Result<Vec2, String> {
 }
 
 /// Twelve numbers placing a row vector: `m00 m01 m02 m10 … m32`, so its rows are glam's columns.
-fn matrix(value: &[u8]) -> Result<Mat4, String> {
-    let refused = || format!("the transform {}", String::from_utf8_lossy(value));
-    let words = std::str::from_utf8(value).map_err(|_| refused())?;
-    let numbers: Vec<f32> = words
+fn matrix(value: &str) -> Result<Mat4, String> {
+    let refused = || format!("the transform {value}");
+    let numbers: Vec<f32> = value
         .split_ascii_whitespace()
         .map(|word| word.parse().ok().filter(|number: &f32| number.is_finite()))
         .collect::<Option<_>>()
@@ -351,16 +350,13 @@ fn attributes<'a>(
 }
 
 fn number<T: FromStr>(attribute: &Attribute<'_>, of: &str) -> Result<T, String> {
-    std::str::from_utf8(&attribute.value)
-        .ok()
-        .and_then(|value| value.trim().parse().ok())
-        .ok_or_else(|| {
-            format!(
-                "the {of} {} {} is not a number",
-                String::from_utf8_lossy(attribute.key.as_ref()),
-                String::from_utf8_lossy(&attribute.value)
-            )
-        })
+    attribute.value.trim().parse().map_err(|_| {
+        format!(
+            "the {of} {} {} is not a number",
+            attribute.key.as_ref(),
+            attribute.value
+        )
+    })
 }
 
 fn finite(attribute: &Attribute<'_>, of: &str) -> Result<f32, String> {
@@ -368,10 +364,7 @@ fn finite(attribute: &Attribute<'_>, of: &str) -> Result<f32, String> {
     if value.is_finite() {
         Ok(value)
     } else {
-        Err(format!(
-            "the {of} {} is {value}",
-            String::from_utf8_lossy(attribute.key.as_ref())
-        ))
+        Err(format!("the {of} {} is {value}", attribute.key.as_ref()))
     }
 }
 
