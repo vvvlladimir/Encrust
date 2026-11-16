@@ -590,7 +590,10 @@ fn a_square_hole_turned_on_its_corner_takes_a_plug() {
 fn medium_on_a_raft(name: &str) -> PathBuf {
     let medium = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../assets/profiles/supports/medium.toml");
-    let text = fs::read_to_string(medium).expect("the medium preset ships");
+    // A Windows checkout ends the preset's lines in CRLF.
+    let text = fs::read_to_string(medium)
+        .expect("the medium preset ships")
+        .replace("\r\n", "\n");
     let rafted = text.replacen("[raft]\nenabled = false", "[raft]\nenabled = true", 1);
     assert_ne!(text, rafted, "the medium preset names its raft off");
     let path = std::env::temp_dir().join(format!("encrust-cli-{name}-supports.toml"));
