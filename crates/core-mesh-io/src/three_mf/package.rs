@@ -13,7 +13,7 @@ use super::parse::parse;
 use crate::ReadSeek;
 
 /// The relationship type naming the root model part, the package's `StartPart` (core §2.1.5).
-const START_PART: &[u8] = b"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel";
+const START_PART: &str = "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel";
 
 /// Where a package keeps its root model when its relationships do not say.
 const USUAL_ROOT: &str = "3D/3dmodel.model";
@@ -143,7 +143,7 @@ fn start_part(relationships: &[u8]) -> Result<Option<String>, String> {
             .map_err(|error| format!("/_rels/.rels: {error}"))?
         {
             Event::Start(element) | Event::Empty(element)
-                if element.local_name().as_ref() == b"Relationship" =>
+                if element.local_name().as_ref() == "Relationship" =>
             {
                 let kind = element.try_get_attribute("Type").ok().flatten();
                 let target = element.try_get_attribute("Target").ok().flatten();

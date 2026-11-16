@@ -5892,7 +5892,6 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- [pollster 0.4.0](https://github.com/zesterer/pollster)
 - [pollster 1.0.1](https://github.com/zesterer/pollster)
 
 ```text
@@ -7399,7 +7398,7 @@ SOFTWARE.
 
 Used by:
 
-- [rfd 0.17.2](https://github.com/PolyMeilex/rfd)
+- [rfd 0.18.0](https://github.com/PolyMeilex/rfd)
 
 ```text
 MIT License
@@ -7523,7 +7522,7 @@ SOFTWARE.
 
 Used by:
 
-- [rfd 0.17.2](https://github.com/PolyMeilex/rfd)
+- [rfd 0.18.0](https://github.com/PolyMeilex/rfd)
 - [sctk-adwaita 0.10.1](https://github.com/PolyMeilex/sctk-adwaita)
 
 ```text
@@ -7730,36 +7729,6 @@ SOFTWARE.
 
 Used by:
 
-- [core_maths 0.1.1](https://github.com/robertbastian/core_maths)
-
-```text
-MIT License
-
-Copyright (c) 2024 Robert Bastian
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-## MIT License
-
-Used by:
-
 - [i_tree 0.20.0](https://github.com/iShape-Rust/iTree)
 
 ```text
@@ -7867,6 +7836,7 @@ Used by:
 - [objc2-foundation 0.3.2](https://github.com/madsmtm/objc2)
 - [objc2-metal 0.3.2](https://github.com/madsmtm/objc2)
 - [objc2-quartz-core 0.3.2](https://github.com/madsmtm/objc2)
+- [objc2-uniform-type-identifiers 0.3.2](https://github.com/madsmtm/objc2)
 - [objc2 0.5.2](https://github.com/madsmtm/objc2)
 - [objc2 0.6.5](https://github.com/madsmtm/objc2)
 - [profiling 1.0.18](https://github.com/aclysma/profiling)
@@ -8807,6 +8777,39 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
+- [quick-xml 0.42.0](https://github.com/tafia/quick-xml)
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2016 Johann Tuffe
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+```
+
+## MIT License
+
+Used by:
+
 - [console 0.16.6](https://github.com/console-rs/console)
 - [indicatif 0.18.6](https://github.com/console-rs/indicatif)
 
@@ -8940,7 +8943,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- [fontdb 0.23.0](https://github.com/RazrFalcon/fontdb)
+- [fontdb 0.24.0](https://github.com/RazrFalcon/fontdb)
 
 ```text
 The MIT License (MIT)

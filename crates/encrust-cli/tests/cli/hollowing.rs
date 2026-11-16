@@ -35,12 +35,14 @@ pub(crate) fn hollow_cube(name: &str, extra: &[&str]) -> (PathBuf, String) {
 fn a_hollowed_cube_exposes_a_ring_on_the_layers_that_cross_its_cavity() {
     let (out, _) = hollow_cube("ring", &["--hollow", "3"]);
 
-    // Halfway up, a 16 mm cube with a 3 mm wall is a 16 mm square with a 10 mm square out
-    // of the middle: 156 mm2, which is 15 600 pixels at a 0.1 mm pitch.
+    // Halfway up, a 16 mm square with the cavity's square out of the middle, at 100 pixels
+    // a mm2 for a 0.1 mm pitch.
+    let side = cavity_side_mm(16.0, 3.0);
+    let expected = (256.0 - side * side) * 100.0;
     let ring = lit_pixels(&out, 8);
     assert!(
-        (ring as f32 - 15_600.0).abs() / 15_600.0 < 0.02,
-        "a 16 mm ring around a 10 mm cavity is 15 600 pixels, got {ring}"
+        (ring as f32 - expected).abs() / expected < 0.02,
+        "a 16 mm ring around a {side} mm cavity is {expected} pixels, got {ring}"
     );
 
     // The floor of an internal hollow is solid, so the first layer is the whole square.
@@ -60,9 +62,11 @@ fn hollowing_reports_the_resin_it_saves() {
         .trim_end_matches(" mm^3")
         .parse()
         .expect("the saved volume is a number");
+    let side = cavity_side_mm(16.0, 3.0);
+    let cavity = side.powi(3);
     assert!(
-        (saved - 1000.0).abs() / 1000.0 < 0.03,
-        "a 10 mm cube of resin is 1000 mm^3, got {saved}"
+        (saved - cavity).abs() / cavity < 0.03,
+        "a {side} mm cube of resin is {cavity} mm^3, got {saved}"
     );
 }
 
