@@ -349,10 +349,11 @@ fn a_hollow_step_keeps_a_model_thinner_than_keep_solid_under_mm_solid() {
     };
     let open = hollowed("recipe-kept-open", "");
     let kept = hollowed("recipe-kept-solid", ", keep_solid_under_mm = 20");
-    // The 16 mm cube's cavity is 12 mm across, 1728 mm3, and the whole cube is under 20 mm.
+    // The whole 16 mm cube is under 20 mm.
+    let cavity = f64::from(cavity_side_mm(16.0, 2.0)).powi(3);
     assert!(
-        (open - 1728.0).abs() < 1728.0 * 0.02,
-        "1728 mm3 open, got {open}"
+        (open - cavity).abs() < cavity * 0.02,
+        "{cavity} mm3 open, got {open}"
     );
     assert_eq!(kept, 0.0, "a 16 mm cube is under 20 mm, so 0 mm3 of cavity");
 }

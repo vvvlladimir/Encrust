@@ -122,9 +122,11 @@ fn a_sealed_cavity_is_located_inside_the_hollowed_cube() {
     let volume = pocket["volume_mm3"]
         .as_f64()
         .expect("a pocket holds a volume");
+    let side = f64::from(cavity_side_mm(16.0, 2.0));
+    let cavity = side.powi(3);
     assert!(
-        (volume - 1728.0).abs() / 1728.0 < 0.03,
-        "a 12 mm cavity holds 1728 mm^3, found {volume}"
+        (volume - cavity).abs() / cavity < 0.03,
+        "a {side} mm cavity holds {cavity} mm^3, found {volume}"
     );
     let (min, max) = (
         point(&pocket["bounds_mm"]["min"]),

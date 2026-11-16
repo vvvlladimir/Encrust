@@ -11,6 +11,14 @@ pub fn write_box_stl(name: &str, size: f32, faces: usize, invert: usize) -> Path
     write_leaning_box_stl(name, size, 0.0, faces, invert)
 }
 
+/// The side of the cavity `--hollow wall_mm` cuts into a `size_mm` cube at the default
+/// `--precision`: half a voxel past the wall on each face (ADR 0449).
+pub fn cavity_side_mm(size_mm: f32, wall_mm: f32) -> f32 {
+    let precision = core_volume::HollowSettings::default().precision;
+    let voxel_mm = core_volume::lattice_mm(wall_mm, precision, 6.0 * size_mm * size_mm);
+    size_mm - 2.0 * (wall_mm + voxel_mm / 2.0)
+}
+
 /// The same box with its top pushed `lean` along x, so that one wall hangs over the plate
 /// and the opposite one leans back from it.
 pub fn write_leaning_box_stl(
