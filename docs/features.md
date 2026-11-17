@@ -1025,6 +1025,8 @@ address in a video player).
   time left and steps, with Cancel while it downloads. You can skip a version. A copy from
   the Microsoft Store is updated by the Store instead: it says when the Store has a new
   version, and its button opens Encrust in the Store app to update.
+  A copy from Flathub is updated by Flathub: it still says a new version is out, and that
+  Flathub installs it.
 - **Find a setting** at the top of Settings narrows its pages as you type (`⌘F`).
 - **Recovery:** while a plate holds models that are not saved, a copy of it is kept every two
   minutes. If Encrust ends without closing — a crash, a forced quit, the power going — the

@@ -2016,6 +2016,7 @@ update-cannot-open-store = cannot open the Microsoft Store
 update-dev-build = A development build is updated by building it.
 update-no-exe = The running program cannot be located.
 update-by-store = This copy is updated by the Microsoft Store.
+update-by-flathub = This copy is updated by Flathub.
 update-by-package = This copy is updated by downloading the new package.
 
 ## panels/settings/updates.rs

@@ -39,13 +39,21 @@ jobs:
       - name: Install the pinned toolchain
         run: rustup show
       - run: cargo update --workspace
-      - name: Commit the refreshed lock
+      # A software centre lists the releases the metainfo names (ADR 0456); the date is the day
+      # this pull request last changed, which is close enough to the day it is merged.
+      - name: Name the release in the metainfo
         run: |
-          git diff --quiet -- Cargo.lock && exit 0
+          version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          file=assets/linux/app.encrust.Encrust.metainfo.xml
+          sed -i "/<release version=\"$version\"/d" "$file"
+          sed -i "s|^  <releases>\$|&\n    <release version=\"$version\" date=\"$(date -u +%F)\" />|" "$file"
+      - name: Commit the refreshed lock and metainfo
+        run: |
+          git diff --quiet -- Cargo.lock assets/linux && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock
-          git commit -m "chore: refresh Cargo.lock for the release"
+          git add Cargo.lock assets/linux/app.encrust.Encrust.metainfo.xml
+          git commit -m "chore: refresh Cargo.lock and the metainfo for the release"
           git push
 
   build:

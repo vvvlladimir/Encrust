@@ -70,7 +70,8 @@ binary as the process exits. "Keep working" in that question cancels the restart
 
 A development build (`debug_assertions`) is offered but never replaced, and so is a copy
 started from an `.AppImage` (it runs from a read-only mount) or installed under `/usr` by the
-`.deb` (the package manager owns it); those are sent to the release page. Inside `Encrust.app`
+`.deb` (the package manager owns it); those are sent to the release page. A copy run by Flatpak, from
+`/app`, says Flathub updates it ([ADR 0456](../decisions/0456-linux-also-ships-through-flathub.md)). Inside `Encrust.app`
 and the per-user Windows install the swap works as above.
 
 A copy installed from the Microsoft Store runs from under a `WindowsApps` directory, which

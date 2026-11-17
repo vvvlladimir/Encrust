@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- What a software centre shows for Encrust; see docs/decisions/0456. -->
+<component type="desktop-application">
+  <id>app.encrust.Encrust</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+  <name>Encrust</name>
+  <summary>Slice models for resin 3D printers</summary>
+  <developer id="app.encrust">
+    <name>Encrust contributors</name>
+  </developer>
+
+  <description>
+    <p>
+      Encrust is a free slicer for MSLA and SLA resin printers. It checks every layer for
+      islands, suction cups and weak necks before you print, counted from what will really cure
+      after supports and hollowing.
+    </p>
+    <ul>
+      <li>Automatic branching supports, manual placement, painted patches and rafts</li>
+      <li>Hollowing with infill lattices, drain holes and a warning for trapped resin</li>
+      <li>STL, OBJ and 3MF import with mesh repair, auto-orient and auto-arrange</li>
+      <li>Cutting with joints, text and textures pressed into the surface</li>
+      <li>Adaptive layer height, anti-aliasing and exposure by height</li>
+      <li>Writes and reads back .goo, .ctb, .cbddlp, .pwmx, .sl1 and more</li>
+      <li>Sends prints over the network to SDCP and PrusaLink printers</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">app.encrust.Encrust.desktop</launchable>
+  <provides>
+    <binary>encrust-gui</binary>
+    <binary>encrust</binary>
+    <mediatype>application/x-encrust</mediatype>
+  </provides>
+
+  <url type="homepage">https://encrust.app</url>
+  <url type="help">https://encrust.app/guides/</url>
+  <url type="bugtracker">https://github.com/vvvlladimir/Encrust/issues</url>
+  <url type="vcs-browser">https://github.com/vvvlladimir/Encrust</url>
+  <url type="contribute">https://github.com/vvvlladimir/Encrust/blob/main/CONTRIBUTING.md</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>A model on the build plate, with its print time and resin</caption>
+      <image>https://raw.githubusercontent.com/vvvlladimir/Encrust/main/assets/linux/screenshots/plate.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Every island the check found, layer by layer</caption>
+      <image>https://raw.githubusercontent.com/vvvlladimir/Encrust/main/assets/linux/screenshots/check.png</image>
+    </screenshot>
+  </screenshots>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#f2763a</color>
+    <color type="primary" scheme_preference="dark">#c9531f</color>
+  </branding>
+
+  <requires>
+    <display_length compare="ge">900</display_length>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.8.0" date="2026-11-12" />
+    <release version="0.7.0" date="2026-11-04" />
+    <release version="0.6.0" date="2026-10-29" />
+    <release version="0.5.0" date="2026-10-20" />
+    <release version="0.4.0" date="2026-10-16" />
+    <release version="0.3.0" date="2026-10-14" />
+    <release version="0.2.0" date="2026-10-08" />
+    <release version="0.1.0" date="2026-10-02" />
+  </releases>
+</component>

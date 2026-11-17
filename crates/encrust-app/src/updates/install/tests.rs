@@ -84,6 +84,13 @@ fn a_deb_install_is_not_replaced_but_a_home_one_is() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
+fn a_flatpak_install_is_not_replaced_but_a_home_one_is() {
+    assert!(in_flatpak(Path::new("/app/bin/encrust-gui")));
+    assert!(!in_flatpak(Path::new("/home/u/app/encrust-gui")));
+}
+
+#[test]
 fn an_archive_without_the_window_is_refused() {
     let archive = zipped(&[(&format!("{DIR}/LICENSE"), b"text")]);
     let unpacked = unpack(&archive, "a.zip");

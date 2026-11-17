@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Encrust
+GenericName=Resin Slicer
+Comment=Prepare and slice models for MSLA and SLA resin 3D printers
+Exec=encrust-gui %f
+Icon=app.encrust.Encrust
+Terminal=false
+Categories=Graphics;3DGraphics;Engineering;
+Keywords=3D;printing;printer;resin;slicer;MSLA;SLA;supports;STL;3MF;
+MimeType=application/x-encrust;
+StartupNotify=true

@@ -76,6 +76,11 @@ fn viewport() -> anyhow::Result<egui::ViewportBuilder> {
             crate::ui::theme::WINDOW_MIN_H,
         ])
         .with_icon(icon().context("the window icon")?);
+    // Wayland ties a window to its desktop entry by app id, which Flatpak names after the app.
+    let viewport = match std::env::var("FLATPAK_ID") {
+        Ok(id) => viewport.with_app_id(id),
+        Err(_) => viewport,
+    };
     Ok(if cfg!(target_os = "macos") {
         viewport
             .with_fullsize_content_view(true)

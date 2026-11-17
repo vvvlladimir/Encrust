@@ -2065,6 +2065,7 @@ update-cannot-open-store = не удалось открыть Microsoft Store
 update-dev-build = Сборка для разработки обновляется пересборкой.
 update-no-exe = Не удалось определить расположение запущенной программы.
 update-by-store = Эта копия обновляется через Microsoft Store.
+update-by-flathub = Эта копия обновляется через Flathub.
 update-by-package = Эта копия обновляется скачиванием нового пакета.
 
 ## panels/settings/updates.rs

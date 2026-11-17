@@ -80,6 +80,9 @@ pub fn current_exe() -> Result<PathBuf, String> {
     if cfg!(windows) && in_store_package(&exe) {
         return Err(tr!("update-by-store"));
     }
+    if in_flatpak(&exe) {
+        return Err(tr!("update-by-flathub"));
+    }
     if packaged(&exe, std::env::var_os("APPIMAGE").is_some()) {
         return Err(tr!("update-by-package"));
     }
@@ -98,6 +101,11 @@ pub fn from_store() -> bool {
 fn in_store_package(exe: &Path) -> bool {
     exe.components()
         .any(|part| part.as_os_str().eq_ignore_ascii_case("WindowsApps"))
+}
+
+/// Flatpak mounts every app read-only at `/app`, and Flathub updates it (ADR 0456).
+fn in_flatpak(exe: &Path) -> bool {
+    cfg!(target_os = "linux") && exe.starts_with("/app")
 }
 
 /// An AppImage runs from a read-only mount, and what a `.deb` put under `/usr` is the
