@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.0](https://github.com/vvvlladimir/Encrust/compare/v0.8.0...v0.9.0) (2026-11-17)
+
+
+### ✨ New
+
+* **app:** give macOS an Encrust menu and an About that names the ([58ca7f7](https://github.com/vvvlladimir/Encrust/commit/58ca7f75ff7d61e3882e0dca27f154d1d4092dd4))
+* **app:** keep a copy of an unsaved plate and offer it after a crash ([a17cf36](https://github.com/vvvlladimir/Encrust/commit/a17cf36e4b1c7792d0e3f2bb48e461705497b4a6))
+* **app:** offer the panic the window closed on at the next start & ([cc01f4a](https://github.com/vvvlladimir/Encrust/commit/cc01f4a52200308efc6073ce4ee394d89bae1919))
+* **app:** open an .encrust project from the file manager ([447571f](https://github.com/vvvlladimir/Encrust/commit/447571ff676597e49e53a552de8828ae2651af8a))
+* **app:** size the interface from Settings and ctrl/cmd +/-/0 ([10ff30c](https://github.com/vvvlladimir/Encrust/commit/10ff30c8d9fd52a05f285b20379f17f4a7888fab))
+* **hollow:** one cavity through parts, wall at its thinnest ([da676e4](https://github.com/vvvlladimir/Encrust/commit/da676e4bb06a7997dbfd28b85fd59fe644408f38))
+* **supports:** space Medium and Heavy by what a tip holds ([ff8b3b6](https://github.com/vvvlladimir/Encrust/commit/ff8b3b66f4cf7fccb7c330555b0021ad0f8c9966))
+
+
+### 🐛 Fixed
+
+* **app:** a plate left on Auto follows Auto saved or reset in Settings ([7d842bf](https://github.com/vvvlladimir/Encrust/commit/7d842bf059ad5b49c41586de33ccc160c482d113))
+* **hollow:** keep only cavity pieces inside the model and clean of stray ([f5688ca](https://github.com/vvvlladimir/Encrust/commit/f5688ca16c128cc07b817dc0c3200dea0622aaec))
+
 ## [0.8.0](https://github.com/vvvlladimir/Encrust/compare/v0.7.0...v0.8.0) (2026-11-12)
 
 
