@@ -22,7 +22,29 @@ on:
     paths-ignore: *unbuilt
   schedule:
     - cron: "0 3 * * *"
+  # On demand, only the platforms ticked; every other trigger runs them all.
   workflow_dispatch:
+    inputs:
+      linux:
+        description: Linux, x86_64 and ARM64 (with format, architecture and rustdoc)
+        type: boolean
+        default: true
+      macos:
+        description: macOS
+        type: boolean
+        default: true
+      windows:
+        description: Windows, x86_64 and ARM64
+        type: boolean
+        default: true
+      web:
+        description: Browser build on threads
+        type: boolean
+        default: true
+      msrv:
+        description: The rust-version floor
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -51,7 +73,21 @@ jobs:
       contents: read
     outputs:
       skip: ${{ steps.tree.outputs.skip == 'true' || steps.nightly.outputs.skip == 'true' }}
+      platforms: ${{ steps.platforms.outputs.os }}
     steps:
+      - id: platforms
+        env:
+          ALL: ${{ github.event_name != 'workflow_dispatch' }}
+          LINUX: ${{ inputs.linux }}
+          MACOS: ${{ inputs.macos }}
+          WINDOWS: ${{ inputs.windows }}
+        run: |
+          os=()
+          if [ "$ALL" = true ] || [ "$MACOS" = true ]; then os+=(macos-latest); fi
+          if [ "$ALL" = true ] || [ "$WINDOWS" = true ]; then os+=(windows-latest windows-11-arm); fi
+          if [ "$ALL" = true ] || [ "$LINUX" = true ]; then os+=(ubuntu-24.04-arm); fi
+          echo "os=$(printf '%s\n' "${os[@]}" | jq -Rnc '[inputs | select(. != "")]')" >> "$GITHUB_OUTPUT"
+
       # A run passing is not enough: a draft's run passes with every job skipped.
       - id: tree
         if: github.event_name == 'push'
@@ -171,6 +207,7 @@ jobs:
     if: >-
       !cancelled() && needs.gate.result == 'success' && needs.gate.outputs.skip != 'true'
       && needs.sync-generate.outputs.changed != 'true' && github.event.pull_request.draft != true
+      && (github.event_name != 'workflow_dispatch' || inputs.linux)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -233,13 +270,15 @@ jobs:
   platforms:
     name: rust (${{ matrix.os }})
     needs: gate
-    if: needs.gate.outputs.skip != 'true' && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
+    if: >-
+      needs.gate.outputs.skip != 'true' && needs.gate.outputs.platforms != '[]'
+      && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         # ARM64 Windows and Linux are released (ADR 0454), so they are checked before a tag is.
-        os: [macos-latest, windows-latest, windows-11-arm, ubuntu-24.04-arm]
+        os: ${{ fromJSON(needs.gate.outputs.platforms) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -265,7 +304,9 @@ jobs:
   web:
     name: web (threads)
     needs: gate
-    if: needs.gate.outputs.skip != 'true' && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
+    if: >-
+      needs.gate.outputs.skip != 'true' && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
+      && (github.event_name != 'workflow_dispatch' || inputs.web)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -286,7 +327,9 @@ jobs:
   msrv:
     name: msrv
     needs: gate
-    if: needs.gate.outputs.skip != 'true' && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
+    if: >-
+      needs.gate.outputs.skip != 'true' && contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)
+      && (github.event_name != 'workflow_dispatch' || inputs.msrv)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

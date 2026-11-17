@@ -282,7 +282,8 @@ impl Files {
     /// off while writing leaves the copy before it whole.
     fn write(&self, project: &Project, belonged: Option<&Path>) -> Result<(), ProjectError> {
         core_engine::project::save(&self.part, project)?;
-        File::open(&self.part)?.sync_all()?;
+        // Windows flushes only a handle open for writing.
+        File::options().write(true).open(&self.part)?.sync_all()?;
         // A path that is not Unicode would not read back as itself: its plate comes back unnamed.
         let belonged = belonged.and_then(Path::to_str).unwrap_or_default();
         std::fs::write(&self.belonged, belonged)?;
