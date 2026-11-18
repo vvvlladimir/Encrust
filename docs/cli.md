@@ -921,7 +921,10 @@ the answer carries the window's `window` and what it leaves out as `unshown`;
 `--window FILE` reads another window's file, `--no-window` shows none
 (`docs/design/window-link.md`). The server lists itself for the window as an agent, a file in
 `agents/` beside the jobs saying which client drives it, what it runs and the jobs it touched;
-`--agents DIR` moves it, and `--no-window` keeps none (ADR 0465).
+`--agents DIR` moves it, and `--no-window` keeps none (ADR 0465). A revision kept is run on
+the plate only while the window follows its agents; `show_in_window` hands one over marked
+to be shown, starting the window first where none answers — `--app PATH`, else `encrust-gui`
+beside the server, on the `PATH`, or in `/Applications/Encrust.app` — and waiting up to 30 s.
 
 ```sh
 cargo xtask mcpb                                        # target/mcpb/encrust-<os>-<arch>.mcpb

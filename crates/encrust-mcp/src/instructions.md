@@ -39,20 +39,23 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    and presses a texture in; `set_repair` repairs and turns or drops faces by `inspect_model`'s
    numbers; `set_slicing` sets the layer height, exposure bands, anti-aliasing and islands.
    Change these only when the user asks or a finding needs it.
-7. Every edit answers with `compared`: how it stands against the revision before and the
+7. The user's Encrust window shows a revision only when they follow agents there or you
+   call `show_in_window`; call it when they want to see or adjust the model in Encrust. It
+   starts Encrust if it is closed. A revision's `window.shown: false` is not an error.
+8. Every edit answers with `compared`: how it stands against the revision before and the
    autopilot. An edit `behind` either one is reverted with `revert` unless the user asked for
    it; say what it cost. `render` (`iso`, `bottom`) and look at it; fix what the check names.
-8. `write_file` when the check is clean. If defects remain, tell the user what they are and
+9. `write_file` when the check is clean. If defects remain, tell the user what they are and
    write with `accept_defects` only when they accept them.
-9. After a print, ask how it came out. If it failed, name what the user saw, or what their
-   photo shows, from `report_print`'s symptoms, with `at_mm` where they can point. Read the
-   causes in order: try the first one's change with its tool, say why, and print again. A
-   change to the resin or the printer is the user's to make.
-10. When a way of preparing worked, or the user describes one they want again — "busts, face
+10. After a print, ask how it came out. If it failed, name what the user saw, or what their
+    photo shows, from `report_print`'s symptoms, with `at_mm` where they can point. Read the
+    causes in order: try the first one's change with its tool, say why, and print again. A
+    change to the resin or the printer is the user's to make.
+11. When a way of preparing worked, or the user describes one they want again — "busts, face
     up, no supports on the face" — offer to keep it: `save_recipe` with the job, or with a
     recipe written in the TOML `list_recipes` shows. It is refused with the reason if it
     would not run; fix that and save again. The window then runs it as Prepare for print.
-11. `send_to_printer` only when the user asks for that printer; `start` only when they ask to
+12. `send_to_printer` only when the user asks for that printer; `start` only when they ask to
     start and say the vat is filled and the plate and film are clear.
 
 Coordinates are plate millimetres from the plate's front left corner, Z up; the model stands

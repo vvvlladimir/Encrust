@@ -2,7 +2,8 @@
 //! its plate, over the loopback port its file names (`docs/design/window-link.md`).
 
 use std::path::PathBuf;
-use std::time::Duration;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
@@ -18,20 +19,80 @@ const CONNECT_WAIT: Duration = Duration::from_secs(1);
 /// How long it may take to answer: its next frame, which a busy plate can hold up.
 const REPLY_WAIT: Duration = Duration::from_secs(15);
 
-/// Where the window says it listens, or no window at all.
+/// How long a window started for `show_in_window` may take to listen.
+const START_WAIT: Duration = Duration::from_secs(30);
+/// How often its file is read again meanwhile.
+const START_POLL: Duration = Duration::from_millis(500);
+
+/// Where the window says it listens, or no window at all, and the programs that start one.
 #[derive(Debug, Clone, Default)]
 pub struct Window {
     file: Option<PathBuf>,
+    apps: Vec<PathBuf>,
 }
 
 impl Window {
-    pub fn new(file: Option<PathBuf>) -> Self {
-        Self { file }
+    /// The window `file` names, started where none answers by the first of `apps` that runs.
+    pub fn new(file: Option<PathBuf>, apps: Vec<PathBuf>) -> Self {
+        Self { file, apps }
+    }
+
+    /// Hands `revision` to the window marked `open`, so it is shown whether the window
+    /// follows its agents or not, starting the window first where none answers (ADR 0465).
+    pub async fn show_now(&self, revision: &Revision) -> Result<(Value, bool)> {
+        if revision.steps.is_none() {
+            bail!(
+                "revision {} keeps no recipe for the window to run",
+                revision.number
+            );
+        }
+        if self.file.is_none() {
+            bail!("this server was started with --no-window");
+        }
+        if let Some(answer) = self.show(revision, true).await {
+            return Ok((answer, false));
+        }
+        self.start()?;
+        let started = Instant::now();
+        while started.elapsed() < START_WAIT {
+            tokio::time::sleep(START_POLL).await;
+            if let Some(answer) = self.show(revision, true).await {
+                return Ok((answer, true));
+            }
+        }
+        bail!(
+            "Encrust was started but did not listen within {} s",
+            START_WAIT.as_secs()
+        )
+    }
+
+    /// Starts the window by the first program that runs, left running on its own.
+    fn start(&self) -> Result<()> {
+        for app in &self.apps {
+            let spawned = Command::new(app)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn();
+            if spawned.is_ok() {
+                return Ok(());
+            }
+        }
+        bail!(
+            "no Encrust window is open and none could be started from {}; open Encrust and \
+             ask again",
+            self.apps
+                .iter()
+                .map(|app| app.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 
     /// Hands `revision` to the window and answers what it said; `None` when no window is
     /// open or the revision has no recipe to run, so the tool's answer says nothing of one.
-    pub async fn show(&self, revision: &Revision) -> Option<Value> {
+    /// One not marked `open` is run only while the window follows its agents.
+    pub async fn show(&self, revision: &Revision, open: bool) -> Option<Value> {
         let steps = revision.steps.as_ref()?;
         let text = tokio::fs::read_to_string(self.file.as_ref()?).await.ok()?;
         let found: Value = serde_json::from_str(&text).ok()?;
@@ -49,6 +110,7 @@ impl Window {
             "printer": revision.recipe.printer,
             "resin": revision.recipe.resin,
             "recipe": steps,
+            "open": open,
         });
         Some(
             ask(stream, &line)
@@ -103,15 +165,17 @@ mod tests {
             ..revision()
         };
         assert_eq!(
-            Window::new(Some(file("unstepped"))).show(&unstepped).await,
+            Window::new(Some(file("unstepped")), Vec::new())
+                .show(&unstepped, false)
+                .await,
             None
         );
     }
 
     #[tokio::test]
     async fn with_no_window_file_there_is_no_window() {
-        let window = Window::new(Some(file("none")));
-        assert_eq!(window.show(&revision()).await, None);
+        let window = Window::new(Some(file("none")), Vec::new());
+        assert_eq!(window.show(&revision(), false).await, None);
     }
 
     #[tokio::test]
@@ -133,7 +197,9 @@ mod tests {
                 .expect("answered");
             serde_json::from_str::<Value>(&line).expect("the line is JSON")
         });
-        let answered = Window::new(Some(path)).show(&revision()).await;
+        let answered = Window::new(Some(path), Vec::new())
+            .show(&revision(), true)
+            .await;
         assert_eq!(answered, Some(json!({"shown": true})));
         let line = window.await.expect("the window's task ends");
         assert_eq!(line["token"], "t0");
@@ -143,5 +209,16 @@ mod tests {
         );
         assert_eq!(line["model"], "/m/cube.stl");
         assert_eq!(line["recipe"], "name = \"r\"\nformat = 1\n");
+        assert_eq!(line["open"], true);
+    }
+
+    #[tokio::test]
+    async fn with_no_window_and_nothing_to_start_one_the_client_is_told_to_open_encrust() {
+        let window = Window::new(Some(file("nothing")), vec!["/no/such/encrust-app".into()]);
+        let error = window
+            .show_now(&revision())
+            .await
+            .expect_err("no window could be shown");
+        assert!(format!("{error:#}").contains("open Encrust"), "{error:#}");
     }
 }

@@ -167,6 +167,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "set_shape",
             "set_slicing",
             "set_supports",
+            "show_in_window",
             "start_job",
             "use_recipe",
             "write_file",
@@ -954,4 +955,60 @@ async fn the_server_lists_itself_as_an_agent_with_the_jobs_it_touched_and_ends_w
         seen["ended_s"].as_u64()
     });
     assert!(ended.is_some(), "the file says the agent ended");
+}
+
+#[tokio::test]
+async fn a_revision_asked_for_is_shown_in_the_window_marked_open_and_with_none_the_client_is_told()
+{
+    use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
+
+    let dir = scratch("show-in-window");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("a free port");
+    let port = listener.local_addr().expect("bound").port();
+    let file = dir.join("window.json");
+    fs::write(&file, json!({"port": port, "token": "t"}).to_string()).expect("writable");
+    let window = tokio::spawn(async move {
+        let mut lines = Vec::new();
+        for answer in [
+            &b"{\"shown\":false,\"why_not\":\"not following\"}\n"[..],
+            b"{\"shown\":true}\n",
+        ] {
+            let (stream, _) = listener.accept().await.expect("the server connects");
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).await.expect("a line");
+            reader.get_mut().write_all(answer).await.expect("answered");
+            lines.push(serde_json::from_str::<Value>(&line).expect("JSON"));
+        }
+        lines
+    });
+    let app = dir.join("no-such-encrust-gui");
+    let extra = [
+        "--window".as_ref(),
+        file.as_os_str(),
+        "--app".as_ref(),
+        app.as_os_str(),
+    ];
+    let client = serve_with(&encrust(), &dir.join("jobs"), &extra).await;
+    let job = start(&client, &model).await;
+    let shown = call(&client, "show_in_window", json!({"job": job})).await;
+    assert!(!failed(&shown), "{}", answer(&shown));
+    assert_eq!(answer(&shown)["started"], false);
+    let lines = window.await.expect("the window's task ends");
+    assert_eq!(lines[0]["open"], false, "a revision kept is not marked");
+    assert_eq!(lines[1]["open"], true, "a revision asked for is");
+
+    fs::remove_file(&file).expect("the window closes");
+    let closed = call(&client, "show_in_window", json!({"job": job})).await;
+    assert!(failed(&closed));
+    assert!(
+        answer_text(&closed).contains("open Encrust"),
+        "{}",
+        answer_text(&closed)
+    );
+    client.cancel().await.expect("the server stops");
 }

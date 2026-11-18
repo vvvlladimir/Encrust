@@ -65,6 +65,7 @@ a crate of its own when the window's panel or the connector needs it too.
 | `write_file` | the printer file; refused while the check names defects | `slice --strict` | writes a file |
 | `render` | pictures from each side, the check's findings marked | `render --mark` | read |
 | `send_to_printer` | the file to a printer on the user's network | `printer send` | outward |
+| `show_in_window` | a revision on the open window's plate, the window started if closed (ADR 0465) | — | edits the window |
 | `set_supports` `shown_at_mm` (step 13) | the side meant to be seen, painted round plate points | `--shown-at` | edits |
 | `list_recipes`, `use_recipe` (step 14) | the recipes with their steps; one for the job, by the user's purpose | `recipes list`, `recipes show`, `--recipe` | read, edits |
 | `import_resin` (step 15) | a resin from a sliced file or another slicer's export | `profiles import` | creates a profile |

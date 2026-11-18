@@ -29,6 +29,7 @@
     { "name": "inspect_model", "description": "What a model file is and what is wrong with it" },
     { "name": "start_job", "description": "Starts preparing a model for a printer and resin" },
     { "name": "use_recipe", "description": "Prepares the model by a recipe that fits what it is for" },
+    { "name": "show_in_window", "description": "Shows the model as prepared in your Encrust window" },
     { "name": "report_print", "description": "Reads what went wrong with a print against its file's check" },
     { "name": "save_recipe", "description": "Keeps a way of preparing as your own recipe, for the window too" },
     { "name": "compare_poses", "description": "Shows the best ways to stand the model, each drawn" },
