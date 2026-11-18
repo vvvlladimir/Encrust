@@ -73,7 +73,9 @@ saying. A file whose `seen_s` is a week old is taken away by the next server tha
 The window reads the folder every 2 s off its drawing thread and lists the agents in the
 agents' ring beside the print chip (`ui-screens.md`, Top bar): each job an agent's file names, by its
 latest revision — the highest `N.toml` — whose model is the first of `N.args.json` and whose
-verdict is `N.json`'s `status`. A press on a job builds the same line the server sends from
+verdict is `N.json`'s `status`. The jobs of the last day — their folder changed within it — that no agent's file names are
+listed after the agents as *Earlier jobs*: a server that keeps no file, as one built before
+ADR 0465, still has its work listed. A press on a job builds the same line the server sends from
 `N.args.json` (`--printer` or `--profile`, `--resin` or `--material`) and `N.recipe.toml`,
 marked `open`, and takes it as one handed over.
 

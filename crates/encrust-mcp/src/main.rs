@@ -102,6 +102,18 @@ fn parse(
         (None, None) => None,
     };
     let window = window.and_then(|file| file.or_else(|| Some(cache_dir()?.join("window.json"))));
+    // On stderr, which a client keeps in its log of the server, so a stale build is told.
+    eprintln!(
+        "encrust-mcp {}: jobs in {}, agents in {}, window file {}",
+        env!("CARGO_PKG_VERSION"),
+        jobs.display(),
+        agents
+            .as_ref()
+            .map_or_else(|| "none".into(), |dir| dir.display().to_string()),
+        window
+            .as_ref()
+            .map_or_else(|| "none".into(), |file| file.display().to_string()),
+    );
     let shown = (
         Trace::new(trace),
         Window::new(window, apps(app, &server)),
