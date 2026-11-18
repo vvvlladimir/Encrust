@@ -491,11 +491,14 @@ these two: ADR 0408. Your own are the files `<id>.toml` in the
 moves it); `--recipe <id>` takes the built-in of that id first, so a file of yours named
 like one is reached by its path. `recipes list` prints each built-in recipe and then yours,
 one that would not read with its error, and `recipes show <ID|PATH>` prints a recipe as the
-TOML it reads back, comments aside, to copy and edit; `--json` for both:
+TOML it reads back, comments aside, to copy and edit; `recipes save <PATH> [--name NAME]`
+checks a recipe file as Prepare for print would run it and keeps it as one of yours under a
+new id from its name, refusing one that would not run with why; `--json` for all three:
 
 ```sh
 encrust recipes list
 encrust recipes show miniatures > my-minis.toml
+encrust recipes save my-minis.toml --name "My minis"
 encrust slice figure.stl --printer elegoo-mars-4-ultra --resin my-grey --recipe miniatures
 ```
 
@@ -925,7 +928,8 @@ command line's flags; `set_hollow` takes the mode, precision and `keep_solid_at_
 `set_drains` the hole's depth, taper, sides, turn, walled holes, holes into the supports and
 channels, and `set_supports` a profile TOML, `at_mm` with `only_at` and `shown_at_mm`, the
 side meant to be seen, as `--shown-at`. `list_recipes` answers `recipes list` with each
-recipe's TOML; `use_recipe` prepares the job by one with `--recipe` in place of `--prepare`.
+recipe's TOML; `use_recipe` prepares the job by one with `--recipe` in place of `--prepare`;
+`save_recipe` runs `recipes save` on a revision's steps, or on a recipe the client wrote.
 `import_resin` runs `profiles import` on the file given; `write_test_print` runs `test-print`
 into the folder given.
 `set_pose`, `set_hollow`, `set_drains` and `set_supports` check the changed recipe with

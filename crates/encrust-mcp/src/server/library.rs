@@ -1,10 +1,10 @@
 //! The user's profiles and recipes: what there is to choose from, and a resin taken in.
 
-use anyhow::Result;
+use anyhow::{Context as _, Result, bail};
 
 use super::reply::{Reply, reported, trim_profiles};
 use super::{Context, Server};
-use crate::params::{ImportResin, ListProfiles, absolute, plain};
+use crate::params::{ImportResin, ListProfiles, SaveRecipe, absolute, plain};
 
 impl Server {
     pub(super) async fn profiles(&self, list: ListProfiles, ctx: &Context) -> Result<Reply> {
@@ -58,5 +58,34 @@ impl Server {
             }
         }
         Ok(reported(&listed, report))
+    }
+
+    /// Keeps a job's steps, or a recipe the client wrote, as one of the user's recipes; the
+    /// command line refuses one that would not run, and says why.
+    pub(super) async fn keep_recipe(&self, save: SaveRecipe, ctx: &Context) -> Result<Reply> {
+        let text = match (&save.job, save.toml) {
+            (Some(job), None) => {
+                let revision = self.jobs.open(job, save.revision)?;
+                revision.steps.with_context(|| {
+                    format!("revision {} of job {job} keeps no steps", revision.number)
+                })?
+            }
+            (None, Some(toml)) => toml,
+            _ => bail!("save_recipe takes a job or a recipe's toml, one of the two"),
+        };
+        let file = self.jobs.scratch_steps()?;
+        std::fs::write(&file, text).with_context(|| format!("writing {}", file.display()))?;
+        let args = [
+            "recipes".into(),
+            "save".into(),
+            format!("--name={}", save.name),
+            "--".into(),
+            file.display().to_string(),
+        ];
+        let outcome = self.watched(&args, ctx).await;
+        // A scratch file left behind is overwritten by no other run: its name is this run's.
+        let _ = std::fs::remove_file(&file);
+        let outcome = outcome?;
+        Ok(reported(&outcome, outcome.report.clone()))
     }
 }

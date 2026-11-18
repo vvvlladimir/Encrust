@@ -131,3 +131,49 @@ fn a_users_recipe_is_found_by_its_stem_and_a_built_in_one_wins_a_clash() {
     let steps = json(&output)["recipe"]["steps"].as_array().unwrap().len();
     assert_eq!(steps, 5, "the built-in miniatures ran, not the user's copy");
 }
+
+#[test]
+fn a_saved_recipe_is_kept_under_a_new_id_and_slices_by_it() {
+    let dir = profile_dir("save", &[("busts.toml", OWN)]);
+    let file = dir.join("words.toml");
+    fs::write(&file, OWN).expect("a writable file");
+    let output = encrust_with_profiles(
+        &dir,
+        &[
+            "recipes",
+            "save",
+            file.to_str().unwrap(),
+            "--name",
+            "Busts",
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let saved = json(&output);
+    assert_eq!(
+        saved["id"], "busts-2",
+        "the kept busts.toml is not overwritten"
+    );
+    assert_eq!(saved["name"], "Busts");
+    let kept = fs::read_to_string(dir.join("recipes").join("busts-2.toml")).expect("written");
+    assert!(kept.contains("name = \"Busts\""), "{kept}");
+
+    let output = slice_by(&dir, "recipes-saved", "busts-2");
+    assert!(output.status.success(), "{}", stderr(&output));
+}
+
+#[test]
+fn a_recipe_that_would_not_run_is_refused_and_not_kept() {
+    let dir = profile_dir("save-refused", &[]);
+    let file = dir.join("words.toml");
+    let unknown =
+        "name = \"Odd\"\nformat = 1\n\n[[step]]\ndo = \"check\"\nwhen = \"no_such > 1\"\n";
+    fs::write(&file, unknown).expect("a writable file");
+    let output = encrust_with_profiles(&dir, &["recipes", "save", file.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("no_such"), "{}", stderr(&output));
+    let kept = fs::read_dir(dir.join("recipes"))
+        .expect("the folder")
+        .count();
+    assert_eq!(kept, 0, "nothing was kept");
+}

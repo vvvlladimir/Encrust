@@ -1091,7 +1091,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
 | `convert` | A sliced file to another format. |
 | `profiles` | List, show, export and import profiles. |
-| `recipes` | List the built-in and your own recipes, and show one as TOML to copy and edit. |
+| `recipes` | List the built-in and your own recipes, show one as TOML to copy and edit, and keep a recipe file as one of yours once it is checked. |
 | `test-print` | The window's test prints — detail, exposure check, surface finish, fit gauge — written as STL files to prepare and print like any model. |
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
 | `completions` | Shell completion for bash, zsh, fish, elvish, PowerShell. |
@@ -1112,7 +1112,9 @@ the same recipe the check ran, one undo each, on the job's printer and resin. A 
 picked from the list or turned by hand, the modelling and the slicing are not run there yet;
 the answer names what was left out. It asks what the print is for and can prepare it by
 another recipe, such as Miniatures; it can be told which side of the model is looked at, so
-the supports there are sparser and lighter. A resin you have not set up it takes in from a
+the supports there are sparser and lighter. A way of preparing that worked, or one you
+describe in words, it keeps as a recipe of your own, which the window's Prepare for print then
+runs with no chat. A resin you have not set up it takes in from a
 file that printed well with it or from another slicer's export, and it writes the exposure
 check for you to print; a resin known only by its label's numbers you still set up in the
 window.

@@ -160,6 +160,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "list_recipes",
             "render",
             "revert",
+            "save_recipe",
             "send_to_printer",
             "set_drains",
             "set_hollow",
@@ -734,5 +735,53 @@ async fn the_exposure_check_is_written_and_prepared_like_any_model() {
     let path = PathBuf::from(answer(&written)["path"].as_str().expect("a path"));
     assert_eq!(path, dir.join("exposure-check.stl"));
     start(&client, &path).await;
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn a_jobs_steps_are_kept_as_a_recipe_of_the_users_and_one_that_would_not_run_is_not() {
+    let dir = scratch("save-recipe");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    let client = serve_at_home(&encrust(), &dir.join("jobs"), &[], Some(&dir.join("home"))).await;
+    let job = start(&client, &model).await;
+    call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.5}}),
+    )
+    .await;
+    let saved = call(
+        &client,
+        "save_recipe",
+        json!({"job": job, "name": "Hollow cubes"}),
+    )
+    .await;
+    assert!(!failed(&saved), "{}", answer(&saved));
+    let id = answer(&saved)["id"].as_str().expect("an id").to_owned();
+    let listed = answer(&call(&client, "list_recipes", json!({})).await);
+    let kept = listed["recipes"]
+        .as_array()
+        .and_then(|recipes| recipes.iter().find(|recipe| recipe["id"] == id.as_str()))
+        .expect("the saved recipe is listed")
+        .clone();
+    assert_eq!(kept["name"], "Hollow cubes");
+    assert!(
+        kept["toml"]
+            .as_str()
+            .is_some_and(|text| text.contains("wall_mm = 2.5")),
+        "the wall the job was given: {kept}"
+    );
+
+    let odd = "name = \"Odd\"\nformat = 1\n\n[[step]]\ndo = \"check\"\nwhen = \"no_such > 1\"\n";
+    let refused = call(&client, "save_recipe", json!({"toml": odd, "name": "Odd"})).await;
+    assert!(failed(&refused), "a recipe that would not run is refused");
+    let both = call(
+        &client,
+        "save_recipe",
+        json!({"job": job, "toml": odd, "name": "Both"}),
+    )
+    .await;
+    assert!(failed(&both), "a job and a toml at once is refused");
     client.cancel().await.expect("the server stops");
 }

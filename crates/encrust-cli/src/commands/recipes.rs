@@ -11,6 +11,19 @@ pub enum RecipesCommand {
     List,
     /// Print one recipe as TOML as it reads back, the starting point for one of your own.
     Show(ShowArgs),
+    /// Check a recipe file and keep it as one of yours, under a new id from its name: the
+    /// window's Prepare for print and `--recipe` find it there.
+    Save(SaveArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SaveArgs {
+    /// The recipe file, as `recipes show` prints one.
+    #[arg(value_name = "PATH")]
+    pub file: std::path::PathBuf,
+    /// The name it is kept and listed under, over the one the file gives.
+    #[arg(long)]
+    pub name: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -32,6 +45,7 @@ impl RecipesCommand {
                 }
             }
             Self::Show(args) => show(args, global)?,
+            Self::Save(args) => save(args, global)?,
         }
         Ok(Exit::Success)
     }
@@ -49,5 +63,21 @@ fn show(args: &ShowArgs, global: &GlobalArgs) -> Result<()> {
         }));
     }
     print!("{toml}");
+    Ok(())
+}
+
+fn save(args: &SaveArgs, global: &GlobalArgs) -> Result<()> {
+    let saved = library::save(&args.file, args.name.as_deref())?;
+    if global.json {
+        return json::print(&saved);
+    }
+    if global.talks() {
+        println!(
+            "recipe {} kept as {} in {}",
+            saved.name,
+            saved.id,
+            saved.path.display()
+        );
+    }
     Ok(())
 }
