@@ -749,7 +749,10 @@ async fn a_cut_reaches_the_window_as_an_edit_and_an_undo_there_reaches_the_next_
         answer(&hollowed)
     );
     let second = fs::read_to_string(jobs.join(&job).join("2.toml")).expect("revision 2 is kept");
-    assert!(second.contains("[modelling.cut]"), "the cut was kept: {second}");
+    assert!(
+        second.contains("[modelling.cut]"),
+        "the cut was kept: {second}"
+    );
     let third = fs::read_to_string(jobs.join(&job).join("3.toml")).expect("revision 3 is kept");
     assert!(
         !third.contains("[modelling.cut]"),

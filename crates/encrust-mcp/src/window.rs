@@ -157,7 +157,8 @@ impl Window {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Plate {
     /// The `.encrust` file it wrote.
-    pub plate: PathBuf,
+    #[serde(rename = "plate")]
+    pub path: PathBuf,
     pub version: u64,
     /// Every object on the plate.
     pub objects: Vec<ObjectId>,

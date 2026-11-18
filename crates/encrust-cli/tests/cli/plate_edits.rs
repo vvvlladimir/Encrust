@@ -1,7 +1,7 @@
 //! `--edits` on a project, and `--project-out` writing the plate they leave (ADR 0466).
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use core_engine::project::{ObjectId, load};
 
@@ -18,7 +18,7 @@ fn edits_file(name: &str, json: &str) -> PathBuf {
     path
 }
 
-fn estimate_edited(edits: &PathBuf, out: &PathBuf) -> std::process::Output {
+fn estimate_edited(edits: &Path, out: &Path) -> std::process::Output {
     let panel = project_fixture().with_file_name("project-panel.toml");
     let resin = test_resin();
     estimate(&[
