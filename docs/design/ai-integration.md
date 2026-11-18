@@ -74,8 +74,9 @@ a crate of its own when the window's panel or the connector needs it too.
 | `report_print` (step 16) | what a print of a job's file did, as named symptoms, read against its check | `diagnose` | edits |
 | `save_recipe` (step 17) | a recipe from the job's revisions or from words, validated | `recipes save` | creates a profile |
 
-`start_job` runs the autopilot (`--prepare`) unless told not to, and each `set_*` tool
-overrides one of its steps. An edit is kept only if the command line took it; every finding
+`start_job` runs the autopilot (`--prepare`) only when the client says `prepare: true`, as
+it does when the user asked to prepare the model for print, and each `set_*` tool overrides
+one of its steps; to open or cut a model, it says false. An edit is kept only if the command line took it; every finding
 is located (ADR 0400), so the next call can act on it.
 
 ### Better than the autopilot

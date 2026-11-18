@@ -316,6 +316,7 @@ async fn a_job_the_autopilot_prepares_is_hollowed_drained_and_ready_to_write() {
             "model": model,
             "printer": profile("project-panel.toml"),
             "resin": profile("test-resin.toml"),
+            "prepare": true,
         }),
     )
     .await;
@@ -505,14 +506,14 @@ async fn a_name_from_the_client_never_reaches_the_command_line_as_a_flag() {
     let relative = call(
         &client,
         "start_job",
-        json!({"model": "cube.stl", "printer": "elegoo-mars-4-ultra", "resin": "my-grey"}),
+        json!({"model": "cube.stl", "printer": "elegoo-mars-4-ultra", "resin": "my-grey", "prepare": false}),
     )
     .await;
     assert!(failed(&relative));
     let dashed = call(
         &client,
         "start_job",
-        json!({"model": model, "printer": "--profile=/etc/passwd", "resin": "my-grey"}),
+        json!({"model": model, "printer": "--profile=/etc/passwd", "resin": "my-grey", "prepare": false}),
     )
     .await;
     assert!(failed(&dashed));
@@ -535,7 +536,7 @@ async fn a_missing_command_line_is_a_tool_error_naming_it() {
     let result = call(
         &client,
         "start_job",
-        json!({"model": model, "printer": "elegoo-mars-4-ultra", "resin": "my-grey"}),
+        json!({"model": model, "printer": "elegoo-mars-4-ultra", "resin": "my-grey", "prepare": false}),
     )
     .await;
     assert!(failed(&result));
@@ -797,6 +798,7 @@ async fn a_project_the_window_saved_is_checked_drawn_and_written_as_it_stands() 
             "model": project,
             "printer": profile("project-panel.toml"),
             "resin": profile("test-resin.toml"),
+            "prepare": true,
         }),
     )
     .await;

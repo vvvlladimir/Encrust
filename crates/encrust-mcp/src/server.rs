@@ -441,7 +441,7 @@ impl Server {
             plain(value, what)?;
         }
         let mut recipe = Recipe {
-            prepare: start.prepare.unwrap_or(true),
+            prepare: start.prepare,
             repair: start.repair,
             ..Recipe::bare(start.model, start.printer, start.resin)
         };
@@ -575,6 +575,25 @@ impl Server {
     }
 }
 
+/// The client's own name for itself: from the request's `_meta`, as a client of the stateless
+/// protocol sends it, else from its handshake, else `claude-code` where Claude Code, which
+/// may send neither, marks the processes it starts.
+fn client_name(context: &Context) -> Option<String> {
+    context
+        .meta
+        .client_info()
+        .map(|info| info.name)
+        .or_else(|| {
+            context
+                .peer
+                .peer_info()
+                .map(|info| info.client_info.name.clone())
+        })
+        .or_else(|| {
+            (std::env::var("CLAUDECODE").as_deref() == Ok("1")).then(|| "claude-code".to_owned())
+        })
+}
+
 #[expect(
     clippy::unused_async_trait_impl,
     reason = "rmcp's tool_handler expands to it"
@@ -588,10 +607,7 @@ impl ServerHandler for Server {
     ) -> Result<CallToolResponse, rmcp::ErrorData> {
         let started = Instant::now();
         let tool = request.name.clone();
-        let client = context
-            .peer
-            .peer_info()
-            .map(|info| info.client_info.name.clone());
+        let client = client_name(&context);
         let named = request
             .arguments
             .as_ref()

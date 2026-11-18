@@ -10,9 +10,11 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    gives a print that tells whether they are right.
 2. Ask what the print is for — to look at, a miniature for the table, a part that must fit —
    and `inspect_model` on the user's file. Repair only what it reports as wrong.
-3. `start_job`. The engine's autopilot prepares the model at once — repair, orientation, a
+3. `start_job`. Do what the user asked and no more: to open, cut, scale or look at a model,
+   `prepare: false`, then only those tools. Only when they ask to prepare it for print,
+   `prepare: true`: the engine's autopilot then prepares it at once — repair, orientation, a
    hollow where it saves resin, drains, supports — and `report.models[].prepared` says what it
-   decided. A project (`.encrust`) the user saved in the window starts as it was saved: check,
+   decided. One job a model: edit the job you have rather than starting another. A project (`.encrust`) the user saved in the window starts as it was saved: check,
    `render`, `set_slicing` and `write_file` it; its models are changed in the window. Each
    tool below overrides one step. Every editing tool answers with the new
    revision and its check: read `status` and the findings before the next step. An edit the
