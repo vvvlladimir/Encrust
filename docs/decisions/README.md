@@ -250,7 +250,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0326](0326-a-step-and-a-gentle-slope-are-held-by-shapes-of-their-own.md) | Size a step by the resin it puts out, and steady a part sparsely on its gentle slopes | Accepted; the steadying shape's 0.18 mm contact is superseded by 0422, Auto's step reach by 0424 |
 | [0422](0422-placement-is-strengthened-where-a-tip-carries-too-much.md) | Strengthen automatic placement where a tip carries too much, on tips no thinner than 0.30 mm | Accepted; the rigid share among tips on grown trees amended by 0455 |
 | [0423](0423-an-automatic-support-is-sized-by-its-share-of-what-it-holds.md) | Size each automatic support by its share of the model it holds | Accepted |
-| [0424](0424-auto-places-contacts-3-mm-apart-and-steadies-on-thin-supports.md) | Place Auto's contacts 3.0 mm apart, past 45 degrees, on 1.0 mm pillars, and steady a part on thin supports | Accepted |
+| [0424](0424-auto-places-contacts-3-mm-apart-and-steadies-on-thin-supports.md) | Place Auto's contacts 3.0 mm apart, past 45 degrees, on 1.0 mm pillars, and steady a part on thin supports | Accepted; Medium's and Heavy's 1.0 mm pillars are superseded by 0455 |
 | [0455](0455-grown-supports-are-checked-as-springs-and-mended-where-a-part-sways.md) | Check grown supports as springs, and mend where a part sways, a trunk buckles or a tip tears | Accepted |
 | [0425](0425-auto-holds-the-painted-side-sparser-on-its-lightest-tips.md) | Hold the side painted to be seen sparser, on Auto's lightest tips | Accepted |
 | [0426](0426-sweep-a-head-from-past-its-seat.md) | Sweep a head, and test a drawn tip, from past the seat its rim finds | Accepted |

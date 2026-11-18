@@ -55,12 +55,7 @@ pub fn gives(
     trees
         .iter()
         .enumerate()
-        .flat_map(|(index, tree)| {
-            of_tree(tree, points, profiles, braced[index]).map(move |mut give| {
-                give.tree = index;
-                give
-            })
-        })
+        .flat_map(|(index, tree)| of_tree((index, tree), points, profiles, braced[index]))
         .collect()
 }
 
@@ -82,7 +77,7 @@ fn braced_to(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<
 
 /// How each tip of `tree` gives, its trunk braced up to `braced`.
 fn of_tree<'t>(
-    tree: &'t SupportTree,
+    (index, tree): (usize, &'t SupportTree),
     points: &'t [SupportPoint],
     profiles: Profiles,
     braced: Option<Scalar>,
@@ -117,7 +112,7 @@ fn of_tree<'t>(
             .get(point)
             .map_or(node.position, |point| point.contact);
         let path = path_of(tree, (leaf, contact), &shared, trunk);
-        let give = give_at(contact, &path, floor, point, (trunk_mm4, free_mm));
+        let give = give_at(contact, &path, floor, (point, index), (trunk_mm4, free_mm));
         Some(Give { stands_on, ..give })
     })
 }
@@ -173,7 +168,7 @@ fn give_at(
     contact: Vec3,
     path: &[Strut],
     floor: Scalar,
-    point: usize,
+    (point, tree): (usize, usize),
     (trunk_mm4, free_mm): (f64, f64),
 ) -> Give {
     let force = |e: Vec3| move |x: Vec3| ((contact - x).cross(e), e);
@@ -187,7 +182,7 @@ fn give_at(
     let (x, y) = (Vec3::X, Vec3::Y);
     Give {
         point,
-        tree: 0,
+        tree,
         axial_per_mm: sum(&force(Vec3::Z)),
         lateral_per_mm: f64::midpoint(sum(&force(x)), sum(&force(y))),
         turning_per_mm3: f64::midpoint(sum(&moment(x)), sum(&moment(y))),

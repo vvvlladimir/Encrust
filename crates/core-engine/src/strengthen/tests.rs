@@ -2,9 +2,9 @@ use std::f64::consts::PI;
 
 use core_geometry::{Transform, cuboid, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
-use printer_profiles::{Catalogue, SupportProfile};
 
 use super::*;
+use crate::fixtures::{light, sized};
 
 const LAYER_MM: f32 = 0.05;
 
@@ -177,21 +177,6 @@ impl Slab {
             Reason::POINT,
         )]
     }
-}
-
-fn sized() -> SupportPlan {
-    let catalogue = Catalogue::bundled().expect("the bundled profiles load");
-    let auto = catalogue
-        .autos()
-        .next()
-        .expect("an automatic profile ships")
-        .profile
-        .clone();
-    SupportPlan::sized(auto, &catalogue).expect("its shapes ship")
-}
-
-fn light() -> SupportPlan {
-    SupportPlan::of(SupportProfile::shipped("light").expect("light ships"))
 }
 
 #[test]

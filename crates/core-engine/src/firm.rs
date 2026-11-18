@@ -2,7 +2,7 @@
 //! makes, and mended where a part sways, a trunk buckles or a tip tears (ADR 0455).
 
 use core_analysis::{Footing, GREEN_MODULUS_MPA, Load, Spring, Tip};
-use core_geometry::{Buckets, Ray, Scalar, Transform, Vec3};
+use core_geometry::{Buckets, FastSet, Ray, Scalar, Transform, Vec3};
 use core_supports::{
     Give, Need, Placed, Profiles, SupportPoint, SupportTree, columns, gives, grow,
 };
@@ -99,6 +99,7 @@ fn sprung_tips(
     (placed, profiles): (&Placed, Profiles),
 ) -> Vec<Tip> {
     let table = plan.table();
+    let held_radius_mm = plan.placing().surface_radius_mm();
     let points: Vec<SupportPoint> = needs
         .iter()
         .map(|need| SupportPoint {
@@ -112,7 +113,8 @@ fn sprung_tips(
     points
         .iter()
         .zip(held)
-        .map(|(point, held)| Tip {
+        .enumerate()
+        .map(|(at, (point, held))| Tip {
             at_mm: [point.contact.x, point.contact.y],
             // A contact no tree carries is put out of reach of every layer.
             z_mm: if held.is_some() {
@@ -120,7 +122,11 @@ fn sprung_tips(
             } else {
                 Scalar::MAX
             },
-            radius_mm: f64::from(table_radius(&table, point.group)),
+            radius_mm: f64::from(if at < needs.len() {
+                table_radius(&table, point.group)
+            } else {
+                held_radius_mm
+            }),
             spring: held.map(|(spring, _)| spring),
             stands_on: held.and_then(|(_, footing)| footing),
         })
@@ -151,7 +157,7 @@ pub fn held_by(
 }
 
 /// The spring `give` makes in green resin.
-pub fn spring_of(give: &Give) -> Spring {
+fn spring_of(give: &Give) -> Spring {
     let stiff = |compliance: f64| GREEN_MODULUS_MPA / compliance.max(f64::MIN_POSITIVE);
     let length = BUCKLING_LENGTHS * give.free_mm;
     Spring {
@@ -164,7 +170,8 @@ pub fn spring_of(give: &Give) -> Spring {
     }
 }
 
-/// Adds or thickens what `loads` show weak among `needs`, once per place `taken` leaves free.
+/// Adds or thickens what `loads` show weak among `needs`, once per place `taken` leaves free
+/// and once per layer that swayed.
 fn mend(
     model: Underside<'_>,
     needs: &mut Vec<Need>,
@@ -173,15 +180,21 @@ fn mend(
     (taken, reach_mm): (&mut Buckets<Vec3>, Scalar),
     done: &mut Firmed,
 ) {
+    let mut swayed = FastSet::default();
     for at in 0..needs.len() {
         let load = loads[at];
         let added = if load.sways() {
-            let contact = under_sway(model, &load, reach_mm, taken);
+            // Every tip of a part that swayed points at the same pull; one contact answers it.
+            let first = load
+                .shift_at_mm
+                .is_some_and(|at| swayed.insert(at.map(f32::to_bits)));
+            let contact = first
+                .then(|| under_sway(model, &load, reach_mm, taken))
+                .flatten();
             done.steadied += usize::from(contact.is_some());
             contact
-        } else if weak(&load) {
-            let tears = load.margin().is_some_and(|margin| margin < WANTED_MARGIN);
-            if tears && heavier(plan, &needs[at]) {
+        } else if tears_or_buckles(&load) {
+            if heavier(plan, &needs[at]) {
                 needs[at].heavier += 1;
                 done.strengthened += 1;
                 continue;
@@ -206,12 +219,9 @@ fn mend(
 }
 
 /// Whether a tip tears or its trunk buckles.
-fn weak(load: &Load) -> bool {
-    let tears = load.margin().is_some_and(|margin| margin < WANTED_MARGIN);
-    let buckles = load
-        .buckling_margin
-        .is_some_and(|margin| margin < WANTED_MARGIN);
-    tears || buckles
+fn tears_or_buckles(load: &Load) -> bool {
+    let short = |margin: Option<f64>| margin.is_some_and(|margin| margin < WANTED_MARGIN);
+    short(load.margin()) || short(load.buckling_margin)
 }
 
 /// The highest underside within a spacing round where the layer that swayed was pulled,

@@ -37,7 +37,7 @@ fn second_moment() -> f64 {
 #[test]
 fn a_lone_column_gives_as_a_cantilever_fixed_at_its_foot() {
     let (top, strut) = column(1.0);
-    let give = give_at(top, &[strut], f32::MIN, 0, (0.0, 0.0));
+    let give = give_at(top, &[strut], f32::MIN, (0, 0), (0.0, 0.0));
     let (length, area) = (f64::from(LENGTH_MM), PI * f64::from(RADIUS_MM).powi(2));
     close(
         give.lateral_per_mm,
@@ -56,7 +56,7 @@ fn a_lone_column_gives_as_a_cantilever_fixed_at_its_foot() {
 fn a_brace_holds_the_trunk_still_across_below_it() {
     let (top, strut) = column(1.0);
     let braced_at = 12.0;
-    let give = give_at(top, &[strut], braced_at, 0, (0.0, 0.0));
+    let give = give_at(top, &[strut], braced_at, (0, 0), (0.0, 0.0));
     let free = f64::from(LENGTH_MM - braced_at);
     close(
         give.lateral_per_mm,
@@ -68,7 +68,7 @@ fn a_brace_holds_the_trunk_still_across_below_it() {
 #[test]
 fn tips_sharing_a_trunk_each_feel_it_give_under_all_of_them() {
     let (top, strut) = column(3.0);
-    let give = give_at(top, &[strut], f32::MIN, 0, (0.0, 0.0));
+    let give = give_at(top, &[strut], f32::MIN, (0, 0), (0.0, 0.0));
     close(
         give.lateral_per_mm,
         3.0 * f64::from(LENGTH_MM).powi(3) / (3.0 * second_moment()),

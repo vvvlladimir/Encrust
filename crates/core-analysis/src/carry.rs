@@ -42,7 +42,8 @@ pub struct Tip {
     pub radius_mm: f64,
     /// How the support under it gives; `None` reads it as rigid.
     pub spring: Option<Spring>,
-    /// Where its support stands on the model; `None` where it stands on the plate.
+    /// Where its support stands on the model; `None` where it stands on the plate or on
+    /// another support.
     pub stands_on: Option<Footing>,
 }
 

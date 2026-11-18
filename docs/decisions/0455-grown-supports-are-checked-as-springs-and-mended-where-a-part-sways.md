@@ -42,17 +42,21 @@ flexural modulus of 1.0 to 1.8 GPa; published green values sit at 0.57 to 0.85 o
   over twice its free length; a tip keeps `WANTED_MARGIN` against `NECK_LIMIT_MPA`.
 - **`GREEN_MODULUS_MPA` is 600**, the data sheet's lowest times the lowest green share.
 - **`core_engine::firm_up` runs after strengthening**, in Generate, `--supports` and the bench:
-  it grows the trees, reads the springs and adds, at most three rounds, a contact on the highest
-  underside within a spacing under a layer that swayed, or strengthening's heavier tip or
-  neighbour where a tip tears or a trunk buckles. The trees it grows are thrown away; the
-  window grows its own as before.
+  it grows the trees, reads the springs and adds, at most three rounds, one contact on the
+  highest underside within a spacing under each place a part swayed, or strengthening's
+  heavier tip or neighbour where a tip tears or a trunk buckles. The trees it grows are thrown
+  away; the window grows its own as before.
+- **Auto Medium's pillars are 1.3 mm and Auto Heavy's 1.6 mm, Heavy's trunks up to 3.0 mm**,
+  where 0424 stood every size on 1.0 mm: a column gives as its radius to the fourth, so a
+  heavier size now holds stiffer, not only wider at its tip.
 
 ## Consequences
 
 On the dragon, Auto puts 1591 contacts instead of 1549 and 0.6 ml more resin; 26 of the 42 land
 on the wings, among them 5 mm of one that had none. Generating takes about twice as long, the
 trees being grown up to three more times; an orientation's proof, which stands supports as the
-print does, slows alike. A part held at its foot alone now gets contacts up its length.
+print does, slows alike. A part held at its foot alone now gets contacts up its length. Sizing
+now moves contacts too: a lighter shape sways where a heavier one stands.
 
 The read moves with the modulus and the shift limit, neither measured. A part rocking on its
 first tips, or one held as its own sections bend, are what the limit reads; a print of the

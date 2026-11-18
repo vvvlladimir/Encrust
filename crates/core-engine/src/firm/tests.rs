@@ -1,9 +1,9 @@
 use core_geometry::{Bvh, Mesh, Quat, Transform, cuboid, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
 use core_supports::Reason;
-use printer_profiles::SupportProfile;
 
 use super::*;
+use crate::fixtures::{light, sized};
 
 const LAYER_MM: f32 = 0.05;
 
@@ -49,10 +49,6 @@ impl Body {
             .expect("the body is over the point");
         from + Vec3::Z * hit.t
     }
-}
-
-fn light() -> SupportPlan {
-    SupportPlan::of(SupportProfile::shipped("light").expect("light ships"))
 }
 
 /// A fin 0.6 mm thick and 16 mm wide, leant 30 degrees off upright so its underside looks
@@ -106,6 +102,45 @@ fn a_fin_held_only_along_its_foot_is_given_a_contact_up_its_length() {
 }
 
 #[test]
+fn the_tips_of_one_swaying_part_are_given_one_contact_between_them() {
+    let body = fin(20.0);
+    let lowest = body
+        .mesh
+        .vertices
+        .iter()
+        .min_by(|a, b| a.z.total_cmp(&b.z))
+        .expect("a fin has vertices");
+    let mut needs: Vec<Need> = [41.0, 44.0, 47.0, 50.0, 53.0]
+        .iter()
+        .map(|x| Need::new(body.under(*x, lowest.y + 0.3), Reason::POINT))
+        .collect();
+    let bounds = body.mesh.aabb().expect("a fin has bounds");
+    // Each tip of a part reports the same worst sway: at the fin's top, leant back over y.
+    let swayed = Load {
+        shift_mm: 2.0,
+        shift_at_mm: Some([48.0, bounds.mins.y + 0.2, bounds.maxs.z - 0.3]),
+        ..Load::default()
+    };
+    let loads = vec![swayed; needs.len()];
+    let plan = light();
+    let reach_mm = plan.placing().spacing_mm();
+    let mut taken = Buckets::new(reach_mm * NEIGHBOUR_SPACINGS);
+    let mut done = Firmed::default();
+    mend(
+        body.underside(),
+        &mut needs,
+        &loads,
+        &plan,
+        (&mut taken, reach_mm),
+        &mut done,
+    );
+    assert_eq!(
+        done.steadied, 1,
+        "five tips swaying as one part need one contact under the sway: {done:?}"
+    );
+}
+
+#[test]
 fn a_low_slab_on_short_supports_is_left_alone() {
     let body = Body::new(transform_mesh(
         &cuboid(Vec3::ZERO, Vec3::new(4.0, 4.0, 1.0)),
@@ -127,7 +162,7 @@ fn a_low_slab_on_short_supports_is_left_alone() {
 }
 
 #[test]
-fn a_tall_column_gives_far_less_than_a_short_one() {
+fn a_trunk_free_twice_as_long_buckles_under_a_quarter_of_the_squeeze() {
     let short = Give {
         point: 0,
         tree: 0,
@@ -139,12 +174,46 @@ fn a_tall_column_gives_far_less_than_a_short_one() {
         stands_on: None,
     };
     let tall = Give {
-        lateral_per_mm: 800.0,
         free_mm: 20.0,
         ..short
     };
     let (short, tall) = (spring_of(&short), spring_of(&tall));
-    assert!((short.lateral_n_per_mm / tall.lateral_n_per_mm - 8.0).abs() < 1e-9);
-    // Euler: twice as long buckles under a quarter of the squeeze.
-    assert!((short.buckles_at_n / tall.buckles_at_n - 4.0).abs() < 1e-9);
+    let ratio = short.buckles_at_n / tall.buckles_at_n;
+    assert!(
+        (ratio - 4.0).abs() < 1e-9,
+        "Euler's load goes as one over the length squared: 4, got {ratio}"
+    );
+}
+
+#[test]
+fn a_trunk_that_buckles_is_built_to_a_heavier_shape_where_one_is_left() {
+    let body = Body::new(transform_mesh(
+        &cuboid(Vec3::ZERO, Vec3::new(4.0, 4.0, 1.0)),
+        Transform::from_translation(Vec3::new(50.0, 50.0, 3.0)),
+    ));
+    let mut needs = vec![Need::new(body.under(52.0, 52.0), Reason::POINT)];
+    let buckles = Load {
+        stress_mpa: 0.1,
+        z_mm: Some(3.0),
+        seated: true,
+        buckling_margin: Some(0.5),
+        ..Load::default()
+    };
+    let plan = sized();
+    let reach_mm = plan.placing().spacing_mm();
+    let mut taken = Buckets::new(reach_mm * NEIGHBOUR_SPACINGS);
+    let mut done = Firmed::default();
+    mend(
+        body.underside(),
+        &mut needs,
+        &[buckles],
+        &plan,
+        (&mut taken, reach_mm),
+        &mut done,
+    );
+    assert_eq!(
+        (needs.len(), needs[0].heavier, done.strengthened),
+        (1, 1, 1),
+        "a trunk under half the squeeze it takes is thickened, not given a neighbour"
+    );
 }

@@ -1,6 +1,6 @@
 # 0424. Place Auto's contacts 3.0 mm apart, past 45 degrees, on 1.0 mm pillars, and steady a part on thin supports
 
-- **Status:** Accepted
+- **Status:** Accepted; Medium's and Heavy's 1.0 mm pillars are superseded by 0455
 - **Date:** 2026-11-11
 
 ## Context

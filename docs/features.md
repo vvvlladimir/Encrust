@@ -506,7 +506,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   500 mm³ **Auto Heavy**, anything less **Auto Light**; so a few supports under much of a
   heavy part are heavy, and the many under a wide base stay light. Auto places contacts
   3.0 mm apart under a face looking straight down and 5.5 mm under a steep one, holds faces
-  leaning past 45°, and stands them on 1.0 mm pillars. The end of a toe or spike under 2 mm
+  leaning past 45°, and stands them on pillars of 1.0 mm (light), 1.3 mm (medium) and 1.6 mm
+  (heavy). The end of a toe or spike under 2 mm
   across gets a contact of its own, however near one stands at its root. Each shape is a group of its own, tuned like any
   other, and the notice says how many of each were placed. A shelf put out in one layer
   is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
