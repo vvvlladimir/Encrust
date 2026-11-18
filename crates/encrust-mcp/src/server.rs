@@ -7,7 +7,7 @@ use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
+    CallToolRequestParams, CallToolResponse, CallToolResult, Implementation,
     ProgressNotificationParam, ServerCapabilities, ServerConfig,
 };
 use rmcp::service::{RequestContext, RoleServer};
@@ -20,7 +20,7 @@ use crate::jobs::{Jobs, Revision};
 use crate::params::{
     ComparePoses, CreateResin, ImportResin, JobRef, ListProfiles, ListRecipes, Model, Render,
     ReportPrint, Revert, SaveRecipe, SendFile, SetDrains, SetHollow, SetPose, SetRepair, SetShape,
-    SetSlicing, SetSupports, Start, UseRecipe, View, WriteFile, WriteTestPrint, absolute, plain,
+    SetSlicing, SetSupports, Start, UseRecipe, WriteFile, WriteTestPrint, absolute, plain,
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
@@ -31,8 +31,9 @@ mod after;
 mod library;
 mod poses;
 mod reply;
+mod written;
 
-use reply::{Reply, answer, images, not_applied, reported, revised};
+use reply::{Reply, answer, not_applied, reported, revised};
 
 const INSTRUCTIONS: &str = include_str!("instructions.md");
 
@@ -487,99 +488,6 @@ impl Server {
         }
         let revision = self.jobs.commit(job, (recipe, steps), &outcome.report)?;
         Ok(self.kept(&revision, &outcome, note).await)
-    }
-
-    async fn write(&self, write: WriteFile, ctx: &Context) -> Result<Reply> {
-        absolute(&write.output, "the output")?;
-        let revision = self.jobs.open(&write.job, write.revision)?;
-        let mut args = vec!["slice".to_owned()];
-        args.extend(revision.recipe.flags());
-        args.push(format!("--output={}", write.output.display()));
-        if !write.accept_defects {
-            args.push("--strict".into());
-        }
-        let outcome = self.watched(&args, ctx).await?;
-        let written = outcome.exit_code == 0;
-        if written {
-            self.jobs.mark_written(&revision.job, revision.number)?;
-        }
-        let body = json!({
-            "job": revision.job,
-            "revision": revision.number,
-            "written": written,
-            "output": written.then(|| write.output.display().to_string()),
-            "why_not": (!written).then_some(if outcome.reported() {
-                "the check names defects; nothing was written"
-            } else {
-                "the command line refused the run; nothing was written"
-            }),
-            "report": outcome.report,
-        });
-        Ok(Reply {
-            body,
-            failed: !written,
-        })
-    }
-
-    /// The pictures of a revision, and a JSON list of each one with the findings it marks.
-    async fn pictures(&self, render: Render, ctx: &Context) -> Result<CallToolResult> {
-        let revision = self.jobs.open(&render.job, render.revision)?;
-        let views = render
-            .views
-            .unwrap_or_else(|| vec![View::Iso, View::Bottom]);
-        if views.is_empty() {
-            bail!("name at least one view");
-        }
-        let size = render.size_px.unwrap_or(512).clamp(64, 1024);
-        let marked = if render.mark_findings.unwrap_or(true) {
-            let outcome = self.estimate(&revision.recipe, &[], ctx).await?;
-            findings(&outcome.report)
-        } else {
-            Vec::new()
-        };
-        let dir = self.jobs.pictures_dir(&revision)?;
-        let names: Vec<&str> = views.iter().map(|view| view.name()).collect();
-        let mut args = vec!["render".to_owned()];
-        args.extend(revision.recipe.flags());
-        args.push(format!("--view={}", names.join(",")));
-        args.push(format!("--size={size}"));
-        args.push(format!("--output={}", dir.display()));
-        for finding in marked.iter().take(MOST_MARKED) {
-            let [x, y, z] = finding.at_mm;
-            args.push(format!("--mark={x},{y},{z}"));
-        }
-        let outcome = self.watched(&args, ctx).await?;
-        if outcome.exit_code != 0 {
-            return Ok(answer(Ok(reported(&outcome, outcome.report.clone()))));
-        }
-        let mut content = vec![ContentBlock::text(
-            json!({
-                "job": revision.job,
-                "revision": revision.number,
-                "findings": marked,
-                "unmarked": marked.len().saturating_sub(MOST_MARKED),
-                "pictures": outcome.report["pictures"],
-            })
-            .to_string(),
-        )];
-        content.extend(images(&outcome.report).await?);
-        Ok(CallToolResult::success(content))
-    }
-
-    async fn send(&self, send: SendFile, ctx: &Context) -> Result<Reply> {
-        absolute(&send.file, "the file")?;
-        plain(&send.address, "the printer's address")?;
-        let mut args = vec![
-            "printer".into(),
-            "send".into(),
-            send.file.display().to_string(),
-            send.address,
-        ];
-        if send.start {
-            args.push("--start".into());
-        }
-        let outcome = self.watched(&args, ctx).await?;
-        Ok(reported(&outcome, outcome.report.clone()))
     }
 
     /// A check of `recipe` and the steps it ran, as the command line wrote them out.
