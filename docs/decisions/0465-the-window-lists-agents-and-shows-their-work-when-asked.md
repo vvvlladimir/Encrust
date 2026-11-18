@@ -22,9 +22,11 @@ already finds the server's folder there.
   ended. It is written whole on each call and every 20 s; one silent for a minute is read
   as ended, and one gone a week is taken away. `--agents DIR` moves it; `--no-window`
   keeps none.
-- **The window lists them** in a fourth part of the print chip, right of the print settings:
-  a robot glyph, lit while one works, and how many are at work. It opens a chooser of the
-  agents, each under its name with its latest jobs as rows — model, revision, the check's
+- **The window lists them** from a ring left of the print chip, beside the printers', there
+  while an agent works or waits for its chat: a robot glyph, an arc going round while one
+  works — no share, since neither a chat nor its tools say how much is left — and a count
+  past one; on hover each agent's model, what it does and for how long. It opens a chooser
+  of the agents, each under its name with its latest jobs as rows — model, revision, the check's
   verdict — and a press on a row shows that revision on the plate as ADR 0459 runs one. A
   project's job has no row to press; it opens from File.
 - **Following is the user's choice:** with *Follow agents* off, the default, a revision
@@ -41,7 +43,7 @@ A window opened after the work lists it and shows it with one press, and a windo
 left alone unless the user asked to follow or the client to show. Several agents are told
 apart by client and start, each with its jobs. The window now reads the server's job layout
 (`N.args.json`, `N.recipe.toml`, `N.json`) from disk as well as the line it is sent, so the two
-change together. The chip carries a fourth part, which the browser build leaves out. The
+change together. The ring is gone when no agent is there, and the browser build has none. The
 agents' part is where a chat of the window's own goes later (step 9). Reopen if the window
 ever runs agents itself rather than listing those the clients run.
 

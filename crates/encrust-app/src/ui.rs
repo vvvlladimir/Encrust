@@ -65,6 +65,7 @@ pub use widgets::{
     PictureTile, TILE_PICTURE_H, ZoneWords, drop_zone_box, picture_tile, start_title,
 };
 pub use widgets::{ReadoutWords, layer_readout};
+pub use widgets::{RingLook, paint_ring, ring_badge};
 pub use widgets::{RunState, run_box};
 pub use widgets::{ZONE_INSET, inline_button_w};
 pub use widgets::{

@@ -1,4 +1,3 @@
-use super::agents;
 use crate::i18n::tr;
 use crate::panels::{Window, printer_card};
 use crate::profiles;
@@ -31,8 +30,8 @@ pub(super) fn centred_chip(
                 .max_rect(rect)
                 .layout(Layout::left_to_right(Align::Center)),
             |ui| {
-                let ring_w = printer_card::ring::ui(ui, window);
-                print_chip(ui, window, max_w - ring_w, short);
+                let rings_w = printer_card::ring::ui(ui, window) + super::agents::ring(ui, window);
+                print_chip(ui, window, max_w - rings_w, short);
             },
         )
         .response
@@ -45,18 +44,22 @@ pub(super) fn centred_chip(
 }
 
 /// The plate's machine, resin, layers and exposure within `max_w`, the maker dropped while
-/// `short`; left out below `NAME_LEAST_W` a name. The agents' part stands last where the
-/// window can have agents.
+/// `short`; left out below `NAME_LEAST_W` a name.
 pub(super) fn print_chip(ui: &mut egui::Ui, window: &mut Window, max_w: f32, short: bool) {
     let slicing = &window.machine.slicing;
     let untuned = slicing.printer_id.is_some() && slicing.has_resin() && !slicing.resin_is_tuned();
-    let agents = agents::part(ui, &window.machine.agents);
-    let room = max_w - agents.as_ref().map_or(0.0, |part| part.width);
-    let Some(parts) = chip_parts(ui, window, room, (untuned, short)) else {
+    let Some(parts) = chip_parts(ui, window, max_w, (untuned, short)) else {
         return;
     };
-    let mut parts = Vec::from(parts);
-    let mut names = vec![
+    let width: f32 = parts.iter().map(|part| part.width).sum::<f32>();
+    let (rect, _) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::hover());
+    let mut x = rect.left();
+    let zones = std::array::from_fn(|index| {
+        let zone = Rect::from_x_y_ranges(x..=x + parts[index].width, rect.y_range());
+        x += parts[index].width;
+        zone
+    });
+    let names = [
         tr!("chip-machine", name = window.doc.plate.display_name()),
         tr!("chip-resin", name = window.machine.slicing.resin_name()),
         tr!(
@@ -65,44 +68,23 @@ pub(super) fn print_chip(ui: &mut egui::Ui, window: &mut Window, max_w: f32, sho
             summary = layers_and_exposure(window.machine)
         ),
     ];
-    if let Some(part) = agents {
-        parts.push(part);
-        names.push(agents::name(&window.machine.agents));
-    }
-    let width: f32 = parts.iter().map(|part| part.width).sum::<f32>();
-    let (rect, _) = ui.allocate_exact_size(vec2(width, theme::CHIP_H), Sense::hover());
-    let mut x = rect.left();
-    let zones: Vec<Rect> = parts
-        .iter()
-        .map(|part| {
-            let zone = Rect::from_x_y_ranges(x..=x + part.width, rect.y_range());
-            x += part.width;
-            zone
-        })
-        .collect();
-    let responses: Vec<egui::Response> = zones
-        .iter()
-        .zip(&names)
-        .enumerate()
-        .map(|(index, (&zone, name))| {
-            let response = ui.interact(zone, ui.id().with(("print-chip", index)), Sense::click());
-            response
-                .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name));
-            response
-        })
-        .collect();
-    let popup_open = |response: &egui::Response| {
-        egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(response))
-    };
-    let mut open = vec![
-        popup_open(&responses[0]),
-        popup_open(&responses[1]),
+    let responses = std::array::from_fn(|index: usize| {
+        let response = ui.interact(
+            zones[index],
+            ui.id().with(("print-chip", index)),
+            Sense::click(),
+        );
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &names[index])
+        });
+        response
+    });
+    let open = [
+        egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&responses[0])),
+        egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&responses[1])),
         *window.tool == Tool::PrintSettings,
     ];
-    if let Some(response) = responses.get(3) {
-        open.push(popup_open(response));
-    }
-    paint_chip(ui, parts, &zones, rect, &responses, &open);
+    paint_chip(ui, parts, zones, rect, &responses, open);
     answer_chip(window, responses, untuned);
 }
 
@@ -165,14 +147,9 @@ fn chip_parts(
     ])
 }
 
-/// Opens the machine or resin menu, the print settings or the agents, for the part clicked.
-fn answer_chip(window: &mut Window, responses: Vec<egui::Response>, untuned: bool) {
-    let mut responses = responses.into_iter();
-    let (Some(printer), Some(resin), Some(layers)) =
-        (responses.next(), responses.next(), responses.next())
-    else {
-        return;
-    };
+/// Opens the machine or resin menu, or the print settings, for the part clicked.
+fn answer_chip(window: &mut Window, responses: [egui::Response; 3], untuned: bool) {
+    let [printer, resin, layers] = responses;
     let printer = printer.on_hover_text(tr!("chip-machine-tooltip"));
     chooser(&printer).show(|ui| profiles::printer_menu(ui, window));
     let resin = if untuned {
@@ -183,10 +160,6 @@ fn answer_chip(window: &mut Window, responses: Vec<egui::Response>, untuned: boo
     chooser(&resin).show(|ui| profiles::resin_menu(ui, window.machine));
     if layers.on_hover_text(Tool::PrintSettings.label()).clicked() {
         shortcuts::pick(window, Tool::PrintSettings);
-    }
-    if let Some(agents) = responses.next() {
-        let agents = agents.on_hover_text(tr!("chip-agents-tooltip"));
-        chooser(&agents).show(|ui| agents::menu(ui, window));
     }
 }
 

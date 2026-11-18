@@ -237,7 +237,7 @@ paints from tokens only.
 | `key_foot` | A palette's keys on a strip under a rule at its foot |
 | `search_button` | The bar's way into Find: a sunken box of the glyph, the word and its keys, the glyph alone when compact |
 | `bar_pill` | A round tag in the bar ringed in its tint: the update badges |
-| `ChipPart`, `paint_chip` | The print chip: parts of a glyph, what is chosen and a caret, side by side under one ring |
+| `ChipPart`, `paint_chip` | The print chip: three parts of a glyph, what is chosen and a caret, side by side under one ring |
 | `RingLook`, `paint_ring`, `ring_badge` | A round status beside the chip: a track, an arc for the share done or spinning, the percent or a glyph in the middle, a count in a disc at its corner |
 | `device_row`, `print_picture` | A printer as one row on `raised`, its state word and dot breathing while busy; a print's picture, or the model glyph on `sunken` |
 | `paint_layer_track`, `layer_readout` | The layer strip: its rule with the cured area behind it, scale, fill, risk bars and thumbs; the layer in a sunken box to type into, the count and the height |

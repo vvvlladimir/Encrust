@@ -303,10 +303,10 @@ fn the_chip_opening_its_machines_and_its_resins() {
     }
 }
 
-/// The agents' list with none yet, and with an agent at work on one of its two jobs, the
-/// other on the plate, and one ended (ADR 0465).
+/// The agents' ring beside the chip and the list it opens: an agent at work on one of its
+/// two jobs, the other on the plate, and one ended (ADR 0465).
 #[test]
-fn the_chip_opening_its_agents() {
+fn the_agents_ring_opening_its_list() {
     use crate::agents::{Agent, Job, State};
     let job = |id: &str, model: &str, revision, clean| Job {
         id: id.into(),
@@ -320,6 +320,7 @@ fn the_chip_opening_its_agents() {
         state: State::Working {
             tool: "check".into(),
             job: Some("bust-2".into()),
+            since_s: crate::agents::now_s(),
         },
         jobs: vec![
             job("bust-2", "/m/Dragon bust.stl", 4, None),
@@ -332,20 +333,13 @@ fn the_chip_opening_its_agents() {
         state: State::Ended,
         jobs: vec![job("base-3", "/m/base.stl", 1, Some(false))],
     };
-    let mut results = SnapshotResults::new();
-    for (name, list) in [
-        ("chip_agents_none", vec![]),
-        ("chip_agents", vec![working, ended]),
-    ] {
-        let mut app = pictured();
-        app.machine.agents.list = list;
-        app.machine.agents.on_plate = vec!["cube-1".into()];
-        let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app);
-        harness.get_by_label_contains("Agents, ").click();
-        harness.run_steps(SETTLE_FRAMES);
-        harness.snapshot(name);
-        results.extend(harness.take_snapshot_results());
-    }
+    let mut app = pictured();
+    app.machine.agents.list = vec![working, ended];
+    app.machine.agents.on_plate = vec!["cube-1".into()];
+    let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app);
+    harness.get_by_label("Agents").click();
+    harness.run_steps(SETTLE_FRAMES);
+    harness.snapshot("agents_ring");
 }
 
 /// The recipes dropped from Prepare for print's row over the plate card, one of the user's
