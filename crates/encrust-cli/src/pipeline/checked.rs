@@ -4,12 +4,14 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use core_document::{ApplyError, repaired as repaired_by};
+use core_edit::ObjectId;
 use core_engine::hollowing;
 use core_geometry::{
     Aabb, Mat3, MendSettings, Mended, Mesh, MeshDiagnostics, Welded, diagnose, list_shells,
     orient_outward, remove_duplicate_faces,
 };
-use core_volume::{Cancel, Progress, RepairSettings, VolumeError, repair};
+use core_volume::{Cancel, Progress, RepairSettings};
 use printer_profiles::PrinterProfile;
 
 use crate::args::ImportArgs;
@@ -157,18 +159,22 @@ fn watched_repair(
         }
         watch.stop.requested()
     };
-    let done = repair(
+    let done = repaired_by(
         mesh,
-        method,
-        settings,
+        (method, settings),
         Cancel::when(&asked).reporting(&progress),
+        ObjectId::UNSET,
     );
     if let Some(shown) = &shown {
         shown.finish_and_clear();
     }
     match done {
-        Err(VolumeError::Cancelled) => Err(Cancelled.into()),
-        done => done.context("could not repair the model"),
+        Err(ApplyError::Cancelled) => Err(Cancelled.into()),
+        Err(ApplyError::Failed { reason, .. }) => {
+            Err(anyhow::anyhow!(reason).context("could not repair the model"))
+        }
+        Err(other) => Err(anyhow::Error::new(other).context("could not repair the model")),
+        Ok(done) => Ok(done),
     }
 }
 

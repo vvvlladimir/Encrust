@@ -89,6 +89,15 @@ letters (the window runs it, then the stamp on a job); `labelled` is both. Error
 (no outline in the text), `NoSurface` (no face near `at_mm`), `BadFont { path, reason }`, the
 stamp's own `NothingLeft`, `NotSolid` and `Failed`.
 
+`Repair { object, method }` runs `core_document::repaired` (`core_volume::repair`, the window's
+default `RepairSettings`) on the object's source mesh and `Mend { object, flip_faces, drop_faces,
+drop_shells, bridge }` runs `mended`, which `--flip-faces` and its kin call too: turns and bridges
+first, drops last. Both end in `Document::reshape`, which replaces the source and takes off what
+was built on the old surface (supports, cavity, painted regions; plugs stay, as the window keeps
+them); the object keeps its id (`Report::Repaired`, `Report::Mended`). Errors: a face past the
+last `NoSuchFace` (from 0), a shell `NoSuchShell` (from 1), a bridge the mesh refuses `Failed`,
+`Cancelled`. The window runs a repair as its Repair tool's job and a mend as one job of the Faces mode.
+
 ## Undo
 
 The window keeps snapshots of its scene (ADR 0086); a document applied is one entry. The

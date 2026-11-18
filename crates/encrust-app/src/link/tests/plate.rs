@@ -89,6 +89,45 @@ fn a_cut_on_the_version_it_was_built_on_leaves_two_halves_which_one_undo_takes_b
     assert_eq!(names, ["cube"], "one undo puts the cube back whole");
 }
 
+fn mend_of(object: ObjectId, base_version: u64, drop_faces: &[usize]) -> Value {
+    json!({"base_version": base_version,
+           "apply": [{"edit": "mend", "object": object.0, "drop_faces": drop_faces}]})
+}
+
+#[test]
+fn a_mend_drops_the_faces_it_names_off_the_object_which_keeps_its_id() {
+    let file = scratch("mend");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+
+    let reply = bench.hand_over_running(&file, asking(&file, mend_of(cube, version, &[0, 1])));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench
+        .doc
+        .scene
+        .get(cube)
+        .expect("a mend keeps the object's id");
+    assert_eq!(object.mesh.faces.len(), 10, "the cube's 12 faces less two");
+}
+
+#[test]
+fn a_mend_naming_a_face_the_object_lacks_is_answered_with_why_and_leaves_the_cube() {
+    let file = scratch("mend-refused");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+
+    let reply = bench.hand_over_running(&file, asking(&file, mend_of(cube, version, &[13])));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], false, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("the cube is still there");
+    assert_eq!(object.mesh.faces.len(), 12);
+}
+
 #[test]
 fn edits_built_on_a_plate_since_changed_are_answered_stale_and_not_applied() {
     let file = scratch("stale");

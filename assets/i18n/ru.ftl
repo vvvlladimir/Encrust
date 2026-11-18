@@ -2529,6 +2529,14 @@ edit-dropped-shells =
         [few] Удалено { $count } оболочки { $name }
        *[many] Удалено { $count } оболочек { $name }
     }
+edit-mended =
+    { $count ->
+        [one] Внесено { $count } изменение в грани { $name }
+        [few] Внесено { $count } изменения в грани { $name }
+       *[many] Внесено { $count } изменений в грани { $name }
+    }
+edit-no-such-face = В { $name } нет грани { $number }; грани нумеруются с 0
+edit-no-such-shell = В { $name } нет оболочки { $number }; оболочки нумеруются с 1
 edit-bridge-not-open = Одно из рёбер уже не открыто, соединять нечего
 edit-bridge-same = Ребро нельзя соединить с самим собой
 edit-bridge-in-line = Рёбра лежат на одной прямой, грань между ними не ляжет

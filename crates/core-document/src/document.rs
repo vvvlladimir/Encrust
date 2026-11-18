@@ -4,7 +4,7 @@ use core_edit::ObjectId;
 use core_engine::project::{
     ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project, Summary, assign_ids,
 };
-use core_geometry::{Orientation, Region, Transform};
+use core_geometry::{Mesh, Orientation, Region, Transform, diagnose};
 
 use crate::piece::{Piece, Role};
 
@@ -66,22 +66,50 @@ impl Document {
     /// Takes object `id` off the plate with the plugs laid for it, answering every id taken,
     /// the object's first; empty when it is not on the plate.
     pub(crate) fn remove(&mut self, id: ObjectId) -> Vec<ObjectId> {
-        let Some(index) = self.index_of(id) else {
+        if self.index_of(id).is_none() {
             return Vec::new();
+        }
+        let mut gone = vec![id];
+        gone.extend(self.take_plugs_of(id));
+        if let Some(index) = self.index_of(id) {
+            self.take_at(index);
+        }
+        gone
+    }
+
+    /// Gives object `id` the surface `mesh`, taking off its supports, cavity and painted
+    /// regions; its plugs stay. Nothing changes when `id` is not on the plate.
+    pub(crate) fn reshape(&mut self, id: ObjectId, mesh: Mesh) {
+        let Some(index) = self.index_of(id) else {
+            return;
         };
-        let named = u32::try_from(index).ok();
+        let state = &mut self.project.manifest.objects[index];
+        state.summary.diagnostics = diagnose(&mesh);
+        state.supports = ObjectSupportState::default();
+        state.hollow = ObjectHollowState::default();
+        state.relief_painted = Region::default();
+        state.shown_painted = Region::default();
+        self.project.models[index] = ModelMeshes {
+            source: Arc::new(mesh),
+            shell: None,
+        };
+    }
+
+    /// Takes the plugs laid for object `id` off the plate, answering their ids.
+    fn take_plugs_of(&mut self, id: ObjectId) -> Vec<ObjectId> {
+        let named = self
+            .index_of(id)
+            .and_then(|index| u32::try_from(index).ok());
         let plugs: Vec<ObjectId> = (self.project.manifest.objects.iter())
             .filter(|object| object.plug_of.is_some() && object.plug_of == named)
             .map(|object| object.id)
             .collect();
-        let mut gone = vec![id];
-        gone.extend(&plugs);
-        for id in &gone {
-            if let Some(index) = self.index_of(*id) {
+        for plug in &plugs {
+            if let Some(index) = self.index_of(*plug) {
                 self.take_at(index);
             }
         }
-        gone
+        plugs
     }
 
     /// Puts a copy of object `id` and its meshes right after it under a new id, `changed`

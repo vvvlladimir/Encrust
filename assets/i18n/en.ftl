@@ -2474,6 +2474,13 @@ edit-dropped-shells =
         [one] Dropped { $count } shell of { $name }
        *[other] Dropped { $count } shells of { $name }
     }
+edit-mended =
+    { $count ->
+        [one] Made { $count } change to the faces of { $name }
+       *[other] Made { $count } changes to the faces of { $name }
+    }
+edit-no-such-face = { $name } has no face { $number }; faces are numbered from 0
+edit-no-such-shell = { $name } has no shell { $number }; shells are numbered from 1
 edit-bridge-not-open = One of the edges is not open any more, so there is nothing to bridge
 edit-bridge-same = An edge cannot be bridged to itself
 edit-bridge-in-line = The two edges lie on one line, so no face spans them
