@@ -7,6 +7,7 @@ use crate::combine::apply_combine;
 use crate::cut::{CutAsked, CutModel, cut, pieces};
 use crate::document::Document;
 use crate::error::ApplyError;
+use crate::label::{LabelAsked, apply_label};
 use crate::piece::Role;
 use crate::placement::{moved, sized_to, turned_to};
 use crate::plate_contents::{delete, duplicate, mirrored};
@@ -51,6 +52,8 @@ pub enum Report {
         /// The lattice it was sampled on, mm, where an object was not an exact solid.
         voxel_mm: Option<Scalar>,
     },
+    /// A label was written on an object.
+    Labelled,
     /// An object was moved, turned or sized where it stands.
     Placed,
     /// An object was deleted or copied.
@@ -92,6 +95,10 @@ pub fn apply(
             op,
             toward,
         } => apply_combine(document, objects, op, toward, cancel),
+        Edit::Label { object, .. } => {
+            let asked = LabelAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
+            apply_label(document, object, &asked, cancel)
+        }
         Edit::Move { object, by_mm } => {
             place(document, object, |transform, _| Ok(moved(transform, by_mm)))
         }

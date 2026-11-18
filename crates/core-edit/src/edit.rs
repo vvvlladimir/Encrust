@@ -2,6 +2,7 @@ use core_engine::project::{Axis, Keep, ObjectId};
 use core_geometry::{Scalar, Vec3};
 use core_joint::Joints;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// One action on a plate, naming the object it acts on; points and positions are plate
 /// millimetres.
@@ -56,6 +57,32 @@ pub enum Edit {
         #[serde(default)]
         toward: Option<Vec3>,
     },
+    /// Writes `text` on `object` at the surface nearest plate point `at_mm`, its capitals
+    /// `height_mm` tall and its letters `depth_mm` out of the surface or, unless `raised`, into
+    /// it; unset, the size is the window's Text tool's. With `follow_surface` each letter bends
+    /// onto the surface under it; `angle_deg` turns the line about the normal, anticlockwise.
+    /// `font` is a font file, the bundled IBM Plex Sans where unset.
+    Label {
+        object: ObjectId,
+        text: String,
+        at_mm: Vec3,
+        #[serde(default)]
+        height_mm: Option<Scalar>,
+        #[serde(default)]
+        depth_mm: Option<Scalar>,
+        #[serde(default = "raised_by_default")]
+        raised: bool,
+        #[serde(default)]
+        follow_surface: bool,
+        #[serde(default)]
+        angle_deg: Scalar,
+        #[serde(default)]
+        font: Option<PathBuf>,
+    },
+}
+
+fn raised_by_default() -> bool {
+    true
 }
 
 /// How `Edit::Combine` joins its objects.

@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use core_geometry::{Transform, Vec3, cuboid, diagnose};
+use core_geometry::{Transform, Vec3, cuboid, diagnose, signed_volume, transform_mesh};
 
 use super::*;
 use crate::scene::{ImportSummary, Imported, ObjectId};
@@ -306,5 +306,29 @@ fn a_union_on_the_version_it_was_built_on_replaces_two_overlapping_cubes_by_one(
         (bounds.maxs.x - 15.0).abs() < 1e-4,
         "the union spans x 0 to 15, got {}",
         bounds.maxs.x
+    );
+}
+
+#[test]
+fn a_label_on_the_version_it_was_built_on_raises_text_from_the_cube() {
+    let file = scratch("label");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let label = json!({"base_version": version,
+        "apply": [{"edit": "label", "object": cube.0, "text": "I",
+                   "at_mm": [5, 5, 10], "depth_mm": 1.0}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, label));
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    assert!(bench.doc.scene.get(cube).is_none());
+    let [lettered] = bench.doc.scene.objects() else {
+        panic!("one object is left on the plate");
+    };
+    let volume = signed_volume(&transform_mesh(&lettered.mesh, lettered.transform));
+    assert!(
+        volume > 1_001.0,
+        "the letter adds to the 1000 mm³ cube; got {volume}"
     );
 }

@@ -94,6 +94,26 @@ fn a_combine_written_by_hand_reads_with_no_direction() {
 }
 
 #[test]
+fn a_label_written_by_hand_reads_raised_and_flat_at_the_default_size() {
+    let text = r#"{"edit":"label","object":2,"text":"I","at_mm":[5,5,10]}"#;
+    let edit: Edit = serde_json::from_str(text).expect("a bare label is valid JSON");
+    assert_eq!(
+        edit,
+        Edit::Label {
+            object: ObjectId(2),
+            text: "I".to_owned(),
+            at_mm: Vec3::new(5.0, 5.0, 10.0),
+            height_mm: None,
+            depth_mm: None,
+            raised: true,
+            follow_surface: false,
+            angle_deg: 0.0,
+            font: None,
+        }
+    );
+}
+
+#[test]
 fn an_edit_of_an_unknown_kind_is_refused() {
     let text = r#"{"edit": "melt", "object": 3}"#;
     assert!(serde_json::from_str::<Edit>(text).is_err());

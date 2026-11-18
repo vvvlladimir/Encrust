@@ -614,7 +614,10 @@ takes it and its plugs off, `duplicate` (`offset_mm`, `[x, y, z]`) puts a copy b
 replaces it by the bodies it is made of, and `part-off` (`at_mm`, `[x, y, z]`) cuts the part at
 that plate point off the rest; `combine` (`objects`, `op` of `union`, `difference` or
 `intersection`, and `toward`, optional `[x, y, z]`) replaces the objects by the one they make,
-the first being what a difference keeps.
+the first being what a difference keeps; `label` (`object`, `text`, `at_mm`, `[x, y, z]`, and
+optional `height_mm`, `depth_mm`, `raised` (on), `follow_surface`, `angle_deg` and `font`, a
+file) writes text on the object's surface nearest that point, in IBM Plex Sans unless a font
+is named.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json

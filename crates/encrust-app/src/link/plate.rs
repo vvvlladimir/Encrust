@@ -6,7 +6,8 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use core_document::{
-    ApplyError, CutAsked, boolean_of, mirrored, moved, part_settings, sized_to, turned_to,
+    ApplyError, CutAsked, LabelAsked, boolean_of, mirrored, moved, part_settings, sized_to,
+    turned_to,
 };
 use core_edit::{Edit, ObjectId};
 use core_geometry::{Mesh, Transform, Vec3};
@@ -95,7 +96,7 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     let Some(work) = applying.as_mut() else {
         return false;
     };
-    if window.tools.cut.is_busy() || window.tools.boolean.is_busy() {
+    if window.tools.cut.is_busy() || window.tools.boolean.is_busy() || window.tools.text.is_busy() {
         return true;
     }
     if let Some((id, may_stay)) = work.under_way.take()
@@ -125,7 +126,7 @@ fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
     false
 }
 
-/// Carries `edit` out: a cut starts a tool job, answering the object it replaces; any
+/// Carries `edit` out: a cut, combine or label starts a tool job, answering the object it replaces; any
 /// other edit is made at once, answering `None`.
 fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, String> {
     match *edit {
@@ -167,6 +168,7 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
                 .map_err(|error| format!("{error:#}"))?;
             Ok(objects.first().copied())
         }
+        Edit::Label { object, .. } => start_label(window, edit, object),
         Edit::Move { object, by_mm } => {
             place(window, object, |transform, _| Ok(moved(transform, by_mm)))
         }
@@ -203,6 +205,19 @@ fn start_split(
 ) -> Result<Option<ObjectId>, String> {
     (window.tools.cut)
         .start_split_asked(&window.doc.scene, object, settings, at)
+        .map_err(|error| format!("{error:#}"))?;
+    Ok(Some(object))
+}
+
+/// Starts writing a label edit as a tool job, answering the object it replaces.
+fn start_label(
+    window: &mut Window,
+    edit: &Edit,
+    object: ObjectId,
+) -> Result<Option<ObjectId>, String> {
+    let asked = LabelAsked::of(edit).ok_or_else(|| no_object(object))?;
+    (window.tools.text)
+        .stamp_asked(&window.doc.scene, object, &asked)
         .map_err(|error| format!("{error:#}"))?;
     Ok(Some(object))
 }

@@ -79,6 +79,16 @@ object is not a closed solid, `Report::Combined { voxel_mm }`). Fewer than two d
 is `ApplyError::TooFew`, a missing one `NoObject`, an empty result `NothingLeft`, an unreadable
 first `NotSolid`.
 
+`Label { object, text, at_mm, height_mm, depth_mm, raised, follow_surface, angle_deg, font }`
+writes `text` on the surface of the object nearest plate point `at_mm`, the object's source
+placed on the plate and stamped by `combined` toward the face's normal; the result replaces it
+where it stands (`Role::Kept`, `Report::Labelled`). `height_mm` and `depth_mm` unset are core-text's
+`LETTER_HEIGHT_MM` and `LABEL_DEPTH_MM`; `raised` defaults to true, `follow_surface` and `angle_deg`
+to flat and 0. `font` is a file, the bundled IBM Plex Sans where unset. `label_prisms` lays the
+letters (the window runs it, then the stamp on a job); `labelled` is both. Errors: `BlankLabel`
+(no outline in the text), `NoSurface` (no face near `at_mm`), `BadFont { path, reason }`, the
+stamp's own `NothingLeft`, `NotSolid` and `Failed`.
+
 ## Undo
 
 The window keeps snapshots of its scene (ADR 0086); a document applied is one entry. The
