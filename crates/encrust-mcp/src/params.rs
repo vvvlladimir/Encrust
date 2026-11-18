@@ -27,6 +27,21 @@ pub struct UseRecipe {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct SaveRecipe {
+    /// What the user calls it; the window and `list_recipes` list it under this name.
+    pub name: String,
+    /// A job whose steps are kept, as its check ran them with each edit folded in. Not with
+    /// `toml`.
+    pub job: Option<String>,
+    /// The job's revision, counted from one; absent for the latest.
+    #[schemars(range(min = 1))]
+    pub revision: Option<u32>,
+    /// A recipe written from the user's words, in the TOML `list_recipes` shows. Not with
+    /// `job`.
+    pub toml: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct WriteTestPrint {
     pub print: TestPrint,
     /// Absolute path of the folder the STL is written into, under the print's own name.

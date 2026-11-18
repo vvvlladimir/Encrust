@@ -41,8 +41,12 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    it; say what it cost. `render` (`iso`, `bottom`) and look at it; fix what the check names.
 8. `write_file` when the check is clean. If defects remain, tell the user what they are and
    write with `accept_defects` only when they accept them.
-9. `send_to_printer` only when the user asks for that printer; `start` only when they ask to
-   start and say the vat is filled and the plate and film are clear.
+9. When a way of preparing worked, or the user describes one they want again — "busts, face
+   up, no supports on the face" — offer to keep it: `save_recipe` with the job, or with a
+   recipe written in the TOML `list_recipes` shows. It is refused with the reason if it would
+   not run; fix that and save again. The window then runs it as Prepare for print.
+10. `send_to_printer` only when the user asks for that printer; `start` only when they ask to
+    start and say the vat is filled and the plate and film are clear.
 
 Coordinates are plate millimetres from the plate's front left corner, Z up; the model stands
 centred on the plate.

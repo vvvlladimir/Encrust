@@ -2,7 +2,7 @@
 //! the user's `<stem>.toml` files the catalogue keeps in `recipes/` (ADR 0403, 0405).
 
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use core_recipe::{BUILT_IN, Origin, Read, Recipe};
@@ -139,6 +139,39 @@ pub fn find(asked: &str) -> Result<(Source, Recipe)> {
         ids.join(", "),
         folder.map_or_else(|| "recipes/".to_owned(), |dir| dir.display().to_string())
     )
+}
+
+/// A recipe `save` kept: its id, its name and its file.
+#[derive(Serialize, Debug)]
+pub struct Saved {
+    pub id: String,
+    pub name: String,
+    pub path: PathBuf,
+}
+
+/// Keeps the recipe in `file` as one of the user's under a new id, named `name` where given;
+/// one `validate` refuses is not kept, so whatever the library lists runs.
+pub fn save(file: &Path, name: Option<&str>) -> Result<Saved> {
+    let text = std::fs::read_to_string(file)
+        .with_context(|| format!("cannot read the recipe {}", file.display()))?;
+    let mut recipe = Recipe::from_toml(&text)
+        .with_context(|| format!("{} is not a recipe this build reads", file.display()))?;
+    if let Some(name) = name {
+        name.clone_into(&mut recipe.name);
+    }
+    let plan = core_recipe::validate(recipe)
+        .with_context(|| format!("{} is not a recipe Prepare for print runs", file.display()))?;
+    let recipe = plan.recipe();
+    let mut catalogue = crate::profiles::catalogue()?;
+    let id = catalogue.fresh_recipe_id(&recipe.name, core_recipe::is_built_in);
+    let path = catalogue
+        .save_recipe(&id, &recipe.to_toml())
+        .with_context(|| format!("cannot keep the recipe {id}"))?;
+    Ok(Saved {
+        id,
+        name: recipe.name.clone(),
+        path,
+    })
 }
 
 #[cfg(test)]

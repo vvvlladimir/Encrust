@@ -17,9 +17,9 @@ use serde_json::json;
 use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::{Jobs, Revision};
 use crate::params::{
-    ComparePoses, ImportResin, JobRef, ListProfiles, ListRecipes, Model, Render, Revert, SendFile,
-    SetDrains, SetHollow, SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe,
-    View, WriteFile, WriteTestPrint, absolute, plain,
+    ComparePoses, ImportResin, JobRef, ListProfiles, ListRecipes, Model, Render, Revert,
+    SaveRecipe, SendFile, SetDrains, SetHollow, SetPose, SetRepair, SetShape, SetSlicing,
+    SetSupports, Start, UseRecipe, View, WriteFile, WriteTestPrint, absolute, plain,
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
@@ -133,6 +133,17 @@ impl Server {
             None
         });
         Ok(answer(edited.await))
+    }
+
+    /// Keeps a job's way of preparing, or one the user described, as a recipe of their own,
+    /// which the window then runs as Prepare for print with no chat; answers with its id.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn save_recipe(&self, Parameters(save): Parameters<SaveRecipe>, ctx: Context) -> Answer {
+        Ok(answer(self.keep_recipe(save, &ctx).await))
     }
 
     /// What a model file is: its size, shells, holes, defects, and what a repair would do.

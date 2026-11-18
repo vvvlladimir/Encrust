@@ -70,7 +70,7 @@ a crate of its own when the window's panel or the connector needs it too.
 | `import_resin` (step 15) | a resin from a sliced file or another slicer's export | `profiles import` | creates a profile |
 | `write_test_print` (step 15) | a test print, the exposure check among them | `test-print` | writes a file |
 | `report_print` (step 16) | what a print of a job's file did, as named symptoms | — | edits |
-| `save_recipe` (step 17) | a recipe from the job's revisions or from words, validated | `recipes show PATH`, the store | creates a profile |
+| `save_recipe` (step 17) | a recipe from the job's revisions or from words, validated | `recipes save` | creates a profile |
 
 `start_job` runs the autopilot (`--prepare`) unless told not to, and each `set_*` tool
 overrides one of its steps. An edit is kept only if the command line took it; every finding
@@ -237,7 +237,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 14 | Recipes chosen by purpose: `list_recipes`, `use_recipe`, the instructions ask what the print is for | `encrust-mcp` (done, ADR 0460) | 12 |
 | 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0460); a resin from a label's numbers alone still needs the window | 12 |
 | 16 | After the print: `report_print`, `print-failures.md` and the engine reading it | `core-engine`, `encrust-mcp` | 12 |
-| 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `core-recipe`, `encrust-mcp` | 14 |
+| 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `encrust-cli`, `encrust-mcp` (done, ADR 0462) | 14 |
 | 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | `prototypes/connector` (built; a prepare in an unisolated page measured at 20 s for a 175k-face figure; the rest waits on a run in ChatGPT) | 12 |
 | 19 | `web-engine` prepares, checks and draws; the connector and its page | `web-engine`, a new crate | 18 |
 | 20 | The extension shipped: bundles in `release.yml`, signed where the certificate is set, File → Use with Claude Desktop | `.github`, `xtask`, `encrust-app` (done, ADR 0461); the site's button is the site's | 12, 15 |
@@ -245,7 +245,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 12 |
 | 10 | The MCP Apps page in Claude Desktop, the connector's page served locally | `encrust-mcp` | 19 |
 
-Order: 19 once the spike's live run answers; 16, 17 next; 21 grows with each; 9 and 10 last.
+Order: 19 once the spike's live run answers; 16 next; 21 grows with each; 9 and 10 last.
 
 ## How the work is run
 
