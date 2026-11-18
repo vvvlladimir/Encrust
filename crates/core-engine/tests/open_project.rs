@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use core_engine::project::{
     Array, Axis, BuiltCavity, Cavity, CutState, DrainState, FillProfiles, Group, HollowState, Keep,
-    Manifest, ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project,
+    Manifest, ModelMeshes, ObjectHollowState, ObjectId, ObjectState, ObjectSupportState, Project,
     SlicingState, Summary, SupportState, VERSION,
 };
 use core_engine::{EngineError, Machine, Opening, open_plate};
@@ -47,6 +47,7 @@ fn box_mesh(mins: Vec3, maxs: Vec3) -> Mesh {
 
 fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
     ObjectState {
+        id: ObjectId::UNSET,
         name: name.to_owned(),
         plate: 0,
         transform,

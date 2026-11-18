@@ -61,19 +61,7 @@ impl std::fmt::Debug for Shaped {
     }
 }
 
-/// Identifies one object for as long as the window is open. Never reused, so a stale
-/// identifier resolves to nothing instead of to the wrong object.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ObjectId(u64);
-
-impl ObjectId {
-    /// A bare identifier, for the tests of modules that hold one without a scene to take
-    /// it from.
-    #[cfg(test)]
-    pub fn for_test(raw: u64) -> Self {
-        Self(raw)
-    }
-}
+pub use core_engine::project::ObjectId;
 
 impl SceneObject {}
 
@@ -105,7 +93,8 @@ impl Default for Scene {
             active: 0,
             selected: Vec::new(),
             anchor: None,
-            next_id: 0,
+            // Nought is the id a project file written before ids reads as (ADR 0466).
+            next_id: 1,
         }
     }
 }

@@ -13,7 +13,7 @@ fn open_box() -> Mesh {
 #[test]
 fn a_repaired_model_comes_back_closed() {
     let mut job = RepairJob::spawn(RepairRequest {
-        id: ObjectId::for_test(7),
+        id: ObjectId(7),
         name: "open.stl".to_owned(),
         mesh: Arc::new(open_box()),
         method: RepairMethod::default(),
@@ -29,7 +29,7 @@ fn a_repaired_model_comes_back_closed() {
     let RepairOutcome::Done(repaired) = outcome else {
         panic!("an open box has a hole to close");
     };
-    assert_eq!(repaired.id, ObjectId::for_test(7));
+    assert_eq!(repaired.id, ObjectId(7));
     assert_eq!(repaired.mended.filled.loops_filled, 1);
     assert!(diagnose(&repaired.shaped.mesh).is_closed());
     assert!(
@@ -43,7 +43,7 @@ fn a_repaired_model_comes_back_closed() {
 #[test]
 fn a_running_repair_says_which_model_it_is_on() {
     let job = RepairJob::spawn(RepairRequest {
-        id: ObjectId::for_test(1),
+        id: ObjectId(1),
         name: "dragon.stl".to_owned(),
         mesh: Arc::new(open_box()),
         method: RepairMethod::default(),
@@ -58,7 +58,7 @@ fn turn_faces_turns_a_face_wound_the_wrong_way_and_adds_none() {
     mesh.faces[0].swap(1, 2);
     let faces = mesh.faces.len();
     let mut job = RepairJob::spawn(RepairRequest {
-        id: ObjectId::for_test(3),
+        id: ObjectId(3),
         name: "turned.stl".to_owned(),
         mesh: Arc::new(mesh),
         method: RepairMethod::Mend(core_geometry::MendMethod::Turn),

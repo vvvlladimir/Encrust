@@ -2,8 +2,10 @@
 //! pure functions are redone in `restore`; see `docs/formats/encrust-project.md`, ADR 0191.
 
 mod blob;
+mod ids;
 mod restore;
 
+pub use ids::{ObjectId, assign as assign_ids};
 pub use restore::{hollow_of, supports_of};
 
 use std::io::{Read, Seek, Write};
@@ -333,6 +335,9 @@ pub struct CutState {
 /// One model on a plate: where it stands, and what was done to it.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObjectState {
+    /// A file written before ids reads as [`ObjectId::UNSET`] until [`read_from`] gives one.
+    #[serde(default)]
+    pub id: ObjectId,
     pub name: String,
     pub plate: u32,
     pub transform: Transform,
@@ -574,7 +579,7 @@ pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
     let mut zip = zip::ZipArchive::new(source)
         .map_err(|error| ProjectError::NotAProject(error.to_string()))?;
 
-    let manifest: Manifest = {
+    let mut manifest: Manifest = {
         let mut entry = zip
             .by_name(MANIFEST)
             .map_err(|_| ProjectError::NotAProject(format!("no {MANIFEST} inside")))?;
@@ -592,6 +597,7 @@ pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
         }
     };
 
+    ids::assign(&mut manifest.objects);
     let mut models = Vec::with_capacity(manifest.objects.len());
     for (index, object) in manifest.objects.iter().enumerate() {
         let source = Arc::new(mesh_at(&mut zip, &source_name(index))?);

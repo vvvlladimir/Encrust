@@ -362,10 +362,10 @@ mod tests {
         let request = OrientRequest {
             tasks: vec![
                 OrientTask::solid(
-                    ObjectId::for_test(1),
+                    ObjectId(1),
                     Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
                 ),
-                OrientTask::solid(ObjectId::for_test(2), Arc::new(cuboid(Vec3::splat(10.0)))),
+                OrientTask::solid(ObjectId(2), Arc::new(cuboid(Vec3::splat(10.0)))),
             ],
             settings: OrientSettings::default(),
             proof: None,
@@ -375,7 +375,7 @@ mod tests {
             panic!("two sound models can be oriented");
         };
         assert_eq!(turns.len(), 2);
-        assert_eq!(turns[0].id, ObjectId::for_test(1));
+        assert_eq!(turns[0].id, ObjectId(1));
     }
 
     #[test]
@@ -422,8 +422,8 @@ mod tests {
     #[test]
     fn a_model_painted_otherwise_is_not_asked_the_same() {
         let mesh = Arc::new(cuboid(Vec3::splat(10.0)));
-        let plain = OrientTask::solid(ObjectId::for_test(1), Arc::clone(&mesh));
-        let mut painted = OrientTask::solid(ObjectId::for_test(1), mesh);
+        let plain = OrientTask::solid(ObjectId(1), Arc::clone(&mesh));
+        let mut painted = OrientTask::solid(ObjectId(1), mesh);
         painted.shown.set(0, true);
         assert!(plain.asks_as(&plain), "the same task asks the same");
         assert!(
@@ -436,7 +436,7 @@ mod tests {
     fn a_model_with_no_geometry_fails_the_run() {
         let request = OrientRequest {
             tasks: vec![OrientTask::solid(
-                ObjectId::for_test(1),
+                ObjectId(1),
                 Arc::new(Mesh::default()),
             )],
             settings: OrientSettings::default(),
@@ -453,7 +453,7 @@ mod tests {
     fn a_run_tells_how_far_each_model_has_got_and_stops_when_asked() {
         let request = OrientRequest {
             tasks: vec![OrientTask::solid(
-                ObjectId::for_test(1),
+                ObjectId(1),
                 Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
             )],
             settings: OrientSettings::default(),
