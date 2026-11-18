@@ -348,3 +348,12 @@ Done when: a 10 mm cube drained at (5,5,10.5) (over its top face) gets one hole 
   corner (10.5,10.5,10.5) → `OffAFace`; on a model with no faces → `NoSurface`; the plate written
   and read back keeps the hole. Window link test of `Drain`. Existing `--drain-at` tests pass.
 Not now: the auto search, channels, plugs, holes into the supports (C10b), MCP wiring.
+
+### C11. Supports — blocked on a decision (not dispatched)
+The window grows supports by its own job (`job/place.rs`: `generate_supports`, `strengthen`)
+and keeps the trees; `--supports` and the autopilot stand them by `core_engine::stand_under`.
+A `.encrust` holds only grown trees (`ObjectSupportState::grown`), which `open_plate` reads and
+never decides again. So `Edit::Supports` cannot be one `apply` until the two ways are one: an
+ADR choosing which grows the trees for both (window wins by ADR 0466, but `stand_under` is
+the engine's, ADR 0402), then the job moved down. Until then a client's supports reach the
+window by the old recipe path. Same for the drains' auto search and plugs (C10b).
