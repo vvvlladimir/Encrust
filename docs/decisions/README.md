@@ -561,3 +561,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0460](0460-a-chat-client-names-what-shows-and-brings-the-resin-with-no-window.md) | A chat client names what shows, picks the recipe and brings the resin, with no window | Proposed |
 | [0461](0461-each-release-ships-the-claude-desktop-extension.md) | Each release ships the Claude Desktop extension, one per installer's platform | Proposed |
 | [0462](0462-a-chat-client-keeps-a-way-of-preparing-as-a-recipe.md) | A chat client keeps a way of preparing as a recipe the engine checked | Proposed |
+| [0463](0463-a-failed-print-is-read-against-its-check.md) | A failed print is read against the check of the file printed | Proposed |

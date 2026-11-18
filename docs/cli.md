@@ -682,6 +682,20 @@ no edge joins fail with nothing printed.
 encrust measure figure.stl --from 12,4,30 --to -6,10,2 --along-surface
 ```
 
+## After a failed print
+
+`diagnose REPORT --symptom S` reads what a print showed against the `--json` report of the
+`estimate` or `slice` that made its file, and answers each symptom's likely causes, those
+the report shows first with what it shows, each with the step it belongs to and the change
+to try (`docs/design/print-failures.md`). `--symptom` is given once for each of
+`off-plate`, `layer-split`, `hole`, `support-pulled`, `face-mark`, `resin-crack`:
+
+```sh
+encrust estimate bust.stl --printer elegoo-mars-4-ultra --resin my-grey --hollow 2 \
+  --check-drainage --json > bust.json
+encrust diagnose bust.json --symptom resin-crack --symptom off-plate
+```
+
 ## Render
 
 `render` takes what `slice` takes — models, a plate file or a project, `--plate N`, and
@@ -933,6 +947,9 @@ channels, and `set_supports` a profile TOML, `at_mm` with `only_at` and `shown_a
 side meant to be seen, as `--shown-at`. `list_recipes` answers `recipes list` with each
 recipe's TOML; `use_recipe` prepares the job by one with `--recipe` in place of `--prepare`;
 `save_recipe` runs `recipes save` on a revision's steps, or on a recipe the client wrote.
+`write_file` notes the revision it wrote; `report_print` runs `diagnose` on the check of that
+revision, or of the one named, and appends the symptoms, `at_mm` and the user's note to the
+job's `prints.jsonl`.
 `import_resin` runs `profiles import` on the file given; `write_test_print` runs `test-print`
 into the folder given.
 `set_pose`, `set_hollow`, `set_drains` and `set_supports` check the changed recipe with

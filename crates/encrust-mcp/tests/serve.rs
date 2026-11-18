@@ -151,6 +151,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "list_profiles",
             "list_recipes",
             "render",
+            "report_print",
             "revert",
             "save_recipe",
             "send_to_printer",
@@ -837,4 +838,57 @@ fn answer_text(result: &CallToolResult) -> String {
             _ => None,
         })
         .collect()
+}
+
+#[tokio::test]
+async fn a_print_reported_is_read_against_the_revision_written_and_kept_with_the_job() {
+    let dir = scratch("report-print");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+    )
+    .await;
+    let written = call(
+        &client,
+        "write_file",
+        json!({"job": job, "output": dir.join("cube.goo"), "accept_defects": true}),
+    )
+    .await;
+    assert!(!failed(&written), "{}", answer(&written));
+    call(
+        &client,
+        "set_supports",
+        json!({"job": job, "supports": {"profile": "light"}}),
+    )
+    .await;
+
+    let reported = call(
+        &client,
+        "report_print",
+        json!({"job": job, "symptoms": ["resin-crack"], "note": "split along the side"}),
+    )
+    .await;
+    assert!(!failed(&reported), "{}", answer(&reported));
+    let reported = answer(&reported);
+    assert_eq!(
+        reported["revision"], 2,
+        "the revision written, not the latest"
+    );
+    assert_eq!(reported["prints_reported"], 1);
+    let first = &reported["diagnosis"]["symptoms"][0]["causes"][0];
+    assert_eq!(first["step"], "drains", "{reported}");
+    assert!(
+        first["seen"].is_string(),
+        "the trapped resin is seen: {first}"
+    );
+
+    let none = call(&client, "report_print", json!({"job": job, "symptoms": []})).await;
+    assert!(failed(&none), "a print with no symptom is refused");
+    client.cancel().await.expect("the server stops");
+    let kept = fs::read_to_string(dir.join("jobs").join(&job).join("prints.jsonl"))
+        .expect("the print is kept with the job");
+    assert!(kept.contains("split along the side"), "{kept}");
 }

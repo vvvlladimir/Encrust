@@ -6,6 +6,7 @@ mod batch;
 mod by_hand;
 mod choices;
 mod containers;
+mod diagnose;
 mod drains;
 mod editing;
 mod findings;

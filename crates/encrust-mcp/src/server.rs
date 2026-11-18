@@ -17,8 +17,8 @@ use serde_json::json;
 use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::{Jobs, Revision};
 use crate::params::{
-    ComparePoses, ImportResin, JobRef, ListProfiles, ListRecipes, Model, Render, Revert,
-    SaveRecipe, SendFile, SetDrains, SetHollow, SetPose, SetRepair, SetShape, SetSlicing,
+    ComparePoses, ImportResin, JobRef, ListProfiles, ListRecipes, Model, Render, ReportPrint,
+    Revert, SaveRecipe, SendFile, SetDrains, SetHollow, SetPose, SetRepair, SetShape, SetSlicing,
     SetSupports, Start, UseRecipe, View, WriteFile, WriteTestPrint, absolute, plain,
 };
 use crate::recipe::{Recipe, Repair};
@@ -26,6 +26,7 @@ use crate::runner::{Cli, Outcome};
 use crate::trace::Trace;
 use crate::window::Window;
 
+mod after;
 mod library;
 mod poses;
 mod reply;
@@ -358,6 +359,21 @@ impl Server {
             .unwrap_or_else(|error| answer(Err(error))))
     }
 
+    /// What a print of the job did, as the user saw it: each symptom's likely causes read
+    /// against the check of the revision printed, each with the edit to try; kept with the job.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn report_print(
+        &self,
+        Parameters(print): Parameters<ReportPrint>,
+        ctx: Context,
+    ) -> Answer {
+        Ok(answer(self.after_print(print, &ctx).await))
+    }
+
     /// Sends a written file to a printer on the local network, and starts it if asked.
     #[tool(annotations(
         read_only_hint = false,
@@ -466,6 +482,9 @@ impl Server {
         }
         let outcome = self.watched(&args, ctx).await?;
         let written = outcome.exit_code == 0;
+        if written {
+            self.jobs.mark_written(&revision.job, revision.number)?;
+        }
         let body = json!({
             "job": revision.job,
             "revision": revision.number,
