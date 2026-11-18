@@ -33,6 +33,7 @@ mod run_box;
 mod search;
 mod section;
 mod start_page;
+mod status_ring;
 mod theme_card;
 mod toggle;
 pub mod window_frame;
@@ -102,6 +103,7 @@ pub use start_page::ZONE_INSET;
 pub use start_page::{
     PictureTile, TILE_PICTURE_H, ZoneWords, drop_zone_box, picture_tile, start_title,
 };
+pub use status_ring::{RingLook, paint_ring, ring_badge};
 pub use theme_card::{CardLook, theme_card};
 pub use toggle::{SWITCH_W, Segment, Segmented, bare_switch, switch, switch_with_toggle, tone};
 
