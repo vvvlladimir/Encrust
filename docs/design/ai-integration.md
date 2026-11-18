@@ -69,7 +69,7 @@ a crate of its own when the window's panel or the connector needs it too.
 | `list_recipes`, `use_recipe` (step 14) | the recipes with their steps; one for the job, by the user's purpose | `recipes list`, `recipes show`, `--recipe` | read, edits |
 | `import_resin` (step 15) | a resin from a sliced file or another slicer's export | `profiles import` | creates a profile |
 | `write_test_print` (step 15) | a test print, the exposure check among them | `test-print` | writes a file |
-| `report_print` (step 16) | what a print of a job's file did, as named symptoms | — | edits |
+| `report_print` (step 16) | what a print of a job's file did, as named symptoms, read against its check | `diagnose` | edits |
 | `save_recipe` (step 17) | a recipe from the job's revisions or from words, validated | `recipes save` | creates a profile |
 
 `start_job` runs the autopilot (`--prepare`) unless told not to, and each `set_*` tool
@@ -87,14 +87,14 @@ autopilot's own, so an edit that falls behind is reverted unless the user asked 
 
 ### After the print
 
-The loop a recipe cannot close. A written file keeps its job's id (in the name the tool
-gives it), so `report_print` finds the revision that made it. The client reads the user's
-photo and names symptoms from a fixed list — the part off the plate, a layer split, a
-hole or a crater, a support pulled from the model, a mark on a face, a trapped-resin
-crack. `print-failures.md` maps each symptom, against the job's report, to the step
-that likely caused it and the change to try; the change is an edit like any other, checked
-and compared. The map is a document the engine reads, not the model's memory, so it is tested
-and improved by prints rather than by prompts.
+The loop a recipe cannot close. A job notes the revision it last wrote, so `report_print`
+finds the one printed. The client reads the user's words or photo and names symptoms from a
+fixed list — the part off the plate, a layer split, a hole or a crater, a support pulled
+from the model, a mark on a face, a crack in a hollow print. `encrust diagnose` reads each,
+against that revision's report, to the step that likely caused it and the change to try
+([print-failures.md](print-failures.md), ADR 0463); the change is an edit like any other,
+checked and compared. The map is data the command line reads, not the model's memory, so
+it is tested and improved by prints rather than by prompts.
 
 ### State
 
@@ -236,7 +236,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 13 | The side meant to be seen painted from the command line, `--shown-at X,Y,Z[:R]` | `core-engine`, `encrust-cli`, `encrust-mcp` (done, ADR 0460) | 12 |
 | 14 | Recipes chosen by purpose: `list_recipes`, `use_recipe`, the instructions ask what the print is for | `encrust-mcp` (done, ADR 0460) | 12 |
 | 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0460); a resin from a label's numbers alone still needs the window | 12 |
-| 16 | After the print: `report_print`, `print-failures.md` and the engine reading it | `core-engine`, `encrust-mcp` | 12 |
+| 16 | After the print: `report_print`, `print-failures.md` and the command line reading it | `encrust-cli`, `encrust-mcp` (done, ADR 0463) | 12 |
 | 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `encrust-cli`, `encrust-mcp` (done, ADR 0462) | 14 |
 | 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | `prototypes/connector` (built; a prepare in an unisolated page measured at 20 s for a 175k-face figure; the rest waits on a run in ChatGPT) | 12 |
 | 19 | `web-engine` prepares, checks and draws; the connector and its page | `web-engine`, a new crate | 18 |
@@ -245,7 +245,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 12 |
 | 10 | The MCP Apps page in Claude Desktop, the connector's page served locally | `encrust-mcp` | 19 |
 
-Order: 19 once the spike's live run answers; 16 next; 21 grows with each; 9 and 10 last.
+Order: 19 once the spike's live run answers; 21 grows with each; 9 and 10 last.
 
 ## How the work is run
 
@@ -267,5 +267,5 @@ Order: 19 once the spike's live run answers; 16 next; 21 grows with each; 9 and 
    once OpenAI's terms for apps are confirmed.
 2. **The connector's server** (before step 19, an ADR): where it is hosted on a free tier,
    and in what language; it sees a file's URL, never its bytes.
-3. **Photos** (before step 16): the client names symptoms from the fixed list and no image
-   reaches the server — recommended, as it is testable — or the server takes the photo.
+3. **Photos** (settled by ADR 0463): the client names symptoms from the fixed list, and no
+   image reaches the engine.

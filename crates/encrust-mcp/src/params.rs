@@ -266,6 +266,53 @@ pub struct SendFile {
     pub start: bool,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ReportPrint {
+    pub job: String,
+    /// The revision printed, counted from one; absent for the one last written, else the
+    /// latest.
+    #[schemars(range(min = 1))]
+    pub revision: Option<u32>,
+    /// What the print showed, as the user tells it or as their photo shows it.
+    #[schemars(length(min = 1))]
+    pub symptoms: Vec<Symptom>,
+    /// Where on the plate it showed, plate mm as the revision stands, if the user can say.
+    pub at_mm: Option<Vec<[f32; 3]>>,
+    /// The user's own words, kept with the print.
+    pub note: Option<String>,
+}
+
+/// What a person saw on a failed print.
+#[derive(Debug, Clone, Copy, Deserialize, serde::Serialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Symptom {
+    /// The print, or a part of it, never stuck to the plate or came off it.
+    OffPlate,
+    /// The layers came apart, or a line runs round the print.
+    LayerSplit,
+    /// A hole, a crater or a blowout in a wall.
+    Hole,
+    /// A support broke or tore out of the model; the part it held is missing or sagged.
+    SupportPulled,
+    /// Support marks or scars on a face meant to be seen.
+    FaceMark,
+    /// A hollow print cracked or leaks, often days later.
+    ResinCrack,
+}
+
+impl Symptom {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::OffPlate => "off-plate",
+            Self::LayerSplit => "layer-split",
+            Self::Hole => "hole",
+            Self::SupportPulled => "support-pulled",
+            Self::FaceMark => "face-mark",
+            Self::ResinCrack => "resin-crack",
+        }
+    }
+}
+
 /// A path from the client: absolute, so it means one file whatever the server's directory,
 /// and so never read as a flag.
 pub fn absolute(path: &Path, what: &str) -> Result<()> {

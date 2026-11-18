@@ -5,6 +5,7 @@ mod args;
 mod batch;
 mod commands;
 mod config;
+mod diagnose;
 mod edits;
 mod estimate;
 mod exit;

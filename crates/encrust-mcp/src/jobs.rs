@@ -16,6 +16,10 @@ use crate::recipe::Recipe;
 
 /// The file in a job's directory that keeps the autopilot's check.
 const AUTOPILOT: &str = "autopilot.json";
+/// The file that keeps the number of the revision last written to a printer file.
+const WRITTEN: &str = "written";
+/// The file each print reported of the job is a line of.
+const PRINTS: &str = "prints.jsonl";
 
 /// Where the jobs are kept, and a lock per job so two edits never take one number.
 #[derive(Debug, Clone)]
@@ -141,6 +145,32 @@ impl Jobs {
         let text =
             fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
         serde_json::from_str(&text).with_context(|| format!("{} does not read", file.display()))
+    }
+
+    /// Notes revision `number` as the one last written to a printer file.
+    pub fn mark_written(&self, job: &str, number: u32) -> Result<()> {
+        let file = self.dir(job)?.join(WRITTEN);
+        fs::write(&file, number.to_string()).with_context(|| format!("writing {}", file.display()))
+    }
+
+    /// The revision last written to a printer file, if one was.
+    pub fn written(&self, job: &str) -> Option<u32> {
+        let text = fs::read_to_string(self.dir(job).ok()?.join(WRITTEN)).ok()?;
+        text.trim().parse().ok()
+    }
+
+    /// Adds what a print of the job did to the ones kept; answers how many there are now.
+    pub fn record_print(&self, job: &str, print: &Value) -> Result<usize> {
+        let file = self.dir(job)?.join(PRINTS);
+        let mut prints = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&file)
+            .with_context(|| format!("opening {}", file.display()))?;
+        writeln!(prints, "{print}").with_context(|| format!("writing {}", file.display()))?;
+        let kept =
+            fs::read_to_string(&file).with_context(|| format!("reading {}", file.display()))?;
+        Ok(kept.lines().count())
     }
 
     /// The file the autopilot's own check of the job's model is kept in, if it is there.

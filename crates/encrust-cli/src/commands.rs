@@ -3,6 +3,7 @@
 mod batch;
 mod completions;
 mod convert;
+mod diagnose;
 mod estimate;
 mod info;
 mod inspect;
@@ -26,6 +27,7 @@ use crate::pipeline::Watch;
 pub use batch::BatchCommand;
 pub use completions::CompletionsCommand;
 pub use convert::ConvertCommand;
+pub use diagnose::DiagnoseCommand;
 pub use estimate::EstimateCommand;
 pub use info::InfoCommand;
 pub use inspect::InspectCommand;
@@ -133,6 +135,9 @@ pub enum Command {
     Recipes(RecipesCommand),
     /// Write one of the project's test prints as an STL: detail, exposure, surface or fit.
     TestPrint(TestPrintCommand),
+    /// What a failed print most likely came from: its symptoms read against the check of the
+    /// file printed, each cause with the change to try.
+    Diagnose(DiagnoseCommand),
     /// Find printers on the network, ask one what it is doing, send it a file.
     #[command(subcommand)]
     Printer(PrinterCommand),
@@ -157,6 +162,7 @@ impl Command {
             | Self::Profiles(_)
             | Self::Recipes(_)
             | Self::TestPrint(_)
+            | Self::Diagnose(_)
             | Self::Completions(_) => false,
         }
     }
@@ -190,6 +196,7 @@ pub fn run(cli: &Cli, stop: &Stop) -> Result<Exit> {
         Command::Profiles(command) => command.run(global),
         Command::Recipes(command) => command.run(global),
         Command::TestPrint(command) => command.run(global),
+        Command::Diagnose(command) => command.run(global),
         Command::Printer(command) => command.run(global, stop),
         Command::Completions(command) => command.run(),
     }
