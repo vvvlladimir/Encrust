@@ -182,3 +182,23 @@ fn edits_handed_over_while_others_still_land_are_refused() {
         "{refused}"
     );
 }
+
+#[test]
+fn a_rotation_on_the_version_it_was_built_on_turns_the_object_about_z() {
+    let file = scratch("rotate");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let turn = json!({"base_version": version,
+        "apply": [{"edit": "rotate", "object": cube.0, "degrees": [0, 0, 90]}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, turn));
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("the cube is still there");
+    let (axis, angle) = object.transform.rotation.to_axis_angle();
+    assert!(
+        (angle - std::f32::consts::FRAC_PI_2).abs() < 1e-4 && axis.dot(Vec3::Z) > 1.0 - 1e-4,
+        "a quarter turn about Z, got {angle} about {axis}"
+    );
+}

@@ -1,10 +1,12 @@
 use core_edit::{Edit, ObjectId};
 use core_engine::project::hollow_of;
+use core_geometry::{Mesh, Transform};
 
 use crate::cut::{CutAsked, CutModel, cut, pieces};
 use crate::document::Document;
 use crate::error::ApplyError;
 use crate::piece::Role;
+use crate::placement::{moved, sized_to, turned_to};
 
 /// What an edit did, for a front end to name, select and report it.
 #[derive(Debug, Clone, PartialEq)]
@@ -30,6 +32,8 @@ pub enum Report {
         /// Pieces that did not come out sound and were mended.
         mended: usize,
     },
+    /// An object was moved, turned or sized where it stands.
+    Placed,
 }
 
 /// Carries `edit` out on `document`, which an error leaves as it was.
@@ -52,7 +56,32 @@ pub fn apply(document: &mut Document, edit: &Edit) -> Result<Applied, ApplyError
             };
             apply_cut(document, object, &asked)
         }
+        Edit::Move { object, by_mm } => {
+            place(document, object, |transform, _| Ok(moved(transform, by_mm)))
+        }
+        Edit::Rotate { object, degrees } => place(document, object, |transform, mesh| {
+            Ok(turned_to(transform, mesh, degrees))
+        }),
+        Edit::Scale { object, factors } => place(document, object, |transform, mesh| {
+            sized_to(transform, mesh, factors).ok_or(ApplyError::BadScale(object))
+        }),
     }
+}
+
+/// Sets the transform of `id` to what `to` makes of it and the object's own mesh.
+fn place(
+    document: &mut Document,
+    id: ObjectId,
+    to: impl FnOnce(Transform, &Mesh) -> Result<Transform, ApplyError>,
+) -> Result<Applied, ApplyError> {
+    let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
+    let transform = to(state.transform, &meshes.source)?;
+    document.set_transform(id, transform);
+    Ok(Applied {
+        removed: Vec::new(),
+        added: Vec::new(),
+        report: Report::Placed,
+    })
 }
 
 fn apply_cut(

@@ -1,5 +1,5 @@
 use core_engine::project::{Axis, Keep, ObjectId};
-use core_geometry::Scalar;
+use core_geometry::{Scalar, Vec3};
 use core_joint::Joints;
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +21,14 @@ pub enum Edit {
         #[serde(default)]
         lay_flat: bool,
     },
+    /// Moves `object` by `by_mm`.
+    Move { object: ObjectId, by_mm: Vec3 },
+    /// Sets the turn of `object` to `degrees` about X, then Y, then Z of the plate, about its
+    /// centre of mass, and stands it on the plate.
+    Rotate { object: ObjectId, degrees: Vec3 },
+    /// Sets the scale of `object` to `factors` about its centre of mass and stands it on the
+    /// plate.
+    Scale { object: ObjectId, factors: Vec3 },
 }
 
 #[cfg(test)]

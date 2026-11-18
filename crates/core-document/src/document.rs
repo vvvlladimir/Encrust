@@ -4,7 +4,7 @@ use core_edit::ObjectId;
 use core_engine::project::{
     ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project, Summary, assign_ids,
 };
-use core_geometry::{Orientation, Region};
+use core_geometry::{Orientation, Region, Transform};
 
 use crate::piece::{Piece, Role};
 
@@ -63,6 +63,13 @@ impl Document {
             self.project.models.insert(index + offset, meshes);
         }
         added
+    }
+
+    /// Stands object `id` at `transform`; nothing changes when it is not on the plate.
+    pub(crate) fn set_transform(&mut self, id: ObjectId, transform: Transform) {
+        if let Some(index) = self.index_of(id) {
+            self.project.manifest.objects[index].transform = transform;
+        }
     }
 
     fn index_of(&self, id: ObjectId) -> Option<usize> {

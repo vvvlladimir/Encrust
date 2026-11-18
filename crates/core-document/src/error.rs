@@ -11,4 +11,7 @@ pub enum ApplyError {
     /// The object's drain holes cannot be taken out exactly, so its halves would lose them.
     #[error("the holes of object {0:?} cannot be taken out before it is cut")]
     Undrilled(ObjectId),
+    /// A scale factor that is not finite and above zero.
+    #[error("a scale for object {0:?} is not finite and above zero")]
+    BadScale(ObjectId),
 }

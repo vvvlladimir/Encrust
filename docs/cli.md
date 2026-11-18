@@ -607,7 +607,8 @@ A project's plate is edited as the window's tools edit it by `--edits FILE`, a J
 edits carried out in order before the run, each naming its object by the id the project
 keeps (`docs/design/document.md`, ADR 0466); `--project-out FILE` writes the plate they leave
 as a project. An edit that cannot be carried out stops the run and writes nothing. Only a
-project takes them yet; a model is shaped by its flags.
+project takes them yet; a model is shaped by its flags. Besides `cut`, `move` (`by_mm`),
+`rotate` (`degrees`) and `scale` (`factors`), each `[x, y, z]`, place an object.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json

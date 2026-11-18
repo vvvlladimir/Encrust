@@ -169,3 +169,122 @@ fn the_dowels_a_dowel_joint_prints_stand_in_a_row_beside_the_lower_half() {
         );
     }
 }
+
+/// The object's mesh where it stands on the plate.
+fn standing(document: &Document) -> Mesh {
+    placed(document, &[(CUBE, Role::Kept)]).remove(0)
+}
+
+#[test]
+fn a_cube_moved_by_five_millimetres_stands_five_further_along_x() {
+    let mut document = Document::from_project(cube());
+
+    let applied = apply(
+        &mut document,
+        &Edit::Move {
+            object: CUBE,
+            by_mm: Vec3::new(5.0, 0.0, 0.0),
+        },
+    )
+    .expect("a cube moves");
+
+    assert_eq!(applied.report, Report::Placed);
+    let bounds = standing(&document).aabb().expect("the cube has faces");
+    assert!(
+        (bounds.mins.x - 5.0).abs() < 1e-4 && (bounds.maxs.x - 15.0).abs() < 1e-4,
+        "the cube spans x 5 to 15, got {} to {}",
+        bounds.mins.x,
+        bounds.maxs.x
+    );
+}
+
+#[test]
+fn a_cube_turned_a_quarter_about_x_is_still_a_cube_standing_on_the_plate() {
+    let mut document = Document::from_project(cube());
+
+    apply(
+        &mut document,
+        &Edit::Rotate {
+            object: CUBE,
+            degrees: Vec3::new(90.0, 0.0, 0.0),
+        },
+    )
+    .expect("a cube turns");
+
+    let bounds = standing(&document).aabb().expect("the cube has faces");
+    let size = bounds.maxs - bounds.mins;
+    assert!(
+        (size - Vec3::splat(SIDE_MM)).abs().max_element() < 1e-4 && bounds.mins.z.abs() < 1e-4,
+        "a 10 mm cube on z 0, got {bounds:?}"
+    );
+    let (axis, angle) =
+        (document.object(CUBE).expect("there").0.transform.rotation).to_axis_angle();
+    assert!(
+        (angle - std::f32::consts::FRAC_PI_2).abs() < 1e-4 && axis.dot(Vec3::X) > 1.0 - 1e-4,
+        "a quarter turn about X, got {angle} about {axis}"
+    );
+}
+
+#[test]
+fn a_cube_scaled_to_twice_its_length_holds_twice_the_volume_on_the_plate() {
+    let mut document = Document::from_project(cube());
+
+    apply(
+        &mut document,
+        &Edit::Scale {
+            object: CUBE,
+            factors: Vec3::new(2.0, 1.0, 1.0),
+        },
+    )
+    .expect("a cube scales");
+
+    let mesh = standing(&document);
+    let volume = signed_volume(&mesh);
+    assert!(
+        (volume - 2.0 * SIDE_MM.powi(3)).abs() < VOLUME_MM3,
+        "2000 mm³ expected, got {volume}"
+    );
+    let min_z = mesh.aabb().expect("faces").mins.z;
+    assert!(
+        min_z.abs() < 1e-4,
+        "the stretched cube stands on z 0, got {min_z}"
+    );
+}
+
+#[test]
+fn a_scale_of_zero_is_refused_and_leaves_the_transform() {
+    let mut document = Document::from_project(cube());
+    let before = document
+        .object(CUBE)
+        .expect("the cube is there")
+        .0
+        .transform;
+
+    let error = apply(
+        &mut document,
+        &Edit::Scale {
+            object: CUBE,
+            factors: Vec3::new(0.0, 1.0, 1.0),
+        },
+    )
+    .expect_err("a zero factor is no size");
+
+    assert_eq!(error, ApplyError::BadScale(CUBE));
+    assert_eq!(
+        document.object(CUBE).expect("still there").0.transform,
+        before
+    );
+}
+
+#[test]
+fn a_placement_naming_no_object_is_refused() {
+    let mut document = Document::from_project(cube());
+    let edit = Edit::Move {
+        object: ObjectId(9),
+        by_mm: Vec3::X,
+    };
+
+    let error = apply(&mut document, &edit).expect_err("there is no object 9");
+
+    assert_eq!(error, ApplyError::NoObject(ObjectId(9)));
+}
