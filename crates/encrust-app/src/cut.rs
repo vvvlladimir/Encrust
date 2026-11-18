@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 use core_document::{CutAsked, CutModel, Role, axis_normal};
-use core_geometry::{Plane, Scalar, Vec3};
+use core_geometry::{Plane, Scalar, Vec3, transform_mesh};
 use core_joint::{JointKind, Joints};
 use core_volume::PartedOff;
 
