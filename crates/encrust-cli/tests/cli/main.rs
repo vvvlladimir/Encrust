@@ -19,6 +19,7 @@ mod png_stack;
 mod prepare;
 mod profiles;
 mod recipe;
+mod recipe_out;
 mod recipes;
 mod render;
 mod slicing;
