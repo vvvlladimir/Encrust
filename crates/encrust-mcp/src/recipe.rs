@@ -24,6 +24,9 @@ pub struct Recipe {
     /// The engine's autopilot, `--prepare`, decides every step this recipe leaves out.
     #[serde(default)]
     pub prepare: bool,
+    /// A recipe of `core-recipe` decides them instead, as `--recipe`: an id or a TOML's path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repair: Option<Repair>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -242,6 +245,7 @@ impl Recipe {
             printer,
             resin,
             prepare: false,
+            steps_by: None,
             repair: None,
             mend: None,
             modelling: None,
@@ -266,7 +270,9 @@ impl Recipe {
             "--center".into(),
             "--check-drainage".into(),
         ]);
-        if self.prepare {
+        if let Some(recipe) = &self.steps_by {
+            flags.push(format!("--recipe={recipe}"));
+        } else if self.prepare {
             flags.push("--prepare".into());
         }
         if let Some(repair) = self.repair {
@@ -304,6 +310,9 @@ impl Recipe {
     /// Refuses a path from the client that is not absolute and a name that would read as a
     /// flag, before anything reaches the command line.
     pub fn check_paths(&self) -> anyhow::Result<()> {
+        if let Some(recipe) = &self.steps_by {
+            crate::params::plain(recipe, "the recipe")?;
+        }
         if let Some(supports) = &self.supports {
             crate::params::plain(&supports.profile, "the support profile")?;
         }

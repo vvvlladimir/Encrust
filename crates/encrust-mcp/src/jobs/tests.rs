@@ -17,6 +17,7 @@ fn recipe() -> Recipe {
         printer: "elegoo-mars-4-ultra".into(),
         resin: "my-grey".into(),
         prepare: false,
+        steps_by: None,
         repair: None,
         pose: None,
         hollow: None,

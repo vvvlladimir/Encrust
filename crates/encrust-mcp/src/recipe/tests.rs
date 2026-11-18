@@ -8,6 +8,7 @@ fn plain() -> Recipe {
         printer: "elegoo-mars-4-ultra".into(),
         resin: "my-grey".into(),
         prepare: false,
+        steps_by: None,
         repair: None,
         pose: None,
         hollow: None,
@@ -369,4 +370,19 @@ fn a_relative_path_from_the_client_is_refused() {
         ..plain()
     };
     assert!(recipe.check_paths().is_err());
+}
+
+#[test]
+fn a_recipe_named_runs_in_place_of_the_autopilot() {
+    let recipe = Recipe {
+        prepare: true,
+        steps_by: Some("miniatures".into()),
+        ..plain()
+    };
+    let flags = recipe.flags();
+    assert!(
+        flags.contains(&"--recipe=miniatures".to_owned()),
+        "{flags:?}"
+    );
+    assert!(!flags.contains(&"--prepare".to_owned()), "{flags:?}");
 }

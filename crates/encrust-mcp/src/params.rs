@@ -16,6 +16,17 @@ pub struct ListProfiles {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListRecipes {}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UseRecipe {
+    pub job: String,
+    /// The recipe the job is prepared by: an id `list_recipes` lists, or a recipe TOML's
+    /// absolute path. Absent goes back to the autopilot, `prepare`.
+    pub recipe: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct Model {
     /// Absolute path of an STL, OBJ or 3MF file on this computer.
     pub path: PathBuf,
