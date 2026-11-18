@@ -111,6 +111,7 @@ impl SupportTool {
                     cavity: false,
                     merges: Vec::new(),
                     by_hand: core_engine::ByHand::default(),
+                    shown_at: Vec::new(),
                 },
                 None => SupportPlan::of(self.profile_for(object).clone()),
             };

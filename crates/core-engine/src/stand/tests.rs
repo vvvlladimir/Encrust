@@ -257,3 +257,26 @@ fn a_shell_on_its_model_prints_drilled_with_its_cavity() {
         "a cavity stays"
     );
 }
+
+#[test]
+fn an_underside_painted_to_be_seen_stands_on_fewer_contacts() {
+    let contacts = |shown_at: Vec<ShownAt>| {
+        let mut cube = core_geometry::cuboid(Vec3::new(0.0, 0.0, 5.0), Vec3::new(20.0, 20.0, 25.0));
+        let plan = SupportPlan {
+            shown_at,
+            ..medium()
+        };
+        let stood = stand_under(solid(&mut cube, &mut None), &plan, 0.05)
+            .expect("a floating cube stands on supports");
+        stood.contacts.len()
+    };
+    let plain = contacts(Vec::new());
+    let painted = contacts(vec![ShownAt {
+        at_mm: Vec3::new(10.0, 10.0, 0.0),
+        radius_mm: 30.0,
+    }]);
+    assert!(
+        painted < plain,
+        "contacts on the painted side stand 1.3 times as far apart: {painted} against {plain}"
+    );
+}

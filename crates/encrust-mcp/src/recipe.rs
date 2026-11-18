@@ -215,6 +215,13 @@ pub struct Supports {
     /// Stands only the supports at `at_mm`, none automatically.
     #[serde(default)]
     pub only_at: bool,
+    /// Plate points round which the surface is the side meant to be seen — a face, the front
+    /// of a figure — where contacts stand sparser and lightest, mm, as `--shown-at`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shown_at_mm: Vec<[f32; 3]>,
+    /// How far round each of those the side reaches, mm; 4 when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shown_radius_mm: Option<f32>,
 }
 
 impl Repair {
@@ -330,6 +337,15 @@ impl Supports {
         if self.only_at {
             flags.push("--support-only-at".into());
         }
+        let radius = self
+            .shown_radius_mm
+            .map(|mm| format!(":{mm}"))
+            .unwrap_or_default();
+        flags.extend(
+            self.shown_at_mm
+                .iter()
+                .map(|at| format!("--shown-at={}{radius}", triple(*at))),
+        );
     }
 }
 

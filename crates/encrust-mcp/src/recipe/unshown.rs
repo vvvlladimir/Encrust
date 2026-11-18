@@ -36,8 +36,12 @@ impl Recipe {
         if let Some(drains) = &self.drains {
             drains_unshown(drains, &mut note);
         }
-        if let Some(Supports { at_mm, .. }) = &self.supports {
+        if let Some(Supports {
+            at_mm, shown_at_mm, ..
+        }) = &self.supports
+        {
             note(!at_mm.is_empty(), "supports placed by hand at points");
+            note(!shown_at_mm.is_empty(), "the side painted to be seen");
         }
         left
     }

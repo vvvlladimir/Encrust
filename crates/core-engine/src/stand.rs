@@ -1,10 +1,10 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
+use core_geometry::{Bvh, Mesh, Region, Scalar, Transform, Vec3, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
 use core_supports::{
-    Blocked, Lost, Need, Placed, Profiles, Reason, SupportPoint, WallSide, columns,
+    Blocked, Lost, Need, Placed, Profiles, Reason, Shown, SupportPoint, WallSide, columns,
     generate_supports, grow, lost, low_points, mesh_groups,
 };
 use core_volume::Drilled;
@@ -44,6 +44,17 @@ pub struct SupportPlan {
     pub merges: Vec<Vec<Vec3>>,
     /// Contacts placed by hand, as the window's Edit mode places them.
     pub by_hand: ByHand,
+    /// The side meant to be seen, painted round points as the window's Clean surface brush
+    /// paints it, where contacts stand sparser and lightest (ADR 0425, 0460).
+    pub shown_at: Vec<ShownAt>,
+}
+
+/// One stroke of the Clean surface brush: the faces within `radius_mm` of `at_mm`, plate
+/// millimetres as the model prints, lift included.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShownAt {
+    pub at_mm: Vec3,
+    pub radius_mm: Scalar,
 }
 
 /// Where supports touch the model by hand: each point snapped to the surface nearest it, in
@@ -63,6 +74,7 @@ impl SupportPlan {
             cavity: false,
             merges: Vec::new(),
             by_hand: ByHand::default(),
+            shown_at: Vec::new(),
         }
     }
 
@@ -77,6 +89,7 @@ impl SupportPlan {
             cavity: false,
             merges: Vec::new(),
             by_hand: ByHand::default(),
+            shown_at: Vec::new(),
         })
     }
 
@@ -362,6 +375,7 @@ fn needs_under(
             },
         )
         .map_err(EngineError::Supports)?;
+    let shown = shown_on(surface, bvh, &plan.shown_at);
     let run = Run {
         stack: &stack,
         surface,
@@ -369,6 +383,7 @@ fn needs_under(
         layer_height_mm,
         plan,
         lows: low_points(surface, Transform::default()),
+        shown: shown.as_ref(),
     };
     let inner = inner.filter(|inner| !inner.is_empty());
     let side = |inside| {
@@ -407,6 +422,16 @@ fn needs_under(
     Ok(needs)
 }
 
+/// The faces of `surface` the brush strokes `shown_at` paint, or `None` where none is painted.
+fn shown_on(surface: &Mesh, bvh: &Bvh, shown_at: &[ShownAt]) -> Option<Shown> {
+    let mut region = Region::default();
+    for stroke in shown_at {
+        let on = (surface, bvh, Transform::default());
+        region.brush(on, stroke.at_mm, stroke.radius_mm, true);
+    }
+    Shown::new(surface, &region, Transform::default())
+}
+
 /// One cut stack and what placement on it is asked with.
 struct Run<'a> {
     stack: &'a Sliced,
@@ -415,6 +440,7 @@ struct Run<'a> {
     layer_height_mm: Scalar,
     plan: &'a SupportPlan,
     lows: Vec<Vec3>,
+    shown: Option<&'a Shown>,
 }
 
 impl Run<'_> {
@@ -429,7 +455,7 @@ impl Run<'_> {
             &[],
             &self.lows,
             blocked.as_ref(),
-            None,
+            self.shown,
             &mut |_| true,
         );
         if let Some(side) = side {

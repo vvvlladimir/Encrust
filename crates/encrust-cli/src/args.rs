@@ -4,7 +4,7 @@ use std::num::NonZeroU8;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
-use core_engine::{ByHand, SupportPlan};
+use core_engine::{ByHand, ShownAt, SupportPlan};
 use core_format::ExposureRange;
 use core_geometry::{
     DEFAULT_SEAM_TOLERANCE, DEFAULT_SMALLEST_SHELL_MM2, DEFAULT_WELD_TOLERANCE, MendMethod, Scalar,
@@ -317,6 +317,33 @@ pub struct SupportArgs {
     /// Stand only the supports --support-at places, none automatically.
     #[arg(long, requires = "support_at")]
     pub support_only_at: bool,
+
+    /// Paint the faces within R mm (4) of this point as the side meant to be seen, as the
+    /// window's Clean surface brush does: contacts there stand sparser and lightest. Plate mm
+    /// as the model prints, lift included. Repeat for more strokes.
+    #[arg(long, value_name = "X,Y,Z[:R]", value_parser = shown_at, allow_hyphen_values = true)]
+    pub shown_at: Vec<ShownAt>,
+}
+
+/// The brush's radius where `--shown-at` gives none, mm.
+const SHOWN_RADIUS_MM: Scalar = 4.0;
+
+/// `X,Y,Z` or `X,Y,Z:R`, a point and the radius painted round it.
+fn shown_at(text: &str) -> Result<ShownAt, String> {
+    let (point, radius) = match text.split_once(':') {
+        Some((point, radius)) => (point, Some(radius)),
+        None => (text, None),
+    };
+    let at_mm = crate::hollowing::point(point)?;
+    let radius_mm = match radius {
+        Some(radius) => radius
+            .parse::<Scalar>()
+            .ok()
+            .filter(|mm| *mm > 0.0 && mm.is_finite())
+            .ok_or_else(|| format!("{radius} is not a radius in mm above 0"))?,
+        None => SHOWN_RADIUS_MM,
+    };
+    Ok(ShownAt { at_mm, radius_mm })
 }
 
 impl SupportArgs {
@@ -335,6 +362,11 @@ impl SupportArgs {
         if plan.is_none() && !self.merge_supports.is_empty() {
             bail!("--merge-supports merges the supports --supports stands, and none is asked for");
         }
+        if plan.is_none() && !self.shown_at.is_empty() {
+            bail!(
+                "--shown-at paints where supports stand, and neither --supports nor --support-profile was given"
+            );
+        }
         if plan.is_none() && !self.support_at.is_empty() {
             bail!(
                 "--support-at stands supports, and neither --supports nor --support-profile was given"
@@ -351,6 +383,7 @@ impl SupportArgs {
                 at_mm: self.support_at.clone(),
                 only: self.support_only_at,
             },
+            shown_at: self.shown_at.clone(),
             ..plan
         }))
     }

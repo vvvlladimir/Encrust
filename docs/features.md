@@ -1149,7 +1149,8 @@ still reported; the window's Drain tool does the same with Auto. A run whose plu
 room beside their model stops rather than printing them on a neighbour.
 
 **By hand:** stand a support under the surface nearest a point with `--support-at`, alone with
-`--support-only-at`.
+`--support-only-at`; paint the side meant to be seen round a point with `--shown-at`, so the
+supports there stand sparser and lighter.
 
 **You cannot** (from the command line): paint supports or where a relief goes, take the pieces of a cut or a split out as meshes, or hollow or support
 a model a cut or a split broke into several pieces. Do that in the window, save a project, then slice it.

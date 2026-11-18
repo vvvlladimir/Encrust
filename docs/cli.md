@@ -352,7 +352,10 @@ tip carrying too much is strengthened as the window's Grow does (ADR 0422); and
 as the outside, as the window's **Support the cavity** does (ADR 0332). `--support-at X,Y,Z`,
 repeated, stands one more support under the surface nearest each point, in the same frame as
 `--drain-at`, built as sturdy as a steadying one, as a click in the window's **Edit** mode
-places it; `--support-only-at` stands those alone (ADR 0457). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
+places it; `--support-only-at` stands those alone (ADR 0457). `--shown-at X,Y,Z[:R]`, repeated, paints the faces
+within `R` mm (4) of each point as the side meant to be seen, as the window's Clean surface
+brush does: Auto stands contacts there 1.3 times as far apart, on its lightest tips (ADR 0425,
+0460). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
 search's best few are printed to choose between, as the window's **Auto-orient** does
 (ADR 0290). The search draws a bar on a terminal and Ctrl-C stops it (exit 130). A turned model is stood on the plate over the middle it stood over in x and y.
