@@ -27,6 +27,16 @@ pub struct UseRecipe {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct ImportResin {
+    /// Absolute path of what the user's resin is read from: a sliced file that printed well
+    /// with it, another program's exported resin (`.cfgx`, `.ini`), or a resin TOML.
+    pub file: PathBuf,
+    /// The printer the resin is set up on: an id `list_profiles` lists. Needed where the file
+    /// names no machine, or several share its panel.
+    pub printer: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct Model {
     /// Absolute path of an STL, OBJ or 3MF file on this computer.
     pub path: PathBuf,

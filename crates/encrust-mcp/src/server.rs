@@ -17,9 +17,9 @@ use serde_json::json;
 use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::{Jobs, Revision};
 use crate::params::{
-    ComparePoses, JobRef, ListProfiles, ListRecipes, Model, Render, Revert, SendFile, SetDrains,
-    SetHollow, SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe, View,
-    WriteFile, absolute, plain,
+    ComparePoses, ImportResin, JobRef, ListProfiles, ListRecipes, Model, Render, Revert, SendFile,
+    SetDrains, SetHollow, SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe,
+    View, WriteFile, absolute, plain,
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
@@ -70,6 +70,21 @@ impl Server {
         ctx: Context,
     ) -> Answer {
         Ok(answer(self.profiles(list, &ctx).await))
+    }
+
+    /// Takes in the user's resin from a file that printed well with it, another slicer's
+    /// export or a resin TOML, as one of their own profiles; answers with its id.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn import_resin(
+        &self,
+        Parameters(import): Parameters<ImportResin>,
+        ctx: Context,
+    ) -> Answer {
+        Ok(answer(self.import(import, &ctx).await))
     }
 
     /// The recipes a job can be prepared by, built-in and the user's, each with its steps as
@@ -325,6 +340,25 @@ impl Server {
             &outcome,
             trim_profiles(outcome.report.clone(), list.printer_query.as_deref()),
         ))
+    }
+
+    async fn import(&self, import: ImportResin, ctx: &Context) -> Result<Reply> {
+        absolute(&import.file, "the resin's file")?;
+        let mut args = vec!["profiles".into(), "import".into()];
+        let is_toml = import
+            .file
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("toml"));
+        if is_toml {
+            args.push("--kind=resin".into());
+        }
+        if let Some(printer) = &import.printer {
+            plain(printer, "the printer")?;
+            args.push(format!("--printer={printer}"));
+        }
+        args.extend(["--".into(), import.file.display().to_string()]);
+        let outcome = self.watched(&args, ctx).await?;
+        Ok(reported(&outcome, outcome.report.clone()))
     }
 
     /// Every recipe `recipes list` names, each that reads with its text from `recipes show`.
