@@ -86,6 +86,57 @@ pub struct ImportResin {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateResin {
+    /// The printer it is set up on: an id `list_profiles` lists.
+    pub printer: String,
+    /// What it is called, as on its bottle.
+    pub name: String,
+    /// Exposure of a normal layer, s, as its maker states it for this printer.
+    pub exposure_s: f32,
+    /// Exposure of a bottom layer, s.
+    pub bottom_exposure_s: f32,
+    #[schemars(range(min = 1))]
+    pub bottom_layers: u32,
+    /// The layer height the numbers are for, mm; 0.05 when absent.
+    pub layer_height_mm: Option<f32>,
+    pub light_off_delay_s: Option<f32>,
+    pub lift_distance_mm: Option<f32>,
+    pub lift_speed_mm_min: Option<f32>,
+    pub retract_speed_mm_min: Option<f32>,
+    /// Layers over which the exposure fades from the bottom one to the normal one.
+    pub transition_layers: Option<u16>,
+    pub density_g_cm3: Option<f32>,
+}
+
+impl CreateResin {
+    /// The flags of `profiles new-resin` these numbers are.
+    pub fn flags(&self) -> Vec<String> {
+        let mut flags = vec![
+            format!("--printer={}", self.printer),
+            format!("--name={}", self.name),
+            format!("--exposure={}", self.exposure_s),
+            format!("--bottom-exposure={}", self.bottom_exposure_s),
+            format!("--bottom-layers={}", self.bottom_layers),
+        ];
+        let stated = [
+            ("--layer-height", self.layer_height_mm),
+            ("--light-off-delay", self.light_off_delay_s),
+            ("--lift-distance", self.lift_distance_mm),
+            ("--lift-speed", self.lift_speed_mm_min),
+            ("--retract-speed", self.retract_speed_mm_min),
+            ("--transition-layers", self.transition_layers.map(f32::from)),
+            ("--density", self.density_g_cm3),
+        ];
+        flags.extend(
+            stated
+                .into_iter()
+                .filter_map(|(flag, value)| Some(format!("{flag}={}", value?))),
+        );
+        flags
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct Model {
     /// Absolute path of an STL, OBJ or 3MF file on this computer.
     pub path: PathBuf,

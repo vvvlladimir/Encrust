@@ -68,6 +68,7 @@ a crate of its own when the window's panel or the connector needs it too.
 | `set_supports` `shown_at_mm` (step 13) | the side meant to be seen, painted round plate points | `--shown-at` | edits |
 | `list_recipes`, `use_recipe` (step 14) | the recipes with their steps; one for the job, by the user's purpose | `recipes list`, `recipes show`, `--recipe` | read, edits |
 | `import_resin` (step 15) | a resin from a sliced file or another slicer's export | `profiles import` | creates a profile |
+| `create_resin` | a resin from its maker's numbers, held to the printer's limits | `profiles new-resin` | creates a profile |
 | `write_test_print` (step 15) | a test print, the exposure check among them | `test-print` | writes a file |
 | `report_print` (step 16) | what a print of a job's file did, as named symptoms, read against its check | `diagnose` | edits |
 | `save_recipe` (step 17) | a recipe from the job's revisions or from words, validated | `recipes save` | creates a profile |
@@ -235,7 +236,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 8 | The open window runs each revision's recipe as Prepare for print | `encrust-cli`, `encrust-mcp`, `encrust-app` (done, ADR 0459) | 12 |
 | 13 | The side meant to be seen painted from the command line, `--shown-at X,Y,Z[:R]` | `core-engine`, `encrust-cli`, `encrust-mcp` (done, ADR 0460) | 12 |
 | 14 | Recipes chosen by purpose: `list_recipes`, `use_recipe`, the instructions ask what the print is for | `encrust-mcp` (done, ADR 0460) | 12 |
-| 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0460); a resin from a label's numbers alone still needs the window | 12 |
+| 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0460); a resin from a label's numbers by `create_resin` (done, ADR 0464) | 12 |
 | 16 | After the print: `report_print`, `print-failures.md` and the command line reading it | `encrust-cli`, `encrust-mcp` (done, ADR 0463) | 12 |
 | 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `encrust-cli`, `encrust-mcp` (done, ADR 0462) | 14 |
 | 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | `prototypes/connector` (built; a prepare in an unisolated page measured at 20 s for a 175k-face figure; the rest waits on a run in ChatGPT) | 12 |

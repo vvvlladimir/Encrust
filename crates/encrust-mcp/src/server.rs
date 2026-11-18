@@ -17,9 +17,9 @@ use serde_json::json;
 use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::{Jobs, Revision};
 use crate::params::{
-    ComparePoses, ImportResin, JobRef, ListProfiles, ListRecipes, Model, Render, ReportPrint,
-    Revert, SaveRecipe, SendFile, SetDrains, SetHollow, SetPose, SetRepair, SetShape, SetSlicing,
-    SetSupports, Start, UseRecipe, View, WriteFile, WriteTestPrint, absolute, plain,
+    ComparePoses, CreateResin, ImportResin, JobRef, ListProfiles, ListRecipes, Model, Render,
+    ReportPrint, Revert, SaveRecipe, SendFile, SetDrains, SetHollow, SetPose, SetRepair, SetShape,
+    SetSlicing, SetSupports, Start, UseRecipe, View, WriteFile, WriteTestPrint, absolute, plain,
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
@@ -92,6 +92,21 @@ impl Server {
         ctx: Context,
     ) -> Answer {
         Ok(answer(self.import(import, &ctx).await))
+    }
+
+    /// Makes the user's resin from the numbers on its bottle or its maker's page, set up on
+    /// one printer; answers with its id and what the printer advises against.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn create_resin(
+        &self,
+        Parameters(create): Parameters<CreateResin>,
+        ctx: Context,
+    ) -> Answer {
+        Ok(answer(self.new_resin(create, &ctx).await))
     }
 
     /// Writes one of the project's test prints as an STL, to prepare and print like any model:

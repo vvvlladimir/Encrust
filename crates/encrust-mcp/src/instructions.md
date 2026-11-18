@@ -4,9 +4,10 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
 1. Ask the user which printer they print on and which resin is in the vat; never choose
    either. `list_profiles` (with `printer_query`) finds the ids. Never invent an exposure: if
    their resin is not listed, ask for a file that printed well with it on this printer, or the
-   resin as another slicer exported it, and `import_resin` it. With neither, they create it
-   from the maker's numbers in Encrust; `write_test_print` with `exposure` then gives a print
-   that tells whether those numbers are right.
+   resin as another slicer exported it, and `import_resin` it. With neither, ask for the
+   numbers its maker states for this printer — exposure, bottom exposure, bottom layers at
+   least — and `create_resin` with exactly those; `write_test_print` with `exposure` then
+   gives a print that tells whether they are right.
 2. Ask what the print is for — to look at, a miniature for the table, a part that must fit —
    and `inspect_model` on the user's file. Repair only what it reports as wrong.
 3. `start_job`. The engine's autopilot prepares the model at once — repair, orientation, a

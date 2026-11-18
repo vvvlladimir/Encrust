@@ -23,6 +23,7 @@
   "tools": [
     { "name": "list_profiles", "description": "The printers, your resins and the support profiles" },
     { "name": "import_resin", "description": "Takes in your resin from a file that printed well or another slicer's export" },
+    { "name": "create_resin", "description": "Makes your resin from the numbers on its bottle" },
     { "name": "write_test_print", "description": "Writes a test print, such as the exposure check" },
     { "name": "list_recipes", "description": "The ways a model can be prepared, each with its steps" },
     { "name": "inspect_model", "description": "What a model file is and what is wrong with it" },

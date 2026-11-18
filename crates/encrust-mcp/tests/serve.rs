@@ -146,6 +146,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
         [
             "check",
             "compare_poses",
+            "create_resin",
             "import_resin",
             "inspect_model",
             "list_profiles",
@@ -891,4 +892,35 @@ async fn a_print_reported_is_read_against_the_revision_written_and_kept_with_the
     let kept = fs::read_to_string(dir.join("jobs").join(&job).join("prints.jsonl"))
         .expect("the print is kept with the job");
     assert!(kept.contains("split along the side"), "{kept}");
+}
+
+#[tokio::test]
+async fn a_resin_from_its_bottles_numbers_is_listed_as_the_user_s_own() {
+    let dir = scratch("create-resin");
+    let home = dir.join("home");
+    let client = serve_at_home(&encrust(), &dir.join("jobs"), &[], Some(&home)).await;
+    let numbers = json!({
+        "printer": "elegoo-mars-4-ultra",
+        "name": "Bottle grey",
+        "exposure_s": 2.5,
+        "bottom_exposure_s": 30.0,
+        "bottom_layers": 5,
+        "lift_speed_mm_min": 60.0,
+    });
+    let created = call(&client, "create_resin", numbers.clone()).await;
+    assert!(!failed(&created), "{}", answer(&created));
+    let id = answer(&created)["id"].as_str().expect("an id").to_owned();
+    let listed = answer(&call(&client, "list_profiles", json!({})).await);
+    assert!(
+        listed["resins"]
+            .as_array()
+            .is_some_and(|resins| resins.iter().any(|resin| resin["id"] == id.as_str())),
+        "{id} among the user's resins: {}",
+        listed["resins"]
+    );
+    let mut none = numbers;
+    none["exposure_s"] = json!(0.0);
+    let refused = call(&client, "create_resin", none).await;
+    assert!(failed(&refused), "an exposure of zero is refused");
+    client.cancel().await.expect("the server stops");
 }

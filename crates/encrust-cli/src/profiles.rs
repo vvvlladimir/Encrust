@@ -8,9 +8,12 @@ use core_engine::SupportPlan;
 use core_engine::project::{DrainState, HollowState};
 use core_format::OpenFile;
 use printer_profiles::{
-    Catalogue, ForeignResin, Kind, MaterialProfile, PrinterProfile, SupportProfile,
+    Catalogue, ForeignResin, Kind, LimitBreach, MaterialProfile, PrinterProfile, Stray,
+    SupportProfile,
 };
 use serde::Serialize;
+
+use crate::sliced_file::limit_warning;
 
 /// What the four profile arguments name, before any of it is loaded.
 pub struct Selection<'a> {
@@ -308,6 +311,36 @@ pub fn import_foreign(path: &Path, printer: Option<&str>) -> Result<(String, Str
         .import_resin(foreign.resin, Some(&printer))
         .with_context(|| format!("cannot import the resin of {}", path.display()))?;
     Ok((id, printer))
+}
+
+/// Keeps `resin`, the numbers its maker states, as a new resin of the user's set up on
+/// `printer` alone. Answers its id and what the printer advises against; a setting past what
+/// the printer takes is refused, as the window would not let it be typed.
+pub fn new_resin(resin: MaterialProfile, printer: &str) -> Result<(String, Vec<String>)> {
+    let mut catalogue = catalogue()?;
+    let entry = catalogue
+        .printer(printer)
+        .context("run `encrust profiles list` to see the printers there are")?;
+    let name = entry.profile.name.clone();
+    let (refused, advised): (Vec<_>, Vec<_>) = entry
+        .profile
+        .limits
+        .breaches(&resin)
+        .into_iter()
+        .partition(|breach| breach.stray == Stray::Refused);
+    let told = |breaches: Vec<LimitBreach>| {
+        breaches
+            .iter()
+            .map(|breach| limit_warning(&name, breach))
+            .collect::<Vec<_>>()
+    };
+    if !refused.is_empty() {
+        anyhow::bail!("{}", told(refused).join("; "));
+    }
+    let id = catalogue
+        .import_resin(resin, Some(printer))
+        .context("cannot keep the new resin")?;
+    Ok((id, told(advised)))
 }
 
 /// The printer a resin is set up on: the one asked for, checked, or else the one `found`

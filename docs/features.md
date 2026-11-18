@@ -1090,7 +1090,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `render` | The plate as `slice` would build it — hollowed, drilled, supported — drawn as PNG pictures from the sides you name, the bottom included, with points of your choosing marked even where the model hides them. For a person at a terminal, or a model that reads images. |
 | `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
 | `convert` | A sliced file to another format. |
-| `profiles` | List, show, export and import profiles. |
+| `profiles` | List, show, export and import profiles, and make a resin from the numbers on its bottle. |
 | `recipes` | List the built-in and your own recipes, show one as TOML to copy and edit, and keep a recipe file as one of yours once it is checked. |
 | `diagnose` | What a failed print most likely came from: its symptoms read against the report of the file printed, each cause with the change to try. |
 | `test-print` | The window's test prints — detail, exposure check, surface finish, fit gauge — written as STL files to prepare and print like any model. |
@@ -1119,8 +1119,8 @@ runs with no chat. When a print fails, you tell it what you saw, or show it a ph
 that against what the check found in the file you printed — trapped resin, a suction cup,
 a part starting in mid-air — names the likely cause and makes the change to try. A resin you have not set up it takes in from a
 file that printed well with it or from another slicer's export, and it writes the exposure
-check for you to print; a resin known only by its label's numbers you still set up in the
-window. A project you saved in the window it checks, draws, writes and sends as it stands;
+check for you to print; a resin known only by its label's numbers it makes from those
+numbers, refusing one past what your printer takes. A project you saved in the window it checks, draws, writes and sends as it stands;
 its models you change in the window.
 
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail
