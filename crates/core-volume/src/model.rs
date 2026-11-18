@@ -227,6 +227,11 @@ impl ModelHollow {
         self.built.as_ref().map(|built| &built.mesh)
     }
 
+    /// The shell as a run left it, or `None` while the model is still solid.
+    pub fn built(&self) -> Option<&Shell> {
+        self.built.as_ref()
+    }
+
     /// Which faces of [`Self::shell`] bound the space the resin fills, or `None` while the
     /// model is still solid. It is what a viewport paints to show resin with no way out.
     pub fn cavity_faces(&self) -> Option<Range<usize>> {

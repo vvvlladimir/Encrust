@@ -8,7 +8,7 @@ use crate::cut::Keep;
 
 use super::*;
 use crate::scene::ImportSummary;
-use core_engine::project::Array;
+use core_engine::project::{Array, Cavity};
 use core_engine::project::{read_from, write_to};
 
 /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.

@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use core_engine::project::HollowState;
 use core_geometry::{Transform, Vec3, cuboid, diagnose, signed_volume, transform_mesh};
 
 use super::*;
@@ -163,6 +164,56 @@ fn a_relief_presses_a_picture_into_the_cube_which_keeps_its_id() {
         (after - before).abs() > 1.0,
         "a 0.5 mm checker moves more than 1 mm³ of the cube's {before}, got {after}"
     );
+}
+
+fn hollow_of(object: ObjectId, base_version: u64, state: &HollowState) -> Value {
+    json!({"base_version": base_version,
+           "apply": [{"edit": "hollow", "object": object.0, "settings": state}]})
+}
+
+#[test]
+fn a_hollow_shells_the_cube_by_numbers_that_become_its_own_and_keeps_its_id() {
+    let file = scratch("hollow");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let state = HollowState {
+        thickness_mm: 1.0,
+        ..bench.tools.hollow.state.clone()
+    };
+
+    let reply = bench.hand_over_running(&file, asking(&file, hollow_of(cube, version, &state)));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench
+        .doc
+        .scene
+        .get(cube)
+        .expect("a hollow keeps the object's id");
+    assert!(object.hollow.shell().is_some(), "the cube has a shell now");
+    assert_eq!(
+        object.own.hollow.as_ref(),
+        Some(&state),
+        "the numbers are its own"
+    );
+}
+
+#[test]
+fn a_wall_as_thick_as_the_cube_is_answered_not_applied() {
+    let file = scratch("hollow-no-room");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let state = HollowState {
+        thickness_mm: 10.0,
+        ..bench.tools.hollow.state.clone()
+    };
+
+    let reply = bench.hand_over_running(&file, asking(&file, hollow_of(cube, version, &state)));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], false, "{reply}");
 }
 
 #[test]

@@ -179,6 +179,20 @@ fn a_relief_names_only_what_it_changes_from_the_cli_defaults() {
 }
 
 #[test]
+fn a_hollow_written_by_hand_reads_the_settings_it_carries() {
+    let text = r#"{"edit":"hollow","object":2,"settings":{"thickness_mm":2.0,"mode":"internal",
+        "precision":0.5,"infill_on":false,"infill":{"kind":"hive","cell_mm":6.0,"density":0.3,
+        "wall_mm":null}}}"#;
+    let parsed = serde_json::from_str::<Edit>(text);
+    let Ok(Edit::Hollow { object, settings }) = parsed else {
+        panic!("a hollow with its numbers is an edit: {parsed:?}");
+    };
+    assert_eq!(object, ObjectId(2));
+    assert_eq!(settings.thickness_mm, 2.0);
+    assert!(!settings.open_floor, "an open floor is left out as off");
+}
+
+#[test]
 fn an_edit_of_an_unknown_kind_is_refused() {
     let text = r#"{"edit": "melt", "object": 3}"#;
     assert!(serde_json::from_str::<Edit>(text).is_err());

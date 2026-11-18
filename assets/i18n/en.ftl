@@ -2555,6 +2555,7 @@ app-cannot-build-preview = cannot build the layer preview
 ## job/hollow.rs
 
 job-thread-stopped-hollowing = the hollowing thread stopped without finishing
+hollow-no-room = the wall is too thick to leave room for a cavity inside the model
 job-hollow-stopping = Stopping...
 job-hollow-progress = Hollowing model { $index } of { $total }
 job-step-preparing = Checking the model

@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use core_edit::ObjectId;
 use core_engine::project::{
-    ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState, Project, Summary, assign_ids,
+    BuiltCavity, HollowState, ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState,
+    Project, Summary, assign_ids,
 };
 use core_geometry::{Mesh, Orientation, Region, Transform, diagnose};
 
@@ -93,6 +94,25 @@ impl Document {
             source: Arc::new(mesh),
             shell: None,
         };
+    }
+
+    /// Stands `shell` on object `id`, built as `built` records and asked for by `settings`,
+    /// which the object keeps as its own; supports stay. Nothing changes when `id` is not on
+    /// the plate.
+    pub(crate) fn set_shell(
+        &mut self,
+        id: ObjectId,
+        built: BuiltCavity,
+        shell: Arc<Mesh>,
+        settings: HollowState,
+    ) {
+        let Some(index) = self.index_of(id) else {
+            return;
+        };
+        let state = &mut self.project.manifest.objects[index];
+        state.hollow.built = Some(built);
+        state.own_hollow = Some(settings);
+        self.project.models[index].shell = Some(shell);
     }
 
     /// Takes the plugs laid for object `id` off the plate, answering their ids.

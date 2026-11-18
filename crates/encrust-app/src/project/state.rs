@@ -17,7 +17,7 @@ use crate::state::Tools;
 use crate::supports::with_own;
 use crate::tool_settings::ToolSettings;
 use core_engine::project::{
-    BuiltCavity, Cavity, DrainState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
+    BuiltCavity, DrainState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
     ObjectSupportState, OwnDrain, OwnSupportState, Project, Summary, VERSION, hollow_of,
     supports_of,
 };
@@ -161,18 +161,7 @@ fn object_state(scene: &Scene, object: &SceneObject) -> ObjectState {
 
 /// The shell standing on `object` as the file records it, or `None` for a solid model.
 fn built_cavity(object: &SceneObject) -> Option<BuiltCavity> {
-    let asked = object.hollow.asked()?;
-    let (voxel_mm, coarsened) = object.hollow.lattice()?;
-    let (scale, stretched) = BuiltCavity::keys_of(object.hollow.built_shape()?);
-    Some(BuiltCavity {
-        wall: Cavity::of(asked),
-        cavity_faces: object.hollow.cavity_faces()?,
-        cavity_mm3: object.hollow.cavity_mm3(),
-        voxel_mm,
-        coarsened,
-        scale,
-        stretched,
-    })
+    Some(BuiltCavity::of(object.hollow.built()?))
 }
 
 /// Puts a loaded project in place of whatever the window was holding. Its printer and

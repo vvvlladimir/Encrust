@@ -105,8 +105,17 @@ too. core-document reads the picture through core-mesh-io's `Texture::decode`, i
 The press is at the size the object prints at, so its scale and stretch go into the mesh, which
 `Document::reshape` replaces (`Report::Relieved`); the faces painted for relief limit it where
 any are. A picture that does not read is `BadPicture { path, reason }`, else `Cancelled` or
-`Failed`. The model is left solid, its cavity gone, until Hollow is an edit. A file's own texture is not an edit: a `.encrust` keeps none. The window's Relief tool
+`Failed`. The model is left solid, its cavity gone, until a `Hollow` follows. A file's own texture is not an edit: a `.encrust` keeps none. The window's Relief tool
 runs the edit as its own job, `press_picture` being the call both make.
+
+`Hollow { object, settings: HollowState }` hollows the object by the numbers of the window's
+Hollow panel, which it keeps as its own (`own_hollow`): `settings_of` turns them into the run's
+settings (an open floor faces the plate), the object's blockers and channels laid over them as
+`ModelHollow::asking` does. `shelled` is `cavity_field` then `carve` on the source mesh under
+`Transform::unturned`; the shell goes into `ModelMeshes::shell` and `BuiltCavity::of` into
+`ObjectHollowState::built`; supports stay (`Report::Hollowed`). A wall that leaves no cavity is
+`NoRoom`, else `Cancelled` or `Failed`. The window runs it as the Hollow tool's job on that object
+alone; its field cache stays the window's.
 
 ## Undo
 

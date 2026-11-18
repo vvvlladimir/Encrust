@@ -625,7 +625,10 @@ is named; `repair` (`method`: `"wrap"`, `"deep"` or `{"mend": "repair"}`, also `
 `depth_mm`, `image`, a picture file, and optional `tile_mm` (12), `angle_deg`, `invert`, `symmetric`,
 `smoothing_px`, `hold_bottom_deg`, `hold_top_deg` and `precision` (0.5)) presses the picture tiled
 into the object as `--relief-image` does, only into its painted faces where any are, and drops
-its supports and cavity, and keeps its plugs; the model is left solid until Hollow is an edit.
+its supports and cavity, and keeps its plugs; `hollow` (`object`, and `settings` as the Hollow
+panel keeps them: `thickness_mm`, `mode` of `internal` or `external`, `precision`, `infill_on`,
+`infill`, and optional `open_floor`, `solid_under_mm`) hollows the object by them, which it keeps as
+its own, and keeps its supports.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json
