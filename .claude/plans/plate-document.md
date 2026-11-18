@@ -320,3 +320,31 @@ Done when: a 20 mm cube hollowed with a 2 mm wall keeps 20³ − 16³ = 3904 ± 
   gives and the variant is not added); a stopped `Cancel` → `Cancelled`; the plate written and
   read back keeps the shell. Window link test of `Hollow`. Existing hollow tests pass.
 Not now: Drain (C10), MCP wiring.
+
+### C10. Drain at points (the auto search, channels and plugs are C10b)
+Read: `crates/encrust-cli/src/hollowing.rs` (`hole_near`, `refuse_off_a_face`, `OFF_A_FACE_DEG`,
+  `ON_THE_SURFACE_MM`), `crates/core-volume/src/{drain.rs,model.rs}` (`HoleSize`, `DrainHole`,
+  `HoleKind`, `ModelHollow::add_hole`, `restored`), `crates/core-engine/src/project/restore.rs`
+  (`hollow_of`), `crates/core-document/src/{apply.rs,document.rs,hollow.rs}`, `crates/encrust-app/src/drain.rs`
+Touch: those, `crates/core-edit/src/edit.rs` (+tests), new `crates/core-document/src/drain.rs`
+  (+ `drain/tests.rs`), `crates/core-document/src/{lib.rs,error.rs}`, `crates/encrust-app/src/link/plate.rs`
+  (+ test), `crates/core-volume/src/drain.rs` (serde derives on `HoleSize` only), `docs/design/document.md`,
+  `docs/cli.md` and `docs/features.md` (name the edit)
+Edit: `Drain { object, at_mm: Vec<Vec3>, size: HoleSize, kind: HoleKind }` (`size` defaults to
+  `HoleSize::default()`, `kind` to a drain) — a hole drilled into the surface nearest each plate
+  point, as `--drain-at` drills one.
+Move: `hole_near` + `refuse_off_a_face` and their two constants → core-document/src/drain.rs as
+  `hole_near(mesh, bvh, near_and_up, size, kind) -> Result<DrainHole, ApplyError>`; the CLI keeps
+  only its message for the error. `apply`: each point taken into the object's own space (inverse
+  of its transform), `hole_near` on its source mesh, then `ModelHollow::add_hole` on `hollow_of`
+  its state, and the drains and channels written back to `ObjectHollowState`; the shell is not
+  rebuilt (the holes are cut at bake, as a project file keeps them).
+Errors: no surface near a point → `ApplyError::NoSurface(ObjectId)` (exists); a point off an
+  edge or corner → new `ApplyError::OffAFace { object, at_mm: Vec3 }`.
+Window: the link's Drain arm (a helper) runs the same `hole_near` on `object.mesh` and
+  `object.hollow.add_hole`; the window's drilling job cuts them on its next frame. Nothing under way.
+Done when: a 10 mm cube drained at (5,5,10.5) (over its top face) gets one hole whose mouth is
+  at (5,5,10) ± 1e-3 in its own space and whose axis points down (−Z ± 1e-4); a point at the
+  corner (10.5,10.5,10.5) → `OffAFace`; on a model with no faces → `NoSurface`; the plate written
+  and read back keeps the hole. Window link test of `Drain`. Existing `--drain-at` tests pass.
+Not now: the auto search, channels, plugs, holes into the supports (C10b), MCP wiring.
