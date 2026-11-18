@@ -165,7 +165,7 @@ tools and serves one MCP Apps page (SEP-1865), and does no geometry.
 - **The file out.** The page offers the printer file as a download. Sending to a printer is
   not offered: the browser cannot reach the user's network.
 
-Step 18 is a spike that settles, in ChatGPT on the web and the desktop app, with a 20 MB STL:
+Step 18 is a spike (`prototypes/connector/README.md`) that settles, in ChatGPT on the web and the desktop app, with a 20 MB STL:
 the page can fetch the `download_url`; a prepare of a figure finishes within a minute on a
 laptop with no cross-origin isolation; the report reaches the model in the same turn; the
 file downloads. A failed answer stops the connector, and ChatGPT users go through Codex,
@@ -238,7 +238,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0460); a resin from a label's numbers alone still needs the window | 12 |
 | 16 | After the print: `report_print`, `print-failures.md` and the engine reading it | `core-engine`, `encrust-mcp` | 12 |
 | 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `core-recipe`, `encrust-mcp` | 14 |
-| 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | a prototype outside the workspace | 12 |
+| 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | `prototypes/connector` (built; a prepare in an unisolated page measured at 20 s for a 175k-face figure; the rest waits on a run in ChatGPT) | 12 |
 | 19 | `web-engine` prepares, checks and draws; the connector and its page | `web-engine`, a new crate | 18 |
 | 20 | The extension shipped: bundles in `release.yml`, signed, the download button, Help menu | `.github`, `xtask`, `encrust-app`, the site | 12, 15 |
 | 21 | The bench's sets per use, and their prints | `agent-lab` | 13–17 |
