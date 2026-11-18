@@ -1,6 +1,6 @@
 # 0459. A job's revision is a recipe, which the open window runs
 
-- **Status:** Proposed
+- **Status:** Proposed; its running of every revision handed over is superseded by 0465
 - **Date:** 2026-11-18
 
 ## Context

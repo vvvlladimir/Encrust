@@ -919,7 +919,9 @@ line per tool call: `tool`, `ms`, `failed`, and the `job` and `revision` it answ
 `null` when it named none. With the window open, each revision kept is run on its plate and
 the answer carries the window's `window` and what it leaves out as `unshown`;
 `--window FILE` reads another window's file, `--no-window` shows none
-(`docs/design/window-link.md`).
+(`docs/design/window-link.md`). The server lists itself for the window as an agent, a file in
+`agents/` beside the jobs saying which client drives it, what it runs and the jobs it touched;
+`--agents DIR` moves it, and `--no-window` keeps none (ADR 0465).
 
 ```sh
 cargo xtask mcpb                                        # target/mcpb/encrust-<os>-<arch>.mcpb

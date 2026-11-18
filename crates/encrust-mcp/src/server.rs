@@ -14,6 +14,7 @@ use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use serde_json::json;
 
+use crate::agents::Presence;
 use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::{Jobs, Revision};
 use crate::params::{
@@ -23,7 +24,7 @@ use crate::params::{
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
-use crate::trace::Trace;
+use crate::trace::{Trace, body_of};
 use crate::window::Window;
 
 mod after;
@@ -51,6 +52,7 @@ pub struct Server {
     jobs: Jobs,
     trace: Trace,
     window: Window,
+    presence: Presence,
     tool_router: ToolRouter<Self>,
 }
 
@@ -59,12 +61,13 @@ type Context = RequestContext<RoleServer>;
 
 #[tool_router]
 impl Server {
-    pub fn new(cli: Cli, jobs: Jobs, (trace, window): (Trace, Window)) -> Self {
+    pub fn new(cli: Cli, jobs: Jobs, (trace, window, presence): (Trace, Window, Presence)) -> Self {
         Self {
             cli,
             jobs,
             trace,
             window,
+            presence,
             tool_router: Self::tool_router(),
         }
     }
@@ -665,10 +668,22 @@ impl ServerHandler for Server {
     ) -> Result<CallToolResponse, rmcp::ErrorData> {
         let started = Instant::now();
         let tool = request.name.clone();
+        let client = context
+            .peer
+            .peer_info()
+            .map(|info| info.client_info.name.clone());
+        let named = request
+            .arguments
+            .as_ref()
+            .and_then(|arguments| arguments.get("job")?.as_str().map(str::to_owned));
+        self.presence
+            .begin(client.as_deref(), &tool, named.as_deref());
         let response = self
             .tool_router
             .call(ToolCallContext::new(self, request, context))
             .await;
+        let answered = body_of(&response)["job"].as_str().map(str::to_owned);
+        self.presence.end(answered.or(named).as_deref());
         self.trace.record(&tool, started.elapsed(), &response).await;
         response
     }

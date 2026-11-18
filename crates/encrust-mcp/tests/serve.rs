@@ -80,10 +80,14 @@ async fn serve_at_home(
 ) -> Client {
     let server = PathBuf::from(env!("CARGO_BIN_EXE_encrust-mcp"));
     let transport = TokioChildProcess::new(tokio::process::Command::new(server).configure(|cmd| {
+        // Never the user's own agents' folder, which an open window lists.
+        let agents = jobs.with_file_name("agents");
         cmd.arg("--encrust")
             .arg(cli)
             .arg("--jobs")
             .arg(jobs)
+            .arg("--agents")
+            .arg(agents)
             .args(extra);
         if let Some(home) = home {
             cmd.env("HOME", home)
@@ -923,4 +927,31 @@ async fn a_resin_from_its_bottles_numbers_is_listed_as_the_user_s_own() {
     let refused = call(&client, "create_resin", none).await;
     assert!(failed(&refused), "an exposure of zero is refused");
     client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn the_server_lists_itself_as_an_agent_with_the_jobs_it_touched_and_ends_when_closed() {
+    let dir = scratch("agent");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let agents = dir.join("agents");
+    let file = fs::read_dir(&agents)
+        .expect("the agents' folder")
+        .filter_map(|entry| Some(entry.ok()?.path()))
+        .find(|path| path.extension().is_some_and(|ext| ext == "json"))
+        .expect("the server's file");
+    let seen: Value = serde_json::from_slice(&fs::read(&file).expect("readable")).expect("JSON");
+    assert_eq!(seen["jobs"], json!([job]));
+    assert!(
+        seen["client"].is_string(),
+        "the client named itself: {seen}"
+    );
+    assert!(seen.get("working").is_none(), "{seen}");
+    client.cancel().await.expect("the server stops");
+    let ended = (0..50).find_map(|_| {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let seen: Value = serde_json::from_slice(&fs::read(&file).ok()?).ok()?;
+        seen["ended_s"].as_u64()
+    });
+    assert!(ended.is_some(), "the file says the agent ended");
 }

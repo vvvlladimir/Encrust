@@ -1,6 +1,7 @@
 //! `encrust-mcp`: the server a desktop client starts, speaking MCP on stdin and stdout and
 //! driving the `encrust` command line. See `docs/design/ai-integration.md`.
 
+mod agents;
 mod findings;
 mod jobs;
 mod params;
@@ -18,6 +19,7 @@ use anyhow::{Context, Result, bail};
 use rmcp::ServiceExt;
 use rmcp::transport::stdio;
 
+use crate::agents::{BEAT, Presence};
 use crate::jobs::Jobs;
 use crate::runner::Cli;
 use crate::server::Server;
@@ -25,7 +27,7 @@ use crate::trace::Trace;
 use crate::window::Window;
 
 const USAGE: &str = "usage: encrust-mcp [--encrust PATH] [--jobs DIR] [--timeout-s SECONDS] \
-                     [--trace FILE] [--window FILE | --no-window]";
+                     [--trace FILE] [--window FILE | --no-window] [--agents DIR]";
 
 /// How long one run of the command line may take before it is stopped.
 const TIMEOUT: Duration = Duration::from_mins(30);
@@ -33,21 +35,35 @@ const TIMEOUT: Duration = Duration::from_mins(30);
 #[tokio::main]
 async fn main() -> Result<()> {
     let (cli, jobs, shown) = parse(std::env::args_os().skip(1))?;
+    let presence = shown.2.clone();
+    let beating = presence.clone();
+    let beat = tokio::spawn(async move {
+        let mut every = tokio::time::interval(BEAT);
+        loop {
+            every.tick().await;
+            beating.beat();
+        }
+    });
     let service = Server::new(cli, jobs, shown)
         .serve(stdio())
         .await
         .context("starting the MCP server on stdio")?;
-    service.waiting().await.context("serving MCP")?;
-    Ok(())
+    let served = service.waiting().await.context("serving MCP");
+    beat.abort();
+    presence.close();
+    served.map(drop)
 }
 
-fn parse(mut args: impl Iterator<Item = OsString>) -> Result<(Cli, Jobs, (Trace, Window))> {
+fn parse(
+    mut args: impl Iterator<Item = OsString>,
+) -> Result<(Cli, Jobs, (Trace, Window, Presence))> {
     let server = std::env::current_exe().context("finding this server's own binary")?;
     let mut program = Cli::program_beside(&server);
     let mut jobs = None;
     let mut trace = None;
     let mut timeout = TIMEOUT;
     let mut window = Some(None);
+    let mut agents = None;
     while let Some(arg) = args.next() {
         let mut value = || {
             args.next()
@@ -59,6 +75,7 @@ fn parse(mut args: impl Iterator<Item = OsString>) -> Result<(Cli, Jobs, (Trace,
             Some("--trace") => trace = Some(PathBuf::from(value()?)),
             Some("--window") => window = Some(Some(PathBuf::from(value()?))),
             Some("--no-window") => window = None,
+            Some("--agents") => agents = Some(PathBuf::from(value()?)),
             Some("--timeout-s") => {
                 let seconds = value()?;
                 let seconds: u64 = seconds
@@ -77,8 +94,17 @@ fn parse(mut args: impl Iterator<Item = OsString>) -> Result<(Cli, Jobs, (Trace,
             .join("mcp-jobs"),
     };
     // The open window writes its file beside the jobs, in the user's cache.
+    let agents = match (&window, agents) {
+        (_, Some(dir)) => Some(dir),
+        (Some(_), None) => cache_dir().map(|dir| dir.join("agents")),
+        (None, None) => None,
+    };
     let window = window.and_then(|file| file.or_else(|| Some(cache_dir()?.join("window.json"))));
-    let shown = (Trace::new(trace), Window::new(window));
+    let shown = (
+        Trace::new(trace),
+        Window::new(window),
+        Presence::new(agents),
+    );
     Ok((Cli::new(program, timeout), Jobs::new(jobs), shown))
 }
 
