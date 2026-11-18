@@ -617,7 +617,11 @@ that plate point off the rest; `combine` (`objects`, `op` of `union`, `differenc
 the first being what a difference keeps; `label` (`object`, `text`, `at_mm`, `[x, y, z]`, and
 optional `height_mm`, `depth_mm`, `raised` (on), `follow_surface`, `angle_deg` and `font`, a
 file) writes text on the object's surface nearest that point, in IBM Plex Sans unless a font
-is named.
+is named; `repair` (`method`: `"wrap"`, `"deep"` or `{"mend": "repair"}`, also `close-holes`,
+`close-small-holes` and `turn`) repairs the object's mesh as the window's Repair tool does, and `mend`
+(`flip_faces`, `drop_faces` from 0, `drop_shells` from 1, `bridge`, pairs of open edges as
+`[[a, b], [c, d]]`, all optional) does what `--flip-faces`, `--drop-faces`, `--drop-shells` and
+`--bridge` do; both drop the object's supports and cavity, and keep its plugs.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json

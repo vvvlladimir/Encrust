@@ -11,12 +11,16 @@ use crate::error::VolumeError;
 
 /// Which repair to run, on the mesh alone or wrapping it in one surface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum RepairMethod {
     /// One of the repairs on the mesh alone.
+    #[serde(alias = "Mend")]
     Mend(MendMethod),
     /// The mesh repaired and wrapped in one outer surface.
+    #[serde(alias = "Wrap")]
     Wrap,
     /// Repaired, wrapped and repaired again.
+    #[serde(alias = "Deep")]
     Deep,
 }
 

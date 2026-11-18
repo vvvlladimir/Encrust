@@ -3,6 +3,7 @@ use proptest::prelude::*;
 use super::*;
 use core_geometry::Vec3;
 use core_joint::JointKind;
+use core_volume::RepairMethod;
 
 #[test]
 fn a_cut_written_by_hand_reads_with_the_defaults_it_leaves_out() {
@@ -111,6 +112,48 @@ fn a_label_written_by_hand_reads_raised_and_flat_at_the_default_size() {
             font: None,
         }
     );
+}
+
+#[test]
+fn a_repair_and_a_mend_written_by_hand_read() {
+    let repair: Edit = serde_json::from_str(r#"{"edit":"repair","object":2,"method":"wrap"}"#)
+        .expect("a repair is valid JSON for an edit");
+    let mend: Edit = serde_json::from_str(
+        r#"{"edit":"mend","object":2,"flip_faces":[3],"bridge":[[[0,1],[2,3]]]}"#,
+    )
+    .expect("a mend names only what it changes");
+    assert_eq!(
+        repair,
+        Edit::Repair {
+            object: ObjectId(2),
+            method: RepairMethod::Wrap,
+        }
+    );
+    assert_eq!(
+        mend,
+        Edit::Mend {
+            object: ObjectId(2),
+            flip_faces: vec![3],
+            drop_faces: Vec::new(),
+            drop_shells: Vec::new(),
+            bridge: vec![[[0, 1], [2, 3]]],
+        }
+    );
+}
+
+#[test]
+fn a_repair_by_a_mend_method_reads_in_kebab_case_and_in_the_old_case() {
+    for name in ["close-holes", "CloseHoles"] {
+        let text = format!(r#"{{"edit":"repair","object":2,"method":{{"mend":"{name}"}}}}"#);
+        let edit: Edit = serde_json::from_str(&text).expect("a mend method reads");
+        assert_eq!(
+            edit,
+            Edit::Repair {
+                object: ObjectId(2),
+                method: RepairMethod::Mend(core_geometry::MendMethod::CloseHoles),
+            }
+        );
+    }
 }
 
 #[test]

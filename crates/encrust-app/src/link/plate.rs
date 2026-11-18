@@ -6,16 +6,17 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use core_document::{
-    ApplyError, CutAsked, LabelAsked, boolean_of, mirrored, moved, part_settings, sized_to,
-    turned_to,
+    ApplyError, CutAsked, LabelAsked, MendAsked, boolean_of, mirrored, moved, part_settings,
+    sized_to, turned_to,
 };
 use core_edit::{Edit, ObjectId};
 use core_geometry::{Mesh, Transform, Vec3};
-use core_volume::PartSettings;
+use core_volume::{PartSettings, RepairMethod};
 use serde_json::{Value, json};
 
 use crate::job::Method;
 use crate::panels::Window;
+use crate::repair::RepairState;
 
 /// Edits being applied one after another, each a job of the tool that carries it out.
 #[derive(Debug)]
@@ -96,7 +97,7 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     let Some(work) = applying.as_mut() else {
         return false;
     };
-    if window.tools.cut.is_busy() || window.tools.boolean.is_busy() || window.tools.text.is_busy() {
+    if tool_is_busy(window) {
         return true;
     }
     if let Some((id, may_stay)) = work.under_way.take()
@@ -109,7 +110,10 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     let Some(edit) = work.edits.pop_front() else {
         return finish(applying, json!({"applied": true}));
     };
-    let may_stay = matches!(edit, Edit::Split { .. });
+    let may_stay = matches!(
+        edit,
+        Edit::Split { .. } | Edit::Repair { .. } | Edit::Mend { .. }
+    );
     match start_edit(&edit, window) {
         Ok(id) => {
             work.under_way = id.map(|id| (id, may_stay));
@@ -119,6 +123,15 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     }
 }
 
+fn tool_is_busy(window: &Window) -> bool {
+    let repairs = &window.doc.repairs;
+    window.tools.cut.is_busy()
+        || window.tools.boolean.is_busy()
+        || window.tools.text.is_busy()
+        || repairs.is_busy()
+        || repairs.hand.is_busy()
+}
+
 fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
     if let Some(work) = applying.take() {
         let _ = work.reply.send(answer);
@@ -126,7 +139,7 @@ fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
     false
 }
 
-/// Carries `edit` out: a cut, combine or label starts a tool job, answering the object it replaces; any
+/// Carries `edit` out: a cut, combine, label, repair or mend starts a tool job, answering the object it replaces; any
 /// other edit is made at once, answering `None`.
 fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, String> {
     match *edit {
@@ -169,6 +182,8 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             Ok(objects.first().copied())
         }
         Edit::Label { object, .. } => start_label(window, edit, object),
+        Edit::Repair { object, method } => start_repair(window, object, method),
+        Edit::Mend { object, .. } => start_mend(window, edit, object),
         Edit::Move { object, by_mm } => {
             place(window, object, |transform, _| Ok(moved(transform, by_mm)))
         }
@@ -219,6 +234,40 @@ fn start_label(
     (window.tools.text)
         .stamp_asked(&window.doc.scene, object, &asked)
         .map_err(|error| format!("{error:#}"))?;
+    Ok(Some(object))
+}
+
+/// Starts a repair as the Repair tool's own job, answering the object it reshapes.
+fn start_repair(
+    window: &mut Window,
+    object: ObjectId,
+    method: RepairMethod,
+) -> Result<Option<ObjectId>, String> {
+    window
+        .doc
+        .scene
+        .get(object)
+        .ok_or_else(|| no_object(object))?;
+    let state = RepairState {
+        method,
+        ..RepairState::default()
+    };
+    let (repairs, scene) = (&mut window.doc.repairs, &window.doc.scene);
+    repairs.start(scene, object, state, &mut window.machine.status);
+    Ok(Some(object))
+}
+
+/// Starts a mend by hand as one job off the drawing thread, answering the object it reshapes.
+fn start_mend(
+    window: &mut Window,
+    edit: &Edit,
+    object: ObjectId,
+) -> Result<Option<ObjectId>, String> {
+    let asked = MendAsked::of(edit).ok_or_else(|| no_object(object))?;
+    let (hand, scene) = (&mut window.doc.repairs.hand, &window.doc.scene);
+    if !hand.mend(scene, object, asked, &mut window.machine.status) {
+        return Err(no_object(object));
+    }
     Ok(Some(object))
 }
 

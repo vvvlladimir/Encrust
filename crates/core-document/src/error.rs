@@ -40,10 +40,16 @@ pub enum ApplyError {
         path: Option<PathBuf>,
         reason: String,
     },
+    /// A face number past the last face of the object's mesh, counted from 0.
+    #[error("object {object:?} has no face {number}")]
+    NoSuchFace { object: ObjectId, number: usize },
+    /// A shell number past the last shell of the object's mesh, counted from 1.
+    #[error("object {object:?} has no shell {number}")]
+    NoSuchShell { object: ObjectId, number: usize },
     /// The run was stopped before it finished.
     #[error("the edit was cancelled")]
     Cancelled,
-    /// A split, part-off or combination failed in the geometry; `reason` is the geometry's own message.
+    /// A split, part-off, combination, repair or bridge failed in the geometry; `reason` is the geometry's own message.
     #[error("the edit of object {object:?} failed: {reason}")]
     Failed { object: ObjectId, reason: String },
 }

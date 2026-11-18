@@ -1,8 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use core_document::{ApplyError, repaired};
 use core_geometry::{Mended, Mesh};
-use core_volume::{Cancel, Progress, RepairMethod, RepairSettings, repair};
+use core_volume::{Cancel, Progress, RepairMethod, RepairSettings};
 
 use crate::i18n::tr;
 use crate::job::{Counted, Worker, pooled};
@@ -81,7 +82,8 @@ impl RepairJob {
 fn run(request: RepairRequest, (stop, progress): (&AtomicBool, &Progress)) -> RepairOutcome {
     let asked = || stop.load(Ordering::Relaxed);
     let cancel = Cancel::when(&asked).reporting(progress);
-    match repair(&request.mesh, request.method, request.settings, cancel) {
+    let settings = (request.method, request.settings);
+    match repaired(&request.mesh, settings, cancel, request.id) {
         Ok(done) => RepairOutcome::Done(Box::new(Repaired {
             id: request.id,
             name: request.name,
@@ -90,11 +92,17 @@ fn run(request: RepairRequest, (stop, progress): (&AtomicBool, &Progress)) -> Re
             method: request.method,
             wrapped: done.wrapped,
         })),
-        Err(error) => RepairOutcome::Failed(tr!(
-            "repair-failed",
-            name = request.name,
-            reason = error.to_string()
-        )),
+        Err(error) => RepairOutcome::Failed(match error {
+            ApplyError::Cancelled => tr!("repair-cancelled"),
+            ApplyError::Failed { reason, .. } => {
+                tr!("repair-failed", name = request.name, reason = reason)
+            }
+            other => tr!(
+                "repair-failed",
+                name = request.name,
+                reason = other.to_string()
+            ),
+        }),
     }
 }
 

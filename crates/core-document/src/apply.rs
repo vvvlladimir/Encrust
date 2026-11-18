@@ -11,6 +11,7 @@ use crate::label::{LabelAsked, apply_label};
 use crate::piece::Role;
 use crate::placement::{moved, sized_to, turned_to};
 use crate::plate_contents::{delete, duplicate, mirrored};
+use crate::repair::{MendAsked, Mended, apply_mend, apply_repair};
 use crate::split::{apply_part_off, apply_split};
 
 /// What an edit did, for a front end to name, select and report it.
@@ -54,6 +55,14 @@ pub enum Report {
     },
     /// A label was written on an object.
     Labelled,
+    /// An object's mesh was repaired.
+    Repaired {
+        mended: core_geometry::Mended,
+        /// Whether the mesh is the wrap's surface rather than the repair's alone.
+        wrapped: bool,
+    },
+    /// An object's faces were turned, bridged or dropped by hand.
+    Mended(Mended),
     /// An object was moved, turned or sized where it stands.
     Placed,
     /// An object was deleted or copied.
@@ -98,6 +107,11 @@ pub fn apply(
         Edit::Label { object, .. } => {
             let asked = LabelAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
             apply_label(document, object, &asked, cancel)
+        }
+        Edit::Repair { object, method } => apply_repair(document, object, method, cancel),
+        Edit::Mend { object, .. } => {
+            let asked = MendAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
+            apply_mend(document, object, &asked)
         }
         Edit::Move { object, by_mm } => {
             place(document, object, |transform, _| Ok(moved(transform, by_mm)))

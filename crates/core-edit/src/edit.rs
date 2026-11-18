@@ -1,6 +1,7 @@
 use core_engine::project::{Axis, Keep, ObjectId};
 use core_geometry::{Scalar, Vec3};
 use core_joint::Joints;
+use core_volume::RepairMethod;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -78,6 +79,25 @@ pub enum Edit {
         angle_deg: Scalar,
         #[serde(default)]
         font: Option<PathBuf>,
+    },
+    /// Repairs `object`'s mesh by `method`, to the lengths the window's Repair tool starts
+    /// with; what was built on its old surface goes.
+    Repair {
+        object: ObjectId,
+        method: RepairMethod,
+    },
+    /// Turns, bridges and drops what is named on `object`'s mesh: faces from 0, shells from 1,
+    /// a bridge as two open edges of two vertices each; drops come last.
+    Mend {
+        object: ObjectId,
+        #[serde(default)]
+        flip_faces: Vec<usize>,
+        #[serde(default)]
+        drop_faces: Vec<usize>,
+        #[serde(default)]
+        drop_shells: Vec<usize>,
+        #[serde(default)]
+        bridge: Vec<[[u32; 2]; 2]>,
     },
 }
 

@@ -10,15 +10,20 @@ const SMALL_HOLE_CORNERS: usize = 3;
 
 /// Which repair to run on a mesh.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum MendMethod {
     /// Every step, in the order [`mend`] gives: what a Repair press runs.
     #[default]
+    #[serde(alias = "Repair")]
     Repair,
     /// Every hole patched, the doubled faces dropped and the patches turned outward.
+    #[serde(alias = "CloseHoles")]
     CloseHoles,
     /// Only the holes a single missing face leaves, and nothing turned.
+    #[serde(alias = "CloseSmallHoles")]
     CloseSmallHoles,
     /// The faces wound the wrong way turned, and nothing added.
+    #[serde(alias = "Turn")]
     Turn,
 }
 

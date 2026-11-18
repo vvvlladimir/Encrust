@@ -52,3 +52,21 @@ pub fn cubes_with_plug() -> Project {
     project.manifest.objects[2].plug_of = Some(1);
     project
 }
+
+/// [`cube`] with the winding of face `face` of its mesh turned, so it is no longer a solid.
+pub fn cube_with_turned_face(face: usize) -> Project {
+    let mut project = cube();
+    let mut mesh = (*project.models[0].source).clone();
+    mesh.faces[face].swap(1, 2);
+    project.models[0].source = Arc::new(mesh);
+    project
+}
+
+/// [`cube`] with face `face` of its mesh taken out, leaving a hole.
+pub fn cube_with_hole(face: usize) -> Project {
+    let mut project = cube();
+    let mut mesh = (*project.models[0].source).clone();
+    mesh.faces.remove(face);
+    project.models[0].source = Arc::new(mesh);
+    project
+}

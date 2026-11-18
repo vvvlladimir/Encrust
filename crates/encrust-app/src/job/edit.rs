@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use core_document::{ApplyError, MendAsked, mended};
+use core_edit::ObjectId;
 use core_geometry::{BridgeError, Mesh, Region, bridge, flip_faces, remove_faces, remove_shells};
 
 use crate::i18n::tr;
@@ -15,6 +17,9 @@ pub enum Edit {
     Bridge([u32; 2], [u32; 2]),
     /// Shells numbered in `core_geometry::list_shells` order.
     DropShells(Vec<usize>),
+    /// Everything `asked` names at once, as an edit of the plate's does; `id` names the model
+    /// in an error.
+    Mend(ObjectId, MendAsked),
 }
 
 /// How one change by hand ended.
@@ -75,8 +80,37 @@ fn run(mesh: &Mesh, name: &str, edit: Edit) -> EditOutcome {
                 count = remove_shells(&mut mesh, &which)
             )
         }
+        Edit::Mend(id, asked) => match mend_said(&mut mesh, &name, id, &asked) {
+            Ok(said) => said,
+            Err(why) => return EditOutcome::Failed(why),
+        },
     };
     EditOutcome::Done(Box::new(Shaped::of(Arc::new(mesh))), said)
+}
+
+/// What mending `mesh` by `asked` did, in the words the stage notice says it in, or why it
+/// was refused.
+fn mend_said(
+    mesh: &mut Mesh,
+    name: &str,
+    id: ObjectId,
+    asked: &MendAsked,
+) -> Result<String, String> {
+    let done = mended(mesh, asked, id).map_err(|error| {
+        let name = name.to_owned();
+        match error {
+            ApplyError::NoSuchFace { number, .. } => {
+                tr!("edit-no-such-face", name = name, number = number)
+            }
+            ApplyError::NoSuchShell { number, .. } => {
+                tr!("edit-no-such-shell", name = name, number = number)
+            }
+            ApplyError::Failed { reason, .. } => tr!("repair-failed", name = name, reason = reason),
+            other => tr!("repair-failed", name = name, reason = other.to_string()),
+        }
+    })?;
+    let count = done.faces_flipped + done.faces_added + done.faces_dropped;
+    Ok(tr!("edit-mended", name = name.to_owned(), count = count))
 }
 
 /// Why a bridge was refused, in the words the stage notice says it in.

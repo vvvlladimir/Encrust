@@ -1047,6 +1047,7 @@ dependencies = [
  "core-engine",
  "core-geometry",
  "core-joint",
+ "core-volume",
  "proptest",
  "serde",
  "serde_json",
