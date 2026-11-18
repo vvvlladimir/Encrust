@@ -43,7 +43,7 @@ recipe step says, which the window leaves out.
 
 ## What the window does with it
 
-The first revision of a job reads its model in, as Open does; a model taken off the plate is
+What follows is what the window does with a revision it shows (see Following). The first revision of a job reads its model in, as Open does; a model taken off the plate is
 read in again for the job's next revision. Each revision then puts the model back as it came
 in, takes away what the last run left beside it — plugs, say — puts the window on the job's
 printer and resin, and starts Prepare for print by the revision's recipe on that model. The
@@ -69,3 +69,17 @@ and start, written whole — into a `.part` file, then renamed — on each tool 
 call runs; `jobs` are the jobs its calls named or answered with, latest first, at most 20.
 A server that ends writes `ended_s`; one whose `seen_s` is a minute old ended without
 saying. A file whose `seen_s` is a week old is taken away by the next server that starts.
+
+The window reads the folder every 2 s off its drawing thread and lists the agents in the
+print chip's fourth part (`ui-screens.md`, Top bar): each job an agent's file names, by its
+latest revision — the highest `N.toml` — whose model is the first of `N.args.json` and whose
+verdict is `N.json`'s `status`. A press on a job builds the same line the server sends from
+`N.args.json` (`--printer` or `--profile`, `--resin` or `--material`) and `N.recipe.toml`,
+marked `open`, and takes it as one handed over.
+
+## Following
+
+A line marked `"open": true` is shown whatever the window does. One not marked is shown only
+while *Follow agents* is on; otherwise the window answers
+`{"shown": false, "why_not": "the window is not following its agents; …"}` and the revision
+waits in the list.

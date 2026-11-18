@@ -2,6 +2,7 @@
 //! `encrust-web` hands it a canvas in a browser; the window itself, and every tool in it,
 //! is here.
 
+mod agents;
 mod app;
 #[cfg(target_os = "macos")]
 mod app_menu;

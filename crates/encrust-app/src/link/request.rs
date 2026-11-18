@@ -1,7 +1,7 @@
 //! The line `encrust-mcp` sends for each revision it keeps, and the window's answer
 //! (`docs/design/window-link.md`).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use core_recipe::{Plan, Recipe, validate};
@@ -24,9 +24,46 @@ pub struct Request {
     pub resin: String,
     /// A `core-recipe` file's text, the flags typed folded in (ADR 0459).
     pub recipe: String,
+    /// Shown whether the window follows its agents or not: the client asked for it, or the
+    /// user did (ADR 0465).
+    #[serde(default)]
+    pub open: bool,
 }
 
 impl Request {
+    /// Revision `revision` of `job` as the server keeps it under `jobs`, to be shown: the
+    /// model and the machine from the flags it stages with, and the recipe its check ran.
+    pub fn of_job(jobs: &Path, job: &str, revision: u32) -> Result<Self> {
+        let dir = jobs.join(job);
+        let read = |name: String| {
+            let path = dir.join(name);
+            std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))
+        };
+        let flags: Vec<String> = serde_json::from_str(&read(format!("{revision}.args.json"))?)
+            .with_context(|| format!("revision {revision} of {job} does not read"))?;
+        let flag = |names: [&str; 2]| {
+            let value = flags.iter().find_map(|flag| {
+                let (name, value) = flag.split_once('=')?;
+                names.contains(&name).then_some(value)
+            });
+            value.unwrap_or_default().to_owned()
+        };
+        Ok(Self {
+            schema: SCHEMA,
+            token: String::new(),
+            job: job.to_owned(),
+            revision,
+            model: flags
+                .first()
+                .with_context(|| format!("revision {revision} of {job} names no model"))?
+                .into(),
+            printer: flag(["--printer", "--profile"]),
+            resin: flag(["--resin", "--material"]),
+            recipe: read(format!("{revision}.recipe.toml"))?,
+            open: true,
+        })
+    }
+
     /// The recipe read and checked, as Prepare for print runs it.
     pub fn plan(&self) -> Result<Plan> {
         let recipe = Recipe::from_toml(&self.recipe).context("the revision's recipe")?;

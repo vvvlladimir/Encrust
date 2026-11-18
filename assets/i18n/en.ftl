@@ -369,6 +369,38 @@ supports-growth-stopped = Building the supports stopped without an answer
 surfaces-cannot-build = The surface supports stand on could not be prepared: { $reason }
 surfaces-build-stopped = Preparing the surface supports stand on stopped without an answer
 
+## panels/title_bar/agents.rs
+
+# The group of the agents' list while no agent is there.
+agents-title = Agents
+agents-none = No agent has worked here yet
+# A group of the list, one an agent: its chat client's name, then what it does now.
+agents-working = { $client } · working
+agents-idle = { $client } · waiting
+agents-ended = { $client } · ended
+# A second agent of the same chat client, numbered.
+agents-numbered = { $client } { $number }
+# The name of an agent whose chat client gave none.
+agents-unnamed = Agent
+agents-no-job = No model yet
+# Under a model's name in the list: its latest revision and what the check found in it.
+agents-revision-clean = Revision { $revision } · no problems found
+agents-revision-problems = Revision { $revision } · the check found problems
+agents-revision = Revision { $revision }
+agents-revision-project = Revision { $revision } · project
+# Under a model's name while its agent works on it: what the agent does now.
+agents-starting = Revision { $revision } · starting
+agents-checking = Revision { $revision } · checking
+agents-drawing = Revision { $revision } · making pictures
+agents-writing = Revision { $revision } · writing the file
+agents-sending = Revision { $revision } · sending to the printer
+agents-reading-print = Revision { $revision } · looking at a print
+agents-changing = Revision { $revision } · changing the model
+agents-show-tooltip = Show this revision on the plate
+agents-open-project-tooltip = Open this project
+agents-follow = Follow agents
+agents-follow-tooltip = Run each revision an agent saves on the plate straight away
+
 ## link.rs
 
 # A chat client prepares a model over MCP; each change it keeps is a numbered revision of its job, shown again on the plate.
@@ -1008,6 +1040,9 @@ chip-resin-untuned = The resin, not measured on this printer
 chip-resin-tooltip = The resin
 chip-layers = { $layer } µm · { $exposure } s
 chip-settings = { $tool }, { $summary }
+# The agents' part of the chip, as a screen reader names it.
+chip-agents = Agents, { $count } working
+chip-agents-tooltip = The agents of the chat clients on this computer, and their models
 find-button = Find
 find-tooltip = Find a tool, an action or a model
 bar-source = Source

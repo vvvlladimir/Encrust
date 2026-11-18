@@ -82,6 +82,7 @@ impl Bench {
         let doc = Doc::default();
         let mut machine = Machine::default();
         machine.slicing.material.layer_height_mm = 0.5;
+        machine.general.follow_agents = true;
         Self {
             mode: Mode::default(),
             tool: Tool::default(),
@@ -208,5 +209,60 @@ fn the_next_revision_starts_again_from_the_model_as_it_came_in() {
         bench.wall_mm(),
         None,
         "a recipe of no steps leaves the cube solid"
+    );
+}
+
+#[test]
+fn a_revision_handed_over_while_not_following_is_listed_only_unless_marked_open() {
+    let file = scratch("not-following");
+    let mut bench = Bench::new(file.clone());
+    bench.machine.general.follow_agents = false;
+    let reply = bench.hand_over(&file, line(&file, 1, &hollowing(1.5)));
+    assert_eq!(reply["shown"], false);
+    assert!(
+        reply["why_not"]
+            .as_str()
+            .is_some_and(|why| why.contains("not following")),
+        "{reply}"
+    );
+    bench.run_to_end();
+    assert!(
+        bench.doc.scene.objects().is_empty(),
+        "the plate is left alone"
+    );
+
+    let mut asked = line(&file, 2, &hollowing(1.5));
+    asked["open"] = json!(true);
+    assert_eq!(bench.hand_over(&file, asked), json!({"shown": true}));
+    bench.run_to_end();
+    assert_eq!(bench.wall_mm(), Some(1.5));
+}
+
+#[test]
+fn a_revision_the_user_asks_for_is_read_from_the_servers_jobs_and_shown() {
+    let file = scratch("asked");
+    let job = file.with_file_name("mcp-jobs").join("cube-1");
+    std::fs::create_dir_all(&job).expect("writable");
+    let flags = json!([cube(), "--printer=", "--resin="]).to_string();
+    std::fs::write(job.join("3.args.json"), flags).expect("writable");
+    std::fs::write(job.join("3.recipe.toml"), hollowing(1.5)).expect("writable");
+    let mut bench = Bench::new(file);
+    bench.machine.general.follow_agents = false;
+    bench.machine.agents.asked.push(crate::agents::Asked {
+        job: "cube-1".into(),
+        revision: 3,
+    });
+    bench.run_to_end();
+    assert_eq!(bench.wall_mm(), Some(1.5));
+    assert_eq!(bench.machine.agents.on_plate, ["cube-1"]);
+
+    bench.machine.agents.asked.push(crate::agents::Asked {
+        job: "cube-1".into(),
+        revision: 9,
+    });
+    bench.run_to_end();
+    assert!(
+        matches!(bench.machine.status, Status::Error(_)),
+        "a revision not kept is said, not shown"
     );
 }

@@ -150,4 +150,6 @@ pub struct Machine {
     pub general: crate::prefs::General,
     /// The copy of the unsaved plate, and those runs that did not close left.
     pub autosave: crate::autosave::Autosave,
+    /// The chat clients' servers the window lists, and what the user asked of them.
+    pub agents: crate::agents::Agents,
 }
