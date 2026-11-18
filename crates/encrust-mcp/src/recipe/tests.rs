@@ -305,6 +305,8 @@ fn what_is_placed_by_hand_and_how_it_is_sliced_become_flags() {
             profile: "/profiles/thin.toml".into(),
             at_mm: vec![[1.0, 1.0, 0.0]],
             only_at: true,
+            shown_at_mm: vec![[2.0, 3.0, 4.0]],
+            shown_radius_mm: Some(6.0),
             ..Default::default()
         }),
         slicing: Some(Slicing {
@@ -327,6 +329,7 @@ fn what_is_placed_by_hand_and_how_it_is_sliced_become_flags() {
     let flags = recipe.flags();
     for flag in [
         "--hollow-mode=external",
+        "--shown-at=2,3,4:6",
         "--keep-solid=5,5,5",
         "--keep-solid-radius=3",
         "--channel=0,0,1:10,0,1",

@@ -178,9 +178,10 @@ pub(crate) fn orientation(
             .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),
         ..orient_settings(supports.map(SupportPlan::placing).as_ref())
     };
-    // Points placed by hand stand where the chosen pose puts them, so no trial pose takes them.
+    // Points given by hand stand where the chosen pose puts them, so no trial pose takes them.
     let unhanded = supports.map(|plan| SupportPlan {
         by_hand: ByHand::default(),
+        shown_at: Vec::new(),
         ..plan.clone()
     });
     let keep_clear = keep_clear(mesh, transform, profile);

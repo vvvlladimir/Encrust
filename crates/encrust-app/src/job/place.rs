@@ -325,6 +325,7 @@ fn plan_of(task: &SupportTask, sizing: Option<&Sizing>) -> SupportPlan {
             cavity: false,
             merges: Vec::new(),
             by_hand: core_engine::ByHand::default(),
+            shown_at: Vec::new(),
         },
         None => SupportPlan::of(task.profile.clone()),
     }
