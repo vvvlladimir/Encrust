@@ -91,3 +91,41 @@ from the code as it is then — not all now, since C1 changes what C2 reads.
 - Cargo output through `tail -n 30`; per-crate checks only.
 - Two failed tries → stop and report, never a third approach.
 - Milestone review (after C5, C11, C14): one reviewer run over the range, high effort.
+
+## Cards in full
+
+### C1. Move, Rotate, Scale
+Read: `crates/core-edit/src/edit.rs` (+`edit/tests.rs`), `crates/core-document/src/{apply.rs,
+  apply/tests.rs,cut.rs,piece.rs,document.rs,fixtures.rs}`, `crates/encrust-cli/src/pipeline/place.rs`
+  (`euler_degrees` only), `crates/encrust-app/src/link/plate.rs`, `crates/encrust-app/src/link/tests/plate.rs`
+Touch: the files above, new `crates/core-document/src/placement.rs` (+ `placement/tests.rs` if
+  past 150 test lines), `crates/core-document/src/lib.rs`, `crates/core-document/src/error.rs`,
+  `docs/design/document.md`, `docs/cli.md` (one sentence in the `--edits` paragraph)
+Move: `euler_degrees` from `encrust-cli/src/pipeline/place.rs` → `core-document/src/placement.rs`
+  (pub, re-exported); the CLI imports it from `core_document`.
+Edit: three variants in `core-edit`, fields serde as the cut's (`#[serde(tag = "edit")]`, kebab):
+- `Move { object, by_mm: Vec3 }` — translation += by_mm.
+- `Rotate { object, degrees: Vec3 }` — the object's rotation SET to `euler_degrees(degrees)`
+  (X, then Y, then Z about the plate's axes, as `--rotate`), turned about its centre of mass on
+  the plate, then stood on the plate (lowest point at z 0).
+- `Scale { object, factors: Vec3 }` — the object's scale SET to `factors`, about its centre of
+  mass, then stood on the plate. A factor not finite or ≤ 0 is `ApplyError::BadScale(ObjectId)`.
+In `placement.rs`: `pub fn moved(Transform, Vec3) -> Transform`, `pub fn turned_to(Transform,
+  &Mesh, Vec3) -> Transform`, `pub fn sized_to(Transform, &Mesh, Vec3) -> Result<Transform, ()>`
+  (the mesh is the object's own; use `core_geometry::{center_of_mass, transform_mesh,
+  drop_to_plate}`). `apply` runs them on `ObjectState.transform`; `Report::Placed` (no fields);
+  `Applied { removed: [], added: [] }`.
+Window: in `link/plate.rs`, `start_edit` returns `Result<Option<ObjectId>, String>`: the cut
+  `Some(object)` as now; the three new edits set `SceneObject::transform` at once through the
+  same `placement` fns on `object.mesh`, and answer `None` (nothing under way).
+Done when:
+- core-edit: the round-trip proptest covers the new variants; a hand-written `{"edit":"rotate",
+  "object":1,"degrees":[90,0,0]}` reads.
+- core-document, on the 10 mm cube fixture: `Move` by (5,0,0) → bounds x 5..15 ± 1e-4;
+  `Rotate` (90,0,0) → bounds still 10 × 10 × 10 ± 1e-4 with min z 0 ± 1e-4; `Scale` (2,1,1) →
+  volume 2000 ± 0.01 mm³ and min z 0; `Scale` (0,1,1) → `BadScale`, transform unchanged.
+- window link test: `apply` of `Rotate` (0,0,90) on the bench cube answers `applied: true`
+  and the object's rotation is 90° about Z (angle ± 1e-4).
+- `cargo test -p core-edit -p core-document -p encrust-cli -p encrust-app` (one at a time),
+  clippy per crate, `cargo fmt --all`.
+Not now: MCP wiring (C1b, orchestrator), Orient (C8), the window's own position panel.
