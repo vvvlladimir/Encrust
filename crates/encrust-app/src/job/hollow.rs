@@ -369,7 +369,7 @@ mod tests {
 
     fn tetrahedron_task(id: u64, mesh: &Arc<Mesh>, thickness_mm: Scalar) -> HollowTask {
         HollowTask {
-            id: ObjectId::for_test(id),
+            id: ObjectId(id),
             mesh: Arc::clone(mesh),
             bvh: Arc::new(Bvh::build(mesh)),
             shape: Mat3::IDENTITY,
@@ -410,7 +410,7 @@ mod tests {
         let ids: Vec<ObjectId> = shells.iter().map(|shelled| shelled.id).collect();
         assert_eq!(
             ids,
-            [0, 1, 2].map(ObjectId::for_test),
+            [0, 1, 2].map(ObjectId),
             "every object gets its own shell back, in order"
         );
         assert!(

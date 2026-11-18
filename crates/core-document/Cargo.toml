@@ -1,0 +1,20 @@
+[package]
+name = "core-document"
+description = "The plate as one document, and the one way an edit is carried out on it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+core-edit.workspace = true
+core-engine.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[lints]
+workspace = true

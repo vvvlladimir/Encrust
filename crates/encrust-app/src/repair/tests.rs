@@ -7,7 +7,7 @@ use core_geometry::{
 /// What the fields a test does not set read as: a plain repair, not wrapped.
 fn mended_alone() -> Repaired {
     Repaired {
-        id: ObjectId::for_test(0),
+        id: ObjectId(0),
         name: String::new(),
         shaped: crate::scene::Shaped::of(Arc::new(Mesh::default())),
         mended: Mended::default(),

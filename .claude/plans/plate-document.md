@@ -32,13 +32,12 @@ Not now: what the next card does
 
 1. ADR 0466 draft, `docs/design/document.md`, `docs/architecture.md` edges. Reviewed by the
    user before code.
-2. `core-edit`: the **whole** `Edit` enum, `ObjectId`, `Target`, serde + round-trip proptest.
-   Variants not yet applied exist already, so later cards never change the enum's shape.
-   Decision to take here: `Slicing`/`Machine` stay out of `Edit` (revision settings).
-3. `core-document`: `Document`, `from_project`/`to_project`, ids in the manifest (version
-   bump, old files get ids on read), and the signature every card fills in:
-   `apply(&mut Document, &Edit, &Progress) -> Result<Applied, ApplyError>` with cancel and
-   progress, because window jobs need both (`job/*` take them today).
+2. `core-edit`: `Edit` with `Cut` alone, serde + round-trip proptest. Each card adds its own
+   variants (no variant before its `apply`). `Slicing`/`Machine` stay out of `Edit`.
+3. `core-document`: `Document`, `from_project`/`into_project`, `ObjectId` in core-engine's
+   manifest (`#[serde(default)]`, no version bump, ids given on read); the window's
+   `ObjectId` is that one, its ids start at 1. `apply` arrives with `Cut` in M1, taking
+   cancel and progress because window jobs need both.
 4. Manifests, `cargo hakari generate && cargo hakari manage-deps`, full check once,
    `cargo xtask arch`, `cargo sweep --time 7`.
 

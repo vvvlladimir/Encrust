@@ -6,7 +6,7 @@ use core_volume::InfillPattern;
 
 /// A plate of `objects` models, each hollowed, so every part of the format is in it:
 /// a manifest, a source mesh and a shell beside it.
-fn project(objects: usize) -> Project {
+pub(super) fn project(objects: usize) -> Project {
     let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
     Project {
         manifest: Manifest {
@@ -67,8 +67,9 @@ fn project(objects: usize) -> Project {
 
 /// One model on the plate, with a point, painted faces, a blocker, a channel and a
 /// built cavity, so every part of an object's state is written and read back.
-fn object(index: usize) -> ObjectState {
+pub(super) fn object(index: usize) -> ObjectState {
     ObjectState {
+        id: ObjectId(index as u64 + 1),
         name: format!("model {index}"),
         plate: 0,
         transform: if index == 1 {
@@ -178,6 +179,7 @@ fn a_plate_comes_back_as_it_was_saved() {
     assert_eq!(back.manifest.objects.len(), 2);
     assert_eq!(back.models[0].source, saved.models[0].source);
     let object = &back.manifest.objects[0];
+    assert_eq!(object.id, saved.manifest.objects[0].id);
     assert_eq!(object.transform, saved.manifest.objects[0].transform);
     assert_eq!(
         object.supports.points,
@@ -612,7 +614,7 @@ fn a_project_missing_a_mesh_is_refused() {
 
 /// An archive of `manifest` as written by hand, holding `saved`'s first model as its source
 /// and shell.
-fn archive(manifest: &serde_json::Value, saved: &Project) -> Cursor<Vec<u8>> {
+pub(super) fn archive(manifest: &serde_json::Value, saved: &Project) -> Cursor<Vec<u8>> {
     let mut bytes = Cursor::new(Vec::new());
     {
         let mut zip = zip::ZipWriter::new(&mut bytes);

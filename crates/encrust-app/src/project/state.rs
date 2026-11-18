@@ -110,6 +110,7 @@ fn model_meshes(object: &SceneObject) -> ModelMeshes {
 
 fn object_state(scene: &Scene, object: &SceneObject) -> ObjectState {
     ObjectState {
+        id: object.id,
         name: object.name.clone(),
         plate: object.plate,
         transform: object.transform,

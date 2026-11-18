@@ -1,0 +1,26 @@
+[package]
+name = "core-edit"
+description = "One value per action on a plate, as the window, the command line and a chat client ask it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+core-engine.workspace = true
+core-geometry.workspace = true
+core-joint.workspace = true
+serde.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+proptest.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
