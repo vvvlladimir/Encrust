@@ -49,6 +49,9 @@ pub enum ApplyError {
     /// A relief picture that is missing or cannot be decoded.
     #[error("the picture {} could not be read: {reason}", path.display())]
     BadPicture { path: PathBuf, reason: String },
+    /// A wall as thick as the model, leaving no room for a cavity.
+    #[error("object {0:?} has no room for a cavity at that wall")]
+    NoRoom(ObjectId),
     /// The run was stopped before it finished.
     #[error("the edit was cancelled")]
     Cancelled,

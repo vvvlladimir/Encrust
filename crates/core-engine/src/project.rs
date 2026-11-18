@@ -18,7 +18,7 @@ use core_joint::Joints;
 use core_supports::{ProjectSettings, SupportPoint, SupportTree};
 use core_volume::{
     Blocker, Channel, DrainHole, HoleShape, HollowMode, HollowSettings, InfillSettings,
-    PLUG_GAP_MM, PartSettings,
+    PLUG_GAP_MM, PartSettings, Shell,
 };
 use printer_profiles::{AutoProfile, OutputFormat, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
@@ -483,6 +483,20 @@ pub struct BuiltCavity {
 }
 
 impl BuiltCavity {
+    /// The shell as the file records it: the wall it was asked for and what the lattice gave.
+    pub fn of(shell: &Shell) -> Self {
+        let (scale, stretched) = Self::keys_of(shell.shape);
+        Self {
+            wall: Cavity::of(&shell.settings),
+            cavity_faces: shell.cavity.clone(),
+            cavity_mm3: shell.cavity_mm3,
+            voxel_mm: shell.voxel_mm,
+            coarsened: shell.coarsened,
+            scale,
+            stretched,
+        }
+    }
+
     /// What the wall was measured under (`Transform::unturned`), however the file wrote it.
     pub fn shape(&self) -> Mat3 {
         self.stretched

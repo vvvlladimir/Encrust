@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
+use core_document::{NoRoom, shell_from};
 use core_geometry::{Bvh, Mat3, Mesh, Scalar};
 use core_volume::{
     Cancel, HollowSettings, Progress, Shell, Step, VolumeError, carve, cavity_field,
@@ -296,8 +297,11 @@ fn shell_each(
                 Cancel::when(&asked).reporting(progress),
             ) {
                 Ok(shell) => shell,
-                Err(VolumeError::Cancelled) => return HollowOutcome::Cancelled,
-                Err(error) => return HollowOutcome::Failed(error.to_string()),
+                Err(Unshelled::Volume(VolumeError::Cancelled)) => {
+                    return HollowOutcome::Cancelled;
+                }
+                Err(Unshelled::Volume(error)) => return HollowOutcome::Failed(error.to_string()),
+                Err(Unshelled::NoRoom) => return HollowOutcome::Failed(tr!("hollow-no-room")),
             },
         };
         shells.push(Shelled { id: task.id, shell });
@@ -317,12 +321,32 @@ fn twin_of(earlier: &[HollowTask], task: &HollowTask) -> Option<usize> {
     })
 }
 
+/// Why a model got no shell.
+#[derive(Debug)]
+enum Unshelled {
+    Volume(VolumeError),
+    /// The wall left no cavity.
+    NoRoom,
+}
+
+impl From<VolumeError> for Unshelled {
+    fn from(error: VolumeError) -> Self {
+        Self::Volume(error)
+    }
+}
+
+impl From<NoRoom> for Unshelled {
+    fn from(NoRoom: NoRoom) -> Self {
+        Self::NoRoom
+    }
+}
+
 /// The shell of one model, cut from the field kept for it where there is one.
 fn shell_of(
     task: &HollowTask,
     fields: &SharedFields,
     cancel: Cancel<'_>,
-) -> Result<Shell, VolumeError> {
+) -> Result<Shell, Unshelled> {
     let kept = lock(fields).get(&task.mesh, task.shape, &task.settings);
     let field = match kept {
         Some(field) => field,
@@ -340,15 +364,7 @@ fn shell_of(
         }
     };
     let hollowed = carve(&task.mesh, &field, &task.settings, cancel)?;
-    Ok(Shell {
-        mesh: Arc::new(hollowed.mesh),
-        cavity: hollowed.cavity,
-        cavity_mm3: hollowed.cavity_mm3,
-        voxel_mm: hollowed.voxel_mm,
-        coarsened: hollowed.coarsened,
-        shape: task.shape,
-        settings: task.settings.clone(),
-    })
+    Ok(shell_from(hollowed, task.shape, task.settings.clone())?)
 }
 
 #[cfg(test)]
@@ -443,7 +459,10 @@ mod tests {
             Cancel::when(&stopped),
         );
 
-        assert!(matches!(shelled, Err(VolumeError::Cancelled)));
+        assert!(matches!(
+            shelled,
+            Err(Unshelled::Volume(VolumeError::Cancelled))
+        ));
         assert_eq!(
             lock(&fields).bytes(),
             0,

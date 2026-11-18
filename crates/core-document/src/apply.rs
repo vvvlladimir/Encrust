@@ -7,6 +7,7 @@ use crate::combine::apply_combine;
 use crate::cut::{CutAsked, CutModel, cut, pieces};
 use crate::document::Document;
 use crate::error::ApplyError;
+use crate::hollow::apply_hollow;
 use crate::label::{LabelAsked, apply_label};
 use crate::piece::Role;
 use crate::placement::{moved, sized_to, turned_to};
@@ -71,6 +72,15 @@ pub enum Report {
         /// Whether the memory budget made the lattice coarser than precision asked for.
         coarsened: bool,
     },
+    /// An object was hollowed, the numbers kept as its own.
+    Hollowed {
+        /// Resin the cavity takes out, mm³.
+        cavity_mm3: Scalar,
+        /// The lattice it was cut on, mm.
+        voxel_mm: Scalar,
+        /// Whether the memory budget made the lattice coarser than precision asked for.
+        coarsened: bool,
+    },
     /// An object was moved, turned or sized where it stands.
     Placed,
     /// An object was deleted or copied.
@@ -125,6 +135,10 @@ pub fn apply(
             let asked = ReliefAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
             apply_relief(document, object, &asked, cancel)
         }
+        Edit::Hollow {
+            object,
+            ref settings,
+        } => apply_hollow(document, object, settings, cancel),
         Edit::Move { object, by_mm } => {
             place(document, object, |transform, _| Ok(moved(transform, by_mm)))
         }

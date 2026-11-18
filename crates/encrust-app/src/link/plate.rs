@@ -10,6 +10,7 @@ use core_document::{
     part_settings, sized_to, turned_to,
 };
 use core_edit::{Edit, ObjectId};
+use core_engine::project::HollowState;
 use core_geometry::{Mesh, Transform, Vec3};
 use core_volume::{PartSettings, RepairMethod};
 use serde_json::{Value, json};
@@ -112,7 +113,11 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     };
     let may_stay = matches!(
         edit,
-        Edit::Split { .. } | Edit::Repair { .. } | Edit::Mend { .. } | Edit::Relief { .. }
+        Edit::Split { .. }
+            | Edit::Repair { .. }
+            | Edit::Mend { .. }
+            | Edit::Relief { .. }
+            | Edit::Hollow { .. }
     );
     match start_edit(&edit, window) {
         Ok(id) => {
@@ -131,6 +136,7 @@ fn tool_is_busy(window: &Window) -> bool {
         || repairs.is_busy()
         || repairs.hand.is_busy()
         || window.tools.relief.is_busy()
+        || window.tools.hollow.job.is_some()
 }
 
 fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
@@ -140,7 +146,7 @@ fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
     false
 }
 
-/// Carries `edit` out: a cut, combine, label, repair, mend or relief starts a tool job, answering the object it replaces; any
+/// Carries `edit` out: a cut, combine, label, repair, mend, relief or hollow starts a tool job, answering the object it replaces; any
 /// other edit is made at once, answering `None`.
 fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, String> {
     match *edit {
@@ -186,6 +192,10 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
         Edit::Repair { object, method } => start_repair(window, object, method),
         Edit::Mend { object, .. } => start_mend(window, edit, object),
         Edit::Relief { object, .. } => start_relief(window, edit, object),
+        Edit::Hollow {
+            object,
+            ref settings,
+        } => start_hollow(window, object, settings),
         Edit::Move { object, by_mm } => {
             place(window, object, |transform, _| Ok(moved(transform, by_mm)))
         }
@@ -286,6 +296,27 @@ fn start_relief(
     (window.tools.relief)
         .start_asked(scene, object, &asked)
         .map_err(|error| format!("{error:#}"))?;
+    Ok(Some(object))
+}
+
+/// Starts hollowing one object by `settings`, which it keeps as its own, as the Hollow
+/// tool's job, answering the object it builds the shell on.
+fn start_hollow(
+    window: &mut Window,
+    object: ObjectId,
+    settings: &HollowState,
+) -> Result<Option<ObjectId>, String> {
+    let model = (window.doc.scene.get_mut(object)).ok_or_else(|| no_object(object))?;
+    if model.mesh.is_empty() {
+        return Err(format!("object {object:?} has no surface to hollow"));
+    }
+    model.own.hollow = Some(settings.clone());
+    let (scene, hollow) = (&window.doc.scene, &mut window.tools.hollow);
+    let asked = scene.get(object).map(|model| hollow.settings_for(model));
+    let asked = asked.ok_or_else(|| no_object(object))?;
+    if !hollow.again(scene, &[(object, asked)]) {
+        return Err("a hollowing is already under way".to_owned());
+    }
     Ok(Some(object))
 }
 

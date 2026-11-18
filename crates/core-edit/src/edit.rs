@@ -1,4 +1,4 @@
-use core_engine::project::{Axis, Keep, ObjectId};
+use core_engine::project::{Axis, HollowState, Keep, ObjectId};
 use core_geometry::{Scalar, Vec3};
 use core_joint::Joints;
 use core_volume::{ReliefSettings, RepairMethod, Tiling};
@@ -124,6 +124,11 @@ pub enum Edit {
         hold_top_deg: Scalar,
         #[serde(default = "precision_by_default")]
         precision: Scalar,
+    },
+    /// Hollows `object` by `settings`, which it keeps as its own; its supports stay.
+    Hollow {
+        object: ObjectId,
+        settings: HollowState,
     },
 }
 

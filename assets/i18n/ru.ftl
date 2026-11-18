@@ -2611,6 +2611,7 @@ app-cannot-build-preview = не удалось построить предпро
 ## job/hollow.rs
 
 job-thread-stopped-hollowing = поток создания полости остановился, не закончив
+hollow-no-room = стенка слишком толстая, и полости внутри модели не остаётся места
 job-hollow-stopping = Остановка…
 job-hollow-progress = Создание полости: модель { $index } из { $total }
 job-step-preparing = Проверка модели
