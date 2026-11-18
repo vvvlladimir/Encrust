@@ -4,6 +4,7 @@ use crate::pipeline::Watch;
 use crate::profiles::Chosen;
 use crate::progress::bar;
 use anyhow::{Context, Result};
+use core_document::euler_degrees;
 use core_engine::{
     ByHand, Choice, EngineError, KeepClear, Printout, SupportPlan, Trial, orient_for_print,
 };
@@ -314,11 +315,4 @@ pub(super) fn centred(mesh: Mesh, profile: Option<&PrinterProfile>) -> Result<Me
         return Ok(mesh);
     }
     Ok(transform_mesh(&mesh, Transform::from_translation(offset)))
-}
-
-pub(super) fn euler_degrees(angles: Vec3) -> Quat {
-    let radians = angles * (std::f32::consts::PI / 180.0);
-    Quat::from_rotation_z(radians.z)
-        * Quat::from_rotation_y(radians.y)
-        * Quat::from_rotation_x(radians.x)
 }

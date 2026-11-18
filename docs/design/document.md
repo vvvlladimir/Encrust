@@ -50,6 +50,13 @@ lower half carrying pins or a key; loose dowels stand in a row beside the lower 
 that misses the object is `ApplyError::Missed`. The window runs the two steps on a worker,
 `--cut` on a mesh it has not made an object yet; `--cut` always lays flat.
 
+`Move { object, by_mm }` adds to the translation. `Rotate { object, degrees }` sets the turn
+(X, then Y, then Z of the plate, as `--rotate`) and `Scale { object, factors }` sets the
+scale, each about the object's centre of mass and then standing it on the plate; a factor not
+finite or above zero is `ApplyError::BadScale`. None of them adds or removes an object
+(`Report::Placed`). The window sets the transform at once through the same `placement`
+functions.
+
 ## Undo
 
 The window keeps snapshots of its scene (ADR 0086); a document applied is one entry. The

@@ -5,8 +5,9 @@ use std::collections::VecDeque;
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
-use core_document::CutAsked;
+use core_document::{ApplyError, CutAsked, moved, sized_to, turned_to};
 use core_edit::{Edit, ObjectId};
+use core_geometry::{Mesh, Transform};
 use serde_json::{Value, json};
 
 use crate::panels::Window;
@@ -103,7 +104,7 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     };
     match start_edit(&edit, window) {
         Ok(id) => {
-            work.under_way = Some(id);
+            work.under_way = id;
             true
         }
         Err(why) => finish(applying, refused(why)),
@@ -117,8 +118,9 @@ fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
     false
 }
 
-/// Starts the tool job that carries `edit` out, answering the object it replaces.
-fn start_edit(edit: &Edit, window: &mut Window) -> Result<ObjectId, String> {
+/// Carries `edit` out: a cut starts a tool job, answering the object it replaces; a
+/// placement is set at once, answering `None`.
+fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, String> {
     match *edit {
         Edit::Cut {
             object,
@@ -138,7 +140,29 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<ObjectId, String> {
             (window.tools.cut)
                 .start_asked(&window.doc.scene, object, asked)
                 .map_err(|error| format!("{error:#}"))?;
-            Ok(object)
+            Ok(Some(object))
         }
+        Edit::Move { object, by_mm } => {
+            place(window, object, |transform, _| Ok(moved(transform, by_mm)))
+        }
+        Edit::Rotate { object, degrees } => place(window, object, |transform, mesh| {
+            Ok(turned_to(transform, mesh, degrees))
+        }),
+        Edit::Scale { object, factors } => place(window, object, |transform, mesh| {
+            sized_to(transform, mesh, factors)
+                .ok_or_else(|| ApplyError::BadScale(object).to_string())
+        }),
     }
+}
+
+/// Sets the transform of `id` to what `to` makes of it and the object's own mesh.
+fn place(
+    window: &mut Window,
+    id: ObjectId,
+    to: impl FnOnce(Transform, &Mesh) -> Result<Transform, String>,
+) -> Result<Option<ObjectId>, String> {
+    let object =
+        (window.doc.scene.get_mut(id)).ok_or_else(|| format!("no object {id:?} on the plate"))?;
+    object.transform = to(object.transform, &object.mesh)?;
+    Ok(None)
 }
