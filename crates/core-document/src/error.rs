@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use core_edit::ObjectId;
 use thiserror::Error;
 
@@ -26,6 +28,18 @@ pub enum ApplyError {
     /// An object the exact combination cannot read as a closed solid.
     #[error("object {0:?} is not a closed solid")]
     NotSolid(ObjectId),
+    /// A label with no text, or only spaces, to write.
+    #[error("there is no text to write")]
+    BlankLabel,
+    /// A label asked for where the object has no surface to write on.
+    #[error("object {0:?} has no surface to write on there")]
+    NoSurface(ObjectId),
+    /// A font that cannot be read; `path` is the file asked for, none for the bundled one.
+    #[error("the font could not be read: {reason}")]
+    BadFont {
+        path: Option<PathBuf>,
+        reason: String,
+    },
     /// The run was stopped before it finished.
     #[error("the edit was cancelled")]
     Cancelled,

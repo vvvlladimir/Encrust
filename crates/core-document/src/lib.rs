@@ -8,6 +8,7 @@ mod document;
 mod error;
 #[cfg(test)]
 mod fixtures;
+mod label;
 mod piece;
 mod placement;
 mod plate_contents;
@@ -18,6 +19,7 @@ pub use combine::{boolean_of, combined};
 pub use cut::{CutAsked, CutModel, axis_normal, cut, pieces};
 pub use document::Document;
 pub use error::ApplyError;
+pub use label::{LabelAsked, Lettering, label_prisms, labelled};
 pub use piece::{Piece, Role};
 pub use placement::{euler_degrees, moved, sized_to, turned_to};
 pub use plate_contents::mirrored;

@@ -139,7 +139,7 @@ core-engine ──> core-pipeline, core-plate, core-analysis, core-format, core-
                core-joint, core-raster, core-slicer, core-supports, core-thumbnail,
                core-volume, printer-profiles, rayon,
                serde, serde_json, zip, jiff
-core-document ──> core-edit, core-engine, core-geometry, core-joint, core-volume, thiserror
+core-document ──> core-edit, core-engine, core-geometry, core-joint, core-text, core-volume, thiserror
 core-edit ──> core-engine, core-geometry, core-joint, serde
 core-recipe ──> core-engine, core-geometry, core-plate, core-volume, serde, thiserror, toml
 core-pipeline ──> core-analysis, core-format, core-geometry, core-raster, core-slicer,

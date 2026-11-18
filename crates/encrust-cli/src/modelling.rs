@@ -5,20 +5,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow, bail};
-use core_document::{ApplyError, CutAsked, CutModel, part_off_at, pieces, split};
+use core_document::{ApplyError, CutAsked, CutModel, LabelAsked, part_off_at, pieces, split};
 use core_edit::{Axis, ObjectId};
-use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
+use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_joint::{JointKind, Joints};
-use core_text::{Font, Frame, LABEL_DEPTH_MM, LETTER_HEIGHT_MM, LabelSettings, label, outline};
-use core_volume::{Boolean, Cancel, PartSettings, combine_exact_toward};
+use core_text::{LABEL_DEPTH_MM, LETTER_HEIGHT_MM};
+use core_volume::{Boolean, Cancel, PartSettings};
 
 use crate::hollowing::point;
-
-/// The face labels are written in unless `--label-font` names another, the window's own.
-const BUNDLED_FONT: &[u8] = include_bytes!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/fonts/IBMPlexSans-Regular.ttf"
-));
 
 /// How `--combine` joins the models.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -245,43 +239,29 @@ fn combined(models: Vec<Mesh>, op: Op, talk: bool) -> Result<Vec<Mesh>> {
 
 /// `mesh` with `text` written on the surface nearest `--label-at`.
 fn labelled(mesh: &Mesh, text: &str, args: &ModelArgs, talk: bool) -> Result<Mesh> {
-    let at = args.label_at.context("--label needs --label-at")?;
-    let font = match &args.label_font {
-        Some(path) => {
-            let bytes = std::fs::read(path)
-                .with_context(|| format!("cannot read the font {}", path.display()))?;
-            Font::new(Arc::new(bytes), 0)
-        }
-        None => Font::new(Arc::new(BUNDLED_FONT.to_vec()), 0),
-    }
-    .context("reading the font")?;
-    let shapes = outline(&font, text, args.label_height).context("outlining the label")?;
-    let bvh = Bvh::build(mesh);
-    let nearest = bvh.closest(at).context("the model has no surface")?;
-    let normal = mesh
-        .triangle(nearest.face)
-        .map(|triangle| triangle.normal_unnormalized())
-        .context("the nearest face has no area")?;
-    let frame = Frame::on(nearest.point, normal, args.label_angle)
-        .context("the nearest face has no direction")?;
-    let settings = LabelSettings {
+    let at_mm = args.label_at.context("--label needs --label-at")?;
+    let asked = LabelAsked {
+        text: text.to_owned(),
+        at_mm,
+        height_mm: args.label_height,
         depth_mm: args.label_depth,
         raised: !args.label_sunk,
         follow_surface: args.label_follow,
+        angle_deg: args.label_angle,
+        font: args.label_font.clone(),
     };
-    let written = label(&shapes, frame, mesh, &bvh, Transform::default(), settings)
-        .context("laying the label on the model")?;
-    let op = if written.raised {
-        Boolean::Union
-    } else {
-        Boolean::Difference
-    };
-    let mut models = vec![mesh.clone()];
-    models.extend(written.prisms);
-    let stamped =
-        combine_exact_toward(&models, op, frame.normal).context("writing the label in")?;
+    let stamped = core_document::labelled(mesh, &asked, Cancel::never(), ObjectId::UNSET)
+        .map_err(|error| match error {
+            ApplyError::NoSurface(_) => anyhow!("the model has no surface near --label-at"),
+            ApplyError::NotSolid(_) => anyhow!("the model is not a closed solid"),
+            ApplyError::BadFont {
+                path: Some(path), ..
+            } => anyhow!("cannot read the font {}", path.display()),
+            other => other.into(),
+        })
+        .context("writing the label")?;
     if talk {
-        println!("Labelled with {text:?} at {}\n", nearest.point);
+        println!("Labelled with {text:?} at {at_mm}\n");
     }
     Ok(stamped)
 }
