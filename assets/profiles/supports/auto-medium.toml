@@ -36,7 +36,7 @@ contact_depth_mm = 0.0
 length_mm = 2.0
 
 [middle]
-diameter_mm = 1.0
+diameter_mm = 1.3
 
 [bottom]
 # cylinder, cone, prism or cube.
@@ -68,6 +68,8 @@ max_trunk_diameter_mm = 1.56
 # The longest a leaning strut of a merge runs before its tips get trunks of their own.
 max_strut_length_mm = 6.0
 max_tips_per_trunk = 6
+# A lighter tree this tall or taller stands on this shape's trunk, its tips keeping their own.
+trunk_from_height_mm = 50.0
 
 # The slab the supports stand on instead of standing on the plate.
 [raft]
