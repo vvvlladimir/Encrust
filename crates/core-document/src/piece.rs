@@ -28,6 +28,8 @@ pub enum Role {
     Copy,
     /// One body a split or a part-off made, counted from one.
     Part(usize),
+    /// The one object a combination made, which keeps the first's name.
+    Combined,
 }
 
 impl Piece {

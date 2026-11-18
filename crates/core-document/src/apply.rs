@@ -1,8 +1,9 @@
 use core_edit::{Edit, ObjectId};
 use core_engine::project::hollow_of;
-use core_geometry::{Mesh, Transform};
+use core_geometry::{Mesh, Scalar, Transform};
 use core_volume::Cancel;
 
+use crate::combine::apply_combine;
 use crate::cut::{CutAsked, CutModel, cut, pieces};
 use crate::document::Document;
 use crate::error::ApplyError;
@@ -21,7 +22,7 @@ pub struct Applied {
 }
 
 /// What an edit has to say beyond the objects it changed.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Report {
     Cut {
         /// Cut loops that did not close, and were left uncapped.
@@ -45,6 +46,11 @@ pub enum Report {
     },
     /// A part was cut off an object.
     PartedOff,
+    /// Objects were combined into one.
+    Combined {
+        /// The lattice it was sampled on, mm, where an object was not an exact solid.
+        voxel_mm: Option<Scalar>,
+    },
     /// An object was moved, turned or sized where it stands.
     Placed,
     /// An object was deleted or copied.
@@ -81,6 +87,11 @@ pub fn apply(
             smallest_mm3,
         } => apply_split(document, object, smallest_mm3, cancel),
         Edit::PartOff { object, at_mm } => apply_part_off(document, object, at_mm, cancel),
+        Edit::Combine {
+            ref objects,
+            op,
+            toward,
+        } => apply_combine(document, objects, op, toward, cancel),
         Edit::Move { object, by_mm } => {
             place(document, object, |transform, _| Ok(moved(transform, by_mm)))
         }

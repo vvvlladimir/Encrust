@@ -1,10 +1,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use core_csg::CsgError;
+use core_document::{ApplyError, combined};
+use core_edit::ObjectId;
 use core_geometry::{Mesh, Vec3};
-use core_volume::{
-    Boolean, Cancel, Combined, Progress, VolumeError, combine, combine_exact_toward,
-};
+use core_volume::{Boolean, Cancel, Combined, Progress};
 
 use crate::i18n::tr;
 use crate::job::{Counted, Worker, pooled};
@@ -54,10 +53,11 @@ impl BooleanJob {
             op,
             method,
         } = request;
+        let first = taken.first().map_or(ObjectId(0), |object| object.id);
         let worker = Worker::spawn(
             move |stop, progress| {
                 pooled(
-                    || run(&placed, op, method, (stop, progress)),
+                    || run(&placed, (op, method, first), (stop, progress)),
                     BooleanOutcome::Failed,
                 )
             },
@@ -84,26 +84,19 @@ impl BooleanJob {
 
 fn run(
     placed: &[Mesh],
-    op: Boolean,
-    method: Method,
+    (op, method, first): (Boolean, Method, ObjectId),
     (stop, progress): (&AtomicBool, &Progress),
 ) -> BooleanOutcome {
     let asked = || stop.load(Ordering::Relaxed);
-    let combined = match method {
-        Method::Sampled => combine(placed, op, Cancel::when(&asked).reporting(progress)),
-        Method::ExactToward(toward) => {
-            combine_exact_toward(placed, op, toward).map(|mesh| Combined {
-                mesh,
-                voxel_mm: None,
-            })
-        }
+    let toward = match method {
+        Method::Sampled => None,
+        Method::ExactToward(toward) => Some(toward),
     };
-    match combined {
+    let cancel = Cancel::when(&asked).reporting(progress);
+    match combined(placed, op, toward, cancel, first) {
         Ok(combined) => BooleanOutcome::Combined(combined),
-        Err(VolumeError::NothingLeft) => BooleanOutcome::Failed(tr!("boolean-nothing-left")),
-        Err(VolumeError::Csg(CsgError::NotSolid(_))) => {
-            BooleanOutcome::Failed(tr!("boolean-not-solid"))
-        }
+        Err(ApplyError::NothingLeft) => BooleanOutcome::Failed(tr!("boolean-nothing-left")),
+        Err(ApplyError::NotSolid(_)) => BooleanOutcome::Failed(tr!("boolean-not-solid")),
         Err(error) => BooleanOutcome::Failed(tr!("boolean-failed", reason = error.to_string())),
     }
 }

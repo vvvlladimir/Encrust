@@ -46,6 +46,26 @@ pub enum Edit {
     },
     /// Cuts the part of `object` at plate point `at_mm` off where it joins the rest.
     PartOff { object: ObjectId, at_mm: Vec3 },
+    /// Replaces `objects` by the one `op` makes of them, the first being what a difference
+    /// keeps. With `toward` set the cut is exact and takes only the side of the first the
+    /// others stand on it from; unset, it is exact where every object is a solid and sampled
+    /// where one is not.
+    Combine {
+        objects: Vec<ObjectId>,
+        op: Op,
+        #[serde(default)]
+        toward: Option<Vec3>,
+    },
+}
+
+/// How `Edit::Combine` joins its objects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Op {
+    Union,
+    /// The first object less every other.
+    Difference,
+    Intersection,
 }
 
 #[cfg(test)]

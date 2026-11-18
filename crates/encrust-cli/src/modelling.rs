@@ -10,7 +10,7 @@ use core_edit::{Axis, ObjectId};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_joint::{JointKind, Joints};
 use core_text::{Font, Frame, LABEL_DEPTH_MM, LETTER_HEIGHT_MM, LabelSettings, label, outline};
-use core_volume::{Boolean, Cancel, PartSettings, combine, combine_exact_toward};
+use core_volume::{Boolean, Cancel, PartSettings, combine_exact_toward};
 
 use crate::hollowing::point;
 
@@ -222,7 +222,13 @@ fn combined(models: Vec<Mesh>, op: Op, talk: bool) -> Result<Vec<Mesh>> {
     if models.len() < 2 {
         bail!("--combine takes two models or more, got {}", models.len());
     }
-    let joined = combine(&models, op.into(), Cancel::never()).context("combining the models")?;
+    let joined =
+        core_document::combined(&models, op.into(), None, Cancel::never(), ObjectId::UNSET)
+            .map_err(|error| match error {
+                ApplyError::NotSolid(_) => anyhow!("a model is not a closed solid"),
+                other => other.into(),
+            })
+            .context("combining the models")?;
     if talk {
         match joined.voxel_mm {
             None => println!("Combined {} models\n", models.len()),
