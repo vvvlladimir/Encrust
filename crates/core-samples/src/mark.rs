@@ -3,7 +3,7 @@
 
 use core_geometry::Vec2;
 
-use crate::samples::solid::{EMBED, Solid};
+use crate::solid::{EMBED, Solid};
 
 /// The slabs' depth over their width, and their corners' radius over their width.
 const DEPTH: f32 = 0.867;

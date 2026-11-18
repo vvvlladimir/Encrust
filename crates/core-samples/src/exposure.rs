@@ -4,8 +4,8 @@
 
 use core_geometry::{Mesh, Vec2, Vec3};
 
-use crate::samples::mark;
-use crate::samples::solid::{EMBED, Solid, holed_rectangle, rod};
+use crate::mark;
+use crate::solid::{EMBED, Solid, holed_rectangle, rod};
 
 /// The plaque, mm.
 const BASE: Vec3 = Vec3::new(46.0, 30.0, 2.0);
@@ -23,7 +23,7 @@ const PITCH: f32 = 5.0;
 const BLOCK_HALF: f32 = 1.6;
 const SEGMENTS: u32 = 32;
 
-pub fn build() -> Mesh {
+pub(crate) fn build() -> Mesh {
     let mut solid = Solid::default();
     solid.cuboid(Vec3::ZERO, BASE);
     let (floor, top) = (BASE.z - EMBED, BASE.z + FEATURE_H);

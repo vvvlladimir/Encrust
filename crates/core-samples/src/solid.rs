@@ -118,19 +118,19 @@ impl Solid {
         (lower, lower + outline.len() as u32)
     }
 
-    /// The side between a loop of `n` vertices and the copy above it, facing out of the
+    /// The side between a loop of `count` vertices and the copy above it, facing out of the
     /// loop, or into it where the loop is a hole.
-    fn wall(&mut self, lower: u32, upper: u32, n: u32, hole: bool) {
-        for i in 0..n {
-            let j = (i + 1) % n;
-            let quad = [lower + i, lower + j, upper + j, upper + i];
-            let [a, b, c, d] = if hole {
+    fn wall(&mut self, lower: u32, upper: u32, count: u32, hole: bool) {
+        for this in 0..count {
+            let next = (this + 1) % count;
+            let quad = [lower + this, lower + next, upper + next, upper + this];
+            let [first, second, third, fourth] = if hole {
                 [quad[0], quad[3], quad[2], quad[1]]
             } else {
                 quad
             };
-            self.faces.push([a, b, c]);
-            self.faces.push([a, c, d]);
+            self.faces.push([first, second, third]);
+            self.faces.push([first, third, fourth]);
         }
     }
 }
