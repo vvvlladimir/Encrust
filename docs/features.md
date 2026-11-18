@@ -1112,7 +1112,8 @@ worse. The window lists every agent — Claude Code, Claude Desktop — in the r
 the bar, working, waiting or ended, with its latest models and what the check found; a click
 shows one on the plate as Prepare for print by the same recipe the check ran, one undo, on
 the job's printer and resin, whenever the window was opened. With Follow agents on, each
-step an agent keeps is run on the plate as it comes. A point, a pose
+step an agent keeps is run on the plate as it comes; asked to show you the model, the agent
+puts it on the plate itself, opening Encrust if it is closed. A point, a pose
 picked from the list or turned by hand, the modelling and the slicing are not run there yet;
 the answer names what was left out. It asks what the print is for and can prepare it by
 another recipe, such as Miniatures; it can be told which side of the model is looked at, so

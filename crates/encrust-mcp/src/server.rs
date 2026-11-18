@@ -31,6 +31,7 @@ mod after;
 mod library;
 mod poses;
 mod reply;
+mod shown;
 mod written;
 
 use reply::{Reply, answer, not_applied, reported, revised};
@@ -393,6 +394,17 @@ impl Server {
         Ok(answer(self.after_print(print, &ctx).await))
     }
 
+    /// Shows a revision on the plate of the user's Encrust window, starting the window if it
+    /// is closed: when the user asks to see or adjust the model there.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn show_in_window(&self, Parameters(at): Parameters<JobRef>, _: Context) -> Answer {
+        Ok(answer(self.shown(at).await))
+    }
+
     /// Sends a written file to a printer on the local network, and starts it if asked.
     #[tool(annotations(
         read_only_hint = false,
@@ -517,7 +529,7 @@ impl Server {
         if revision.recipe.is_project() {
             return reply;
         }
-        if let Some(shown) = self.window.show(revision).await {
+        if let Some(shown) = self.window.show(revision, false).await {
             reply.body["window"] = shown;
             reply.body["unshown"] = json!(revision.recipe.unshown());
         }

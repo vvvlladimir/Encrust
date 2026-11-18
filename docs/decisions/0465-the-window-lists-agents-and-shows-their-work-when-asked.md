@@ -32,7 +32,7 @@ already finds the server's folder there.
   The switch is in the chooser and remembered with the window's behaviour.
 - **`show_in_window`** of `encrust-mcp` hands a revision over marked `open`, which the
   window shows whether it follows or not; with no window answering, it starts the window —
-  `--app PATH`, else `encrust-app` beside the server or on the `PATH`, else the installed
+  `--app PATH`, else `encrust-gui` beside the server or on the `PATH`, else the installed
   app — and hands it over once the window's file answers, within 30 s.
 
 ## Consequences

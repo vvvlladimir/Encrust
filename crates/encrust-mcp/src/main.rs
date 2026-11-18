@@ -27,7 +27,7 @@ use crate::trace::Trace;
 use crate::window::Window;
 
 const USAGE: &str = "usage: encrust-mcp [--encrust PATH] [--jobs DIR] [--timeout-s SECONDS] \
-                     [--trace FILE] [--window FILE | --no-window] [--agents DIR]";
+                     [--trace FILE] [--window FILE | --no-window] [--agents DIR] [--app PATH]";
 
 /// How long one run of the command line may take before it is stopped.
 const TIMEOUT: Duration = Duration::from_mins(30);
@@ -64,6 +64,7 @@ fn parse(
     let mut timeout = TIMEOUT;
     let mut window = Some(None);
     let mut agents = None;
+    let mut app = None;
     while let Some(arg) = args.next() {
         let mut value = || {
             args.next()
@@ -76,6 +77,7 @@ fn parse(
             Some("--window") => window = Some(Some(PathBuf::from(value()?))),
             Some("--no-window") => window = None,
             Some("--agents") => agents = Some(PathBuf::from(value()?)),
+            Some("--app") => app = Some(PathBuf::from(value()?)),
             Some("--timeout-s") => {
                 let seconds = value()?;
                 let seconds: u64 = seconds
@@ -102,7 +104,7 @@ fn parse(
     let window = window.and_then(|file| file.or_else(|| Some(cache_dir()?.join("window.json"))));
     let shown = (
         Trace::new(trace),
-        Window::new(window),
+        Window::new(window, apps(app, &server)),
         Presence::new(agents),
     );
     Ok((Cli::new(program, timeout), Jobs::new(jobs), shown))
@@ -111,4 +113,25 @@ fn parse(
 fn cache_dir() -> Option<PathBuf> {
     let dirs = directories::ProjectDirs::from("", "", "Encrust")?;
     Some(dirs.cache_dir().to_owned())
+}
+
+/// The programs `show_in_window` starts the window by, in turn: `--app`, else the window beside
+/// this server, on the `PATH`, and where macOS installs it.
+fn apps(app: Option<PathBuf>, server: &std::path::Path) -> Vec<PathBuf> {
+    if let Some(app) = app {
+        return vec![app];
+    }
+    let name = format!("encrust-gui{}", std::env::consts::EXE_SUFFIX);
+    let mut apps: Vec<PathBuf> = server
+        .parent()
+        .map(|dir| dir.join(&name))
+        .into_iter()
+        .collect();
+    apps.push(PathBuf::from(&name));
+    if cfg!(target_os = "macos") {
+        apps.push(PathBuf::from(
+            "/Applications/Encrust.app/Contents/MacOS/encrust-gui",
+        ));
+    }
+    apps
 }
