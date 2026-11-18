@@ -361,10 +361,7 @@ mod tests {
     fn a_run_reports_a_turn_for_every_model_it_was_given() {
         let request = OrientRequest {
             tasks: vec![
-                OrientTask::solid(
-                    ObjectId(1),
-                    Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
-                ),
+                OrientTask::solid(ObjectId(1), Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0)))),
                 OrientTask::solid(ObjectId(2), Arc::new(cuboid(Vec3::splat(10.0)))),
             ],
             settings: OrientSettings::default(),
@@ -435,10 +432,7 @@ mod tests {
     #[test]
     fn a_model_with_no_geometry_fails_the_run() {
         let request = OrientRequest {
-            tasks: vec![OrientTask::solid(
-                ObjectId(1),
-                Arc::new(Mesh::default()),
-            )],
+            tasks: vec![OrientTask::solid(ObjectId(1), Arc::new(Mesh::default()))],
             settings: OrientSettings::default(),
             proof: None,
         };
