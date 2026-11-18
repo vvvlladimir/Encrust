@@ -663,6 +663,100 @@ async fn each_revision_keeps_the_steps_its_check_ran_and_hands_them_to_the_open_
     );
 }
 
+/// A window that answers each line by its kind for `lines` connections: a revision shown, the
+/// plate with the job's model as object 1 on it at version 5, edits applied; the lines read.
+async fn plate_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
+    use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("a free port");
+    let port = listener.local_addr().expect("bound").port();
+    let file = dir.join("window.json");
+    fs::write(&file, json!({"port": port, "token": "t"}).to_string()).expect("writable");
+    let window = tokio::spawn(async move {
+        let mut read = Vec::new();
+        for _ in 0..lines {
+            let (stream, _) = listener.accept().await.expect("the server connects");
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).await.expect("a line");
+            let line: Value = serde_json::from_str(&line).expect("JSON");
+            let reply = if line["want"] == "plate" {
+                json!({"plate": "/w/base-5.encrust", "version": 5, "objects": [1], "job_object": 1})
+            } else if line.get("apply").is_some() {
+                json!({"applied": true})
+            } else {
+                json!({"shown": true})
+            };
+            let reply = format!("{reply}\n");
+            reader
+                .get_mut()
+                .write_all(reply.as_bytes())
+                .await
+                .expect("answered");
+            read.push(line);
+        }
+        read
+    });
+    (file, window)
+}
+
+#[tokio::test]
+async fn a_cut_reaches_the_window_as_an_edit_and_an_undo_there_reaches_the_next_revision() {
+    let dir = scratch("window-cut");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    // The revision shown, the plate and the cut, then the plate and the next revision shown.
+    let (file, window) = plate_window(&dir, 5).await;
+    let jobs = dir.join("jobs");
+    let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
+    let job = start(&client, &model).await;
+
+    let cut = call(
+        &client,
+        "set_shape",
+        json!({"job": job, "modelling": {"cut": {"axis": "z", "at_mm": 10.0}, "arrange": true}}),
+    )
+    .await;
+    assert_eq!(
+        answer(&cut)["window"],
+        json!({"applied": true}),
+        "{}",
+        answer(&cut)
+    );
+    // The fake window still has object 1, the model whole: the user undid the cut there.
+    let hollowed = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+    )
+    .await;
+    client.cancel().await.expect("the server stops");
+
+    let lines = window.await.expect("the window's task ends");
+    let applied = &lines[2];
+    assert_eq!(applied["base_version"], 5);
+    assert_eq!(
+        applied["apply"][0]["object"], 1,
+        "the cut names the job's model"
+    );
+    assert!(
+        answer(&hollowed)["note"]
+            .as_str()
+            .is_some_and(|note| note.contains("undone")),
+        "{}",
+        answer(&hollowed)
+    );
+    let second = fs::read_to_string(jobs.join(&job).join("2.toml")).expect("revision 2 is kept");
+    assert!(second.contains("[modelling.cut]"), "the cut was kept: {second}");
+    let third = fs::read_to_string(jobs.join(&job).join("3.toml")).expect("revision 3 is kept");
+    assert!(
+        !third.contains("[modelling.cut]"),
+        "the undone cut is gone: {third}"
+    );
+}
+
 #[tokio::test]
 async fn a_job_prepared_by_another_recipe_keeps_that_recipe_as_its_steps() {
     let dir = scratch("recipes");

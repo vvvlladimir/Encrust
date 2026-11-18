@@ -10,7 +10,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
-use serde_json::Value;
+use core_edit::{Edit, ObjectId};
+use serde_json::{Value, json};
 
 use crate::recipe::Recipe;
 
@@ -240,6 +241,28 @@ impl Jobs {
             .with_context(|| format!("job {job} has no revision"))
     }
 
+    /// The edits revision `number` handed the open window, kept beside it as `N.edits.json`.
+    pub fn keep_edits(&self, job: &str, number: u32, edits: &[Edit]) -> Result<()> {
+        let path = self.dir(job)?.join(format!("{number}.edits.json"));
+        fs::write(&path, serde_json::to_string(edits)?)
+            .with_context(|| format!("writing {}", path.display()))
+    }
+
+    /// Notes that the open window holds revision `number`'s cut, which replaced `object`.
+    pub fn keep_window_cut(&self, job: &str, number: u32, object: ObjectId) -> Result<()> {
+        let path = self.dir(job)?.join(window_name(number));
+        fs::write(&path, json!({"cut_object": object}).to_string())
+            .with_context(|| format!("writing {}", path.display()))
+    }
+
+    /// The object revision `number`'s cut replaced on the open window's plate, if the window
+    /// was handed the cut.
+    pub fn window_cut(&self, job: &str, number: u32) -> Option<ObjectId> {
+        let text = fs::read_to_string(self.dir(job).ok()?.join(window_name(number))).ok()?;
+        let kept: Value = serde_json::from_str(&text).ok()?;
+        serde_json::from_value(kept["cut_object"].clone()).ok()
+    }
+
     /// A job's directory under the root. A name of anything but letters, digits, `-` and `_`
     /// is refused, so no name reaches outside it.
     fn dir(&self, job: &str) -> Result<PathBuf> {
@@ -274,6 +297,10 @@ fn slug(stem: &str) -> String {
 }
 
 /// The file the steps of revision `number` are kept in.
+fn window_name(number: u32) -> String {
+    format!("{number}.window.json")
+}
+
 fn steps_name(number: u32) -> String {
     format!("{number}.recipe.toml")
 }

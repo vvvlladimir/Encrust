@@ -129,7 +129,10 @@ impl Link {
                 let _ = reply.send(refused(NOT_FOLLOWING).unwrap_or_default());
             }
             Line::Revision(_) => {}
-            Line::Plate { job } => plate::hand_plate(&self.jobs, &job, window, reply),
+            Line::Plate { job } => {
+                let object = self.job_object(&job, window);
+                plate::hand_plate(&self.jobs, (&job, object), window, reply);
+            }
             Line::Apply { .. } if self.applying.is_some() => {
                 let _ = reply.send(refused(EDITS_UNDER_WAY).unwrap_or_default());
             }
@@ -200,6 +203,13 @@ impl Link {
     /// The job's place in the list, a new entry where it is new or names another model. A
     /// new job of a model already followed takes that model's entry over, so a model is on
     /// the plate once however many jobs an agent starts on it.
+    /// Where `job`'s model stands on the plate whole, as it was read in for the job.
+    fn job_object(&self, job: &str, window: &Window) -> Option<ObjectId> {
+        let followed = self.followed.iter().find(|followed| followed.job == job)?;
+        let id = followed.fresh.as_ref()?.id;
+        window.doc.scene.get(id).is_some().then_some(id)
+    }
+
     fn followed_index(&mut self, job: &str, model: &PathBuf) -> usize {
         if let Some(index) = self.followed.iter().position(|f| f.model == *model) {
             job.clone_into(&mut self.followed[index].job);

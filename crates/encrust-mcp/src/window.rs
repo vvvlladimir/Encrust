@@ -6,6 +6,8 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
+use core_edit::{Edit, ObjectId};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 use tokio::net::TcpStream;
@@ -18,6 +20,10 @@ const SCHEMA: u64 = 2;
 const CONNECT_WAIT: Duration = Duration::from_secs(1);
 /// How long it may take to answer: its next frame, which a busy plate can hold up.
 const REPLY_WAIT: Duration = Duration::from_secs(15);
+/// The schema that asks for the plate and applies edits to it (ADR 0466).
+const PLATE_SCHEMA: u64 = 3;
+/// How long edits handed over may take to land: each runs as a tool's job.
+const APPLY_WAIT: Duration = Duration::from_secs(90);
 
 /// How long a window started for `show_in_window` may take to listen.
 const START_WAIT: Duration = Duration::from_secs(30);
@@ -94,13 +100,7 @@ impl Window {
     /// One not marked `open` is run only while the window follows its agents.
     pub async fn show(&self, revision: &Revision, open: bool) -> Option<Value> {
         let steps = revision.steps.as_ref()?;
-        let text = tokio::fs::read_to_string(self.file.as_ref()?).await.ok()?;
-        let found: Value = serde_json::from_str(&text).ok()?;
-        let port = u16::try_from(found["port"].as_u64()?).ok()?;
-        let token = found["token"].as_str()?;
-        let connected = tokio::time::timeout(CONNECT_WAIT, TcpStream::connect(("127.0.0.1", port)));
-        // A file left by a window that has closed names a port nobody listens on.
-        let stream = connected.await.ok()?.ok()?;
+        let (stream, token) = self.connect().await?;
         let line = json!({
             "schema": SCHEMA,
             "token": token,
@@ -113,20 +113,65 @@ impl Window {
             "open": open,
         });
         Some(
-            ask(stream, &line)
+            ask(stream, &line, REPLY_WAIT)
                 .await
                 .unwrap_or_else(|error| json!({ "shown": false, "why_not": format!("{error:#}") })),
         )
     }
+
+    /// The open window's plate as `job` builds on it: its file, version, the ids on it and the
+    /// job's model there, or `None` with no window that hands it over (ADR 0466).
+    pub async fn plate(&self, job: &str) -> Option<Plate> {
+        let (stream, token) = self.connect().await?;
+        let line = json!({"schema": PLATE_SCHEMA, "token": token, "job": job, "want": "plate"});
+        let answer = ask(stream, &line, REPLY_WAIT).await.ok()?;
+        serde_json::from_value(answer).ok()
+    }
+
+    /// Hands `edits` built on the plate at `base_version` to the window, and its answer.
+    pub async fn apply(&self, job: &str, edits: &[Edit], base_version: u64) -> Option<Value> {
+        let (stream, token) = self.connect().await?;
+        let line = json!({"schema": PLATE_SCHEMA, "token": token, "job": job,
+                          "base_version": base_version, "apply": edits});
+        Some(
+            ask(stream, &line, APPLY_WAIT)
+                .await
+                .unwrap_or_else(|error| json!({"applied": false, "why_not": format!("{error:#}")})),
+        )
+    }
+
+    /// A connection to the window its file names, and the token it asks for.
+    async fn connect(&self) -> Option<(TcpStream, String)> {
+        let text = tokio::fs::read_to_string(self.file.as_ref()?).await.ok()?;
+        let found: Value = serde_json::from_str(&text).ok()?;
+        let port = u16::try_from(found["port"].as_u64()?).ok()?;
+        let token = found["token"].as_str()?.to_owned();
+        let connected = tokio::time::timeout(CONNECT_WAIT, TcpStream::connect(("127.0.0.1", port)));
+        // A file left by a window that has closed names a port nobody listens on.
+        let stream = connected.await.ok()?.ok()?;
+        Some((stream, token))
+    }
 }
 
-async fn ask(mut stream: TcpStream, line: &Value) -> Result<Value> {
+/// The plate the window handed over.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Plate {
+    /// The `.encrust` file it wrote.
+    pub plate: PathBuf,
+    pub version: u64,
+    /// Every object on the plate.
+    pub objects: Vec<ObjectId>,
+    /// The job's model where it stands whole on the plate.
+    pub job_object: Option<ObjectId>,
+}
+
+async fn ask(mut stream: TcpStream, line: &Value, wait: Duration) -> Result<Value> {
     let mut text = line.to_string();
     text.push('\n');
     stream.write_all(text.as_bytes()).await?;
     let mut reply = String::new();
     let mut reader = BufReader::new(stream);
-    tokio::time::timeout(REPLY_WAIT, reader.read_line(&mut reply))
+    tokio::time::timeout(wait, reader.read_line(&mut reply))
         .await
         .context("the window did not answer in time")??;
     if reply.trim().is_empty() {

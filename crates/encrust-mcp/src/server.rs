@@ -29,6 +29,7 @@ use crate::window::Window;
 
 mod after;
 mod library;
+mod plate_edits;
 mod poses;
 mod reply;
 mod shown;
@@ -491,7 +492,8 @@ impl Server {
         let _held = lock.lock().await;
         let latest = self.jobs.open(job, None)?;
         let mut recipe = latest.recipe.clone();
-        let note = change(&mut recipe);
+        let undone = self.follow_window_undo(&latest, &mut recipe).await;
+        let note = change(&mut recipe).or(undone);
         recipe.check_paths()?;
         let against = self.jobs.against(job, Some(latest.number));
         let (outcome, steps) = self.checked(&recipe, &against, ctx).await?;
@@ -527,6 +529,10 @@ impl Server {
         let mut reply = revised(revision, outcome, note);
         // The window reads a job's model in beside the plate; a project would take its place.
         if revision.recipe.is_project() {
+            return reply;
+        }
+        if let Some(applied) = self.cut_in_window(revision).await {
+            reply.body["window"] = applied;
             return reply;
         }
         if let Some(shown) = self.window.show(revision, false).await {

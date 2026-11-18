@@ -10,7 +10,7 @@ mod shape;
 mod slicing;
 mod unshown;
 
-pub use shape::{Mend, Modelling, Relief};
+pub use shape::{Cut, Mend, Modelling, Relief};
 pub use slicing::Slicing;
 
 /// The preparation of one model for one printer and resin.

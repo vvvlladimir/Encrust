@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use core_edit::{Edit, JointKind, Joints, ObjectId};
 use rmcp::schemars::{self, JsonSchema};
 use serde::{Deserialize, Serialize};
 
@@ -123,6 +124,37 @@ pub struct Cut {
     pub at_mm: f32,
     pub keep: Option<Keep>,
     pub joint: Option<Joint>,
+}
+
+impl Cut {
+    /// The cut as an edit of `object` on a plate, its halves laid on their cut faces as
+    /// `--cut` lays them (ADR 0466).
+    pub fn edit(&self, object: ObjectId) -> Edit {
+        Edit::Cut {
+            object,
+            axis: match self.axis {
+                Axis::X => core_edit::Axis::X,
+                Axis::Y => core_edit::Axis::Y,
+                Axis::Z => core_edit::Axis::Z,
+            },
+            at_mm: self.at_mm,
+            keep: match self.keep {
+                None | Some(Keep::Both) => core_edit::Keep::Both,
+                Some(Keep::Lower) => core_edit::Keep::Below,
+                Some(Keep::Upper) => core_edit::Keep::Above,
+            },
+            joints: Joints {
+                kind: self.joint.map(|joint| match joint {
+                    Joint::Dowels => JointKind::Dowels,
+                    Joint::Pins => JointKind::Pins,
+                    Joint::Magnets => JointKind::Magnets,
+                    Joint::Key => JointKind::Key,
+                }),
+                ..Joints::default()
+            },
+            lay_flat: true,
+        }
+    }
 }
 
 /// A texture pressed into the model, as `--relief` and its flags.
