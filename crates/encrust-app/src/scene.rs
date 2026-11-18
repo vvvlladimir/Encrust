@@ -61,7 +61,7 @@ impl std::fmt::Debug for Shaped {
     }
 }
 
-pub use core_engine::project::ObjectId;
+pub use core_edit::ObjectId;
 
 impl SceneObject {}
 
