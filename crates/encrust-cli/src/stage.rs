@@ -203,13 +203,17 @@ pub fn stage(
     }
     match given {
         Given::Models(paths) => {
+            job.edits.refuse_for_models()?;
             let chosen = profiles::resolve(&job.profile.selection())?;
             models(paths, arrange, job, &chosen, watch)
         }
-        Given::PlateFile(path) => plate_file::stage(path, arrange, job, watch),
+        Given::PlateFile(path) => {
+            job.edits.refuse_for_models()?;
+            plate_file::stage(path, arrange, job, watch)
+        }
         Given::Project(path) => {
             refuse_for_a_project(arrange, job)?;
-            let project = project::open(path)?;
+            let project = job.edits.applied(project::open(path)?)?;
             let plate = plate
                 .map(|number| project::chosen_plate(&project.manifest, number))
                 .transpose()?;

@@ -603,6 +603,17 @@ encrust slice plate.encrust --all-plates -o plate.goo
 
 A flag wins over the plate file or project, which wins over the profiles' own numbers.
 
+A project's plate is edited as the window's tools edit it by `--edits FILE`, a JSON list of
+edits carried out in order before the run, each naming its object by the id the project
+keeps (`docs/design/document.md`, ADR 0466); `--project-out FILE` writes the plate they leave
+as a project. An edit that cannot be carried out stops the run and writes nothing. Only a
+project takes them yet; a model is shaped by its flags.
+
+```sh
+echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json
+encrust estimate plate.encrust --edits cut.json --project-out cut.encrust --json
+```
+
 ## Estimate, info and convert
 
 `estimate` takes what `slice` takes and writes nothing. It prints what the stack is and,

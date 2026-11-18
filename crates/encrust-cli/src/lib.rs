@@ -14,6 +14,7 @@ mod json;
 mod keep_solid;
 mod meeting;
 mod modelling;
+mod plate_edits;
 mod plate_file;
 mod png_stack;
 mod progress;
