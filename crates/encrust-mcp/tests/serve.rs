@@ -68,6 +68,16 @@ async fn serve(cli: &Path, jobs: &Path) -> Client {
 }
 
 async fn serve_with(cli: &Path, jobs: &Path, extra: &[&std::ffi::OsStr]) -> Client {
+    serve_at_home(cli, jobs, extra, None).await
+}
+
+/// The server with `home` as the user's home, so the profiles it keeps are a test's own.
+async fn serve_at_home(
+    cli: &Path,
+    jobs: &Path,
+    extra: &[&std::ffi::OsStr],
+    home: Option<&Path>,
+) -> Client {
     let server = PathBuf::from(env!("CARGO_BIN_EXE_encrust-mcp"));
     let transport = TokioChildProcess::new(tokio::process::Command::new(server).configure(|cmd| {
         cmd.arg("--encrust")
@@ -75,6 +85,13 @@ async fn serve_with(cli: &Path, jobs: &Path, extra: &[&std::ffi::OsStr]) -> Clie
             .arg("--jobs")
             .arg(jobs)
             .args(extra);
+        if let Some(home) = home {
+            cmd.env("HOME", home)
+                .env("XDG_CONFIG_HOME", home.join(".config"))
+                .env("XDG_DATA_HOME", home.join(".local/share"))
+                .env("APPDATA", home)
+                .env("LOCALAPPDATA", home);
+        }
     }))
     .expect("the server binary starts");
     ().serve(transport)
@@ -137,6 +154,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
         [
             "check",
             "compare_poses",
+            "import_resin",
             "inspect_model",
             "list_profiles",
             "list_recipes",
@@ -670,4 +688,33 @@ async fn a_job_prepared_by_another_recipe_keeps_that_recipe_as_its_steps() {
     let steps = fs::read_to_string(dir.join("jobs").join(&job).join("2.recipe.toml"))
         .expect("the revision keeps its steps");
     assert!(steps.contains("Miniatures"), "{steps}");
+}
+
+#[tokio::test]
+async fn a_resin_taken_in_from_its_file_is_listed_as_the_user_s_own() {
+    let dir = scratch("resin");
+    let home = dir.join("home");
+    let client = serve_at_home(&encrust(), &dir.join("jobs"), &[], Some(&home)).await;
+    let imported = call(
+        &client,
+        "import_resin",
+        json!({"file": profile("test-resin.toml")}),
+    )
+    .await;
+    assert!(!failed(&imported), "{}", answer(&imported));
+    let id = answer(&imported)["id"].as_str().expect("an id").to_owned();
+    let listed = answer(&call(&client, "list_profiles", json!({})).await);
+    assert!(
+        listed["resins"]
+            .as_array()
+            .is_some_and(|resins| resins.iter().any(|resin| resin["id"] == id.as_str())),
+        "{id} among the user's resins: {}",
+        listed["resins"]
+    );
+    let relative = call(&client, "import_resin", json!({"file": "resin.toml"})).await;
+    assert!(
+        failed(&relative),
+        "a relative path never reaches the command line"
+    );
+    client.cancel().await.expect("the server stops");
 }
