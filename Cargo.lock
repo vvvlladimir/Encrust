@@ -1936,6 +1936,7 @@ version = "0.9.0"
 dependencies = [
  "anyhow",
  "base64",
+ "core-edit",
  "core-geometry",
  "directories",
  "rmcp",

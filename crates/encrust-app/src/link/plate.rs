@@ -25,21 +25,29 @@ fn refused(why: String) -> Value {
 }
 
 /// Writes the plate as it stands into `job`'s folder under `jobs` off the drawing thread,
-/// and answers with its path and the plate's version.
-pub fn hand_plate(jobs: &Path, job: &str, window: &Window, reply: Sender<Value>) {
+/// and answers with its path, the plate's version, the ids on it and `job_object`, the
+/// job's model where it stands on the plate whole.
+pub fn hand_plate(
+    jobs: &Path,
+    (job, job_object): (&str, Option<ObjectId>),
+    window: &Window,
+    reply: Sender<Value>,
+) {
     let Some(dir) = job_dir(jobs, job) else {
         let _ = reply.send(json!({"plate": null, "why_not": format!("{job:?} names no job")}));
         return;
     };
     let version = window.doc.history.plate_version();
     let project = crate::project::captured(window);
+    let objects: Vec<ObjectId> = (project.manifest.objects.iter()).map(|o| o.id).collect();
     let path = dir.join(format!("base-{version}.encrust"));
     std::thread::spawn(move || {
         let written = std::fs::create_dir_all(&dir)
             .map_err(|error| error.to_string())
             .and_then(|()| core_engine::project::save(&path, &project).map_err(|e| e.to_string()));
         let answer = match written {
-            Ok(()) => json!({"plate": path, "version": version}),
+            Ok(()) => json!({"plate": path, "version": version, "objects": objects,
+                             "job_object": job_object}),
             Err(why) => json!({"plate": null, "why_not": why}),
         };
         let _ = reply.send(answer);

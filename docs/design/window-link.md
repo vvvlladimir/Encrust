@@ -48,11 +48,13 @@ A server asks for the plate as it stands:
 
 ```json
 {"schema": 3, "token": "…", "job": "cube-18e4…", "want": "plate"}
-{"plate": "…/mcp-jobs/cube-18e4…/base-12.encrust", "version": 12}
+{"plate": "…/mcp-jobs/cube-18e4…/base-12.encrust", "version": 12, "objects": [3, 4],
+ "job_object": 3}
 ```
 
 The window writes the plate into the job's folder off its drawing thread, every object under
-the id it knows it by, and answers with the path and its plate's version: a count raised by
+the id it knows it by, and answers with the path, the ids on the plate, `job_object` — the
+job's model where it stands whole, read in for the job — and its plate's version: a count raised by
 every recorded change of the plate, its undo and its redo, not by a tool's setting. The server
 builds its edits on that file and hands them back with the version:
 
