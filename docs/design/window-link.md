@@ -52,3 +52,20 @@ job's run, or a job of the user's own still landing, holds it until it ends.
 
 The check every tool answers with is still the command line's: the window shows the steps, it
 does not answer for them.
+
+## Agents
+
+Each server keeps a file of its own in `agents/` beside `mcp-jobs/`, named for its process
+and start, written whole — into a `.part` file, then renamed — on each tool call and every
+20 s (ADR 0465):
+
+```json
+{"schema": 1, "pid": 4242, "client": "claude-code", "started_s": 1763460000,
+ "seen_s": 1763460125, "working": {"tool": "set_hollow", "job": "cube-18e4…",
+ "since_s": 1763460120}, "jobs": ["cube-18e4…", "bust-18e3…"]}
+```
+
+`client` is the name the client gave itself on connecting; `working` is there only while a
+call runs; `jobs` are the jobs its calls named or answered with, latest first, at most 20.
+A server that ends writes `ended_s`; one whose `seen_s` is a minute old ended without
+saying. A file whose `seen_s` is a week old is taken away by the next server that starts.

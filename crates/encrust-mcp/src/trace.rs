@@ -49,6 +49,21 @@ impl Trace {
     }
 }
 
+/// The JSON a tool answered with, or nothing for a call that did not complete.
+pub fn body_of(response: &Result<CallToolResponse, rmcp::ErrorData>) -> Value {
+    let Ok(CallToolResponse::Complete(result)) = response else {
+        return Value::Null;
+    };
+    result
+        .content
+        .iter()
+        .find_map(|block| match block {
+            ContentBlock::Text(text) => serde_json::from_str::<Value>(&text.text).ok(),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
 fn line_of(
     tool: &str,
     took: Duration,
@@ -58,14 +73,7 @@ fn line_of(
         Ok(CallToolResponse::Complete(result)) => Some(result),
         _ => None,
     };
-    let body = result
-        .and_then(|result| {
-            result.content.iter().find_map(|block| match block {
-                ContentBlock::Text(text) => serde_json::from_str::<Value>(&text.text).ok(),
-                _ => None,
-            })
-        })
-        .unwrap_or_default();
+    let body = body_of(response);
     json!({
         "tool": tool,
         "ms": u64::try_from(took.as_millis()).unwrap_or(u64::MAX),

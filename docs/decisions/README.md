@@ -563,3 +563,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0462](0462-a-chat-client-keeps-a-way-of-preparing-as-a-recipe.md) | A chat client keeps a way of preparing as a recipe the engine checked | Proposed |
 | [0463](0463-a-failed-print-is-read-against-its-check.md) | A failed print is read against the check of the file printed | Proposed |
 | [0464](0464-a-chat-client-makes-a-resin-from-its-makers-numbers.md) | A chat client makes a resin from its maker's numbers, held to the printer's limits | Proposed |
+| [0465](0465-the-window-lists-agents-and-shows-their-work-when-asked.md) | The window lists its agents and shows their work when asked | Proposed |
