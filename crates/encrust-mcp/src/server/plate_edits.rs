@@ -1,9 +1,11 @@
-//! A cut the client asks for handed to the open window as an edit of its plate, and an undo
-//! there carried back into the job (ADR 0466, `docs/design/window-link.md`).
+//! What a client asks of the plate handed to the open window as edits of it, and an undone cut
+//! carried back into the job (ADR 0466, `docs/design/window-link.md`).
 
+use core_edit::{Edit, ObjectId};
 use serde_json::{Value, json};
 
 use super::Server;
+use super::asked::asked_edits;
 use crate::jobs::Revision;
 use crate::recipe::{Cut, Recipe};
 
@@ -13,6 +15,9 @@ const REBUILDS: usize = 1;
 /// What the client is told when the cut kept was undone in the window.
 const CUT_UNDONE: &str = "the cut was undone in the window, so this revision is built on the \
     whole model";
+
+/// What the window says of a revision that asks nothing of its plate.
+const NOTHING_ASKED: &str = "the revision asks nothing of the plate the window holds";
 
 /// What the window says of a revision whose cut it already holds.
 const CUT_HELD: &str = "the window holds the plate the cut left; the other steps of a revision \
@@ -39,22 +44,27 @@ impl Server {
         Some(CUT_UNDONE)
     }
 
-    /// Hands `revision`'s cut to the open window as an edit of the plate it holds, where the
-    /// cut is new; `None` leaves the revision to be shown as ADR 0459 runs it.
-    pub(super) async fn cut_in_window(&self, revision: &Revision) -> Option<Value> {
-        let cut = cut_of(&revision.recipe)?;
+    /// Hands what `revision` asks of the plate beyond the revision before to the open window
+    /// as edits of the job's model there; `None` leaves the revision to be shown as ADR 0459
+    /// runs it: the first, one the window has not read the model for, or one asking what no
+    /// edit carries yet.
+    pub(super) async fn edits_in_window(&self, revision: &Revision) -> Option<Value> {
         let earlier = (revision.number.checked_sub(1))
             .filter(|number| *number > 0)
-            .and_then(|number| self.jobs.open(&revision.job, Some(number)).ok());
-        if let Some(earlier) = earlier.filter(|earlier| cut_of(&earlier.recipe) == Some(cut)) {
-            let held = self.jobs.window_cut(&earlier.job, earlier.number)?;
+            .and_then(|number| self.jobs.open(&revision.job, Some(number)).ok())?;
+        let held = self.jobs.window_cut(&earlier.job, earlier.number);
+        if let Some(held) = held.filter(|_| cut_of(&revision.recipe) == cut_of(&earlier.recipe)) {
             let _ = (self.jobs).keep_window_cut(&revision.job, revision.number, held);
             return Some(json!({"shown": false, "why_not": CUT_HELD}));
+        }
+        let asked = asked_edits(&revision.recipe, &earlier.recipe, ObjectId::UNSET)?;
+        if asked.is_empty() {
+            return Some(json!({"shown": false, "why_not": NOTHING_ASKED}));
         }
         for _ in 0..=REBUILDS {
             let plate = self.window.plate(&revision.job).await?;
             let object = plate.job_object?;
-            let edits = [cut.edit(object)];
+            let edits = asked_edits(&revision.recipe, &earlier.recipe, object)?;
             let _ = self.jobs.keep_edits(&revision.job, revision.number, &edits);
             let answer = (self.window)
                 .apply(&revision.job, &edits, plate.version)
@@ -62,7 +72,8 @@ impl Server {
             if answer["stale"] == true {
                 continue;
             }
-            if answer["applied"] == true {
+            let cut = edits.iter().any(|edit| matches!(edit, Edit::Cut { .. }));
+            if cut && answer["applied"] == true {
                 let _ = self
                     .jobs
                     .keep_window_cut(&revision.job, revision.number, object);
@@ -70,6 +81,6 @@ impl Server {
             return Some(answer);
         }
         Some(json!({"applied": false,
-                    "why_not": "the window's plate changed each time the cut was built on it"}))
+                    "why_not": "the window's plate changed each time the edits were built on it"}))
     }
 }
