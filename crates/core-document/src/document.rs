@@ -47,8 +47,7 @@ impl Document {
         let Some(index) = self.index_of(id) else {
             return Vec::new();
         };
-        let old = self.project.manifest.objects.remove(index);
-        self.project.models.remove(index);
+        let (old, _) = self.take_at(index);
         let mut added = Vec::with_capacity(pieces.len());
         for (offset, piece) in pieces.into_iter().enumerate() {
             let id = ObjectId(self.next_id);
@@ -59,10 +58,48 @@ impl Document {
                 source: Arc::new(piece.mesh),
                 shell: None,
             };
-            self.project.manifest.objects.insert(index + offset, state);
-            self.project.models.insert(index + offset, meshes);
+            self.put_at(index + offset, state, meshes);
         }
         added
+    }
+
+    /// Takes object `id` off the plate with the plugs laid for it, answering every id taken,
+    /// the object's first; empty when it is not on the plate.
+    pub(crate) fn remove(&mut self, id: ObjectId) -> Vec<ObjectId> {
+        let Some(index) = self.index_of(id) else {
+            return Vec::new();
+        };
+        let named = u32::try_from(index).ok();
+        let plugs: Vec<ObjectId> = (self.project.manifest.objects.iter())
+            .filter(|object| object.plug_of.is_some() && object.plug_of == named)
+            .map(|object| object.id)
+            .collect();
+        let mut gone = vec![id];
+        gone.extend(&plugs);
+        for id in &gone {
+            if let Some(index) = self.index_of(*id) {
+                self.take_at(index);
+            }
+        }
+        gone
+    }
+
+    /// Puts a copy of object `id` and its meshes right after it under a new id, `changed`
+    /// first; answers the new id, or `None` when `id` is not on the plate.
+    pub(crate) fn copy_after(
+        &mut self,
+        id: ObjectId,
+        changed: impl FnOnce(&mut ObjectState),
+    ) -> Option<ObjectId> {
+        let index = self.index_of(id)?;
+        let mut state = self.project.manifest.objects[index].clone();
+        let meshes = self.project.models[index].clone();
+        state.id = ObjectId(self.next_id);
+        self.next_id += 1;
+        changed(&mut state);
+        let copy = state.id;
+        self.put_at(index + 1, state, meshes);
+        Some(copy)
     }
 
     /// Stands object `id` at `transform`; nothing changes when it is not on the plate.
@@ -70,6 +107,34 @@ impl Document {
         if let Some(index) = self.index_of(id) {
             self.project.manifest.objects[index].transform = transform;
         }
+    }
+
+    /// Takes the object at `index` off the plate, and with it every plug's claim to it; a
+    /// plug naming a later object is renumbered.
+    fn take_at(&mut self, index: usize) -> (ObjectState, ModelMeshes) {
+        let state = self.project.manifest.objects.remove(index);
+        let meshes = self.project.models.remove(index);
+        let gone = u32::try_from(index).ok();
+        for object in &mut self.project.manifest.objects {
+            object.plug_of = match object.plug_of {
+                Some(at) if Some(at) == gone => None,
+                Some(at) if Some(at) > gone => Some(at - 1),
+                other => other,
+            };
+        }
+        (state, meshes)
+    }
+
+    /// Stands an object at `index`, renumbering each plug that names one from there on.
+    fn put_at(&mut self, index: usize, state: ObjectState, meshes: ModelMeshes) {
+        let from = u32::try_from(index).unwrap_or(u32::MAX);
+        for object in &mut self.project.manifest.objects {
+            object.plug_of = object
+                .plug_of
+                .map(|at| if at >= from { at + 1 } else { at });
+        }
+        self.project.manifest.objects.insert(index, state);
+        self.project.models.insert(index, meshes);
     }
 
     fn index_of(&self, id: ObjectId) -> Option<usize> {
@@ -111,7 +176,7 @@ fn new_object(id: ObjectId, old: &ObjectState, piece: &Piece) -> ObjectState {
 /// A new object's name in English; the window names it again in the user's language.
 fn name_of(name: &str, role: Role) -> String {
     match role {
-        Role::Kept => name.to_owned(),
+        Role::Kept | Role::Copy => name.to_owned(),
         Role::Lower => format!("{name} (lower)"),
         Role::Upper => format!("{name} (upper)"),
         Role::Dowel(index) => format!("{name} dowel {index}"),

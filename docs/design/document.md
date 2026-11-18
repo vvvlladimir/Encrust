@@ -57,6 +57,13 @@ finite or above zero is `ApplyError::BadScale`. None of them adds or removes an 
 (`Report::Placed`). The window sets the transform at once through the same `placement`
 functions.
 
+`Delete { object }` removes the object and the plugs laid for it. `Duplicate { object,
+offset_mm }` puts a copy with all its state and meshes right after it, under a new id, a plug
+of nothing, its translation moved by the offset (`Role::Copy`). `Mirror { object, axis }`
+negates the scale on that axis of the object's own frame and moves it back so its bounds'
+centre stays. `plug_of` is an index among the objects, so `Document` renumbers it on every
+removal and insertion: a plug of a removed object names nothing.
+
 ## Undo
 
 The window keeps snapshots of its scene (ADR 0086); a document applied is one entry. The

@@ -29,6 +29,14 @@ pub enum Edit {
     /// Sets the scale of `object` to `factors` about its centre of mass and stands it on the
     /// plate.
     Scale { object: ObjectId, factors: Vec3 },
+    /// Takes `object` off the plate, and the plugs laid for it.
+    Delete { object: ObjectId },
+    /// Puts a copy of `object`, with its supports, cavity and settings, `offset_mm` from it,
+    /// right after it.
+    Duplicate { object: ObjectId, offset_mm: Vec3 },
+    /// Turns `object` inside out across `axis` of its own frame, where its bounds' centre
+    /// stays.
+    Mirror { object: ObjectId, axis: Axis },
 }
 
 #[cfg(test)]

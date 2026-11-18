@@ -1085,7 +1085,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 |---|---|
 | `slice` | One model, several models on one plate, a plate file (TOML) or a project, to a printer file or PNGs. A project slices one plate of your choosing or all of them, a file each. Orient, support, hollow, drain, relief, exposure bands, adaptive layers and island removal are all flags. |
 | `batch` | A whole folder of models, several at once, with a JSON report for each. A model that fails does not stop the rest. |
-| `estimate` | Time, resin, weight, cost and risky layers, without writing a file; the recipe the run took, your flags written into its steps, with `--recipe-out`. A project's plate edited first by a list of edits — a cut, a move, a turn and a scale — and the plate they leave written as a project. |
+| `estimate` | Time, resin, weight, cost and risky layers, without writing a file; the recipe the run took, your flags written into its steps, with `--recipe-out`. A project's plate edited first by a list of edits — a cut, a move, a turn, a scale, a delete, a duplicate and a mirror — and the plate they leave written as a project. |
 | `inspect` | What is wrong with a model and whether it fits. |
 | `render` | The plate as `slice` would build it — hollowed, drilled, supported — drawn as PNG pictures from the sides you name, the bottom included, with points of your choosing marked even where the model hides them. For a person at a terminal, or a model that reads images. |
 | `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |

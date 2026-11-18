@@ -7,6 +7,7 @@ use crate::document::Document;
 use crate::error::ApplyError;
 use crate::piece::Role;
 use crate::placement::{moved, sized_to, turned_to};
+use crate::plate_contents::{delete, duplicate, mirrored};
 
 /// What an edit did, for a front end to name, select and report it.
 #[derive(Debug, Clone, PartialEq)]
@@ -34,6 +35,8 @@ pub enum Report {
     },
     /// An object was moved, turned or sized where it stands.
     Placed,
+    /// An object was deleted or copied.
+    Contents,
 }
 
 /// Carries `edit` out on `document`, which an error leaves as it was.
@@ -64,6 +67,11 @@ pub fn apply(document: &mut Document, edit: &Edit) -> Result<Applied, ApplyError
         }),
         Edit::Scale { object, factors } => place(document, object, |transform, mesh| {
             sized_to(transform, mesh, factors).ok_or(ApplyError::BadScale(object))
+        }),
+        Edit::Delete { object } => delete(document, object),
+        Edit::Duplicate { object, offset_mm } => duplicate(document, object, offset_mm),
+        Edit::Mirror { object, axis } => place(document, object, |transform, mesh| {
+            Ok(mirrored(transform, mesh, axis))
         }),
     }
 }

@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
-use core_document::{ApplyError, CutAsked, moved, sized_to, turned_to};
+use core_document::{ApplyError, CutAsked, mirrored, moved, sized_to, turned_to};
 use core_edit::{Edit, ObjectId};
 use core_geometry::{Mesh, Transform};
 use serde_json::{Value, json};
@@ -118,8 +118,8 @@ fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
     false
 }
 
-/// Carries `edit` out: a cut starts a tool job, answering the object it replaces; a
-/// placement is set at once, answering `None`.
+/// Carries `edit` out: a cut starts a tool job, answering the object it replaces; any
+/// other edit is made at once, answering `None`.
 fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, String> {
     match *edit {
         Edit::Cut {
@@ -152,7 +152,25 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             sized_to(transform, mesh, factors)
                 .ok_or_else(|| ApplyError::BadScale(object).to_string())
         }),
+        Edit::Delete { object } => {
+            let scene = &mut window.doc.scene;
+            scene.get(object).ok_or_else(|| no_object(object))?;
+            scene.remove_plugs_of(object);
+            scene.remove(object);
+            Ok(None)
+        }
+        Edit::Duplicate { object, offset_mm } => {
+            (window.doc.scene.duplicate(object, offset_mm)).ok_or_else(|| no_object(object))?;
+            Ok(None)
+        }
+        Edit::Mirror { object, axis } => place(window, object, |transform, mesh| {
+            Ok(mirrored(transform, mesh, axis))
+        }),
     }
+}
+
+fn no_object(id: ObjectId) -> String {
+    ApplyError::NoObject(id).to_string()
 }
 
 /// Sets the transform of `id` to what `to` makes of it and the object's own mesh.
@@ -161,8 +179,7 @@ fn place(
     id: ObjectId,
     to: impl FnOnce(Transform, &Mesh) -> Result<Transform, String>,
 ) -> Result<Option<ObjectId>, String> {
-    let object =
-        (window.doc.scene.get_mut(id)).ok_or_else(|| format!("no object {id:?} on the plate"))?;
+    let object = (window.doc.scene.get_mut(id)).ok_or_else(|| no_object(id))?;
     object.transform = to(object.transform, &object.mesh)?;
     Ok(None)
 }
