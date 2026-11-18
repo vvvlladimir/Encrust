@@ -100,7 +100,8 @@ and improved by prints rather than by prompts.
 
 MCP 2026-07-28 is stateless: no session, any request on any instance. A call therefore
 names its job, a directory in the user's cache of numbered revisions, each a TOML file —
-the model, printer, resin and each step's settings — that becomes `encrust` flags. An
+the model, printer, resin and each step's settings — that becomes `encrust` flags, and
+beside it the `core-recipe` its check ran, which the window runs (ADR 0459). An
 editing tool writes the next revision and checks it; `revert` copies an old one forward;
 `report_print` appends what a print did. The cost: each check stages the model again from
 its file (ADR 0455). The connector keeps the same revisions in the page's own state, never
@@ -114,10 +115,10 @@ merge kept main's, renumbered the branch's own after 0454 and left out what no l
 | Here | In main | Now |
 |---|---|---|
 | `--prepare` fills the flags left out | 0402, superseded by recipes (0403) | `--prepare` is `--recipe prepare`; `start_job` runs it |
-| a job's TOML "recipe" | `core-recipe`'s recipe | two meanings of one word; open decision 3 |
+| a job's TOML "recipe" | `core-recipe`'s recipe | each revision keeps the `core-recipe` its check ran (ADR 0459) |
 | `--keep-solid X,Y,Z` | `--keep-solid` with blockers fitted to the model (0396) | main's; the branch's flag dropped |
 | `keep_clear_at_mm` points | painted `Shown` faces (0410, 0425), window only | both stand; step 13 brings painting to the command line |
-| the window replaying each revision | Prepare for print rebuilt on recipes | not merged: step 8 again, on `core-recipe` |
+| the window replaying each revision | Prepare for print rebuilt on recipes | step 8 again: the window runs the revision's recipe (ADR 0459) |
 
 Main also brings what the tools gain without new code: Check's issues located and fixed by
 the `fix-issues` recipe, cups vented by their thinnest wall, necks held by their stress, one
@@ -142,7 +143,7 @@ config. The files are the user's own paths and the printer is on the user's netw
 - **Updated by a new download.** Anthropic's directory no longer takes `.mcpb` listings, so
   nothing updates it in place; the bundle reports its version in `instructions`.
 - **No window needed.** Resins come from `import_resin` and the exposure test (step 15).
-  The window open beside it shows nothing of the job until step 8 lands again.
+  When the window is open, each revision's recipe runs on its plate (ADR 0459, `window-link.md`).
 
 Claude on the web and on a phone runs no local program and gives an MCP App page no file
 from the chat; it is served once one of those changes.
@@ -231,7 +232,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 5–7 | The stdio server and its jobs, its tools and `.mcpb`, the bench | `encrust-mcp`, `encrust-cli` (done, ADR 0455, 0456) | — |
 | 11 | Poses offered and chosen, places kept clear, each check compared, a judge; supports by hand | (done, ADR 0457, 0458) | 6, 7 |
 | 12 | Merge main | (done) | — |
-| 8 | The open window replays each revision, as a `core-recipe` run of Prepare for print | `encrust-mcp`, `encrust-app` | 12, decision 3 |
+| 8 | The open window runs each revision's recipe as Prepare for print | `encrust-cli`, `encrust-mcp`, `encrust-app` (done, ADR 0459) | 12 |
 | 13 | Shown faces painted from the command line, `--shown-at X,Y,Z[:R]`; `mark_shown` | `encrust-cli`, `encrust-mcp`; window parity (rule 9) | 12 |
 | 14 | Recipes chosen by purpose: `use_recipe`, the instructions ask what the print is for | `encrust-mcp` | 12 |
 | 15 | Resin with no window: `import_resin`; `encrust test-print exposure`, as the window's | `encrust-cli`, `encrust-mcp` | 12 |
@@ -244,7 +245,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 12 |
 | 10 | The MCP Apps page in Claude Desktop, the connector's page served locally | `encrust-mcp` | 19 |
 
-Order: 13–15, 18 and 8 in parallel; 20 once 15 stands, so a user with no window can
+Order: 13–15 and 18 in parallel; 20 once 15 stands, so a user with no window can
 finish a print; 16, 17 and 19 next; 21 grows with each; 9 and 10 last.
 
 ## How the work is run
@@ -267,8 +268,5 @@ finish a print; 16, 17 and 19 next; 21 grows with each; 9 and 10 last.
    once OpenAI's terms for apps are confirmed.
 2. **The connector's server** (before step 19, an ADR): where it is hosted on a free tier,
    and in what language; it sees a file's URL, never its bytes.
-3. **A revision and a recipe** (before step 8): a job's revision becomes a `core-recipe` file
-   with the job's inputs, run by `--recipe`, so the window's Prepare for print reruns what
-   the model did — recommended — or keeps its own TOML under the name "revision".
-4. **Photos** (before step 16): the client names symptoms from the fixed list and no image
+3. **Photos** (before step 16): the client names symptoms from the fixed list and no image
    reaches the server — recommended, as it is testable — or the server takes the photo.

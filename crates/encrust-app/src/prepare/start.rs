@@ -5,7 +5,7 @@ use core_recipe::{Plan, StepKind};
 
 use super::{Run, poll};
 use crate::i18n::tr;
-use crate::scene::ObjectId;
+use crate::scene::{ObjectId, SceneObject};
 use crate::state::{Doc, Machine, Tools};
 use crate::tool_settings::ToolSettings;
 
@@ -33,7 +33,7 @@ pub fn held_up(doc: &Doc, tools: &Tools, machine: &Machine) -> Option<String> {
 }
 
 /// Whether a job that will land on the plate is running.
-pub(super) fn busy(doc: &Doc, tools: &Tools, machine: &Machine) -> bool {
+pub fn busy(doc: &Doc, tools: &Tools, machine: &Machine) -> bool {
     tools.orient.is_running()
         || tools.hollow.job.is_some()
         || tools.drain.job.is_some()
@@ -84,6 +84,47 @@ pub(super) fn start_on(
     tools: &mut Tools,
     machine: &mut Machine,
 ) -> Result<()> {
+    can_start(&plan, &ids, doc, tools, machine)?;
+    hold(doc, tools, machine);
+    tools.prepare.run = Some(Run::new(plan, ids));
+    poll(doc, tools, machine, true);
+    Ok(())
+}
+
+/// Starts `plan` on `fresh`'s models, each put back as `fresh` holds it and `gone` taken off
+/// the plate first, within the run's one undo: a revision of a chat client's job run again
+/// from the model as it came in (ADR 0459).
+pub fn start_replay(
+    plan: Plan,
+    (fresh, gone): (&[SceneObject], &[ObjectId]),
+    doc: &mut Doc,
+    tools: &mut Tools,
+    machine: &mut Machine,
+) -> Result<()> {
+    let ids: Vec<ObjectId> = fresh.iter().map(|object| object.id).collect();
+    can_start(&plan, &ids, doc, tools, machine)?;
+    hold(doc, tools, machine);
+    for id in gone {
+        doc.scene.remove(*id);
+    }
+    for object in fresh {
+        if let Some(standing) = doc.scene.get_mut(object.id) {
+            *standing = object.clone();
+        }
+    }
+    tools.prepare.run = Some(Run::new(plan, ids));
+    poll(doc, tools, machine, true);
+    Ok(())
+}
+
+/// Why `plan` cannot start on `ids` now.
+fn can_start(
+    plan: &Plan,
+    ids: &[ObjectId],
+    doc: &Doc,
+    tools: &Tools,
+    machine: &Machine,
+) -> Result<()> {
     if let Some(why) = held_up(doc, tools, machine) {
         bail!(why);
     }
@@ -95,10 +136,12 @@ pub(super) fn start_on(
     if supports && machine.slicing.catalogue.autos().next().is_none() {
         bail!(tr!("supports-no-automatic"));
     }
+    Ok(())
+}
+
+/// Opens the run's one undo entry, the plate and the tools as they stand.
+fn hold(doc: &mut Doc, tools: &Tools, machine: &Machine) {
     let settings = ToolSettings::of(tools, &machine.slicing);
     let chosen = machine.slicing.chosen();
     doc.history.hold(&doc.scene, &settings, chosen);
-    tools.prepare.run = Some(Run::new(plan, ids));
-    poll(doc, tools, machine, true);
-    Ok(())
 }

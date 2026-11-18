@@ -1085,7 +1085,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 |---|---|
 | `slice` | One model, several models on one plate, a plate file (TOML) or a project, to a printer file or PNGs. A project slices one plate of your choosing or all of them, a file each. Orient, support, hollow, drain, relief, exposure bands, adaptive layers and island removal are all flags. |
 | `batch` | A whole folder of models, several at once, with a JSON report for each. A model that fails does not stop the rest. |
-| `estimate` | Time, resin, weight, cost and risky layers, without writing a file. |
+| `estimate` | Time, resin, weight, cost and risky layers, without writing a file; the recipe the run took, your flags written into its steps, with `--recipe-out`. |
 | `inspect` | What is wrong with a model and whether it fits. |
 | `render` | The plate as `slice` would build it — hollowed, drilled, supported — drawn as PNG pictures from the sides you name, the bottom included, with points of your choosing marked even where the model hides them. For a person at a terminal, or a model that reads images. |
 | `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
@@ -1104,7 +1104,10 @@ the command line is a tool's: `set_shape` cuts, labels, splits and presses relie
 with what it prints, and the model picks one for what the print is — keeping supports off a
 face you named, say, which the search then ranks first. Every step it takes is set against
 the step before and the autopilot's own preparation, so it can undo one that made the print
-worse.
+worse. With the window open, each step it keeps is run on the plate as Prepare for print by
+the same recipe the check ran, one undo each, on the job's printer and resin. A point, a pose
+picked from the list or turned by hand, the modelling and the slicing are not run there yet;
+the answer names what was left out.
 
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,

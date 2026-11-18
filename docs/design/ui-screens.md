@@ -244,6 +244,8 @@ track. With no stack it reads *No layers*.
   more* for several; a sliced file's rebuild counts its layers then its surface, a mesh's
   read runs its bar, and Cancel drops every import under way. Prepare for print's is
   *Preparing for print:* and its step, only in Preview, where the Prepare row is not shown.
+  A chat client's revision run on the plate (ADR 0459) is the same run, after *Showing
+  revision N of the chat client's job J* in the status line.
   Drain holes taken out and plugs cut are one card: *Reading the model for its holes and
   plugs*, then *Cutting N plugs*, then *Drilling the holes*, at the share of whichever is least
   far along. Its Cancel leaves the holes cut approximately and the new ones without plugs, and

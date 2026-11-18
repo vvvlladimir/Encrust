@@ -26,6 +26,8 @@ mod interface_scale;
 mod job;
 mod landing;
 mod launch;
+#[cfg(not(target_arch = "wasm32"))]
+mod link;
 mod measure;
 mod meeting;
 mod network;
