@@ -257,3 +257,27 @@ Done when: a 10 mm cube with one face's winding turned (fixture) mended by `flip
   closes it; a stopped `Cancel` → `Cancelled`. Window link test of `Mend`. Existing repair,
   `--repair`, `--flip-faces`, `--bridge` tests pass.
 Not now: Relief (C7), MCP wiring.
+
+### C7. Relief (a picture tiled; after C6, which adds `Document::reshape`)
+Read: `crates/encrust-app/src/job/relief.rs` (`run`, `pressed`), `crates/encrust-cli/src/pipeline/relief.rs`
+  (`press_relief`, `read_picture`), `crates/core-document/src/{apply.rs,document.rs,repair.rs}`
+Touch: those, `crates/core-edit/src/edit.rs` (+tests), new `crates/core-document/src/relief.rs`
+  (+ `relief/tests.rs`), `crates/core-document/{Cargo.toml if a picture reader is needed, src/lib.rs,
+  src/error.rs}`, `crates/encrust-app/src/link/plate.rs` (+ test), `docs/design/document.md`,
+  `docs/cli.md` and `docs/features.md` (name the edit where `--edits` lists the others)
+Edit: `Relief { object, depth_mm, image: PathBuf, tile_mm, angle_deg, invert, symmetric,
+  smoothing_px, hold_bottom_deg, hold_top_deg, precision }` (options default as the CLI's flags).
+  Only a picture tiled over the model: a `.encrust` keeps no file texture to press.
+Move: the tiled branch of `job/relief.rs::pressed` and of `press_relief` → core-document
+  `relieved(mesh, &ReliefAsked, painted: Option<&Region>, Cancel) -> Result<Relieved,
+  ApplyError>` over `press_tiled`, the object's `relief_painted` region limiting it as the window's
+  brush does. The picture is read where the CLI reads it now (`read_picture` moves down with it;
+  a new dependency needs asking first — stop and report if one is needed). Result through
+  `Document::reshape`. The window's job keeps the file-texture branch; its tiled branch calls core.
+Errors: a picture that does not read → `ApplyError::BadPicture { path, reason }`; `Cancelled`;
+  others → `Failed`.
+Done when: a 10 mm cube pressed 0.5 mm with a black-and-white checker picture (written by the
+  test into a temp file) changes its volume by more than 1 mm³ and keeps its bounds within
+  ± 0.6 mm of 0..10; a picture path that is not there → `BadPicture`; a stopped `Cancel` →
+  `Cancelled`. Window link test of `Relief`. Existing relief and `--relief` tests pass.
+Not now: the file texture's relief over the link, MCP wiring.
