@@ -1,5 +1,5 @@
-//! The print chip's parts: a glyph, what is chosen and a caret each, three side by side
-//! under one ring; see `docs/design/ui-design-system.md`, Print chip.
+//! The print chip's parts: a glyph, what is chosen and a caret each, side by side under one
+//! ring; see `docs/design/ui-design-system.md`, Print chip.
 
 use egui::{Align2, Rect, Stroke, pos2};
 
@@ -116,25 +116,26 @@ impl ChipPart {
     }
 }
 
-/// Paints the three parts in `zones` of the chip's `rect`, each lit while what it opens is
-/// `open`, with a rule between each two.
+/// Paints the parts in `zones` of the chip's `rect`, each lit while what it opens is `open`,
+/// with a rule between each two.
 pub fn paint_chip(
     ui: &egui::Ui,
-    parts: [ChipPart; 3],
-    zones: [Rect; 3],
+    parts: Vec<ChipPart>,
+    zones: &[Rect],
     rect: Rect,
-    responses: &[egui::Response; 3],
-    open: [bool; 3],
+    responses: &[egui::Response],
+    open: &[bool],
 ) {
+    let last = parts.len().saturating_sub(1);
     let colors = theme::colors();
     let painter = ui.painter();
-    for (index, (part, zone)) in parts.into_iter().zip(zones).enumerate() {
+    for (index, (part, &zone)) in parts.into_iter().zip(zones).enumerate() {
         // Square where a part meets the rule beside it.
         let mut radius = theme::R_CONTROL;
         if index > 0 {
             (radius.nw, radius.sw) = (0, 0);
         }
-        if index < 2 {
+        if index < last {
             (radius.ne, radius.se) = (0, 0);
         }
         part.paint(

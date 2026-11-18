@@ -40,7 +40,7 @@ already finds the server's folder there.
 A window opened after the work lists it and shows it with one press, and a window in use is
 left alone unless the user asked to follow or the client to show. Several agents are told
 apart by client and start, each with its jobs. The window now reads the server's job layout
-(`N.toml`, `N.recipe.toml`, `N.json`) from disk as well as the line it is sent, so the two
+(`N.args.json`, `N.recipe.toml`, `N.json`) from disk as well as the line it is sent, so the two
 change together. The chip carries a fourth part, which the browser build leaves out. The
 agents' part is where a chat of the window's own goes later (step 9). Reopen if the window
 ever runs agents itself rather than listing those the clients run.

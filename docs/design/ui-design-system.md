@@ -237,7 +237,7 @@ paints from tokens only.
 | `key_foot` | A palette's keys on a strip under a rule at its foot |
 | `search_button` | The bar's way into Find: a sunken box of the glyph, the word and its keys, the glyph alone when compact |
 | `bar_pill` | A round tag in the bar ringed in its tint: the update badges |
-| `ChipPart`, `paint_chip` | The print chip: three parts of a glyph, what is chosen and a caret, side by side under one ring |
+| `ChipPart`, `paint_chip` | The print chip: parts of a glyph, what is chosen and a caret, side by side under one ring |
 | `device_row`, `print_picture` | A printer as one row on `raised`, its state word and dot breathing while busy; a print's picture, or the model glyph on `sunken` |
 | `paint_layer_track`, `layer_readout` | The layer strip: its rule with the cured area behind it, scale, fill, risk bars and thumbs; the layer in a sunken box to type into, the count and the height |
 | `window_frame` | The Settings and Machine and resin windows' frame: title row, list, header, page, action bar, tabs and table |
@@ -276,6 +276,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Cut, Relief, Supports, Check | `KNIFE`, `STAMP`, `TREE_STRUCTURE`, `LIST_CHECKS` |
 | Print settings, General and the profiles | `SLIDERS_HORIZONTAL`, `SLIDERS` |
 | Machine, resin, network | `PRINTER`, `FLASK`, `WIFI_HIGH` |
+| Agents | `ROBOT` |
 | Model view, model beside layer, layer | `CUBE`, `COLUMNS`, `SQUARE_HALF` |
 | Frame, grid, see through, as printed, perspective | `FRAME_CORNERS`, `GRID_FOUR`, `CIRCLE_HALF`, `SPARKLE`, `PERSPECTIVE` |
 | Empty plate | `CUBE_FOCUS` |

@@ -380,6 +380,32 @@ supports-growth-stopped = Построение поддержек прервал
 surfaces-cannot-build = Не удалось подготовить поверхность для поддержек: { $reason }
 surfaces-build-stopped = Подготовка поверхности для поддержек прервалась без результата
 
+## panels/title_bar/agents.rs
+
+agents-title = Агенты
+agents-none = Здесь ещё не работал ни один агент
+agents-working = { $client } · работает
+agents-idle = { $client } · ждёт
+agents-ended = { $client } · завершён
+agents-numbered = { $client } { $number }
+agents-unnamed = Агент
+agents-no-job = Моделей пока нет
+agents-revision-clean = Ревизия { $revision } · проблем нет
+agents-revision-problems = Ревизия { $revision } · проверка нашла проблемы
+agents-revision = Ревизия { $revision }
+agents-revision-project = Ревизия { $revision } · проект
+agents-starting = Ревизия { $revision } · начинает работу
+agents-checking = Ревизия { $revision } · проверяет
+agents-drawing = Ревизия { $revision } · строит изображения
+agents-writing = Ревизия { $revision } · записывает файл
+agents-sending = Ревизия { $revision } · отправляет на принтер
+agents-reading-print = Ревизия { $revision } · изучает печать
+agents-changing = Ревизия { $revision } · меняет модель
+agents-show-tooltip = Показать эту ревизию на платформе
+agents-open-project-tooltip = Открыть этот проект
+agents-follow = Следить за агентами
+agents-follow-tooltip = Сразу запускать на платформе каждую ревизию, которую сохраняет агент
+
 ## link.rs
 
 link-replaying = Показываю ревизию { $revision } задания чат-клиента { $job }
@@ -1045,6 +1071,8 @@ chip-resin-untuned = Смола не откалибрована для этог�
 chip-resin-tooltip = Смола
 chip-layers = { $layer } мкм · { $exposure } с
 chip-settings = { $tool }, { $summary }
+chip-agents = Агенты, работают: { $count }
+chip-agents-tooltip = Агенты чат-клиентов на этом компьютере и их модели
 find-button = Найти
 find-tooltip = Найти инструмент, действие или модель
 bar-source = Исходный код

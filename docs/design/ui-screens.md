@@ -64,10 +64,13 @@ Frame view · CAMERA Perspective or Orthographic, the one in force ticked · SHO
 See through models, Show as printed, Depth of field when shown as printed, ticked when on ·
 Keyboard shortcuts.
 
-The chip is three parts in one bordered box 32 tall: printer glyph and machine with a caret,
+The chip is four parts in one bordered box 32 tall: printer glyph and machine with a caret,
 flask glyph in the resin's colour and resin with a caret, sliders glyph and `layer height ·
-exposure`, all three in `text_high` (the resin in `warn` while untuned). Each part is its own button and lights in `accent_wash` while what it opens is open. Under 1100 the
-chip drops the maker; under 720 the right end is glyphs only.
+exposure`, all in `text_high` (the resin in `warn` while untuned), and the agents: robot
+glyph, how many agents are there now when any are, and a caret, the glyph in `accent` while
+one works. Each part is its own button and lights in `accent_wash` while what it opens is
+open. Under 1100 the chip drops the maker; under 720 the right end is glyphs only. The
+browser's chip has no agents' part.
 
 The machine and resin parts each open a chooser hanging 6 under the chip from its part's
 left edge, 300 wide, on `raised` with a window's shadow, a capital group name over its rows:
@@ -80,6 +83,17 @@ left edge, 300 wide, on `raised` with a window's shadow, a capital group name ov
   name over type and layer height, its exposure at the right in `text_mid`, the one in hand
   washed and ticked; under a rule, *Add a resin*, opening Machine and resin on the
   machine's resins.
+
+- *The agents* (ADR 0465), the same chooser under the agents' part: a capital group an agent
+  — its client's name, *Claude Code · working*, *· waiting* or *· ended*, a second of one
+  client numbered — at work first, then idle, then at most three ended; under each, a row a
+  job, its latest three: model glyph, the model's file name over *Revision n* and the
+  check's verdict, or what the agent does to it now with an `accent` dot at the right; the
+  job on the plate washed and ticked. A press shows that revision on the plate as one
+  undo; a project's row opens the project, asking first about unsaved work. An agent with
+  no job yet says so in a line; no agent at all is *No agent has worked here yet* under the
+  group *Agents*. Under a rule, *Follow agents* as a `switch`: on, each revision an agent
+  keeps runs on the plate as it comes.
 
 Choosing a row takes it in hand and closes the chooser, as Esc or a click elsewhere does; a
 footer row opens Machine and resin on that machine's page or that resin's form.

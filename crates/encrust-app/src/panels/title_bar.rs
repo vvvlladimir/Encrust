@@ -6,6 +6,7 @@ use crate::shortcuts::{self, Action};
 use crate::state::Machine;
 use crate::ui::{icon, icon_button, search_button};
 
+mod agents;
 mod badges;
 mod chip;
 mod menus;

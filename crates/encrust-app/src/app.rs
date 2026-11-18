@@ -100,6 +100,7 @@ impl SlicerApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             app.link = crate::link::Link::for_window(&cc.egui_ctx);
+            app.machine.agents = crate::agents::Agents::start(&cc.egui_ctx);
         }
         if let Some(path) = initial_model {
             open_by_what_it_is(&mut app.window(), Handed::Path(path.to_path_buf()));
@@ -471,6 +472,7 @@ impl eframe::App for SlicerApp {
         let _ = frame;
         self.take_files(ui.ctx());
         let mut working = self.poll_jobs(ui.ctx()) | self.hollow_what_a_press_opened();
+        self.machine.agents.poll();
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(mut link) = self.link.take() {
             working |= link.poll(&mut self.window());

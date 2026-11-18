@@ -28,7 +28,13 @@ pub struct Link {
     /// The job whose revision the Prepare run going is, and the plate's models as it began,
     /// to tell what it left.
     replaying: Option<(usize, Vec<ObjectId>)>,
+    /// Where the server keeps its jobs, beside the window's file.
+    jobs: PathBuf,
 }
+
+/// What the server is told of a revision handed over while the window does not follow.
+const NOT_FOLLOWING: &str = "the window is not following its agents; it lists the revision, \
+    which the user can show, or show_in_window shows it";
 
 /// One job on the plate: its model as it came in once read, what the last run left besides,
 /// and the revision waiting to be run.
@@ -64,10 +70,12 @@ impl Link {
 
     /// Listens for the server, the file that says where written to `file`.
     pub fn start(file: PathBuf, wake: impl Fn() + Send + 'static) -> Result<Self> {
+        let jobs = file.with_file_name("mcp-jobs");
         Ok(Self {
             listening: Listening::start(file, wake)?,
             followed: Vec::new(),
             replaying: None,
+            jobs,
         })
     }
 
@@ -84,14 +92,48 @@ impl Link {
                 followed.reading = false;
             }
         }
+        let follow = window.machine.general.follow_agents;
         while let Ok((request, reply)) = self.listening.asked.try_recv() {
-            let _ = reply.send(self.take(request, window));
+            let answer = if request.open || follow {
+                self.take(request, window)
+            } else {
+                Reply::refused(NOT_FOLLOWING.to_owned())
+            };
+            let _ = reply.send(answer);
         }
+        self.take_asked(window);
         self.note_what_was_left(window);
         for index in 0..self.followed.len() {
             self.replay(index, window);
         }
         self.replaying.is_some() || self.followed.iter().any(|f| f.waiting.is_some())
+    }
+
+    /// Takes the revisions the user asked to see from the agents' list.
+    fn take_asked(&mut self, window: &mut Window) {
+        for asked in std::mem::take(&mut window.machine.agents.asked) {
+            let taken = Request::of_job(&self.jobs, &asked.job, asked.revision)
+                .map(|request| self.take(request, window));
+            match taken {
+                Ok(Reply { why_not: None, .. }) => {}
+                Ok(Reply {
+                    why_not: Some(why), ..
+                }) => {
+                    window.machine.status = Status::Error(why);
+                }
+                Err(error) => window.machine.status = Status::failed(&error),
+            }
+        }
+        window.machine.agents.on_plate = self
+            .followed
+            .iter()
+            .filter(|f| {
+                f.fresh
+                    .as_ref()
+                    .is_some_and(|fresh| window.doc.scene.get(fresh.id).is_some())
+            })
+            .map(|f| f.job.clone())
+            .collect();
     }
 
     /// Notes a revision to run, reading its model in where the plate does not have it.
