@@ -119,3 +119,38 @@ fn a_project_job_is_told_apart_and_no_folder_lists_nothing() {
     assert_eq!(project.name(), "plate.encrust");
     assert!(scan(Path::new("/no/such/agents"), Path::new("/no/jobs"), 0).is_empty());
 }
+
+#[test]
+fn the_jobs_of_the_last_day_no_agent_names_are_listed_as_one_entry_after_the_agents() {
+    let dir = scratch("unclaimed");
+    job(&dir, "cube-1", "/m/cube.stl", 2, "ok");
+    job(&dir, "bust-2", "/m/bust.stl", 1, "ok");
+    agent(
+        &dir,
+        "1-1.json",
+        &json!({"started_s": 1, "seen_s": now_s(), "jobs": ["bust-2"]}),
+    );
+    let agents = listed(&dir, now_s());
+    assert_eq!(agents.len(), 2);
+    assert!(!agents[0].unclaimed);
+    assert!(agents[1].unclaimed && agents[1].state == State::Ended);
+    let ids: Vec<&str> = agents[1].jobs.iter().map(|job| job.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["cube-1"],
+        "a job an agent names is listed under it alone"
+    );
+
+    let fs_gone = std::fs::remove_dir_all(dir.join("agents"));
+    assert!(fs_gone.is_ok());
+    assert_eq!(
+        listed(&dir, now_s()).len(),
+        1,
+        "no agents' folder at all still lists them"
+    );
+    let two_days = now_s() + 2 * 24 * 60 * 60;
+    assert!(
+        listed(&dir, two_days).is_empty(),
+        "a job a day old is no longer listed"
+    );
+}

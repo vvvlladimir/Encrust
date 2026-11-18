@@ -109,16 +109,19 @@ pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
         hint(ui, &tr!("agents-none"));
     }
     let names = client_names(&agents.list);
-    let ended = agents
-        .list
-        .iter()
-        .filter(|agent| agent.state == State::Ended);
-    let shown = agents.list.len() - ended.count().saturating_sub(MOST_ENDED);
-    for (agent, client) in agents.list.iter().zip(names).take(shown) {
+    let mut ended = 0;
+    for (agent, client) in agents.list.iter().zip(names) {
         let group = match agent.state {
+            _ if agent.unclaimed => tr!("agents-earlier"),
             State::Working { .. } => tr!("agents-working", client = client),
             State::Idle => tr!("agents-idle", client = client),
-            State::Ended => tr!("agents-ended", client = client),
+            State::Ended => {
+                ended += 1;
+                if ended > MOST_ENDED {
+                    continue;
+                }
+                tr!("agents-ended", client = client)
+            }
         };
         chooser_group(ui, &group);
         if agent.jobs.is_empty() {
@@ -242,6 +245,7 @@ mod tests {
             started_s: 0,
             state: State::Idle,
             jobs: Vec::new(),
+            unclaimed: false,
         }
     }
 

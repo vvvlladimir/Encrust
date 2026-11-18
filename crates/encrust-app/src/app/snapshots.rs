@@ -326,12 +326,14 @@ fn the_agents_ring_opening_its_list() {
             job("bust-2", "/m/Dragon bust.stl", 4, None),
             job("cube-1", "/m/cube.stl", 2, Some(true)),
         ],
+        unclaimed: false,
     };
     let ended = Agent {
         client: Some("claude-ai".into()),
         started_s: 0,
         state: State::Ended,
         jobs: vec![job("base-3", "/m/base.stl", 1, Some(false))],
+        unclaimed: false,
     };
     let mut app = pictured();
     app.machine.agents.list = vec![working, ended];

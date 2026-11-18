@@ -389,6 +389,7 @@ agents-idle = { $client } · ждёт
 agents-ended = { $client } · завершён
 agents-numbered = { $client } { $number }
 agents-unnamed = Агент
+agents-earlier = Прежние задания
 agents-no-job = Моделей пока нет
 agents-revision-clean = Ревизия { $revision } · проблем нет
 agents-revision-problems = Ревизия { $revision } · проверка нашла проблемы

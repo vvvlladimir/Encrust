@@ -382,6 +382,8 @@ agents-ended = { $client } · ended
 agents-numbered = { $client } { $number }
 # The name of an agent whose chat client gave none.
 agents-unnamed = Agent
+# The group of the list holding the jobs of the last day no agent there names.
+agents-earlier = Earlier jobs
 agents-no-job = No model yet
 # Under a model's name in the list: its latest revision and what the check found in it.
 agents-revision-clean = Revision { $revision } · no problems found
