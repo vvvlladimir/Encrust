@@ -1,0 +1,5 @@
+node_modules/
+widget/pkg/
+widget/*.stl
+widget/printer.toml
+widget/resin.toml
