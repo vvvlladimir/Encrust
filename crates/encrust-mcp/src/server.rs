@@ -493,7 +493,10 @@ impl Server {
         let latest = self.jobs.open(job, None)?;
         let mut recipe = latest.recipe.clone();
         let undone = self.follow_window_undo(&latest, &mut recipe).await;
-        let note = change(&mut recipe).or(undone);
+        let note = match (change(&mut recipe), undone) {
+            (Some(asked), Some(undone)) => Some(format!("{asked}; {undone}")),
+            (asked, undone) => asked.or(undone).map(str::to_owned),
+        };
         recipe.check_paths()?;
         let against = self.jobs.against(job, Some(latest.number));
         let (outcome, steps) = self.checked(&recipe, &against, ctx).await?;
@@ -501,7 +504,7 @@ impl Server {
             return Ok(not_applied(Some(&latest), &outcome));
         }
         let revision = self.jobs.commit(job, (recipe, steps), &outcome.report)?;
-        Ok(self.kept(&revision, &outcome, note).await)
+        Ok(self.kept(&revision, &outcome, note.as_deref()).await)
     }
 
     /// A check of `recipe` and the steps it ran, as the command line wrote them out.

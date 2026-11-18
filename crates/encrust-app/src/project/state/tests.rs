@@ -597,3 +597,30 @@ fn the_trees_a_run_grew_stand_again_without_being_grown() {
         "and it is meshed to be seen and sliced"
     );
 }
+
+#[test]
+fn a_plate_reopens_with_the_ids_its_file_keeps_and_new_models_go_above_them() {
+    let mut project = capture(bench().plate());
+    for (object, id) in project.manifest.objects.iter_mut().zip([5, 9]) {
+        object.id = ObjectId(id);
+    }
+    let kept: Vec<ObjectId> = project.manifest.objects.iter().map(|o| o.id).collect();
+
+    let (mut back, _) = reopened(project);
+
+    let ids: Vec<ObjectId> = back.scene.objects().iter().map(|o| o.id).collect();
+    assert_eq!(
+        ids, kept,
+        "an edit naming an id of the file finds its model"
+    );
+    let added = back.scene.insert(Imported::new(
+        "box".into(),
+        Arc::new(unit_cube()),
+        Transform::default(),
+        summary(),
+    ));
+    assert!(
+        kept.iter().all(|id| added.0 > id.0),
+        "{added:?} after {kept:?}"
+    );
+}

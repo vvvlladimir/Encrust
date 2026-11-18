@@ -46,8 +46,9 @@ Not now: what the next card does
 The worked example. After it, the user's case works for a cut.
 
 1. `apply` for `Cut`: moved from `encrust-cli/src/modelling.rs::cut`/`stood` and
-   `encrust-app/src/job/cut.rs`; closed-form test: unit cube cut at z 0.5 → two volumes
-   0.5 ± 1e-6.
+   `encrust-app/src/job/cut.rs`; closed-form test: a 10 mm cube cut at its middle → two
+   halves of 500 ± 0.01 mm³ (f32 over the cut faces). Front ends call `cut` + `pieces` until
+   the Scene is a Document (phase 6); `Run` joins `apply` with Hollow (C9b).
 2. CLI: `--cut` folds to `Edit::Cut`; `--edits FILE`, `--project-out FILE`, `.encrust` input
    with edits allowed (`project.rs:200`).
 3. Window: the cut tool builds `Edit::Cut`, runs `apply` on its worker; one undo entry.
