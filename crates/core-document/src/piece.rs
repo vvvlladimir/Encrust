@@ -24,6 +24,8 @@ pub enum Role {
     Upper,
     /// A loose dowel, counted from one.
     Dowel(usize),
+    /// A copy of the whole object.
+    Copy,
 }
 
 impl Piece {

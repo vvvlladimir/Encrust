@@ -202,3 +202,25 @@ fn a_rotation_on_the_version_it_was_built_on_turns_the_object_about_z() {
         "a quarter turn about Z, got {angle} about {axis}"
     );
 }
+
+#[test]
+fn a_duplicate_on_the_version_it_was_built_on_puts_a_copy_beside_the_cube() {
+    let file = scratch("duplicate");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let copy = json!({"base_version": version,
+        "apply": [{"edit": "duplicate", "object": cube.0, "offset_mm": [20, 0, 0]}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, copy));
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    assert_eq!(bench.doc.scene.objects().len(), 2, "the cube and its copy");
+    let xs: Vec<f32> = (bench.doc.scene.objects().iter())
+        .map(|o| o.transform.translation.x)
+        .collect();
+    assert!(
+        xs.contains(&0.0) && xs.contains(&20.0),
+        "the copy stands 20 mm along x, got {xs:?}"
+    );
+}

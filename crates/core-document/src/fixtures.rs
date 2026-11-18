@@ -3,6 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use core_edit::ObjectId;
 use core_engine::project::{Project, load};
 use core_geometry::{Transform, Vec3, cuboid};
 
@@ -29,5 +30,25 @@ pub fn cube_of(side_mm: f32) -> Project {
     let object = &mut project.manifest.objects[0];
     object.transform = Transform::default();
     object.hollow.built = None;
+    project
+}
+
+/// [`cube`] twice, ids 1 and 2, and a third object, id 3, which is a plug for the second
+/// cube, named by its place among the objects.
+pub fn cubes_with_plug() -> Project {
+    let mut project = cube();
+    let meshes = project.models[0].clone();
+    for id in [2, 3] {
+        let state = &project.manifest.objects[0];
+        let mut copy = core_engine::project::ObjectState {
+            id: ObjectId(id),
+            ..state.clone()
+        };
+        copy.name = format!("cube {id}");
+        project.manifest.objects.push(copy);
+        project.models.push(meshes.clone());
+    }
+    project.manifest.objects[0].id = ObjectId(1);
+    project.manifest.objects[2].plug_of = Some(1);
     project
 }

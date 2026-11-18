@@ -319,15 +319,7 @@ impl DrainTool {
 /// Takes away the plugs laid for model `id`, leaving the selection where it was.
 fn take_away(scene: &mut Scene, id: ObjectId) {
     let selection = scene.selection().to_vec();
-    let old: Vec<ObjectId> = scene
-        .objects()
-        .iter()
-        .filter(|object| object.plug_of == Some(id))
-        .map(|object| object.id)
-        .collect();
-    for plug in old {
-        scene.remove(plug);
-    }
+    scene.remove_plugs_of(id);
     scene.select_many(&selection);
 }
 

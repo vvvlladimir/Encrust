@@ -333,7 +333,7 @@ pub struct CutState {
 }
 
 /// One model on a plate: where it stands, and what was done to it.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectState {
     /// A file written before ids reads as [`ObjectId::UNSET`] until [`read_from`] gives one.
     #[serde(default)]
@@ -425,7 +425,7 @@ pub struct OwnSupportState {
 
 /// What mesh repair found at import, kept because the stored mesh is already repaired and
 /// loading it would report nothing to do.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
     pub vertices_merged: usize,
     pub faces_removed: usize,
@@ -435,7 +435,7 @@ pub struct Summary {
 
 /// One model's supports: the points placed, the regions painted, and every tree
 /// standing — the ones an automatic run grew as well as the ones a hand froze.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ObjectSupportState {
     pub points: Vec<SupportPoint>,
     pub painted: Region,
@@ -452,7 +452,7 @@ pub struct ObjectSupportState {
 
 /// One model's hollowing: the blockers, drains and channels placed on it, and the shell
 /// standing on it.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ObjectHollowState {
     pub blockers: Vec<Blocker>,
     pub drains: Vec<DrainHole>,

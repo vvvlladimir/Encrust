@@ -35,6 +35,29 @@ fn a_rotation_written_by_hand_reads() {
 }
 
 #[test]
+fn a_duplicate_and_a_mirror_written_by_hand_read() {
+    let copy: Edit =
+        serde_json::from_str(r#"{"edit":"duplicate","object":2,"offset_mm":[20,0,0]}"#)
+            .expect("a duplicate is valid JSON for an edit");
+    let flip: Edit = serde_json::from_str(r#"{"edit":"mirror","object":2,"axis":"x"}"#)
+        .expect("a mirror is valid JSON for an edit");
+    assert_eq!(
+        copy,
+        Edit::Duplicate {
+            object: ObjectId(2),
+            offset_mm: Vec3::new(20.0, 0.0, 0.0),
+        }
+    );
+    assert_eq!(
+        flip,
+        Edit::Mirror {
+            object: ObjectId(2),
+            axis: Axis::X,
+        }
+    );
+}
+
+#[test]
 fn an_edit_of_an_unknown_kind_is_refused() {
     let text = r#"{"edit": "melt", "object": 3}"#;
     assert!(serde_json::from_str::<Edit>(text).is_err());

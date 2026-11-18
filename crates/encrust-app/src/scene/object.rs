@@ -3,7 +3,6 @@ use super::support_surface::SupportShell;
 use super::{ObjectId, Scene, Shaped, ShownPatch};
 use crate::drain::{PlugsLaid, Traps};
 use crate::drilling::{PrintedSupports, SupportsUnder};
-use core_engine::project::Axis;
 use core_engine::project::HollowState;
 use core_geometry::{
     Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3, placed_aabb, signed_volume,
@@ -173,15 +172,6 @@ pub(super) fn onto_plate(min: Vec2, span: Vec2, plate: Vec2) -> Vec2 {
         (0.0 as Scalar).clamp(-min, plate - span - min)
     };
     Vec2::new(axis(min.x, span.x, plate.x), axis(min.y, span.y, plate.y))
-}
-
-/// The scale that flips `axis` and leaves the other two alone.
-pub(super) fn flip(axis: Axis) -> Vec3 {
-    match axis {
-        Axis::X => Vec3::new(-1.0, 1.0, 1.0),
-        Axis::Y => Vec3::new(1.0, -1.0, 1.0),
-        Axis::Z => Vec3::new(1.0, 1.0, -1.0),
-    }
 }
 
 impl SceneObject {

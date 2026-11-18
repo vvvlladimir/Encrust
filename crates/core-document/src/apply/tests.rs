@@ -3,7 +3,7 @@ use core_geometry::{Mesh, Scalar, Vec3, signed_volume, transform_mesh};
 use core_volume::{DrainHole, HoleShape};
 
 use super::*;
-use crate::fixtures::{SIDE_MM, cube, cube_of};
+use crate::fixtures::{SIDE_MM, cube, cube_of, cubes_with_plug};
 
 /// What f32 sums over a cube's cut faces drift by, mm³.
 const VOLUME_MM3: Scalar = 1e-2;
@@ -287,4 +287,31 @@ fn a_placement_naming_no_object_is_refused() {
     let error = apply(&mut document, &edit).expect_err("there is no object 9");
 
     assert_eq!(error, ApplyError::NoObject(ObjectId(9)));
+}
+
+fn plug_of_last(document: Document) -> Option<u32> {
+    let project = document.into_project();
+    project.manifest.objects.last().expect("the plug").plug_of
+}
+
+#[test]
+fn a_plug_keeps_naming_its_cube_when_a_cube_before_it_is_cut_in_two() {
+    let mut document = Document::from_project(cubes_with_plug());
+
+    apply(&mut document, &cut_of(CUBE, 5.0, Keep::Both, false)).expect("it cuts");
+
+    assert_eq!(
+        plug_of_last(document),
+        Some(2),
+        "the second cube is now third"
+    );
+}
+
+#[test]
+fn a_plug_whose_cube_is_cut_away_names_nothing() {
+    let mut document = Document::from_project(cubes_with_plug());
+
+    apply(&mut document, &cut_of(ObjectId(2), 5.0, Keep::Both, false)).expect("it cuts");
+
+    assert_eq!(plug_of_last(document), None);
 }

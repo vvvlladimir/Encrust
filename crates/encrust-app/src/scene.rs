@@ -20,7 +20,7 @@ mod shown_patch;
 mod support_surface;
 pub use import_summary::{ImportSummary, Imported, Mapped};
 pub use object::{OwnSettings, SceneObject, Taken};
-use object::{PlacedBounds, flip, onto_plate};
+use object::{PlacedBounds, onto_plate};
 use plates::plate_name;
 pub use shown_patch::ShownPatch;
 
@@ -302,23 +302,18 @@ impl Scene {
     /// The flip is a negative scale, which reverses winding; `transform_mesh` puts the
     /// faces back the right way round, so the copy still slices as a solid.
     pub fn mirror(&mut self, id: ObjectId, axis: Axis) -> bool {
-        let Some(before) = self.get(id).and_then(SceneObject::world_bounds) else {
-            return false;
-        };
         let Some(object) = self.get_mut(id) else {
             return false;
         };
-        object.transform.scale *= flip(axis);
-
-        let Some(after) = self.get(id).and_then(SceneObject::world_bounds) else {
-            return false;
-        };
-        let center = |bounds: &Aabb| (bounds.mins + bounds.maxs) / 2.0;
-        let back = center(&before) - center(&after);
-        if let Some(object) = self.get_mut(id) {
-            object.transform.translation += back;
-        }
+        object.transform = core_document::mirrored(object.transform, &object.mesh, axis);
         true
+    }
+
+    /// Removes the plugs laid for model `id`, and leaves the model.
+    pub fn remove_plugs_of(&mut self, id: ObjectId) {
+        self.objects.retain(|object| object.plug_of != Some(id));
+        self.selected
+            .retain(|picked| self.objects.iter().any(|o| o.id == *picked));
     }
 
     pub fn remove(&mut self, id: ObjectId) {
