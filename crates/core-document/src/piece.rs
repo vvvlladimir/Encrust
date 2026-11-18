@@ -47,6 +47,7 @@ impl Piece {
 
     /// Turned about its centre of mass until `normal` looks straight down, and stood on the
     /// plate. A zero normal leaves it as it is.
+    #[must_use]
     pub fn laid_on(mut self, normal: Vec3) -> Self {
         let (Some(normal), Some(centre)) = (normal.try_normalize(), center_of_mass(&self.mesh))
         else {
