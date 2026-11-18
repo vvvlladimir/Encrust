@@ -1092,6 +1092,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `convert` | A sliced file to another format. |
 | `profiles` | List, show, export and import profiles. |
 | `recipes` | List the built-in and your own recipes, and show one as TOML to copy and edit. |
+| `test-print` | The window's test prints — detail, exposure check, surface finish, fit gauge — written as STL files to prepare and print like any model. |
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
 | `completions` | Shell completion for bash, zsh, fish, elvish, PowerShell. |
 
@@ -1107,7 +1108,12 @@ the step before and the autopilot's own preparation, so it can undo one that mad
 worse. With the window open, each step it keeps is run on the plate as Prepare for print by
 the same recipe the check ran, one undo each, on the job's printer and resin. A point, a pose
 picked from the list or turned by hand, the modelling and the slicing are not run there yet;
-the answer names what was left out.
+the answer names what was left out. It asks what the print is for and can prepare it by
+another recipe, such as Miniatures; it can be told which side of the model is looked at, so
+the supports there are sparser and lighter. A resin you have not set up it takes in from a
+file that printed well with it or from another slicer's export, and it writes the exposure
+check for you to print; a resin known only by its label's numbers you still set up in the
+window.
 
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,

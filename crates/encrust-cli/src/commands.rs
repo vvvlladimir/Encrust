@@ -12,6 +12,7 @@ mod profiles;
 mod recipes;
 mod render;
 pub mod slice;
+mod test_print;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
@@ -34,6 +35,7 @@ pub use profiles::ProfilesCommand;
 pub use recipes::RecipesCommand;
 pub use render::RenderCommand;
 pub use slice::SliceCommand;
+pub use test_print::TestPrintCommand;
 
 /// Slice meshes for MSLA resin printers.
 #[derive(Parser, Debug)]
@@ -129,6 +131,8 @@ pub enum Command {
     /// The recipes Prepare runs, the built-in ones and yours.
     #[command(subcommand)]
     Recipes(RecipesCommand),
+    /// Write one of the project's test prints as an STL: detail, exposure, surface or fit.
+    TestPrint(TestPrintCommand),
     /// Find printers on the network, ask one what it is doing, send it a file.
     #[command(subcommand)]
     Printer(PrinterCommand),
@@ -152,6 +156,7 @@ impl Command {
             | Self::Info(_)
             | Self::Profiles(_)
             | Self::Recipes(_)
+            | Self::TestPrint(_)
             | Self::Completions(_) => false,
         }
     }
@@ -184,6 +189,7 @@ pub fn run(cli: &Cli, stop: &Stop) -> Result<Exit> {
         Command::Convert(command) => command.run(global, stop),
         Command::Profiles(command) => command.run(global),
         Command::Recipes(command) => command.run(global),
+        Command::TestPrint(command) => command.run(global),
         Command::Printer(command) => command.run(global, stop),
         Command::Completions(command) => command.run(),
     }

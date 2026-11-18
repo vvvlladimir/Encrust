@@ -768,6 +768,15 @@ without one needs `--printer ID`. Where each value comes from is in
 encrust profiles import "My resin.cfgx"
 ```
 
+`test-print NAME` writes one of the window's test prints as an STL — `detail`, `exposure`,
+`surface` or `fit` — under its own name in the current directory, or to `-o PATH`, a file or
+a directory; `--json` gives `print` and `path`. The exposure check, printed at a resin's stated
+exposure, tells by which pins stand and which holes stay open whether it is right (ADR 0460):
+
+```sh
+encrust test-print exposure -o ~/prints
+```
+
 `--config FILE` holds flags written down: a key is a flag's long name, `true` the bare flag,
 `false` nothing, an array the flag once per element. Keys at the top are the global flags,
 a table names a subcommand, and a nested one a subcommand under it. A key fills in only a
@@ -912,7 +921,11 @@ dropped and shells dropped by number, bridges — and `set_slicing` — layer he
 layers, exposure bands, anti-aliasing, greys, blur, islands removed — reach the rest of the
 command line's flags; `set_hollow` takes the mode, precision and `keep_solid_at_mm`,
 `set_drains` the hole's depth, taper, sides, turn, walled holes, holes into the supports and
-channels, and `set_supports` a profile TOML and `at_mm` with `only_at`.
+channels, and `set_supports` a profile TOML, `at_mm` with `only_at` and `shown_at_mm`, the
+side meant to be seen, as `--shown-at`. `list_recipes` answers `recipes list` with each
+recipe's TOML; `use_recipe` prepares the job by one with `--recipe` in place of `--prepare`.
+`import_resin` runs `profiles import` on the file given; `write_test_print` runs `test-print`
+into the folder given.
 `set_pose`, `set_hollow`, `set_drains` and `set_supports` check the changed recipe with
 `estimate --check-drainage` and keep it as the next revision only if the command line took
 it; every check is set `--against` the revision before and the autopilot, and the answer

@@ -27,6 +27,40 @@ pub struct UseRecipe {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct WriteTestPrint {
+    pub print: TestPrint,
+    /// Absolute path of the folder the STL is written into, under the print's own name.
+    pub folder: PathBuf,
+}
+
+/// The project's test prints, as the window's start page offers them.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum TestPrint {
+    /// Spikes, ledges and pillars: the finest detail that prints.
+    Detail,
+    /// Pins, fins, slots and holes from fine to coarse: whether the resin's exposure is short
+    /// or long. Printed with the exposure the maker states, then the user reads which pins
+    /// and holes came out.
+    Exposure,
+    /// Faces at each angle: the finish a surface takes.
+    Surface,
+    /// A hole and pins at each clearance: what fits.
+    Fit,
+}
+
+impl TestPrint {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Detail => "detail",
+            Self::Exposure => "exposure",
+            Self::Surface => "surface",
+            Self::Fit => "fit",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct ImportResin {
     /// Absolute path of what the user's resin is read from: a sliced file that printed well
     /// with it, another program's exported resin (`.cfgx`, `.ini`), or a resin TOML.
