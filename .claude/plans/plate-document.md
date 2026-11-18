@@ -186,3 +186,44 @@ Done when: core tests — two 10 mm cubes 5 mm apart in one mesh (`core_geometry
   stopped → `Cancelled` and the document unchanged. Window link test applying `Split` on two
   cubes. All existing cut, split and CLI `--split`/`--part-off` tests still pass.
 Not now: Combine (C4), MCP wiring.
+
+### C4. Combine
+Read: `crates/encrust-app/src/job/boolean.rs`, `crates/encrust-app/src/boolean.rs` (its landing),
+  `crates/encrust-cli/src/modelling.rs` (`combined`), `crates/core-document/src/{apply.rs,document.rs,split.rs}`
+Touch: those, `crates/core-edit/src/edit.rs` (+tests), new `crates/core-document/src/combine.rs`,
+  `crates/core-document/src/{lib.rs,error.rs,apply/tests.rs}`, `crates/encrust-app/src/link/plate.rs`
+  (+ test), `docs/design/document.md`
+Edit: `Combine { objects: Vec<ObjectId>, op: Op, toward: Option<Vec3> }`, `Op` = union |
+  difference | intersection (kebab, in core-edit; `core_volume::Boolean` from it). The first
+  object is what a difference keeps. `toward` set: `combine_exact_toward`, else `combine`
+  (Method::ExactToward / Sampled of the window). Fewer than two objects or one missing:
+  `ApplyError::NoObject`/new `TooFew`. `NothingLeft` → `ApplyError::NothingLeft`; `NotSolid` →
+  `ApplyError::NotSolid(ObjectId)` (the first); other → `Failed`.
+Move: the body of `job/boolean.rs::run` becomes core-document's `combined(placed, op, toward,
+  Cancel)`; the window maps its `ApplyError` to its `tr!` strings; `modelling::combined` calls it.
+Result: the objects are replaced by one `Piece::sound(Role::Combined, mesh)` at the first's
+  index (`Document::replace` for the first, `Delete`'s helper for the rest).
+Done when: two 10 mm cubes overlapping by 5 mm on x → union 1500 ± 0.01 mm³, difference 500 ±
+  0.01, intersection 500 ± 0.01; two apart → intersection is `NothingLeft`; one object →
+  `TooFew`. Window link test applying a union. Existing boolean, text and `--combine` tests pass.
+Not now: Label (C5), MCP wiring.
+
+### C5. Label
+Read: `crates/encrust-cli/src/modelling.rs` (`labelled`, `BUNDLED_FONT`), `crates/encrust-app/src/text.rs`
+  (`label_at`, `stamp`), `crates/core-text/src/lib.rs`, C4's `combine.rs`
+Touch: those, `crates/core-edit/src/edit.rs` (+tests), new `crates/core-document/src/label.rs`,
+  `crates/core-document/{Cargo.toml (+core-text), src/lib.rs, src/error.rs, src/apply/tests.rs}`,
+  `docs/architecture.md` (the core-document edge to core-text), `crates/encrust-app/src/link/plate.rs` (+ test)
+Edit: `Label { object, text: String, at_mm: Vec3, height_mm, depth_mm, raised: bool,
+  follow_surface: bool, angle_deg, font: Option<PathBuf> }` (defaults as the CLI's flags:
+  `LETTER_HEIGHT_MM`, `LABEL_DEPTH_MM`, raised, not following, 0°). `font: None` is the bundled
+  IBM Plex Sans: `BUNDLED_FONT` moves from the CLI into `label.rs`.
+Move: `modelling::labelled`'s outline-frame-label steps become core-document's
+  `labelled(mesh, transform, &LabelAsked, cancel) -> Result<Mesh, ApplyError>`, stamped with C4's
+  `combined` (`toward` = the face's normal, as the window); `modelling::labelled` calls it. The
+  window's Text tool keeps its own fonts and ghost; only an edit from the link uses `labelled`.
+Errors: blank text, no surface near `at_mm`, a font that does not read → new `ApplyError`
+  variants, each tested.
+Done when: "I" raised 1 mm on the 10 mm cube's top face adds volume (> 1000 + 1 mm³), sunk
+  removes it (< 1000 − 1); each new error variant has a test; window link test stamping one.
+Not now: the window's font picker over the link, MCP wiring.
