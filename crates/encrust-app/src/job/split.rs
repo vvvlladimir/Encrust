@@ -1,13 +1,16 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use core_document::{ApplyError, part_off_at, split};
+use core_edit::ObjectId;
 use core_geometry::{Mesh, Vec3};
-use core_volume::{Cancel, PartSettings, PartedOff, Parts, Progress, VolumeError, part_off, parts};
+use core_volume::{Cancel, PartSettings, PartedOff, Parts, Progress};
 
 use crate::i18n::tr;
 use crate::job::{Worker, pooled};
 
 /// One model to split into its parts, already placed on the plate.
 pub struct SplitRequest {
+    pub id: ObjectId,
     pub placed: Mesh,
     pub settings: PartSettings,
     /// The point on the plate a part is marked at, to cut that part off instead.
@@ -37,17 +40,16 @@ pub fn spawn_split(request: SplitRequest) -> SplitJob {
 fn run(request: SplitRequest, stop: &AtomicBool, progress: &Progress) -> SplitOutcome {
     let asked = || stop.load(Ordering::Relaxed);
     let Some(at) = request.at else {
-        return SplitOutcome::Split(parts(&request.placed, &request.settings));
+        return SplitOutcome::Split(split(&request.placed, &request.settings));
     };
-    match part_off(
+    match part_off_at(
         &request.placed,
         at,
         Cancel::when(&asked).reporting(progress),
+        request.id,
     ) {
         Ok(parted) => SplitOutcome::PartedOff(parted),
-        Err(VolumeError::NoNeck | VolumeError::NotOnModel) => {
-            SplitOutcome::Failed(tr!("cut-no-neck"))
-        }
+        Err(ApplyError::NoNeck(_)) => SplitOutcome::Failed(tr!("cut-no-neck")),
         Err(error) => SplitOutcome::Failed(tr!("cut-split-failed", reason = error.to_string())),
     }
 }

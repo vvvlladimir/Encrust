@@ -4,13 +4,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{Context, Result, bail};
-use core_document::{CutAsked, CutModel, pieces};
+use anyhow::{Context, Result, anyhow, bail};
+use core_document::{ApplyError, CutAsked, CutModel, part_off_at, pieces, split};
 use core_edit::{Axis, ObjectId};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_joint::{JointKind, Joints};
 use core_text::{Font, Frame, LABEL_DEPTH_MM, LETTER_HEIGHT_MM, LabelSettings, label, outline};
-use core_volume::{Boolean, Cancel, PartSettings, combine, combine_exact_toward, part_off, parts};
+use core_volume::{Boolean, Cancel, PartSettings, combine, combine_exact_toward};
 
 use crate::hollowing::point;
 
@@ -326,7 +326,14 @@ fn cut(
 /// `mesh` as `--split` or `--part-off` leaves it, or whole.
 fn parted(mesh: Mesh, args: &ModelArgs, talk: bool) -> Result<Vec<Mesh>> {
     if let Some(at) = args.part_off {
-        let parted = part_off(&mesh, at, Cancel::never()).context("cutting the part off")?;
+        let parted = part_off_at(&mesh, at, Cancel::never(), ObjectId::UNSET)
+            .map_err(|error| match error {
+                ApplyError::NoNeck(_) => {
+                    anyhow!("there is no narrow join to cut at from this point")
+                }
+                other => other.into(),
+            })
+            .context("cutting the part off")?;
         if talk {
             println!("Cut the part at {at} off where it joins the rest\n");
         }
@@ -338,7 +345,7 @@ fn parted(mesh: Mesh, args: &ModelArgs, talk: bool) -> Result<Vec<Mesh>> {
     let settings = PartSettings {
         smallest_mm3: args.split_smallest,
     };
-    let found = parts(&mesh, &settings);
+    let found = split(&mesh, &settings);
     if talk {
         println!(
             "Split into {} parts: {} scraps joined, {} dropped\n",

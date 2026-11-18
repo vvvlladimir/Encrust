@@ -7,6 +7,7 @@ use anyhow::{Context, Result, bail};
 use core_document::{Document, apply};
 use core_edit::Edit;
 use core_engine::project::{Project, save};
+use core_volume::Cancel;
 
 /// The edits a run makes to a project's plate, and where the plate they leave is written.
 #[derive(Debug, Clone, Default, clap::Args)]
@@ -35,7 +36,8 @@ impl EditArgs {
         };
         let mut document = Document::from_project(project);
         for (index, edit) in edits.iter().enumerate() {
-            apply(&mut document, edit).with_context(|| format!("edit {} of --edits", index + 1))?;
+            apply(&mut document, edit, Cancel::never())
+                .with_context(|| format!("edit {} of --edits", index + 1))?;
         }
         let project = document.into_project();
         if let Some(path) = &self.project_out {

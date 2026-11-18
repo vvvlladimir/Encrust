@@ -36,12 +36,12 @@ them. Print settings, printer and resin are a revision's, not edits.
 
 ## apply
 
-`apply(&mut Document, &Edit)` changes the document or leaves it as it was: an error never
-leaves half an edit. ADR 0466's `Run`, the window job's cancel flag and progress, joins the
-signature with Hollow, the first edit long enough to be given up on part way; a cut cannot be.
+`apply(&mut Document, &Edit, Cancel)` changes the document or leaves it as it was: an error
+never leaves half an edit. A caller that cannot cancel passes `Cancel::never()`.
 
 Until the window's `Scene` is a `Document`, a front end runs an edit's steps rather than
-`apply`: the window's Cut and `--cut` call `cut` and `pieces`, the same two `apply` runs.
+`apply`: the window's Cut and `--cut` call `cut` and `pieces`, its Split and `--split` call
+`split` and `part_off_at`, the same calls `apply` runs.
 
 `Cut { object, axis, at_mm, keep, joints, lay_flat }` cuts the object's printed mesh, its
 drain holes taken out first, at `at_mm` along `axis` on the plate. The kept halves replace it
@@ -56,6 +56,14 @@ scale, each about the object's centre of mass and then standing it on the plate;
 finite or above zero is `ApplyError::BadScale`. None of them adds or removes an object
 (`Report::Placed`). The window sets the transform at once through the same `placement`
 functions.
+
+`Split { object, smallest_mm3 }` and `PartOff { object, at_mm }` run on the object's printed
+mesh placed on the plate and replace it with `Role::Part(n)` pieces, counted from one: a split
+by `core_volume::parts` (the default smallest part where unset), a part-off by
+`core_volume::part_off` into the part and the rest. A split that finds one body and no scrap
+joined or dropped is a no-op: the object keeps its id and `Report::Split` says so. Errors map
+as `NoNeck | NotOnModel` to `ApplyError::NoNeck`, a stopped run to `Cancelled`, any other to
+`Failed`. `apply` takes a `core_volume::Cancel` (ADR 0466's `Run`).
 
 `Delete { object }` removes the object and the plugs laid for it. `Duplicate { object,
 offset_mm }` puts a copy with all its state and meshes right after it, under a new id, a plug

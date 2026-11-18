@@ -224,3 +224,50 @@ fn a_duplicate_on_the_version_it_was_built_on_puts_a_copy_beside_the_cube() {
         "the copy stands 20 mm along x, got {xs:?}"
     );
 }
+
+#[test]
+fn a_split_on_the_version_it_was_built_on_replaces_two_cubes_by_their_two_parts() {
+    let file = scratch("split");
+    let mut bench = Bench::new(file.clone());
+    let mut mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    mesh.append(&cuboid(
+        Vec3::new(15.0, 0.0, 0.0),
+        Vec3::new(25.0, 10.0, 10.0),
+    ));
+    let summary = ImportSummary::made(diagnose(&mesh));
+    let imported = Imported::new(
+        "cubes".into(),
+        Arc::new(mesh),
+        Transform::default(),
+        summary,
+    );
+    let cubes = bench.doc.scene.insert(imported);
+    bench.run_to_end();
+    let version = bench.doc.history.plate_version();
+    let split = json!({"base_version": version,
+        "apply": [{"edit": "split", "object": cubes.0}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, split));
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    assert!(bench.doc.scene.get(cubes).is_none(), "the pair is replaced");
+    assert_eq!(bench.doc.scene.objects().len(), 2, "one object per cube");
+}
+
+#[test]
+fn a_split_of_one_body_leaves_it_in_place_and_is_answered_applied() {
+    let file = scratch("split-whole");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let split = json!({"base_version": version,
+        "apply": [{"edit": "split", "object": cube.0}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, split));
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    assert!(
+        bench.doc.scene.get(cube).is_some(),
+        "the cube is left whole"
+    );
+}

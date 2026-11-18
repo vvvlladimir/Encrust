@@ -37,6 +37,15 @@ pub enum Edit {
     /// Turns `object` inside out across `axis` of its own frame, where its bounds' centre
     /// stays.
     Mirror { object: ObjectId, axis: Axis },
+    /// Breaks `object` into the bodies it is made of; a body under `smallest_mm3` (the
+    /// default where unset) is joined to the one it touches, or dropped.
+    Split {
+        object: ObjectId,
+        #[serde(default)]
+        smallest_mm3: Option<Scalar>,
+    },
+    /// Cuts the part of `object` at plate point `at_mm` off where it joins the rest.
+    PartOff { object: ObjectId, at_mm: Vec3 },
 }
 
 #[cfg(test)]

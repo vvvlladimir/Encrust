@@ -14,4 +14,13 @@ pub enum ApplyError {
     /// A scale factor that is not finite and above zero.
     #[error("a scale for object {0:?} is not finite and above zero")]
     BadScale(ObjectId),
+    /// A part-off at a point that is off the model, or on a body with no neck to cut at.
+    #[error("object {0:?} has no neck to cut a part off at there")]
+    NoNeck(ObjectId),
+    /// The run was stopped before it finished.
+    #[error("the edit was cancelled")]
+    Cancelled,
+    /// A split or part-off failed in the geometry; `reason` is the geometry's own message.
+    #[error("the edit of object {object:?} failed: {reason}")]
+    Failed { object: ObjectId, reason: String },
 }

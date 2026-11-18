@@ -58,6 +58,28 @@ fn a_duplicate_and_a_mirror_written_by_hand_read() {
 }
 
 #[test]
+fn a_split_and_a_part_off_written_by_hand_read() {
+    let split: Edit = serde_json::from_str(r#"{"edit":"split","object":2}"#)
+        .expect("a bare split is valid JSON for an edit");
+    let off: Edit = serde_json::from_str(r#"{"edit":"part-off","object":2,"at_mm":[1,2,3]}"#)
+        .expect("a part-off is valid JSON for an edit");
+    assert_eq!(
+        split,
+        Edit::Split {
+            object: ObjectId(2),
+            smallest_mm3: None,
+        }
+    );
+    assert_eq!(
+        off,
+        Edit::PartOff {
+            object: ObjectId(2),
+            at_mm: Vec3::new(1.0, 2.0, 3.0),
+        }
+    );
+}
+
+#[test]
 fn an_edit_of_an_unknown_kind_is_refused() {
     let text = r#"{"edit": "melt", "object": 3}"#;
     assert!(serde_json::from_str::<Edit>(text).is_err());

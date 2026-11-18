@@ -26,6 +26,8 @@ pub enum Role {
     Dowel(usize),
     /// A copy of the whole object.
     Copy,
+    /// One body a split or a part-off made, counted from one.
+    Part(usize),
 }
 
 impl Piece {
