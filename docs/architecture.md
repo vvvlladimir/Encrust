@@ -103,7 +103,7 @@ it are in `.claude/rules/architecture.md`.
 | `encrust-web` | The window's browser front end (ADR 0181): `start`, the window on a canvas; `www/` the page, its headers, its manifest and `sw.js`, the service worker that isolates it where a host sends no headers and keeps the build for working offline (ADR 0183) |
 | `encrust-mcp` | `encrust-mcp` binary, the MCP server over stdio a chat client starts (ADR 0455): `Server` and its tools, `Jobs` of numbered `Revision`s, each a `Recipe` — model, printer, resin, `Pose`, `Hollow`, `Drains`, `Supports` — turned into `encrust` flags, kept with its check's report, its flags and the autopilot's check, `compare_poses` over the search's finalists (ADR 0458), `Cli`, which runs `encrust --json` and reads its `Outcome`, `Trace`, a line per tool call (ADR 0456), and `Window`, which hands each revision kept and its recipe to the open window (ADR 0459) |
 | `web-engine` | The browser's front end without a window (ADR 0177): `slice_project`, the bytes of a project into the bytes of a sliced file with no file system, thread or clock, and the `wasm-bindgen` exports of it; `www/` the page, its worker and the Node measurement |
-| `xtask` | `xtask` binary: `web`, the browser build; `man`, the command line's man pages from its own clap definition (ADR 0183); `arch`, the dependency graph below against every crate's manifest |
+| `xtask` | `xtask` binary: `web`, the browser build; `man`, the command line's man pages from its own clap definition (ADR 0183); `arch`, the dependency graph below against every crate's manifest; `mcpb`, the Claude Desktop extension for a target (ADR 0461) |
 | `encrust-app` | `encrust-gui` binary: egui/wgpu window — plate panel left, one inspector panel per tool and the rail beside it, plate tabs on their own strip, Preview splitting the stage between model and mask; `Scene` with `duplicate`/`mirror`/`array`, `BuildPlate` — the machine's platform, named apart from `core_engine::Plate` — `OrbitCamera`, picking, gizmo, `History`, `Measure`, `Cutting`, jobs that hold no stack, `prepare` running the recipe picked, `link` running each revision `encrust-mcp` hands over by its recipe (ADR 0459), `Settings` with the Recipes page editing the user's recipes (ADR 0405), `shortcuts`, `ui/theme`, `prefs`, `project` — the dialogs and the `Scene` ↔ `Manifest` conversion over `core_engine::project` — `updates`, `report` — the markdown a user hands to an issue themselves (ADR 0212); `i18n`, the window's text in the user's language (ADR 0300); `files` and, for a browser, `web` (ADR 0181) |
 
 ## The allowed dependency graph
@@ -129,7 +129,7 @@ encrust-cli ──> core-engine, core-analysis, core-format, core-geometry, core
                printer-link, net-sdcp, net-prusalink, rayon, clap, clap_complete, serde, serde_json,
                toml, indicatif, ctrlc, jiff
 web-engine ──> core-engine, core-pipeline, wasm-bindgen
-xtask ──> encrust-cli, toml, clap, clap_mangen
+xtask ──> encrust-cli, toml, clap, clap_mangen, zip
 encrust-mcp ──> (nothing in this workspace; rmcp, tokio, serde, serde_json, toml,
                directories; it runs `encrust` as a child, ADR 0455)
 

@@ -559,3 +559,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0458](0458-a-client-chooses-among-poses-the-engine-proved.md) | A client chooses among the poses the engine proved, and is held to its own last step | Proposed |
 | [0459](0459-a-revision-is-a-recipe-the-open-window-runs.md) | A job's revision is a recipe, which the open window runs | Proposed |
 | [0460](0460-a-chat-client-names-what-shows-and-brings-the-resin-with-no-window.md) | A chat client names what shows, picks the recipe and brings the resin, with no window | Proposed |
+| [0461](0461-each-release-ships-the-claude-desktop-extension.md) | Each release ships the Claude Desktop extension, one per installer's platform | Proposed |

@@ -135,11 +135,11 @@ Claude Desktop; Claude Code, Codex, Cursor and LM Studio take the same binary fr
 config. The files are the user's own paths and the printer is on the user's network.
 
 - **Built by the release.** `release.yml` packs a bundle for each of its six targets after
-  the build and attaches `encrust-<platform>-<arch>.mcpb` to the release, signed with
-  `mcpb sign`; the binaries inside are signed and notarised as the app's are.
+  the build and attaches `encrust-<os>-<arch>.mcpb` to the release, signed with `mcpb sign`
+  where the certificate is set (ADR 0461).
 - **Downloaded from a button.** encrust.app's download page offers the bundle for the
-  visitor's system beside the installer; the window's Help menu downloads and opens the one
-  for its own version.
+  visitor's system beside the installer; the window's File → Use with Claude Desktop
+  downloads the one for its own version.
 - **Updated by a new download.** Anthropic's directory no longer takes `.mcpb` listings, so
   nothing updates it in place; the bundle reports its version in `instructions`.
 - **No window needed.** Resins come from `import_resin` and the exposure test (step 15).
@@ -240,13 +240,12 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `core-recipe`, `encrust-mcp` | 14 |
 | 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | `prototypes/connector` (built; a prepare in an unisolated page measured at 20 s for a 175k-face figure; the rest waits on a run in ChatGPT) | 12 |
 | 19 | `web-engine` prepares, checks and draws; the connector and its page | `web-engine`, a new crate | 18 |
-| 20 | The extension shipped: bundles in `release.yml`, signed, the download button, Help menu | `.github`, `xtask`, `encrust-app`, the site | 12, 15 |
+| 20 | The extension shipped: bundles in `release.yml`, signed where the certificate is set, File → Use with Claude Desktop | `.github`, `xtask`, `encrust-app` (done, ADR 0461); the site's button is the site's | 12, 15 |
 | 21 | The bench's sets per use, and their prints | `agent-lab` | 13–17 |
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 12 |
 | 10 | The MCP Apps page in Claude Desktop, the connector's page served locally | `encrust-mcp` | 19 |
 
-Order: 18 and 20 now, 15 standing, so a user with no window can finish a print; 16, 17 and
-19 next; 21 grows with each; 9 and 10 last.
+Order: 19 once the spike's live run answers; 16, 17 next; 21 grows with each; 9 and 10 last.
 
 ## How the work is run
 
