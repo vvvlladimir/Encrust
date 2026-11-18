@@ -1,49 +1,103 @@
-//! The agents' part of the print chip and the list it opens: each chat client's agent with
+//! The agents' ring beside the print chip and the list it opens: each chat client's agent with
 //! its latest jobs, a press showing one on the plate (ADR 0465, `ui-screens.md`, Top bar).
 
 use crate::agents::{Agent, Agents, Asked, Job, State};
 use crate::files::Handed;
 use crate::i18n::tr;
 use crate::panels::Window;
+use egui::{Sense, vec2};
+
+use crate::ui::theme::layout::printer_card_ring::{GAP, SIZE};
 use crate::ui::{
-    Aside, ChipPart, ChooserRow, Lead, chooser_group, chooser_row, hairline, hint, icon, switch,
-    theme,
+    Aside, ChooserRow, Lead, RingLook, chooser_frame, chooser_group, chooser_row, duration,
+    focus_ring, hairline, hint, icon, paint_ring, ring_badge, switch, theme,
 };
 
 /// The most agents that have ended the list keeps.
 const MOST_ENDED: usize = 3;
 
-/// The agents' part: the robot, lit while one works, and how many there are now. None in a
-/// browser, where no agent can reach the window.
-pub(super) fn part(ui: &egui::Ui, agents: &Agents) -> Option<ChipPart> {
+/// The agents' ring, beside the printers': there while an agent works or waits for its chat,
+/// spinning while one works, the count at its corner past one; a press opens the list.
+/// Answers the width it took; none in a browser, which no agent reaches.
+pub(super) fn ring(ui: &mut egui::Ui, window: &mut Window) -> f32 {
     if cfg!(target_arch = "wasm32") {
-        return None;
+        return 0.0;
+    }
+    let (count, working) = window.machine.agents.at_work();
+    if count == 0 {
+        return 0.0;
     }
     let colors = theme::colors();
-    let (count, working) = agents.at_work();
-    let text = if count > 0 {
-        count.to_string()
-    } else {
-        String::new()
+    let look = RingLook {
+        glyph: icon::AGENTS,
+        glyph_tint: colors.text_mid,
+        track: colors.line,
+        arc: colors.accent,
+        share: None,
+        spinning: working,
     };
-    let part = ChipPart::new(
+    let (rect, response) = ui.allocate_exact_size(vec2(SIZE, SIZE), Sense::click());
+    paint_ring(
         ui,
-        icon::AGENTS,
-        &text,
-        colors.text_high,
-        icon::CARET_DOWN,
-        f32::INFINITY,
+        rect.center(),
+        SIZE / 2.0 - 2.0,
+        &look,
+        response.hovered(),
     );
-    Some(if working {
-        part.glyph_tint(colors.accent)
-    } else {
-        part
-    })
+    if count > 1 {
+        ring_badge(ui, rect, count);
+    }
+    focus_ring(ui, &response, theme::R_CONTROL);
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tr!("agents-title"))
+    });
+    let response = response.on_hover_text(hover_lines(&window.machine.agents));
+    chooser(&response).show(|ui| menu(ui, window));
+    SIZE + GAP
 }
 
-/// The part's name for a screen reader.
-pub(super) fn name(agents: &Agents) -> String {
-    tr!("chip-agents", count = agents.at_work().0)
+/// What the ring says on hover: each agent there now, what it does and for how long.
+fn hover_lines(agents: &Agents) -> String {
+    let now = crate::agents::now_s();
+    let names = client_names(&agents.list);
+    let lines: Vec<String> = agents
+        .list
+        .iter()
+        .zip(names)
+        .filter(|(agent, _)| agent.state != State::Ended)
+        .map(|(agent, client)| match &agent.state {
+            State::Working { tool, job, since_s } => {
+                let agent_name = tr!("agents-working", client = client);
+                let time =
+                    duration(u32::try_from(now.saturating_sub(*since_s)).unwrap_or(u32::MAX));
+                let on = job.as_ref().and_then(|id| agents_job(agent, id));
+                match on {
+                    Some(job) => tr!(
+                        "agents-ring-line",
+                        agent = agent_name,
+                        model = job.name(),
+                        detail = detail(job, Some(tool)),
+                        time = time
+                    ),
+                    None => tr!("agents-ring-busy", agent = agent_name, time = time),
+                }
+            }
+            _ => tr!("agents-idle", client = client),
+        })
+        .collect();
+    lines.join("\n")
+}
+
+fn agents_job<'a>(agent: &'a Agent, id: &str) -> Option<&'a Job> {
+    agent.jobs.iter().find(|job| job.id == id)
+}
+
+/// The list the ring opens, hanging under it.
+fn chooser(ring: &egui::Response) -> egui::Popup<'_> {
+    crate::ui::popup_menu(ring)
+        .frame(chooser_frame())
+        .width(theme::CHOOSER_W)
+        .gap(theme::CHOOSER_GAP)
 }
 
 /// The list: each agent under its name with its jobs, then whether the window follows them.
@@ -100,6 +154,7 @@ fn job_row(ui: &mut egui::Ui, agent: &Agent, job: &Job, on_plate: bool) -> bool 
         State::Working {
             tool,
             job: Some(on),
+            ..
         } if *on == job.id => Some(tool.as_str()),
         _ => None,
     };
@@ -218,5 +273,33 @@ mod tests {
             "Revision 3 · changing the model"
         );
         assert_eq!(detail(&job, None), "Revision 3 · the check found problems");
+    }
+
+    #[test]
+    fn the_ring_says_what_each_agent_there_does_and_leaves_out_the_ended() {
+        let mut working = agent(Some("claude-code"));
+        working.state = State::Working {
+            tool: "check".into(),
+            job: Some("cube-1".into()),
+            since_s: crate::agents::now_s(),
+        };
+        working.jobs = vec![Job {
+            id: "cube-1".into(),
+            model: "/m/cube.stl".into(),
+            revision: 3,
+            clean: None,
+        }];
+        let mut ended = agent(Some("claude-ai"));
+        ended.state = State::Ended;
+        let mut agents = Agents::default();
+        agents.list = vec![working, agent(None), ended];
+        let said = hover_lines(&agents);
+        let lines: Vec<&str> = said.lines().collect();
+        assert_eq!(lines.len(), 2, "{said}");
+        assert!(
+            lines[0].starts_with("Claude Code · working: cube.stl, Revision 3 · checking, "),
+            "{said}"
+        );
+        assert_eq!(lines[1], "Agent · waiting");
     }
 }

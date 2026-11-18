@@ -403,6 +403,8 @@ agents-reading-print = Ревизия { $revision } · изучает печат
 agents-changing = Ревизия { $revision } · меняет модель
 agents-show-tooltip = Показать эту ревизию на платформе
 agents-open-project-tooltip = Открыть этот проект
+agents-ring-line = { $agent }: { $model }, { $detail }, { $time }
+agents-ring-busy = { $agent }, { $time }
 agents-follow = Следить за агентами
 agents-follow-tooltip = Сразу запускать на платформе каждую ревизию, которую сохраняет агент
 
@@ -1071,8 +1073,6 @@ chip-resin-untuned = Смола не откалибрована для этог�
 chip-resin-tooltip = Смола
 chip-layers = { $layer } мкм · { $exposure } с
 chip-settings = { $tool }, { $summary }
-chip-agents = Агенты, работают: { $count }
-chip-agents-tooltip = Агенты чат-клиентов на этом компьютере и их модели
 find-button = Найти
 find-tooltip = Найти инструмент, действие или модель
 bar-source = Исходный код

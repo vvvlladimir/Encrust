@@ -398,6 +398,10 @@ agents-reading-print = Revision { $revision } · looking at a print
 agents-changing = Revision { $revision } · changing the model
 agents-show-tooltip = Show this revision on the plate
 agents-open-project-tooltip = Open this project
+# The agents' ring on hover, a line an agent at work: its group name, the model, what it does, and for how long.
+agents-ring-line = { $agent }: { $model }, { $detail }, { $time }
+# The same while the agent works on no model yet.
+agents-ring-busy = { $agent }, { $time }
 agents-follow = Follow agents
 agents-follow-tooltip = Run each revision an agent saves on the plate straight away
 
@@ -1040,9 +1044,6 @@ chip-resin-untuned = The resin, not measured on this printer
 chip-resin-tooltip = The resin
 chip-layers = { $layer } µm · { $exposure } s
 chip-settings = { $tool }, { $summary }
-# The agents' part of the chip, as a screen reader names it.
-chip-agents = Agents, { $count } working
-chip-agents-tooltip = The agents of the chat clients on this computer, and their models
 find-button = Find
 find-tooltip = Find a tool, an action or a model
 bar-source = Source

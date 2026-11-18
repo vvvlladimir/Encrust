@@ -71,7 +71,7 @@ A server that ends writes `ended_s`; one whose `seen_s` is a minute old ended wi
 saying. A file whose `seen_s` is a week old is taken away by the next server that starts.
 
 The window reads the folder every 2 s off its drawing thread and lists the agents in the
-print chip's fourth part (`ui-screens.md`, Top bar): each job an agent's file names, by its
+agents' ring beside the print chip (`ui-screens.md`, Top bar): each job an agent's file names, by its
 latest revision — the highest `N.toml` — whose model is the first of `N.args.json` and whose
 verdict is `N.json`'s `status`. A press on a job builds the same line the server sends from
 `N.args.json` (`--printer` or `--profile`, `--resin` or `--material`) and `N.recipe.toml`,

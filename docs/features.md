@@ -1108,8 +1108,9 @@ the command line is a tool's: `set_shape` cuts, labels, splits and presses relie
 with what it prints, and the model picks one for what the print is — keeping supports off a
 face you named, say, which the search then ranks first. Every step it takes is set against
 the step before and the autopilot's own preparation, so it can undo one that made the print
-worse. The window lists every agent — Claude Code, Claude Desktop — in the robot's part of
-the bar, working, waiting or ended, with its latest models and what the check found; a click
+worse. The window lists every agent — Claude Code, Claude Desktop — in a robot's ring beside the
+print chip, there while an agent works or waits and turning while it works, each working,
+waiting or ended, with its latest models and what the check found; a click
 shows one on the plate as Prepare for print by the same recipe the check ran, one undo, on
 the job's printer and resin, whenever the window was opened. With Follow agents on, each
 step an agent keeps is run on the plate as it comes; asked to show you the model, the agent

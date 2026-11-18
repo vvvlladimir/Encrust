@@ -55,7 +55,8 @@ fn an_agent_at_work_is_listed_first_with_its_jobs_latest_revision_and_verdict() 
         "2-200.json",
         &json!({
             "client": "claude-code", "started_s": 200, "seen_s": 980,
-            "working": {"tool": "check", "job": "cube-1"}, "jobs": ["cube-1", "gone-3"],
+            "working": {"tool": "check", "job": "cube-1", "since_s": 970},
+            "jobs": ["cube-1", "gone-3"],
         }),
     );
     let agents = listed(&dir, 1000);
@@ -65,7 +66,8 @@ fn an_agent_at_work_is_listed_first_with_its_jobs_latest_revision_and_verdict() 
         agents[0].state,
         State::Working {
             tool: "check".into(),
-            job: Some("cube-1".into())
+            job: Some("cube-1".into()),
+            since_s: 970
         }
     );
     assert_eq!(
@@ -90,7 +92,7 @@ fn an_agent_silent_a_minute_has_ended_and_one_ended_with_no_job_is_not_listed() 
         &dir,
         "1-1.json",
         &json!({
-            "started_s": 1, "seen_s": 900, "working": {"tool": "check"}, "jobs": ["cube-1"],
+            "started_s": 1, "seen_s": 900, "working": {"tool": "check", "since_s": 1}, "jobs": ["cube-1"],
         }),
     );
     agent(

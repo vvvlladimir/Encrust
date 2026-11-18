@@ -39,7 +39,7 @@ stripe or a border of its own.
 ## Top bar
 
 Left to right: on macOS 72 for the system's buttons, File, Edit, View as quiet text
-buttons; in the centre the printer ring (while a printer prints; idle ones are reached from the plate card) and the chip; at the right
+buttons; in the centre the printer ring (while a printer prints; idle ones are reached from the plate card), the agents' ring (while an agent is there) and the chip; at the right
 the Beta pill, Find (as wide as its word and `⌘K` at its right), the key sheet and the gear as 30
 squares.
 
@@ -64,13 +64,10 @@ Frame view · CAMERA Perspective or Orthographic, the one in force ticked · SHO
 See through models, Show as printed, Depth of field when shown as printed, ticked when on ·
 Keyboard shortcuts.
 
-The chip is four parts in one bordered box 32 tall: printer glyph and machine with a caret,
+The chip is three parts in one bordered box 32 tall: printer glyph and machine with a caret,
 flask glyph in the resin's colour and resin with a caret, sliders glyph and `layer height ·
-exposure`, all in `text_high` (the resin in `warn` while untuned), and the agents: robot
-glyph, how many agents are there now when any are, and a caret, the glyph in `accent` while
-one works. Each part is its own button and lights in `accent_wash` while what it opens is
-open. Under 1100 the chip drops the maker; under 720 the right end is glyphs only. The
-browser's chip has no agents' part.
+exposure`, all three in `text_high` (the resin in `warn` while untuned). Each part is its own button and lights in `accent_wash` while what it opens is open. Under 1100 the
+chip drops the maker; under 720 the right end is glyphs only.
 
 The machine and resin parts each open a chooser hanging 6 under the chip from its part's
 left edge, 300 wide, on `raised` with a window's shadow, a capital group name over its rows:
@@ -84,7 +81,7 @@ left edge, 300 wide, on `raised` with a window's shadow, a capital group name ov
   washed and ticked; under a rule, *Add a resin*, opening Machine and resin on the
   machine's resins.
 
-- *The agents* (ADR 0465), the same chooser under the agents' part: a capital group an agent
+- *The agents* (ADR 0465), the same chooser under the agents' ring: a capital group an agent
   — its client's name, *Claude Code · working*, *· waiting* or *· ended*, a second of one
   client numbered — at work first, then idle, then at most three ended; under each, a row a
   job, its latest three: model glyph, the model's file name over *Revision n* and the
@@ -101,6 +98,12 @@ footer row opens Machine and resin on that machine's page or that resin's form.
 The ring is 32 across, filled clockwise with the current print's fraction in the colour of
 what the printer is doing, the percent in its middle and a count badge when more than one
 printer answers.
+
+The agents' ring stands 6 right of the printers' (ADR 0465), 32 across, while an agent works
+or waits for its chat: the robot glyph in `text_mid` on a `line` track, a quarter arc in
+`accent` going round while one works, a count badge past one. On hover a line an agent: its
+name and state, and while it works the model, what it does to it and for how long. A press
+opens the agents' chooser under it. None in a browser.
 
 ## Tool row
 

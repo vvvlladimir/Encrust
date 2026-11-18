@@ -52,6 +52,8 @@ pub enum State {
     Working {
         tool: String,
         job: Option<String>,
+        /// When it started, a Unix second.
+        since_s: u64,
     },
     Idle,
     Ended,
@@ -154,6 +156,7 @@ struct Said {
 struct Working {
     tool: String,
     job: Option<String>,
+    since_s: u64,
 }
 
 /// The agents whose files are in `agents`, those at work first, then the idle, then the
@@ -190,6 +193,7 @@ fn agent_of(said: &Said, jobs: &Path, now_s: u64) -> Agent {
         (Some(working), false) => State::Working {
             tool: working.tool.clone(),
             job: working.job.clone(),
+            since_s: working.since_s,
         },
         (None, false) => State::Idle,
     };
@@ -240,7 +244,8 @@ fn job(jobs: &Path, id: &str) -> Option<Job> {
     })
 }
 
-fn now_s() -> u64 {
+/// Seconds since the Unix epoch.
+pub fn now_s() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs())
