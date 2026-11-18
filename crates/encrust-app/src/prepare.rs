@@ -30,10 +30,10 @@ mod work;
 pub use fixes::start_fixes;
 pub use recipes::{Library, kind_glyph, kind_name};
 use run::Next;
+use start::start_on;
 #[cfg(test)]
 use start::start_with;
-pub use start::{blocker, held_up, start};
-use start::{busy, start_on};
+pub use start::{blocker, busy, held_up, start, start_replay};
 use step::{Ended, Going};
 use work::Batch;
 

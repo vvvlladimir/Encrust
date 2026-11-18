@@ -628,6 +628,17 @@ encrust --json estimate model.stl --printer elegoo-mars-4-ultra --hollow 2 --dra
   --supports auto --against autopilot=autopilot.json
 ```
 
+`--recipe-out FILE` writes the recipe the run takes each model through, as `recipes show`
+prints one: each flag typed written into the steps it shapes, so a forced step has no `when`
+and a typed setting replaces the step's own; with no `--recipe` or `--prepare`, the steps the
+flags ask for alone. A flag no recipe step holds — a point, a turn, the modelling — is left
+out. The window runs the file as Prepare for print (ADR 0459):
+
+```sh
+encrust estimate model.stl --printer elegoo-mars-4-ultra --prepare --hollow 2.5 \
+  --recipe-out steps.toml
+```
+
 `slice` and `convert` warn of each resin setting past what the printer takes or its maker
 advises, and write the file as asked (ADR 0368).
 
@@ -858,11 +869,15 @@ The command line as tools for a chat client that speaks the Model Context Protoc
 stdio. The client starts it; each tool runs `encrust --json` — `--encrust PATH`, else the
 one beside the server, else the one on the `PATH` — and answers with its report (ADR 0455).
 Jobs are kept under the user's cache directory, or `--jobs DIR`, each revision as `N.toml`
-with the report of its check as `N.json` and the flags it stages with as `N.args.json`, and
-the autopilot's own check of the model as `autopilot.json`; a run is stopped after `--timeout-s` seconds
+with the report of its check as `N.json`, the flags it stages with as `N.args.json` and the
+recipe its check ran as `N.recipe.toml`, and the autopilot's own check of the model as
+`autopilot.json`; a run is stopped after `--timeout-s` seconds
 (1800), and reports progress every five seconds while it runs. `--trace FILE` appends a JSON
 line per tool call: `tool`, `ms`, `failed`, and the `job` and `revision` it answered with,
-`null` when it named none.
+`null` when it named none. With the window open, each revision kept is run on its plate and
+the answer carries the window's `window` and what it leaves out as `unshown`;
+`--window FILE` reads another window's file, `--no-window` shows none
+(`docs/design/window-link.md`).
 
 ```sh
 cargo xtask mcpb                                        # target/mcpb/encrust-<platform>.mcpb

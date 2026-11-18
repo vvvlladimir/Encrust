@@ -84,6 +84,8 @@ showcase = []
 fontdb.workspace = true
 ureq = { workspace = true, features = ["rustls"] }
 rfd.workspace = true
+# Where the file that tells encrust-mcp of an open window goes; see docs/decisions/0459.
+directories.workspace = true
 
 # The window buttons macOS draws, set on the top bar's centre line, and the application menu;
 # see docs/decisions/0217 and 0444.

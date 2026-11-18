@@ -557,3 +557,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0456](0456-a-model-is-benched-through-its-own-client-against-the-autopilot.md) | Bench a language model through its own client, against the autopilot | Proposed |
 | [0457](0457-the-command-line-places-supports-by-hand.md) | Place supports by hand on the command line | Proposed |
 | [0458](0458-a-client-chooses-among-poses-the-engine-proved.md) | A client chooses among the poses the engine proved, and is held to its own last step | Proposed |
+| [0459](0459-a-revision-is-a-recipe-the-open-window-runs.md) | A job's revision is a recipe, which the open window runs | Proposed |

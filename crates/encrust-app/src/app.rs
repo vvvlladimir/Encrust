@@ -33,6 +33,9 @@ pub struct SlicerApp {
     prefs: Preferences,
     /// The keys this frame asked for, read off the raw input before egui saw it.
     keys: Vec<shortcuts::Action>,
+    /// What `encrust-mcp` hands the open window, while it listens.
+    #[cfg(not(target_arch = "wasm32"))]
+    link: Option<crate::link::Link>,
 }
 
 impl Default for SlicerApp {
@@ -48,6 +51,8 @@ impl Default for SlicerApp {
             machine: Machine::default(),
             prefs: Preferences::default(),
             keys: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            link: None,
         }
     }
 }
@@ -92,6 +97,10 @@ impl SlicerApp {
         // A copy to restore is offered over the plate, which the start page would hide.
         app.view.options.started |= app.machine.autosave.offered().is_some();
         project::mark_saved(&mut app.window());
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            app.link = crate::link::Link::for_window(&cc.egui_ctx);
+        }
         if let Some(path) = initial_model {
             open_by_what_it_is(&mut app.window(), Handed::Path(path.to_path_buf()));
         }
@@ -461,7 +470,12 @@ impl eframe::App for SlicerApp {
         #[cfg(not(target_os = "macos"))]
         let _ = frame;
         self.take_files(ui.ctx());
-        let working = self.poll_jobs(ui.ctx()) | self.hollow_what_a_press_opened();
+        let mut working = self.poll_jobs(ui.ctx()) | self.hollow_what_a_press_opened();
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(mut link) = self.link.take() {
+            working |= link.poll(&mut self.window());
+            self.link = Some(link);
+        }
         self.forget_what_an_old_check_found();
         self.let_go_of_other_tools();
         if working | self.run_the_cut_up(ui.ctx()) {
