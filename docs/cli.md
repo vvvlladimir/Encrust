@@ -612,7 +612,9 @@ project takes them yet; a model is shaped by its flags. Besides `cut`, `move` (`
 takes it and its plugs off, `duplicate` (`offset_mm`, `[x, y, z]`) puts a copy beside it and
 `mirror` (`axis`, `x`, `y` or `z`) flips it in place; `split` (`smallest_mm3`, optional)
 replaces it by the bodies it is made of, and `part-off` (`at_mm`, `[x, y, z]`) cuts the part at
-that plate point off the rest.
+that plate point off the rest; `combine` (`objects`, `op` of `union`, `difference` or
+`intersection`, and `toward`, optional `[x, y, z]`) replaces the objects by the one they make,
+the first being what a difference keeps.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json

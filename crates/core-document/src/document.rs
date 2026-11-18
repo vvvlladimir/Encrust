@@ -176,7 +176,7 @@ fn new_object(id: ObjectId, old: &ObjectState, piece: &Piece) -> ObjectState {
 /// A new object's name in English; the window names it again in the user's language.
 fn name_of(name: &str, role: Role) -> String {
     match role {
-        Role::Kept | Role::Copy => name.to_owned(),
+        Role::Kept | Role::Copy | Role::Combined => name.to_owned(),
         Role::Lower => format!("{name} (lower)"),
         Role::Upper => format!("{name} (upper)"),
         Role::Dowel(index) => format!("{name} dowel {index}"),

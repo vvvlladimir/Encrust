@@ -2,6 +2,7 @@
 //! way (ADR 0466, `docs/design/document.md`).
 
 mod apply;
+mod combine;
 mod cut;
 mod document;
 mod error;
@@ -13,6 +14,7 @@ mod plate_contents;
 mod split;
 
 pub use apply::{Applied, Report, apply};
+pub use combine::{boolean_of, combined};
 pub use cut::{CutAsked, CutModel, axis_normal, cut, pieces};
 pub use document::Document;
 pub use error::ApplyError;

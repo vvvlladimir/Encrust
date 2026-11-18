@@ -295,7 +295,7 @@ impl Running {
 fn piece_name(name: &str, role: Role) -> String {
     let name = name.to_owned();
     match role {
-        Role::Kept | Role::Copy => name,
+        Role::Kept | Role::Copy | Role::Combined => name,
         Role::Lower => tr!("cut-lower-name", name = name),
         Role::Upper => tr!("cut-upper-name", name = name),
         Role::Dowel(index) => tr!("cut-dowel-name", name = name, index = index),

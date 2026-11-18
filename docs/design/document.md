@@ -72,6 +72,13 @@ negates the scale on that axis of the object's own frame and moves it back so it
 centre stays. `plug_of` is an index among the objects, so `Document` renumbers it on every
 removal and insertion: a plug of a removed object names nothing.
 
+`Combine { objects, op, toward }` replaces the objects by one `Role::Combined` piece at the
+first's place, made by `core_document::combined` on their source meshes placed on the plate: the
+exact `combine_exact_toward` where `toward` is set, else `core_volume::combine` (sampled where an
+object is not a closed solid, `Report::Combined { voxel_mm }`). Fewer than two distinct objects
+is `ApplyError::TooFew`, a missing one `NoObject`, an empty result `NothingLeft`, an unreadable
+first `NotSolid`.
+
 ## Undo
 
 The window keeps snapshots of its scene (ADR 0086); a document applied is one entry. The

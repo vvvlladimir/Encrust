@@ -17,10 +17,19 @@ pub enum ApplyError {
     /// A part-off at a point that is off the model, or on a body with no neck to cut at.
     #[error("object {0:?} has no neck to cut a part off at there")]
     NoNeck(ObjectId),
+    /// A combination of fewer than two objects.
+    #[error("a combination takes two objects or more")]
+    TooFew,
+    /// A combination that leaves no volume, as an intersection of objects that share none.
+    #[error("the combination leaves nothing")]
+    NothingLeft,
+    /// An object the exact combination cannot read as a closed solid.
+    #[error("object {0:?} is not a closed solid")]
+    NotSolid(ObjectId),
     /// The run was stopped before it finished.
     #[error("the edit was cancelled")]
     Cancelled,
-    /// A split or part-off failed in the geometry; `reason` is the geometry's own message.
+    /// A split, part-off or combination failed in the geometry; `reason` is the geometry's own message.
     #[error("the edit of object {object:?} failed: {reason}")]
     Failed { object: ObjectId, reason: String },
 }

@@ -5,12 +5,15 @@ use std::collections::VecDeque;
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
-use core_document::{ApplyError, CutAsked, mirrored, moved, part_settings, sized_to, turned_to};
+use core_document::{
+    ApplyError, CutAsked, boolean_of, mirrored, moved, part_settings, sized_to, turned_to,
+};
 use core_edit::{Edit, ObjectId};
 use core_geometry::{Mesh, Transform, Vec3};
 use core_volume::PartSettings;
 use serde_json::{Value, json};
 
+use crate::job::Method;
 use crate::panels::Window;
 
 /// Edits being applied one after another, each a job of the tool that carries it out.
@@ -92,7 +95,7 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     let Some(work) = applying.as_mut() else {
         return false;
     };
-    if window.tools.cut.is_busy() {
+    if window.tools.cut.is_busy() || window.tools.boolean.is_busy() {
         return true;
     }
     if let Some((id, may_stay)) = work.under_way.take()
@@ -152,6 +155,17 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
         } => start_split(window, object, part_settings(smallest_mm3), None),
         Edit::PartOff { object, at_mm } => {
             start_split(window, object, PartSettings::default(), Some(at_mm))
+        }
+        Edit::Combine {
+            ref objects,
+            op,
+            toward,
+        } => {
+            let method = toward.map_or(Method::Sampled, Method::ExactToward);
+            (window.tools.boolean)
+                .start_asked(&window.doc.scene, objects, (boolean_of(op), method))
+                .map_err(|error| format!("{error:#}"))?;
+            Ok(objects.first().copied())
         }
         Edit::Move { object, by_mm } => {
             place(window, object, |transform, _| Ok(moved(transform, by_mm)))

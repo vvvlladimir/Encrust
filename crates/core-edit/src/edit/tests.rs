@@ -80,6 +80,20 @@ fn a_split_and_a_part_off_written_by_hand_read() {
 }
 
 #[test]
+fn a_combine_written_by_hand_reads_with_no_direction() {
+    let text = r#"{"edit":"combine","objects":[2,5],"op":"difference"}"#;
+    let edit: Edit = serde_json::from_str(text).expect("a bare combine is valid JSON");
+    assert_eq!(
+        edit,
+        Edit::Combine {
+            objects: vec![ObjectId(2), ObjectId(5)],
+            op: Op::Difference,
+            toward: None,
+        }
+    );
+}
+
+#[test]
 fn an_edit_of_an_unknown_kind_is_refused() {
     let text = r#"{"edit": "melt", "object": 3}"#;
     assert!(serde_json::from_str::<Edit>(text).is_err());

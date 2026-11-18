@@ -271,3 +271,40 @@ fn a_split_of_one_body_leaves_it_in_place_and_is_answered_applied() {
         "the cube is left whole"
     );
 }
+
+#[test]
+fn a_union_on_the_version_it_was_built_on_replaces_two_overlapping_cubes_by_one() {
+    let file = scratch("combine");
+    let mut bench = Bench::new(file.clone());
+    let first = with_cube(&mut bench);
+    let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    let moved = Transform {
+        translation: Vec3::new(5.0, 0.0, 0.0),
+        ..Transform::default()
+    };
+    let summary = ImportSummary::made(diagnose(&mesh));
+    let second = (bench.doc.scene).insert(Imported::new(
+        "other".into(),
+        Arc::new(mesh),
+        moved,
+        summary,
+    ));
+    bench.run_to_end();
+    let version = bench.doc.history.plate_version();
+    let union = json!({"base_version": version,
+        "apply": [{"edit": "combine", "objects": [first.0, second.0], "op": "union"}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, union));
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    assert!(bench.doc.scene.get(first).is_none() && bench.doc.scene.get(second).is_none());
+    let [united] = bench.doc.scene.objects() else {
+        panic!("one object is left on the plate");
+    };
+    let bounds = united.world_bounds().expect("the union has faces");
+    assert!(
+        (bounds.maxs.x - 15.0).abs() < 1e-4,
+        "the union spans x 0 to 15, got {}",
+        bounds.maxs.x
+    );
+}

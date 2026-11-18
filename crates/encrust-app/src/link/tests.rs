@@ -138,6 +138,7 @@ impl Bench {
         working |= tools.supports.poll(scene, status);
         working |= tools.orient.poll(scene, &doc.plate, status);
         working |= tools.cut.poll(scene, status);
+        working |= tools.boolean.poll(scene, status);
         working |= crate::prepare::poll(doc, tools, machine, true);
         working |= self.poll_link();
         let (doc, tools, machine) = (&mut self.doc, &mut self.tools, &mut self.machine);
