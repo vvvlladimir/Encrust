@@ -15,6 +15,7 @@ mod import;
 mod keep_solid;
 mod measure;
 mod modelling;
+mod new_resin;
 mod plate;
 mod png_stack;
 mod prepare;

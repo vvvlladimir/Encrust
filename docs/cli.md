@@ -785,6 +785,19 @@ without one needs `--printer ID`. Where each value comes from is in
 encrust profiles import "My resin.cfgx"
 ```
 
+`profiles new-resin` makes a resin of yours from the numbers on its bottle or its maker's
+page, set up on one printer, as the window's **New resin** does: `--printer ID`, `--name`,
+`--exposure S`, `--bottom-exposure S` and `--bottom-layers N`, and where stated
+`--layer-height`, `--light-off-delay`, `--lift-distance`, `--lift-speed`, `--retract-speed`,
+`--transition-layers` and `--density`; the rest are the stock numbers. A number past what the
+printer takes is refused, as the window would not let it be typed; one it advises against is
+kept and named, under `advised_against` with `--json` (ADR 0464):
+
+```sh
+encrust profiles new-resin --printer elegoo-mars-4-ultra --name "ABS-like grey" \
+  --exposure 2.5 --bottom-exposure 30 --bottom-layers 5
+```
+
 `test-print NAME` writes one of the window's test prints as an STL — `detail`, `exposure`,
 `surface` or `fit` — under its own name in the current directory, or to `-o PATH`, a file or
 a directory; `--json` gives `print` and `path`. The exposure check, printed at a resin's stated
@@ -950,7 +963,8 @@ recipe's TOML; `use_recipe` prepares the job by one with `--recipe` in place of 
 `write_file` notes the revision it wrote; `report_print` runs `diagnose` on the check of that
 revision, or of the one named, and appends the symptoms, `at_mm` and the user's note to the
 job's `prints.jsonl`.
-`import_resin` runs `profiles import` on the file given; `write_test_print` runs `test-print`
+`import_resin` runs `profiles import` on the file given, `create_resin` `profiles new-resin`
+on the numbers given; `write_test_print` runs `test-print`
 into the folder given.
 `set_pose`, `set_hollow`, `set_drains` and `set_supports` check the changed recipe with
 `estimate --check-drainage` and keep it as the next revision only if the command line took

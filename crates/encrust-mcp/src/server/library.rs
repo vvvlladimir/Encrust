@@ -4,7 +4,7 @@ use anyhow::{Context as _, Result, bail};
 
 use super::reply::{Reply, reported, trim_profiles};
 use super::{Context, Server};
-use crate::params::{ImportResin, ListProfiles, SaveRecipe, absolute, plain};
+use crate::params::{CreateResin, ImportResin, ListProfiles, SaveRecipe, absolute, plain};
 
 impl Server {
     pub(super) async fn profiles(&self, list: ListProfiles, ctx: &Context) -> Result<Reply> {
@@ -58,6 +58,16 @@ impl Server {
             }
         }
         Ok(reported(&listed, report))
+    }
+
+    /// A resin of the user's from the numbers its maker states; the command line refuses one
+    /// past what the printer takes, and names what it advises against.
+    pub(super) async fn new_resin(&self, create: CreateResin, ctx: &Context) -> Result<Reply> {
+        plain(&create.printer, "the printer")?;
+        let mut args = vec!["profiles".to_owned(), "new-resin".to_owned()];
+        args.extend(create.flags());
+        let outcome = self.watched(&args, ctx).await?;
+        Ok(reported(&outcome, outcome.report.clone()))
     }
 
     /// Keeps a job's steps, or a recipe the client wrote, as one of the user's recipes; the

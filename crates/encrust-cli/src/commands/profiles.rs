@@ -1,3 +1,5 @@
+mod new_resin;
+
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -16,6 +18,9 @@ pub enum ProfilesCommand {
     /// Import an exported profile, a resin from another program, or the resin a sliced file was
     /// printed with, under a new id of its own; an import never overwrites.
     Import(ImportArgs),
+    /// Make a resin of your own from the numbers on its bottle or its maker's page, set up on
+    /// one printer; a number past what the printer takes is refused.
+    NewResin(new_resin::NewResinArgs),
     /// Throw away your copies of shipped profiles that no longer read, so the shipped ones are
     /// used; a file under an id of your own is kept unless `--with-own` is given.
     ResetUnreadable(ResetArgs),
@@ -96,6 +101,7 @@ impl ProfilesCommand {
             }
             Self::Show(args) => show(args, global)?,
             Self::Import(args) => import(args, global)?,
+            Self::NewResin(args) => args.run(global)?,
             Self::ResetUnreadable(args) => reset_unreadable(args, global)?,
         }
         Ok(Exit::Success)

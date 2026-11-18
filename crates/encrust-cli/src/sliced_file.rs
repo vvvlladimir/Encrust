@@ -151,7 +151,7 @@ pub(crate) fn warn_of_limits(job: &PrintJob) {
     }
 }
 
-fn limit_warning(printer: &str, breach: &LimitBreach) -> String {
+pub(crate) fn limit_warning(printer: &str, breach: &LimitBreach) -> String {
     let span = match breach.span {
         (Some(low), Some(high)) => format!("{low} to {high}"),
         (Some(low), None) => format!("at least {low}"),
