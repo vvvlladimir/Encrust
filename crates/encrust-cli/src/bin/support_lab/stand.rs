@@ -7,7 +7,9 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use std::sync::Arc;
 
-use core_engine::{Strengthened, SupportPlan, SupportShapes, Underside, strengthen};
+use core_engine::{
+    Firmed, Strengthened, SupportPlan, SupportShapes, Underside, firm_up, strengthen,
+};
 use core_geometry::{
     Bvh, Mat4, Mesh, Prominence, Quat, Region, Scalar, Transform, Vec3, center_over_plate,
     drop_to_plate, lift_over_plate, orient_outward, transform_mesh, weld,
@@ -52,6 +54,8 @@ pub struct Supported {
     pub grow_s: f64,
     /// What strengthening changed, unless `--no-strengthen` left it out.
     pub strengthened: Option<Strengthened>,
+    /// What checking the grown trees changed, where strengthening ran.
+    pub firmed: Option<Firmed>,
     /// Contacts on the side painted to be seen.
     pub shown: usize,
 }
@@ -163,7 +167,7 @@ pub fn supported(
     }
     let (model, side) = printed(model, wall_mm)?;
     let started = Instant::now();
-    let (needs, reasons, strengthened) =
+    let (needs, reasons, (strengthened, firmed)) =
         needs_under(&model, asked, side.as_ref(), (layer_mm, sizing))?;
     let place_s = started.elapsed().as_secs_f64();
 
@@ -178,6 +182,7 @@ pub fn supported(
         place_s,
         grow_s: 0.0,
         strengthened,
+        firmed,
         shown: needs.iter().filter(|need| need.shown).count(),
     };
     supported.regrow()?;
@@ -208,15 +213,18 @@ fn printed(model: Mesh, wall_mm: Option<Scalar>) -> Result<(Mesh, Option<WallSid
     Ok((shell, Some(side)))
 }
 
+/// What strengthening, then the check of the grown trees, changed; `None` where not run.
+type Mended = (Option<Strengthened>, Option<Firmed>);
+
 /// Where `model` needs holding up, as automatic placement reads it off its own stack, kept to
 /// the outside of `side`'s wall and sized as `sizing` says; why placement asked for each
-/// contact, and what strengthening changed where asked.
+/// contact, and what strengthening and the check of the grown trees changed where asked.
 fn needs_under(
     model: &Mesh,
     plan: &SupportPlan,
     side: Option<&WallSide>,
     (layer_mm, sizing): (Scalar, Sizing),
-) -> Result<(Vec<Need>, Vec<Reason>, Option<Strengthened>)> {
+) -> Result<(Vec<Need>, Vec<Reason>, Mended)> {
     if layer_mm <= 0.0 {
         bail!("a layer of {layer_mm} mm cannot be cut");
     }
@@ -253,7 +261,7 @@ fn needs_under(
         }
     }
     if !sizing.strengthening {
-        return Ok((needs, asked, None));
+        return Ok((needs, asked, (None, None)));
     }
     let underside = Underside {
         stack: &stack,
@@ -264,9 +272,11 @@ fn needs_under(
     };
     let done = strengthen(underside, &mut needs, &[], plan, &mut || true)
         .context("the model cannot be read for what its tips carry")?;
+    let firmed = firm_up(underside, &mut needs, &[], plan, &mut || true)
+        .context("the grown trees cannot be read for how they give")?;
     let added = needs.iter().skip(asked.len()).map(|need| need.reason);
     let reasons = asked.iter().copied().chain(added).collect();
-    Ok((needs, reasons, Some(done)))
+    Ok((needs, reasons, (Some(done), Some(firmed))))
 }
 
 /// Every face of `model` that shows at least `least`, painted as the side meant to be seen.

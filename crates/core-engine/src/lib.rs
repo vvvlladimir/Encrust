@@ -6,6 +6,7 @@ mod cut;
 mod drains;
 mod error;
 mod file_name;
+mod firm;
 mod held;
 mod open;
 mod outputs;
@@ -26,6 +27,7 @@ pub use drains::{
 };
 pub use error::EngineError;
 pub use file_name::{DEFAULT_TEMPLATE, NameFields, file_stem, unknown_tags};
+pub use firm::{Firmed, Held, firm_up, held_by, spring_of};
 pub use held::{
     CupVent, Hanging, Unvented, cup_vents, held_by_shape, island_floors, island_holds, lever_holds,
     neck_profile,

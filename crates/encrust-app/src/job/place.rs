@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_engine::{SupportPlan, SupportShapes, Underside, strengthen};
+use core_engine::{SupportPlan, SupportShapes, Underside, firm_up, strengthen};
 use core_geometry::Region;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_supports::{Blocked, Need, Shown, WallSide, generate_supports, low_points};
@@ -309,6 +309,9 @@ fn needs_of(
     };
     // Tips beyond the wall hold the same shell, so they share its pull all the same.
     strengthen(underside, &mut needs, &task.seeds, &plan, &mut || {
+        !cancel.load(Ordering::Relaxed)
+    })?;
+    firm_up(underside, &mut needs, &task.seeds, &plan, &mut || {
         !cancel.load(Ordering::Relaxed)
     })?;
     Ok(needs)

@@ -46,6 +46,9 @@ pub struct Row {
     /// What strengthening changed, unless `--no-strengthen` left it out.
     #[serde(default)]
     pub strengthened: Option<Strengthened>,
+    /// What checking the grown trees changed, unless `--no-strengthen` left it out.
+    #[serde(default)]
+    pub firmed: Option<Firmed>,
     /// Contacts on the side painted to be seen.
     #[serde(default)]
     pub shown: usize,
@@ -70,6 +73,24 @@ impl From<core_engine::Strengthened> for Strengthened {
             rounds: done.rounds,
             thickened: done.thickened,
             added: done.added,
+        }
+    }
+}
+
+/// What checking the grown trees changed under one model.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct Firmed {
+    pub rounds: usize,
+    pub steadied: usize,
+    pub strengthened: usize,
+}
+
+impl From<core_engine::Firmed> for Firmed {
+    fn from(done: core_engine::Firmed) -> Self {
+        Self {
+            rounds: done.rounds,
+            steadied: done.steadied,
+            strengthened: done.strengthened,
         }
     }
 }
@@ -383,6 +404,12 @@ fn print_placement(row: &Row) {
         println!(
             "- strengthened: {} rounds, {} tips thickened, {} added",
             done.rounds, done.thickened, done.added
+        );
+    }
+    if let Some(done) = row.firmed {
+        println!(
+            "- on the grown trees: {} rounds, {} contacts under a swaying layer, {} tips strengthened",
+            done.rounds, done.steadied, done.strengthened
         );
     }
     if row.shown > 0 {

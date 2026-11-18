@@ -27,6 +27,13 @@ impl Pull {
             *peel += force * lever;
         }
     }
+
+    /// Adds `force_n` pulling at `at_mm` with no peel of its own: the part's weight.
+    pub(super) fn hang(&mut self, force_n: f64, [x, y]: [f64; 2]) {
+        self.force_n += force_n;
+        self.moment_x += force_n * x;
+        self.moment_y += force_n * y;
+    }
 }
 
 /// The square root of a symmetric `[xx, xy, yy]` with no negative eigenvalue, in closed form.

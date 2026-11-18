@@ -1280,15 +1280,15 @@ fn joined(meshes: &[Mesh]) -> Mesh {
     all
 }
 
-/// A 4 mm slab tilted 50° about Y and lifted 25 mm, and, when `hollow`, a cavity in it
-/// 0.6 mm in from every face: its ceiling runs along the slab's leaning underside.
+/// A 4 mm slab tilted 30° about Y, lifted 25 mm and held along its underside, so neither body
+/// sways; when `hollow`, a cavity 0.6 mm in from every face, its ceiling along that underside.
 fn tilted_slab(hollow: bool) -> Scene {
     let solid = box_of(Vec3::ZERO, Vec3::new(20.0, 10.0, 4.0), false);
     let mut scene = one_cube();
     let object = &mut scene.objects_mut()[0];
     object.mesh = Arc::new(solid.clone());
     object.bvh = Arc::new(core_geometry::Bvh::build(&solid));
-    object.transform.rotation = core_geometry::Quat::from_rotation_y(50f32.to_radians());
+    object.transform.rotation = core_geometry::Quat::from_rotation_y(30f32.to_radians());
     object.transform.translation.z = 25.0;
     if hollow {
         let cavity = box_of(Vec3::splat(0.6), Vec3::new(19.4, 9.4, 3.4), true);

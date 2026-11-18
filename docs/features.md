@@ -527,6 +527,13 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   heavier, and at its heaviest, or under one preset, puts a second tip beside it on the same
   underside, low enough to share the load before it peaks. Supports you placed are never
   changed. Auto's tips are 0.30, 0.35 and 0.40 mm, its steadying ones 0.27 mm.
+- Then the supports are grown and read as they give: a long thin trunk bends more than a
+  short one, a part bends above its highest support, and its weight pulls with each layer.
+  Where a layer would move more than 0.1 mm under the pull, such as a wing held only along its
+  lower edge, a support is added under it, higher up; where a trunk would buckle as the plate
+  goes down or a tip would tear, the tip is strengthened as above. A support standing on the
+  model moves with the part under it and passes its load down to that part's supports, and
+  one tying a part to itself counts as holding nothing.
 - Nearby tips merge into shared **branching trunks**, a higher tip running down onto the
   trunk of a lower one beside it. Where the part is in the way of a merge, the two drop
   straight down past it and merge lower. A support that has to step aside for room steps

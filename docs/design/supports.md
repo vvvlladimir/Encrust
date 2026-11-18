@@ -537,6 +537,27 @@ Volume figures read high, because an overlapping mesh counts its overlaps twice 
 `signed_volume` (ADR 0041): on a dense plate by a factor of ten, so `support-lab` takes its
 resin from the cured stack less the model cured alone.
 
+## How a support gives
+
+`gives` reads each tip of a grown forest as the spring its tree makes (ADR 0455), as
+compliance times the modulus so that the modulus stays `core-analysis`'s. A unit load at the
+contact — along z, along x and y, or a turn about x and y — makes at each point `x` of a strut
+the moment `(p − x) × e` and the force `e`; the strut's work is
+`∫ (M_b² / I + (1 + ν) M_t² / I + N² / A) ds` over its length, Simpson's rule exact for a
+moment linear in `s`. The path runs from the contact through the head to the leaf, up the
+parents to the root and down the trunk to where it stands, fixed there; one standing on the
+model also answers where, and the radius of the contact it meets it by, so the read can stand
+it on the part under it. A strut `n` tips hang from is counted `n` times, each tip taken to load it equally.
+Below a trunk's highest brace (`ties`) a strut only stretches: the braced pair is a truss.
+The trunk's second moment and its free length, from that brace or its foot to its highest
+tip, are its buckling's.
+
+After strengthening, `core_engine::firm_up` grows the trees placement asks for, reads every
+tip on its spring (`docs/design/analysis.md`, "On springs") and, at most three rounds, adds a
+contact on the highest underside within a spacing under a layer that swayed, or a heavier tip
+or a neighbour where a tip tears or a trunk buckles. Its trees are thrown away; the window
+grows its own as ever.
+
 ## Groups
 
 A support carries the number of a group, and `Profiles` is the table of profiles the plate

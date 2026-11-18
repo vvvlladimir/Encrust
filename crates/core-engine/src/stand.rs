@@ -11,6 +11,7 @@ use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
 
 use crate::error::EngineError;
+use crate::firm::firm_up;
 use crate::strengthen::{Underside, strengthen};
 
 mod lift;
@@ -430,7 +431,8 @@ impl Run<'_> {
             bvh: self.bvh,
             blocked: blocked.as_ref(),
         };
-        strengthen(underside, needs, held, self.plan, &mut || true).map(|_| ())
+        strengthen(underside, needs, held, self.plan, &mut || true)?;
+        firm_up(underside, needs, held, self.plan, &mut || true).map(|_| ())
     }
 }
 

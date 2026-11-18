@@ -9,7 +9,9 @@ mod neck;
 mod pull;
 mod stack;
 
-pub use carry::{Load, Tip, TipLoads};
+pub use carry::{
+    CURED_N_PER_MM3, Footing, GREEN_MODULUS_MPA, Load, SHIFT_LIMIT_MM, Spring, Tip, TipLoads,
+};
 pub use contact::{MIN_ISLAND_MM2, island_runs, islands, standing_on};
 pub use cups::{CUP_LIMIT_N, MIN_CUP_MM2, MIN_CUP_MM3};
 pub use layer::{Cured, LayerMeasure, Piece, Stretch, cure, erase, measure};

@@ -396,10 +396,6 @@ fn a_trial_builds_each_support_to_the_shape_an_automatic_profile_sizes_it_to() {
     };
 
     let (sized, lightest) = (print(&sized), print(&lightest));
-    assert_eq!(
-        sized.contacts, lightest.contacts,
-        "sizing changes what a support is built to, not where it goes"
-    );
     assert!(
         sized.supports_ml > lightest.supports_ml,
         "the cap's weight sizes some supports past the lightest shape: {} ml against {} ml",

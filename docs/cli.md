@@ -344,7 +344,8 @@ its shape, as painting what shows is done in the window (ADR 0410); and
 `light`, `medium`, `heavy` or one saved in the window, as `profiles list` names them — or to
 your own TOML with `--support-profile`; `--supports auto` sizes each support by what it holds
 into the automatic profile's shapes, as the window's **Auto** does (ADR 0325); either way a
-tip carrying too much is strengthened as the window's Grow does (ADR 0422); and
+tip carrying too much is strengthened, and a layer that sways on the grown trees given a
+support under it, as the window's Grow does (ADR 0422, 0455); and
 `--support-cavity` holds up the cavity `--hollow`, or a plate file's `hollow`, leaves as well
 as the outside, as the window's **Support the cavity** does (ADR 0332). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
 profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
@@ -833,8 +834,10 @@ tall trunks with nothing to brace them to. A model holds when nothing falls, and
 enough when it holds and no tip carries more than 1.2 times what it holds, where the
 calibration coupon's plates still held. Each row of the run also lists
 every standing tip: why it stands, its group, the pull on it at its worst height and its
-margin (`docs/design/analysis.md`), the material behind it, its trunk's height and slenderness;
-the block and table give the weakest margin and how many tips keep under ×1.5.
+margin, read on the spring its tree makes (`docs/design/analysis.md`, "On springs"), how far
+the layers it held moved across and its trunk's margin from buckling, the material behind it,
+its trunk's height and slenderness; the block and table give the weakest margin, how many tips
+keep under ×1.5, how many hold a layer that sways and the weakest trunk.
 
 `--profile` names the support profiles to bench, repeated for several, Light when none is
 given. `--auto` names automatic profiles to bench the same way, each support sized by what
@@ -842,8 +845,8 @@ it holds as Generate does with Automatic on, and each tip read against the shape
 built to; its row is named `auto:<id>`. `--hollow-wall-mm` hollows each model to a wall that
 thick and stands its supports against the shell from outside. `--sweep` also supports each
 model at shares of the profile's density and reports the least that is enough. Every
-row is strengthened as Generate strengthens it; `--no-strengthen` reads placement as it
-put the tips. `--lightest-first` builds every tip of an automatic profile to its lightest
+row is strengthened, and checked on its grown trees, as Generate does it; `--no-strengthen`
+reads placement as it put the tips. `--lightest-first` builds every tip of an automatic profile to its lightest
 shape and leaves its size to strengthening, by what it carries. `--shown-from 0.5` paints
 as the side meant to be seen every face that shows at least that much, as Clean surface
 reads it off the shape, and counts the contacts on it. `--tip-floor-mm`

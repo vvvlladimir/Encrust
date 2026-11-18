@@ -14,6 +14,7 @@ mod field;
 #[cfg(test)]
 mod fixtures;
 mod generate;
+mod give;
 mod group;
 mod inline;
 mod islands;
@@ -46,6 +47,7 @@ pub use edit::{
     standing_on, tip_carried, with_riders,
 };
 pub use generate::generate_supports;
+pub use give::{Give, gives};
 pub use group::Profiles;
 pub use inline::{INLINE_SPACING_MM, inline};
 pub use lost::{Lost, Unstood, lost};

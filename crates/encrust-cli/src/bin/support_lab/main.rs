@@ -268,6 +268,7 @@ fn bench(entry: &Entry, id: &str, asked: &SupportPlan, setup: &Setup, args: &Arg
         tips: tips::Tips::default(),
         sweep: Vec::new(),
         strengthened: None,
+        firmed: None,
         shown: 0,
         broken: Vec::new(),
         seconds: 0.0,
@@ -301,6 +302,7 @@ fn measure(
     row.tips = tips::read(&supported, setup.material.layer_height_mm, setup.neck_mpa)?;
     row.stages_s = [supported.place_s, supported.grow_s, cured.seconds];
     row.strengthened = supported.strengthened.map(Into::into);
+    row.firmed = supported.firmed.map(Into::into);
     row.shown = supported.shown;
     row.broken = broken(&entry.expect, &shape);
     if let Some(dir) = &args.export {

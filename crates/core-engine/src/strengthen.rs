@@ -20,11 +20,11 @@ const MOST_ROUNDS: usize = 3;
 /// ten pixels across, and the panel's own pitch is unknown here.
 const PITCH_MM: f32 = 0.05;
 /// How far from a weak tip its neighbour stands, in the placement's spacing.
-const NEIGHBOUR_SPACINGS: Scalar = 0.5;
+pub(crate) const NEIGHBOUR_SPACINGS: Scalar = 0.5;
 /// The ways around a weak tip a neighbour is looked for.
-const AROUND: [[Scalar; 2]; 4] = [[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0], [0.0, -1.0]];
+pub(crate) const AROUND: [[Scalar; 2]; 4] = [[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0], [0.0, -1.0]];
 /// How near a contact already standing a neighbour may not seat, in its reach: that spot is held.
-const TAKEN_SHARE: Scalar = 0.5;
+pub(crate) const TAKEN_SHARE: Scalar = 0.5;
 
 /// What strengthening changed.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -151,10 +151,12 @@ fn tip(at: Vec3, radius_mm: f32) -> Tip {
         at_mm: [at.x, at.y],
         z_mm: at.z,
         radius_mm: f64::from(radius_mm),
+        spring: None,
+        stands_on: None,
     }
 }
 
-fn table_radius(table: &[printer_profiles::SupportProfile], group: u16) -> f32 {
+pub(crate) fn table_radius(table: &[printer_profiles::SupportProfile], group: u16) -> f32 {
     let at = usize::from(group).min(table.len().saturating_sub(1));
     table
         .get(at)
@@ -169,7 +171,7 @@ fn weak(load: &Load) -> Option<f32> {
 
 /// Whether `plan` sizes `need` and has a size after its own with a wider tip; a
 /// steadying support has none.
-fn heavier(plan: &SupportPlan, need: &Need) -> bool {
+pub(crate) fn heavier(plan: &SupportPlan, need: &Need) -> bool {
     let Some(auto) = plan.sizing() else {
         return false;
     };
@@ -184,7 +186,7 @@ fn heavier(plan: &SupportPlan, need: &Need) -> bool {
 
 /// The lowest underside `reach_mm` round `tip`, free and held by none of `taken`, seated no
 /// higher than `worst_z_mm`: one over the layer the tip is worst at comes too late to share it.
-fn neighbour(
+pub(crate) fn neighbour(
     model: Underside<'_>,
     tip: Vec3,
     (worst_z_mm, reach_mm): (f32, Scalar),

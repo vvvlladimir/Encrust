@@ -94,15 +94,49 @@ highest stress in tip `i` is
 piece `p`, `J_p` its second moments about its own centre over its area: the film's last grip
 lies on that ellipse, far along a strip and near across it, at half the polar gyration on a
 disc or a square, as for a neck. The peel is taken the way worst for that tip. One tip is
-exactly a neck's `F / A + F L / (π r³ / 4)`. Margin is the strength over this stress. It is
-rigid-body sharing: a thin arm is not softer than the body, and the film is not followed as
-it peels. Margins are read against `NECK_LIMIT_MPA` as calibrated below. A long arm held only
-near its root reads as held; placement holds an arm leaning past the angle along its length,
-and only Auto steadies one leaning less, so Light, Medium and Heavy may let it rock.
+exactly a neck's `F / A + F L / (π r³ / 4)`. Margin is the strength over this stress. This
+rigid read is what a tip with no spring gets; the film is not followed as it peels. Margins
+are read against `NECK_LIMIT_MPA` as calibrated below. The part's weight so far, `CURED_N_PER_MM3`
+at its centre of mass, pulls with each layer.
 
 Placement mends what it reads (ADR 0422): a tip under ×1.5 is built one size heavier where
 its plan has a wider tip; at the widest it gets a neighbour, which helps only if it seats
 before the tip's worst layer. Three rounds at most, read on 0.05 mm pixels.
+
+## On springs
+
+Where every tip under a part carries the `Spring` its grown tree makes (ADR 0455, the tree's
+read in `supports.md`, "How a support gives"), the part is a rigid body on them. Its six
+unknowns `q = (u, θ)` about the tips' centre solve `K q = f`, `K = Σ Bᵢᵀ kᵢ Bᵢ` with
+`kᵢ = diag(lateral, lateral, axial)`, `Bᵢ` taking `q` to the tip's move `u + θ × rᵢ`, and a
+turning spring on `θ`: the neck, `E π r³ / 8` as long as it is wide, in series with the
+tree's top. The load is the pull at each of eight points round the peel ellipse, and the
+weight. A tip's stress is `(N⁺ + H) / A + M / (π r³ / 4)`: tension, the lateral force as
+shear where the neck meets the part, the turn as bending. A short trunk is stiffer than a long
+one and carries more; a part on tips in a line turns on its turning springs alone.
+
+Above its highest tip the part bends as a beam whose section is each layer's: a vertical
+force `F` at `P` curves the section at `s` by `J_s F (P − c_s) / E`, `J_s` the inverse of its
+second moments, so the layer at `z` moves across
+`−F Σ_s Δz (z − z_s) J_s (P − c_s) / E`. Expanded, that is four running sums —
+`Σ J`, `Σ J c`, `Σ z J`, `Σ z J c` — kept per part and started again where a tip seats or
+two parts join; no section is kept. The layer's move is the body's at the pull's point plus
+this bend. Past `SHIFT_LIMIT_MM` the layer sways.
+
+A tree standing on the model (`Tip::stands_on`) stands on the part under its foot, found on
+the layer the stack climbs past it by. On the part it holds it holds nothing. On another
+part `Q` its stiffness is `(k⁻¹ + C_Q)⁻¹`, `C_Q` how far `Q`, on its own tips' springs, moves
+per newton at the foot; the force it carries is passed down and `Q`'s tips read again with
+it, once. Its foot is one contact every tip of the tree loads, so a tip's stress is the worse
+of its neck and that contact's `(N⁺ + H) / A` under the tree's whole force.
+
+Going down, the film pushes the layer back as hard as it pulled. The push, less the weight,
+is solved the same way; each trunk takes the sum its tips press it with, against the Euler
+load `π² E I / (2 L)²` its tree gives, `L` its free length.
+
+`GREEN_MODULUS_MPA` is 600: the lowest cured modulus a data sheet gives Anycubic ABS-Like Pro 2
+(1.0 GPa) times the lowest green share published (0.57). The force on each tip moves only
+with the springs' ratios, so with the modulus barely; the sway and the buckling move with it.
 
 ## Calibration
 

@@ -31,6 +31,8 @@ fn seat(x: f32, y: f32, z: f32, radius_mm: f64) -> Tip {
         at_mm: [x, y],
         z_mm: z,
         radius_mm,
+        spring: None,
+        stands_on: None,
     }
 }
 
