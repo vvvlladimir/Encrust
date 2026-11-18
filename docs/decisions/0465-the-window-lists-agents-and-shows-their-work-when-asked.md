@@ -28,7 +28,8 @@ already finds the server's folder there.
   past one; on hover each agent's model, what it does and for how long. It opens a chooser
   of the agents, each under its name with its latest jobs as rows — model, revision, the check's
   verdict — and a press on a row shows that revision on the plate as ADR 0459 runs one. A
-  project's job has no row to press; it opens from File.
+  project's job opens the project. The jobs of the last day no agent's file names follow
+  as *Earlier jobs*, so the work of a server that keeps no file is listed all the same.
 - **Following is the user's choice:** with *Follow agents* off, the default, a revision
   handed over is answered `shown: false` and only listed; on, it runs as ADR 0459 has it.
   The switch is in the chooser and remembered with the window's behaviour.
