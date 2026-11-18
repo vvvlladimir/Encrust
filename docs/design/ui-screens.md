@@ -55,7 +55,9 @@ Test prints ▸ (Crustling with Download, its percentage or STL as keys, then th
 in code; a browser, the four alone) · Save, Save as · Slice to .ext (why when off), Slice
 all N plates, Send a sliced file (where the printer in hand sends over a network; its name
 in the tooltip, why when off) · Import ▸
-(Machine profile, Resin profile), Machine and resin, Settings · Quit (not in a browser).
+(Machine profile, Resin profile), Machine and resin, Use with Claude Desktop (not in a browser;
+opens this version's extension for the system in the browser, ADR 0461), Settings · Quit (not
+in a browser).
 Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
 (the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate, Prepare for print (why when off) · Find. View:
 Frame view · CAMERA Perspective or Orthographic, the one in force ticked · SHOW Plate grid,

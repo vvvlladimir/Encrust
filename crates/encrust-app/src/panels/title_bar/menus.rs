@@ -270,6 +270,11 @@ fn setup_items(ui: &mut egui::Ui, window: &mut Window) {
     if clicked(ui, &MenuRow::new(Some(icon::PRINTER), &machines)) {
         open_machines(window.machine);
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if clicked(ui, &MenuRow::new(None, &tr!("menu-claude-desktop"))) {
+        ui.ctx()
+            .open_url(egui::OpenUrl::new_tab(claude_extension_url()));
+    }
     let settings = tr!("menu-settings");
     if clicked(
         ui,
@@ -277,6 +282,23 @@ fn setup_items(ui: &mut egui::Ui, window: &mut Window) {
     ) {
         toggle_settings(window.machine);
     }
+}
+
+/// The Claude Desktop extension of this version, for this system: the browser downloads it and
+/// opening it installs it (ADR 0461).
+#[cfg(not(target_arch = "wasm32"))]
+fn claude_extension_url() -> String {
+    let os = match std::env::consts::OS {
+        "macos" => "macos",
+        "windows" => "windows",
+        _ => "linux",
+    };
+    format!(
+        "{}/releases/download/v{}/encrust-{os}-{}.mcpb",
+        env!("CARGO_PKG_REPOSITORY"),
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::ARCH
+    )
 }
 
 /// The files opened lately, newest first, each with how long ago, and a way to forget them.

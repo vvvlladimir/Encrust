@@ -892,12 +892,14 @@ the answer carries the window's `window` and what it leaves out as `unshown`;
 (`docs/design/window-link.md`).
 
 ```sh
-cargo xtask mcpb                                        # target/mcpb/encrust-<platform>.mcpb
+cargo xtask mcpb                                        # target/mcpb/encrust-<os>-<arch>.mcpb
 claude mcp add encrust -- /path/to/encrust-mcp          # Claude Code
 ```
 
-The bundle carries both binaries for the platform it is built on; Claude Desktop installs it
-by a double click or from Settings, Extensions. By hand, Claude Desktop takes the server in
+The bundle carries both binaries for the platform it is built on, or for `--target`'s; Claude
+Desktop installs it by a double click or from Settings, Extensions. Each release attaches one
+for each of its platforms, `releases/latest/download/encrust-<os>-<arch>.mcpb`, and the
+window's File → Use with Claude Desktop downloads the one for its version (ADR 0461). By hand, Claude Desktop takes the server in
 `claude_desktop_config.json` and Codex in `~/.codex/config.toml`, whose 60 s default is too
 short for a hollowed model:
 
