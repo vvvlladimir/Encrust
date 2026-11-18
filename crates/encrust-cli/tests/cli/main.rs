@@ -25,3 +25,4 @@ mod render;
 mod slicing;
 mod support;
 mod talking;
+mod test_print;

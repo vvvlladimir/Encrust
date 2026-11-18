@@ -65,10 +65,10 @@ a crate of its own when the window's panel or the connector needs it too.
 | `write_file` | the printer file; refused while the check names defects | `slice --strict` | writes a file |
 | `render` | pictures from each side, the check's findings marked | `render --mark` | read |
 | `send_to_printer` | the file to a printer on the user's network | `printer send` | outward |
-| `mark_shown` (step 13) | faces that show, painted round plate points | `--shown-at` | edits |
-| `use_recipe` (step 14) | a recipe and its variables for the job, by the user's purpose | `recipes list`, `--recipe` | edits |
+| `set_supports` `shown_at_mm` (step 13) | the side meant to be seen, painted round plate points | `--shown-at` | edits |
+| `list_recipes`, `use_recipe` (step 14) | the recipes with their steps; one for the job, by the user's purpose | `recipes list`, `recipes show`, `--recipe` | read, edits |
 | `import_resin` (step 15) | a resin from a sliced file or another slicer's export | `profiles import` | creates a profile |
-| `write_test_print` (step 15) | the exposure test for the printer and resin | `test-print exposure` | writes a file |
+| `write_test_print` (step 15) | a test print, the exposure check among them | `test-print` | writes a file |
 | `report_print` (step 16) | what a print of a job's file did, as named symptoms | — | edits |
 | `save_recipe` (step 17) | a recipe from the job's revisions or from words, validated | `recipes show PATH`, the store | creates a profile |
 
@@ -117,7 +117,7 @@ merge kept main's, renumbered the branch's own after 0454 and left out what no l
 | `--prepare` fills the flags left out | 0402, superseded by recipes (0403) | `--prepare` is `--recipe prepare`; `start_job` runs it |
 | a job's TOML "recipe" | `core-recipe`'s recipe | each revision keeps the `core-recipe` its check ran (ADR 0459) |
 | `--keep-solid X,Y,Z` | `--keep-solid` with blockers fitted to the model (0396) | main's; the branch's flag dropped |
-| `keep_clear_at_mm` points | painted `Shown` faces (0410, 0425), window only | both stand; step 13 brings painting to the command line |
+| `keep_clear_at_mm` points | painted `Shown` faces (0410, 0425), window only | both stand: kept clear for the search, painted for the supports (ADR 0460) |
 | the window replaying each revision | Prepare for print rebuilt on recipes | step 8 again: the window runs the revision's recipe (ADR 0459) |
 
 Main also brings what the tools gain without new code: Check's issues located and fixed by
@@ -233,9 +233,9 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 11 | Poses offered and chosen, places kept clear, each check compared, a judge; supports by hand | (done, ADR 0457, 0458) | 6, 7 |
 | 12 | Merge main | (done) | — |
 | 8 | The open window runs each revision's recipe as Prepare for print | `encrust-cli`, `encrust-mcp`, `encrust-app` (done, ADR 0459) | 12 |
-| 13 | Shown faces painted from the command line, `--shown-at X,Y,Z[:R]`; `mark_shown` | `encrust-cli`, `encrust-mcp`; window parity (rule 9) | 12 |
-| 14 | Recipes chosen by purpose: `use_recipe`, the instructions ask what the print is for | `encrust-mcp` | 12 |
-| 15 | Resin with no window: `import_resin`; `encrust test-print exposure`, as the window's | `encrust-cli`, `encrust-mcp` | 12 |
+| 13 | The side meant to be seen painted from the command line, `--shown-at X,Y,Z[:R]` | `core-engine`, `encrust-cli`, `encrust-mcp` (done, ADR 0460) | 12 |
+| 14 | Recipes chosen by purpose: `list_recipes`, `use_recipe`, the instructions ask what the print is for | `encrust-mcp` (done, ADR 0460) | 12 |
+| 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0460); a resin from a label's numbers alone still needs the window | 12 |
 | 16 | After the print: `report_print`, `print-failures.md` and the engine reading it | `core-engine`, `encrust-mcp` | 12 |
 | 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `core-recipe`, `encrust-mcp` | 14 |
 | 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | a prototype outside the workspace | 12 |
@@ -245,8 +245,8 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 12 |
 | 10 | The MCP Apps page in Claude Desktop, the connector's page served locally | `encrust-mcp` | 19 |
 
-Order: 13–15 and 18 in parallel; 20 once 15 stands, so a user with no window can
-finish a print; 16, 17 and 19 next; 21 grows with each; 9 and 10 last.
+Order: 18 and 20 now, 15 standing, so a user with no window can finish a print; 16, 17 and
+19 next; 21 grows with each; 9 and 10 last.
 
 ## How the work is run
 

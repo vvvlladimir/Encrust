@@ -170,7 +170,8 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "set_supports",
             "start_job",
             "use_recipe",
-            "write_file"
+            "write_file",
+            "write_test_print"
         ]
     );
     let hint = |name: &str| {
@@ -716,5 +717,22 @@ async fn a_resin_taken_in_from_its_file_is_listed_as_the_user_s_own() {
         failed(&relative),
         "a relative path never reaches the command line"
     );
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn the_exposure_check_is_written_and_prepared_like_any_model() {
+    let dir = scratch("test-print");
+    let client = serve(&encrust(), &dir.join("jobs")).await;
+    let written = call(
+        &client,
+        "write_test_print",
+        json!({"print": "exposure", "folder": dir}),
+    )
+    .await;
+    assert!(!failed(&written), "{}", answer(&written));
+    let path = PathBuf::from(answer(&written)["path"].as_str().expect("a path"));
+    assert_eq!(path, dir.join("exposure-check.stl"));
+    start(&client, &path).await;
     client.cancel().await.expect("the server stops");
 }

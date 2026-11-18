@@ -19,7 +19,7 @@ use crate::jobs::{Jobs, Revision};
 use crate::params::{
     ComparePoses, ImportResin, JobRef, ListProfiles, ListRecipes, Model, Render, Revert, SendFile,
     SetDrains, SetHollow, SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe,
-    View, WriteFile, absolute, plain,
+    View, WriteFile, WriteTestPrint, absolute, plain,
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
@@ -85,6 +85,31 @@ impl Server {
         ctx: Context,
     ) -> Answer {
         Ok(answer(self.import(import, &ctx).await))
+    }
+
+    /// Writes one of the project's test prints as an STL, to prepare and print like any model:
+    /// the exposure check tells whether a resin's exposure is right.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn write_test_print(
+        &self,
+        Parameters(write): Parameters<WriteTestPrint>,
+        ctx: Context,
+    ) -> Answer {
+        let written = async {
+            absolute(&write.folder, "the folder")?;
+            let args = [
+                "test-print".into(),
+                write.print.name().into(),
+                format!("--output={}", write.folder.display()),
+            ];
+            let outcome = self.watched(&args, &ctx).await?;
+            Ok(reported(&outcome, outcome.report.clone()))
+        };
+        Ok(answer(written.await))
     }
 
     /// The recipes a job can be prepared by, built-in and the user's, each with its steps as
