@@ -1117,7 +1117,8 @@ describe in words, it keeps as a recipe of your own, which the window's Prepare 
 runs with no chat. A resin you have not set up it takes in from a
 file that printed well with it or from another slicer's export, and it writes the exposure
 check for you to print; a resin known only by its label's numbers you still set up in the
-window.
+window. A project you saved in the window it checks, draws, writes and sends as it stands;
+its models you change in the window.
 
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,

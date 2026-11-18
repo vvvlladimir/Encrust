@@ -34,6 +34,11 @@ use reply::{Reply, answer, images, not_applied, reported, revised};
 
 const INSTRUCTIONS: &str = include_str!("instructions.md");
 
+/// What a job of a project answers with first.
+const PROJECT: &str = "a project the window saved: its models, poses, hollows and supports \
+    stand as saved, and the tools that shape them are refused; check, render, set_slicing, \
+    write_file and send_to_printer work. To prepare a model anew, start a job from its file.";
+
 /// How often a client hears that a long run is still going, so it does not time out.
 const BEAT: Duration = Duration::from_secs(5);
 
@@ -371,6 +376,12 @@ impl Server {
 impl Server {
     async fn inspect(&self, model: Model, ctx: &Context) -> Result<Reply> {
         absolute(&model.path, "the model")?;
+        if Recipe::bare(model.path.clone(), String::new(), String::new()).is_project() {
+            bail!(
+                "{} is a project the window saved; start_job checks it as it stands",
+                model.path.display()
+            );
+        }
         let mut args = vec!["inspect".into(), model.path.display().to_string()];
         args.extend(model.repair.map(Repair::flag));
         let outcome = self.watched(&args, ctx).await?;
@@ -382,18 +393,25 @@ impl Server {
         for (value, what) in [(&start.printer, "the printer"), (&start.resin, "the resin")] {
             plain(value, what)?;
         }
-        let recipe = Recipe {
+        let mut recipe = Recipe {
             prepare: start.prepare.unwrap_or(true),
             repair: start.repair,
             ..Recipe::bare(start.model, start.printer, start.resin)
         };
+        if recipe.is_project() {
+            if recipe.repair.is_some() {
+                bail!("a project's models are repaired in the window, as they were saved");
+            }
+            recipe.prepare = false;
+        }
         let (outcome, steps) = self.checked(&recipe, &[], ctx).await?;
         if !outcome.reported() {
             return Ok(not_applied(None, &outcome));
         }
-        let job = Jobs::name_for(&recipe);
-        let autopilot = if recipe.prepare && recipe.repair.is_none() {
-            outcome.report.clone()
+        let autopilot = if recipe.is_project() {
+            None
+        } else if recipe.prepare && recipe.repair.is_none() {
+            Some(outcome.report.clone())
         } else {
             let alone = Recipe {
                 prepare: true,
@@ -403,11 +421,15 @@ impl Server {
                     recipe.resin.clone(),
                 )
             };
-            self.estimate(&alone, &[], ctx).await?.report
+            Some(self.estimate(&alone, &[], ctx).await?.report)
         };
+        let job = Jobs::name_for(&recipe);
+        let note = recipe.is_project().then_some(PROJECT);
         let revision = self.jobs.commit(&job, (recipe, steps), &outcome.report)?;
-        self.jobs.keep_autopilot(&job, &autopilot)?;
-        Ok(self.kept(&revision, &outcome, None).await)
+        if let Some(autopilot) = &autopilot {
+            self.jobs.keep_autopilot(&job, autopilot)?;
+        }
+        Ok(self.kept(&revision, &outcome, note).await)
     }
 
     /// Changes the job's latest recipe, checks it, and keeps it as the next revision only when
@@ -546,6 +568,10 @@ impl Server {
     /// steps, and what the steps leave out.
     async fn kept(&self, revision: &Revision, outcome: &Outcome, note: Option<&str>) -> Reply {
         let mut reply = revised(revision, outcome, note);
+        // The window reads a job's model in beside the plate; a project would take its place.
+        if revision.recipe.is_project() {
+            return reply;
+        }
         if let Some(shown) = self.window.show(revision).await {
             reply.body["window"] = shown;
             reply.body["unshown"] = json!(revision.recipe.unshown());

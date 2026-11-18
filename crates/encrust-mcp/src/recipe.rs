@@ -258,6 +258,14 @@ impl Recipe {
         }
     }
 
+    /// Whether the model is a project the window saved, whose models, poses and supports
+    /// stand as saved: the command line refuses every flag that would shape them.
+    pub fn is_project(&self) -> bool {
+        self.model
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("encrust"))
+    }
+
     /// The flags after the subcommand that stage the model as this recipe says. Every value
     /// rides on its flag as `--flag=value`, so a negative number is never read as a flag.
     pub fn flags(&self) -> Vec<String> {
@@ -267,9 +275,11 @@ impl Recipe {
         flags.extend([
             profile_flag(&self.printer, "--printer", "--profile"),
             profile_flag(&self.resin, "--resin", "--material"),
-            "--center".into(),
-            "--check-drainage".into(),
         ]);
+        if !self.is_project() {
+            flags.push("--center".into());
+        }
+        flags.push("--check-drainage".into());
         if let Some(recipe) = &self.steps_by {
             flags.push(format!("--recipe={recipe}"));
         } else if self.prepare {

@@ -94,7 +94,8 @@ pub struct Model {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct Start {
-    /// Absolute path of an STL, OBJ or 3MF file on this computer.
+    /// Absolute path of an STL, OBJ or 3MF file on this computer, or of a project (`.encrust`)
+    /// the window saved, which is checked and written as it was saved.
     pub model: PathBuf,
     /// The printer the user named: an id `list_profiles` lists, or a printer TOML's path.
     pub printer: String,
@@ -103,7 +104,7 @@ pub struct Start {
     pub repair: Option<Repair>,
     /// Lets the engine's autopilot decide every step no tool sets: repair when broken, the
     /// orientation search, a 2 mm hollow where it saves resin, drains, supports. True when
-    /// absent; what it decided is in each model's `prepared`.
+    /// absent, false for a project; what it decided is in each model's `prepared`.
     pub prepare: Option<bool>,
 }
 
