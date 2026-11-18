@@ -14,6 +14,10 @@ doctest = false
 [dependencies]
 core-edit.workspace = true
 core-engine.workspace = true
+core-geometry.workspace = true
+core-joint.workspace = true
+core-volume.workspace = true
+thiserror.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [lints]

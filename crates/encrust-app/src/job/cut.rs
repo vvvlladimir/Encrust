@@ -1,32 +1,26 @@
-use std::sync::Arc;
-
-use core_engine::project::Keep;
-use core_geometry::{Mesh, Plane, Transform, transform_mesh};
-use core_joint::{Joined, Joints, cut_and_join};
-use core_volume::drilled;
+use core_document::{ApplyError, CutAsked, CutModel, Piece, cut, pieces};
+use core_edit::ObjectId;
 
 use crate::i18n::tr;
 use crate::job::{Worker, pooled};
 
-/// One model to cut, in its own space and where it stands on the plate.
+/// One model to cut, and how.
 pub struct CutRequest {
-    /// What prints: the model or its hollowed shell, its cuts taken out where they have been.
-    pub printed: Arc<Mesh>,
-    /// The holes and channels still to be taken out of `printed` before it is cut.
-    pub cuts: Option<Arc<Mesh>>,
-    /// The model's outside, where what prints is its shell.
-    pub solid: Option<Arc<Mesh>>,
-    pub transform: Transform,
-    pub plane: Plane,
-    pub keep: Keep,
-    pub joints: Joints,
+    pub id: ObjectId,
+    pub model: CutModel,
+    pub asked: CutAsked,
 }
 
 /// How a cut ended.
 #[derive(Debug)]
 pub enum CutOutcome {
     Cut {
-        joined: Joined,
+        /// The halves kept and the loose dowels, laid out as they stand on the plate.
+        pieces: Vec<Piece>,
+        /// Pins, dowels or magnets put in, or pieces of the face a key runs round.
+        placed: usize,
+        /// Pieces of the cut face too small or thin to take a fixing.
+        bare: usize,
         /// Cut loops that did not close, and were left uncapped.
         open_loops: usize,
         /// Why the halves were left plain when they were to be joined.
@@ -47,32 +41,22 @@ pub type CutJob = Worker<CutOutcome>;
 pub fn spawn_cut(request: CutRequest) -> CutJob {
     Worker::spawn(
         // Neither the cut nor the joint can be given up on part way.
-        move |_, _| pooled(|| cut(request), CutOutcome::Failed),
+        move |_, _| pooled(|| cut_and_lay(&request), CutOutcome::Failed),
         || CutOutcome::Failed(tr!("job-thread-stopped-cut")),
     )
 }
 
-fn cut(request: CutRequest) -> CutOutcome {
-    // The halves are new models with no holes of their own, so they are cut from the drilled one.
-    let printed = match &request.cuts {
-        Some(cuts) => match drilled(&request.printed, cuts) {
-            Ok(mesh) => transform_mesh(&mesh, request.transform),
-            Err(_) => return CutOutcome::Undrilled,
+fn cut_and_lay(request: &CutRequest) -> CutOutcome {
+    match cut(&request.model, &request.asked, request.id) {
+        Ok(done) => CutOutcome::Cut {
+            placed: done.joined.placed,
+            bare: done.joined.bare,
+            open_loops: done.open_loops,
+            unjoined: done.unjoined.map(|error| error.to_string()),
+            pieces: pieces(done.joined, &request.asked),
         },
-        None => transform_mesh(&request.printed, request.transform),
-    };
-    let solid = request
-        .solid
-        .map(|solid| transform_mesh(&solid, request.transform));
-    let joints = (request.keep == Keep::Both).then_some(&request.joints);
-    // A plane that misses leaves the model whole. Replacing it with a copy of itself
-    // would throw away its supports and its cavity for nothing.
-    let Some(cut) = cut_and_join(&printed, solid.as_ref(), request.plane, joints) else {
-        return CutOutcome::Missed;
-    };
-    CutOutcome::Cut {
-        joined: cut.joined,
-        open_loops: cut.open_loops,
-        unjoined: cut.unjoined.map(|error| error.to_string()),
+        Err(ApplyError::Missed(_)) => CutOutcome::Missed,
+        Err(ApplyError::Undrilled(_)) => CutOutcome::Undrilled,
+        Err(error) => CutOutcome::Failed(error.to_string()),
     }
 }

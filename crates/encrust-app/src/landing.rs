@@ -2,7 +2,8 @@
 
 use std::sync::Arc;
 
-use core_geometry::{MendMethod, MendSettings, Mesh, Transform, diagnose, mend};
+use core_document::{Piece, Role};
+use core_geometry::Mesh;
 
 use crate::i18n::tr;
 use crate::scene::{ImportSummary, Imported, ObjectId, Scene, Taken};
@@ -25,21 +26,21 @@ pub(crate) fn take_off(scene: &mut Scene, taken: &[Taken]) -> Result<(), String>
 /// Mending is not asked for the way an imported model's is (ADR 0194): the surface is the
 /// tool's own, and the stage notice says what was done to it.
 pub(crate) fn place(scene: &mut Scene, plate: u32, name: String, mesh: Mesh) -> (ObjectId, bool) {
-    let mut mesh = mesh;
-    let mut diagnostics = diagnose(&mesh);
-    let mended = !diagnostics.is_sound();
-    if mended {
-        mend(&mut mesh, MendMethod::Repair, MendSettings::default());
-        diagnostics = diagnose(&mesh);
-    }
+    let piece = Piece::sound(Role::Kept, mesh);
+    let mended = piece.mended;
+    (place_piece(scene, plate, name, piece), mended)
+}
+
+/// Puts a piece an edit made on `plate`, standing where the edit left it.
+pub(crate) fn place_piece(scene: &mut Scene, plate: u32, name: String, piece: Piece) -> ObjectId {
     let id = scene.insert(Imported::new(
         name,
-        Arc::new(mesh),
-        Transform::default(),
-        ImportSummary::made(diagnostics),
+        Arc::new(piece.mesh),
+        piece.transform,
+        ImportSummary::made(piece.diagnostics),
     ));
     scene.move_to_plate(id, plate);
-    (id, mended)
+    id
 }
 
 /// Puts each named mesh on `plate` with [`place`], and answers how many had to be mended.

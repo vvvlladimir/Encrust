@@ -5,8 +5,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
-use core_geometry::{Bvh, Mesh, Plane, Quat, Scalar, Transform, Vec3, transform_mesh};
-use core_joint::{CutJoined, JointKind, Joints, cut_and_join};
+use core_document::{CutAsked, CutModel, pieces};
+use core_edit::{Axis, ObjectId};
+use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
+use core_joint::{JointKind, Joints};
 use core_text::{Font, Frame, LABEL_DEPTH_MM, LETTER_HEIGHT_MM, LabelSettings, label, outline};
 use core_volume::{Boolean, Cancel, PartSettings, combine, combine_exact_toward, part_off, parts};
 
@@ -44,6 +46,16 @@ pub enum Keep {
     Both,
     Lower,
     Upper,
+}
+
+impl From<Keep> for core_edit::Keep {
+    fn from(keep: Keep) -> Self {
+        match keep {
+            Keep::Both => Self::Both,
+            Keep::Lower => Self::Below,
+            Keep::Upper => Self::Above,
+        }
+    }
 }
 
 /// What `--joint` joins the halves of a cut by.
@@ -115,8 +127,8 @@ pub struct ModelArgs {
 
     /// Cut the model with a plane square to an axis at a plate coordinate, millimetres:
     /// `z:10` is 10 mm over the plate.
-    #[arg(long, value_name = "AXIS:MM", value_parser = plane, allow_hyphen_values = true)]
-    pub cut: Option<Plane>,
+    #[arg(long, value_name = "AXIS:MM", value_parser = cut_at, allow_hyphen_values = true)]
+    pub cut: Option<(Axis, Scalar)>,
 
     /// Which halves of the cut are kept.
     #[arg(long, value_enum, default_value_t = Keep::Both, requires = "cut")]
@@ -157,19 +169,22 @@ impl ModelArgs {
     }
 }
 
-/// `axis:mm` as the plane square to that axis of the plate at that coordinate.
-fn plane(text: &str) -> Result<Plane, String> {
+/// `axis:mm` as the axis of the plate a cut is square to and the coordinate it crosses at.
+fn cut_at(text: &str) -> Result<(Axis, Scalar), String> {
     let (axis, at) = text
         .split_once(':')
         .ok_or_else(|| format!("a cut is AXIS:MM, such as z:10, got {text:?}"))?;
-    let normal = match axis.trim().to_ascii_lowercase().as_str() {
-        "x" => Vec3::X,
-        "y" => Vec3::Y,
-        "z" => Vec3::Z,
+    let axis = match axis.trim().to_ascii_lowercase().as_str() {
+        "x" => Axis::X,
+        "y" => Axis::Y,
+        "z" => Axis::Z,
         other => return Err(format!("a cut is across x, y or z, got {other:?}")),
     };
     let at: Scalar = at.trim().parse().map_err(|error| format!("{error}"))?;
-    Plane::at(normal, at).ok_or_else(|| format!("{text:?} names no plane"))
+    if !at.is_finite() {
+        return Err(format!("{text:?} names no plane"));
+    }
+    Ok((axis, at))
 }
 
 /// The models as `args` shapes them, each into the pieces it becomes, in plate coordinates.
@@ -265,70 +280,47 @@ fn labelled(mesh: &Mesh, text: &str, args: &ModelArgs, talk: bool) -> Result<Mes
     Ok(stamped)
 }
 
-/// The halves `plane` cuts `mesh` into that `--keep` keeps, a half no longer reaching down
-/// to where the model stood laid on its cut face, and the loose dowels a dowel joint prints.
-fn cut(mesh: &Mesh, plane: Plane, args: &ModelArgs, talk: bool) -> Result<Vec<Mesh>> {
-    let joints = args
-        .joint
-        .filter(|_| args.keep == Keep::Both)
-        .map(|joint| Joints {
-            kind: Some(joint.into()),
+/// The halves `--cut` cuts `mesh` into that `--keep` keeps, each laid on its cut face as
+/// the window's Lay flat does, and the loose dowels a dowel joint prints (ADR 0466).
+fn cut(
+    mesh: &Mesh,
+    (axis, at_mm): (Axis, Scalar),
+    args: &ModelArgs,
+    talk: bool,
+) -> Result<Vec<Mesh>> {
+    let asked = CutAsked {
+        axis,
+        at_mm,
+        keep: args.keep.into(),
+        joints: Joints {
+            kind: args.joint.map(JointKind::from),
             ..Joints::default()
-        });
-    let Some(CutJoined {
-        joined,
-        open_loops,
-        unjoined,
-    }) = cut_and_join(mesh, None, plane, joints.as_ref())
-    else {
+        },
+        lay_flat: true,
+    };
+    let model = CutModel {
+        printed: Arc::new(mesh.clone()),
+        cuts: None,
+        solid: None,
+        transform: Transform::default(),
+    };
+    let Ok(done) = core_document::cut(&model, &asked, ObjectId::UNSET) else {
         bail!("the --cut plane misses the model");
     };
-    if let Some(reason) = unjoined {
+    if let Some(reason) = done.unjoined {
         bail!("the joint could not be built into the halves: {reason}");
     }
     if talk {
         println!(
             "Cut: {} fixings, {} open loops left uncapped\n",
-            joined.placed, open_loops
+            done.joined.placed, done.open_loops
         );
     }
-    let floor = mesh.aabb().map_or(0.0, |bounds| bounds.mins.z);
-    let lower = stood(joined.below, plane.normal, floor);
-    let upper = stood(joined.above, -plane.normal, floor);
-    let mut kept = match args.keep {
-        Keep::Both => vec![lower, upper],
-        Keep::Lower => vec![lower],
-        Keep::Upper => vec![upper],
-    };
-    kept.extend(joined.loose.into_iter().map(|dowel| dowel.mesh));
-    Ok(kept)
-}
-
-/// How far over where the model stood a half's lowest point may be and still stand there,
-/// millimetres: rounding, not a gap.
-const STANDS_MM: Scalar = 1e-3;
-
-/// `half` as it is where it still reaches down to `floor`, or else turned so its cut face,
-/// looking along `facing`, lies on the plate.
-fn stood(half: Mesh, facing: Vec3, floor: Scalar) -> Mesh {
-    if half
-        .aabb()
-        .is_none_or(|bounds| bounds.mins.z <= floor + STANDS_MM)
-    {
-        return half;
-    }
-    let turned = transform_mesh(
-        &half,
-        Transform {
-            rotation: Quat::from_rotation_arc(facing, -Vec3::Z),
-            ..Transform::default()
-        },
-    );
-    let low = turned.aabb().map_or(0.0, |bounds| bounds.mins.z);
-    transform_mesh(
-        &turned,
-        Transform::from_translation(Vec3::Z * (floor - low)),
-    )
+    let kept = pieces(done.joined, &asked);
+    Ok(kept
+        .into_iter()
+        .map(|piece| transform_mesh(&piece.mesh, piece.transform))
+        .collect())
 }
 
 /// `mesh` as `--split` or `--part-off` leaves it, or whole.
