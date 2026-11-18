@@ -124,7 +124,11 @@ pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
             }
         };
         chooser_group(ui, &group);
-        if agent.jobs.is_empty() {
+        let opening =
+            matches!(&agent.state, State::Working { tool, job: None, .. } if tool == "start_job");
+        if opening {
+            hint(ui, &tr!("agents-opening"));
+        } else if agent.jobs.is_empty() {
             hint(ui, &tr!("agents-no-job"));
         }
         for job in &agent.jobs {

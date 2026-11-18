@@ -384,6 +384,8 @@ agents-numbered = { $client } { $number }
 agents-unnamed = Agent
 # The group of the list holding the jobs of the last day no agent there names.
 agents-earlier = Earlier jobs
+# Under an agent while it opens a model as a new job, before the job has a revision.
+agents-opening = Opening a model…
 agents-no-job = No model yet
 # Under a model's name in the list: its latest revision and what the check found in it.
 agents-revision-clean = Revision { $revision } · no problems found

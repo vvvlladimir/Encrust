@@ -165,14 +165,15 @@ impl Link {
         Reply::taken()
     }
 
-    /// The job's place in the list, a new entry where it is new or names another model.
+    /// The job's place in the list, a new entry where it is new or names another model. A
+    /// new job of a model already followed takes that model's entry over, so a model is on
+    /// the plate once however many jobs an agent starts on it.
     fn followed_index(&mut self, job: &str, model: &PathBuf) -> usize {
-        let found = self.followed.iter().position(|f| f.job == job);
-        if let Some(index) = found
-            && self.followed[index].model == *model
-        {
+        if let Some(index) = self.followed.iter().position(|f| f.model == *model) {
+            job.clone_into(&mut self.followed[index].job);
             return index;
         }
+        let found = self.followed.iter().position(|f| f.job == job);
         let entry = Followed {
             job: job.to_owned(),
             model: model.clone(),

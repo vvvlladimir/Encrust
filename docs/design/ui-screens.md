@@ -89,7 +89,7 @@ left edge, 300 wide, on `raised` with a window's shadow, a capital group name ov
   job on the plate washed and ticked. A press shows that revision on the plate as one
   undo; a project's row opens the project, asking first about unsaved work. Last, under
   *Earlier jobs*, the latest three jobs of the last day that no agent's file names — an
-  older server's, or one whose file is gone. An agent with no job yet says so in a line; no agent at all is *No agent has worked here yet* under the
+  older server's, or one whose file is gone. An agent with no job yet says so in a line, *Opening a model…* while it starts one; no agent at all is *No agent has worked here yet* under the
   group *Agents*. Under a rule, *Follow agents* as a `switch`: on, each revision an agent
   keeps runs on the plate as it comes.
 
