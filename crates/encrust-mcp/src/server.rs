@@ -28,6 +28,7 @@ use crate::trace::{Trace, body_of};
 use crate::window::Window;
 
 mod after;
+mod asked;
 mod library;
 mod plate_edits;
 mod poses;
@@ -534,7 +535,7 @@ impl Server {
         if revision.recipe.is_project() {
             return reply;
         }
-        if let Some(applied) = self.cut_in_window(revision).await {
+        if let Some(applied) = self.edits_in_window(revision).await {
             reply.body["window"] = applied;
             return reply;
         }

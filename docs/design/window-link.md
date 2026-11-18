@@ -72,6 +72,14 @@ the rest and is answered with why. A plate that moved on is answered `stale` wit
 and nothing is applied: the server asks for the plate again. A window not following its
 agents refuses both lines, and edits while others are still being applied are refused.
 
+A revision after the first hands over, as edits of the job's model, what it asks beyond the
+revision before: a repair, the faces mended, a picture pressed in, a scale, a turn typed, a
+label, a split or part cut off, a cut, in that order. One that asks anything no edit carries
+yet — a hollow, drains, supports, a combination, the orientation search — or takes back what an
+earlier one asked is shown by its recipe instead, as below. While the window holds a cut it was
+handed, the job's model is no longer on its plate whole, and a revision keeping that cut is not
+shown; a cut the user undid there is taken out of the job's next revision.
+
 ## What the window does with it
 
 What follows is what the window does with a revision it shows (see Following). The first revision of a job reads its model in, as Open does, unless another job of the

@@ -43,7 +43,9 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    Change these only when the user asks or a finding needs it.
 7. The user's Encrust window shows a revision only when they follow agents there or you
    call `show_in_window`; call it when they want to see or adjust the model in Encrust. It
-   starts Encrust if it is closed. A revision's `window.shown: false` is not an error.
+   starts Encrust if it is closed. A revision's `window.shown: false` is not an error. A
+   followed window owns the plate: a repair, scale, turn, label, split or cut lands there as an
+   edit (`window.applied`), and a `note` says when the user undid your cut there.
 8. Every edit answers with `compared`: how it stands against the revision before and the
    autopilot. An edit `behind` either one is reverted with `revert` unless the user asked for
    it; say what it cost. `render` (`iso`, `bottom`) and look at it; fix what the check names.
