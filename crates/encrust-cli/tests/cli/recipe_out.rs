@@ -19,7 +19,11 @@ fn the_autopilot_written_out_hollows_at_the_wall_typed_whatever_its_condition() 
         "--recipe-out",
         out.to_str().unwrap(),
     ]);
-    assert!(output.status.success(), "the run failed:\n{}", stderr(&output));
+    assert!(
+        output.status.success(),
+        "the run failed:\n{}",
+        stderr(&output)
+    );
     let text = std::fs::read_to_string(&out).expect("--recipe-out wrote the file");
     let recipe = core_recipe::Recipe::from_toml(&text).expect("the file is a recipe");
     let hollow = recipe

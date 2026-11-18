@@ -1,5 +1,6 @@
-//! Jobs on disk, a directory per job and a numbered recipe per revision with its check and
-//! flags beside it; a call names its job, so no state lives in the process but a lock per job.
+//! Jobs on disk, a directory per job and a numbered recipe per revision with its check, its
+//! flags and the steps it runs beside it; a call names its job, so no state lives in the
+//! process but a lock per job.
 
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
@@ -30,6 +31,9 @@ pub struct Revision {
     /// Counted from one.
     pub number: u32,
     pub recipe: Recipe,
+    /// The `core-recipe` file its check ran, the flags folded in (ADR 0459); what the window
+    /// runs.
+    pub steps: Option<String>,
 }
 
 impl Jobs {
@@ -71,17 +75,24 @@ impl Jobs {
             .with_context(|| format!("job {job} has no revision {number}"))?;
         let recipe = toml::from_str(&text)
             .with_context(|| format!("revision {number} of job {job} does not read"))?;
+        let steps = fs::read_to_string(self.dir(job)?.join(steps_name(number))).ok();
         Ok(Revision {
             job: job.to_owned(),
             number,
             recipe,
+            steps,
         })
     }
 
-    /// Writes `recipe` and the `report` of its check as the revision after the job's latest, or
-    /// as revision one of a job not there yet. Hold the job's lock across reading the latest
-    /// and this.
-    pub fn commit(&self, job: &str, recipe: Recipe, report: &Value) -> Result<Revision> {
+    /// Writes `recipe`, the `report` of its check and the `steps` it ran as the revision after
+    /// the job's latest, or as revision one of a job not there yet. Hold the job's lock across
+    /// reading the latest and this.
+    pub fn commit(
+        &self,
+        job: &str,
+        (recipe, steps): (Recipe, Option<String>),
+        report: &Value,
+    ) -> Result<Revision> {
         let dir = self.dir(job)?;
         let number = if dir.is_dir() {
             self.latest(job)? + 1
@@ -104,10 +115,15 @@ impl Jobs {
         let args = dir.join(format!("{number}.args.json"));
         fs::write(&args, serde_json::to_string(&recipe.flags())?)
             .with_context(|| format!("writing {}", args.display()))?;
+        if let Some(steps) = &steps {
+            let file = dir.join(steps_name(number));
+            fs::write(&file, steps).with_context(|| format!("writing {}", file.display()))?;
+        }
         Ok(Revision {
             job: job.to_owned(),
             number,
             recipe,
+            steps,
         })
     }
 
@@ -151,6 +167,15 @@ impl Jobs {
         kept.into_iter()
             .filter_map(|(name, file)| Some(format!("--against={name}={}", file?.display())))
             .collect()
+    }
+
+    /// A file no other run writes, for the command line to write the steps of a check into.
+    pub fn scratch_steps(&self) -> Result<PathBuf> {
+        static TAKEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let dir = self.root.join("scratch");
+        fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        let taken = TAKEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Ok(dir.join(format!("{}-{taken}.recipe.toml", std::process::id())))
     }
 
     /// An empty directory of the job's for the pictures of one revision.
@@ -216,6 +241,11 @@ fn slug(stem: &str) -> String {
     } else {
         slug
     }
+}
+
+/// The file the steps of revision `number` are kept in.
+fn steps_name(number: u32) -> String {
+    format!("{number}.recipe.toml")
 }
 
 fn revision_number(path: &Path) -> Option<u32> {

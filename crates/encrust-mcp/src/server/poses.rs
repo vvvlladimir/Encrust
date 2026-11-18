@@ -164,6 +164,7 @@ mod tests {
                 pose,
                 ..Recipe::bare("/m.stl".into(), "p".into(), "r".into())
             },
+            steps: None,
         }
     }
 

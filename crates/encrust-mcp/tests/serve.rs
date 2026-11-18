@@ -591,3 +591,52 @@ async fn points_kept_clear_are_kept_with_the_turn_they_were_seen_in() {
         "revision one stands the cube as its file does: {taken}"
     );
 }
+
+#[tokio::test]
+async fn each_revision_keeps_the_steps_its_check_ran_and_hands_them_to_the_open_window() {
+    use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
+
+    let dir = scratch("window");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("a free port");
+    let port = listener.local_addr().expect("bound").port();
+    let file = dir.join("window.json");
+    fs::write(&file, json!({"port": port, "token": "t"}).to_string()).expect("writable");
+    let window = tokio::spawn(async move {
+        let mut lines = Vec::new();
+        for _ in 0..2 {
+            let (stream, _) = listener.accept().await.expect("the server connects");
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).await.expect("a line");
+            let reply = b"{\"shown\":true}\n";
+            reader.get_mut().write_all(reply).await.expect("answered");
+            lines.push(serde_json::from_str::<Value>(&line).expect("JSON"));
+        }
+        lines
+    });
+    let jobs = dir.join("jobs");
+    let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
+    let job = start(&client, &model).await;
+    let edited = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.5}}),
+    )
+    .await;
+    assert_eq!(answer(&edited)["window"], json!({"shown": true}));
+    client.cancel().await.expect("the server stops");
+
+    let kept = fs::read_to_string(jobs.join(&job).join("2.recipe.toml"))
+        .expect("the revision keeps its steps");
+    let lines = window.await.expect("the window's task ends");
+    assert_eq!(lines[1]["revision"], 2);
+    assert_eq!(lines[1]["recipe"].as_str(), Some(kept.as_str()));
+    assert!(
+        kept.contains("wall_mm = 2.5"),
+        "the wall typed is the hollow step's: {kept}"
+    );
+}

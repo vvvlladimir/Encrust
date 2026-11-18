@@ -15,7 +15,7 @@ use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use serde_json::json;
 
 use crate::findings::{MOST_MARKED, findings};
-use crate::jobs::Jobs;
+use crate::jobs::{Jobs, Revision};
 use crate::params::{
     ComparePoses, JobRef, ListProfiles, Model, Render, Revert, SendFile, SetDrains, SetHollow,
     SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, View, WriteFile, absolute, plain,
@@ -23,6 +23,7 @@ use crate::params::{
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
 use crate::trace::Trace;
+use crate::window::Window;
 
 mod poses;
 mod reply;
@@ -41,6 +42,7 @@ pub struct Server {
     cli: Cli,
     jobs: Jobs,
     trace: Trace,
+    window: Window,
     tool_router: ToolRouter<Self>,
 }
 
@@ -49,11 +51,12 @@ type Context = RequestContext<RoleServer>;
 
 #[tool_router]
 impl Server {
-    pub fn new(cli: Cli, jobs: Jobs, trace: Trace) -> Self {
+    pub fn new(cli: Cli, jobs: Jobs, (trace, window): (Trace, Window)) -> Self {
         Self {
             cli,
             jobs,
             trace,
+            window,
             tool_router: Self::tool_router(),
         }
     }
@@ -246,9 +249,10 @@ impl Server {
             let old = self.jobs.open(&revert.job, Some(revert.revision))?;
             let latest = self.jobs.open(&revert.job, None)?;
             let against = self.jobs.against(&revert.job, Some(latest.number));
-            let outcome = self.estimate(&old.recipe, &against, &ctx).await?;
-            let revision = self.jobs.commit(&revert.job, old.recipe, &outcome.report)?;
-            Ok(revised(&revision, &outcome, None))
+            let (outcome, steps) = self.checked(&old.recipe, &against, &ctx).await?;
+            let kept = (old.recipe, steps);
+            let revision = self.jobs.commit(&revert.job, kept, &outcome.report)?;
+            Ok(self.kept(&revision, &outcome, None).await)
         };
         Ok(answer(reverted.await))
     }
@@ -318,7 +322,7 @@ impl Server {
             repair: start.repair,
             ..Recipe::bare(start.model, start.printer, start.resin)
         };
-        let outcome = self.estimate(&recipe, &[], ctx).await?;
+        let (outcome, steps) = self.checked(&recipe, &[], ctx).await?;
         if !outcome.reported() {
             return Ok(not_applied(None, &outcome));
         }
@@ -336,9 +340,9 @@ impl Server {
             };
             self.estimate(&alone, &[], ctx).await?.report
         };
-        let revision = self.jobs.commit(&job, recipe, &outcome.report)?;
+        let revision = self.jobs.commit(&job, (recipe, steps), &outcome.report)?;
         self.jobs.keep_autopilot(&job, &autopilot)?;
-        Ok(revised(&revision, &outcome, None))
+        Ok(self.kept(&revision, &outcome, None).await)
     }
 
     /// Changes the job's latest recipe, checks it, and keeps it as the next revision only when
@@ -356,12 +360,12 @@ impl Server {
         let note = change(&mut recipe);
         recipe.check_paths()?;
         let against = self.jobs.against(job, Some(latest.number));
-        let outcome = self.estimate(&recipe, &against, ctx).await?;
+        let (outcome, steps) = self.checked(&recipe, &against, ctx).await?;
         if !outcome.reported() {
             return Ok(not_applied(Some(&latest), &outcome));
         }
-        let revision = self.jobs.commit(job, recipe, &outcome.report)?;
-        Ok(revised(&revision, &outcome, note))
+        let revision = self.jobs.commit(job, (recipe, steps), &outcome.report)?;
+        Ok(self.kept(&revision, &outcome, note).await)
     }
 
     async fn write(&self, write: WriteFile, ctx: &Context) -> Result<Reply> {
@@ -452,6 +456,36 @@ impl Server {
         }
         let outcome = self.watched(&args, ctx).await?;
         Ok(reported(&outcome, outcome.report.clone()))
+    }
+
+    /// A check of `recipe` and the steps it ran, as the command line wrote them out.
+    async fn checked(
+        &self,
+        recipe: &Recipe,
+        against: &[String],
+        ctx: &Context,
+    ) -> Result<(Outcome, Option<String>)> {
+        let out = self.jobs.scratch_steps()?;
+        let mut args = vec!["estimate".to_owned()];
+        args.extend(recipe.flags());
+        args.extend(against.iter().cloned());
+        args.push(format!("--recipe-out={}", out.display()));
+        let outcome = self.watched(&args, ctx).await?;
+        let steps = std::fs::read_to_string(&out).ok();
+        // A scratch file left behind is overwritten by no other run: its name is this run's.
+        let _ = std::fs::remove_file(&out);
+        Ok((outcome, steps))
+    }
+
+    /// The answer for a revision just kept: what the open window, if any, said of running its
+    /// steps, and what the steps leave out.
+    async fn kept(&self, revision: &Revision, outcome: &Outcome, note: Option<&str>) -> Reply {
+        let mut reply = revised(revision, outcome, note);
+        if let Some(shown) = self.window.show(revision).await {
+            reply.body["window"] = shown;
+            reply.body["unshown"] = json!(revision.recipe.unshown());
+        }
+        reply
     }
 
     async fn estimate(
