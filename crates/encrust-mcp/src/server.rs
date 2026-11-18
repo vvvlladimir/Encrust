@@ -17,8 +17,9 @@ use serde_json::json;
 use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::{Jobs, Revision};
 use crate::params::{
-    ComparePoses, JobRef, ListProfiles, Model, Render, Revert, SendFile, SetDrains, SetHollow,
-    SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, View, WriteFile, absolute, plain,
+    ComparePoses, JobRef, ListProfiles, ListRecipes, Model, Render, Revert, SendFile, SetDrains,
+    SetHollow, SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe, View,
+    WriteFile, absolute, plain,
 };
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
@@ -69,6 +70,28 @@ impl Server {
         ctx: Context,
     ) -> Answer {
         Ok(answer(self.profiles(list, &ctx).await))
+    }
+
+    /// The recipes a job can be prepared by, built-in and the user's, each with its steps as
+    /// TOML: the autopilot `prepare`, `miniatures`, `fix-issues` and the user's own.
+    #[tool(annotations(read_only_hint = true, open_world_hint = false))]
+    async fn list_recipes(&self, _: Parameters<ListRecipes>, ctx: Context) -> Answer {
+        Ok(answer(self.recipes(&ctx).await))
+    }
+
+    /// Prepares the job by another recipe — one fitting what the print is for — and checks it.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn use_recipe(&self, Parameters(set): Parameters<UseRecipe>, ctx: Context) -> Answer {
+        let edited = self.edit(&set.job, &ctx, |recipe| {
+            recipe.prepare |= set.recipe.is_none();
+            recipe.steps_by = set.recipe;
+            None
+        });
+        Ok(answer(edited.await))
     }
 
     /// What a model file is: its size, shells, holes, defects, and what a repair would do.
@@ -302,6 +325,30 @@ impl Server {
             &outcome,
             trim_profiles(outcome.report.clone(), list.printer_query.as_deref()),
         ))
+    }
+
+    /// Every recipe `recipes list` names, each that reads with its text from `recipes show`.
+    async fn recipes(&self, ctx: &Context) -> Result<Reply> {
+        let listed = self
+            .watched(&["recipes".into(), "list".into()], ctx)
+            .await?;
+        let mut report = listed.report.clone();
+        if let Some(recipes) = report["recipes"].as_array_mut() {
+            for recipe in recipes
+                .iter_mut()
+                .filter(|recipe| recipe["error"].is_null())
+            {
+                let Some(id) = recipe["id"].as_str().map(str::to_owned) else {
+                    continue;
+                };
+                let args = ["recipes".into(), "show".into(), "--".into(), id];
+                let shown = self.cli.run(&args).await;
+                recipe["toml"] = shown.map_or(serde_json::Value::Null, |shown| {
+                    shown.report["toml"].clone()
+                });
+            }
+        }
+        Ok(reported(&listed, report))
     }
 
     async fn inspect(&self, model: Model, ctx: &Context) -> Result<Reply> {

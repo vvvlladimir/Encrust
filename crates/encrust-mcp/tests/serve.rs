@@ -139,6 +139,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "compare_poses",
             "inspect_model",
             "list_profiles",
+            "list_recipes",
             "render",
             "revert",
             "send_to_printer",
@@ -150,6 +151,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "set_slicing",
             "set_supports",
             "start_job",
+            "use_recipe",
             "write_file"
         ]
     );
@@ -639,4 +641,33 @@ async fn each_revision_keeps_the_steps_its_check_ran_and_hands_them_to_the_open_
         kept.contains("wall_mm = 2.5"),
         "the wall typed is the hollow step's: {kept}"
     );
+}
+
+#[tokio::test]
+async fn a_job_prepared_by_another_recipe_keeps_that_recipe_as_its_steps() {
+    let dir = scratch("recipes");
+    let (model, client) = cube_and_server(&dir).await;
+    let listed = answer(&call(&client, "list_recipes", json!({})).await);
+    let recipes = listed["recipes"].as_array().expect("recipes are listed");
+    let miniatures = recipes
+        .iter()
+        .find(|recipe| recipe["id"] == "miniatures")
+        .expect("miniatures is built in");
+    assert!(
+        miniatures["toml"]
+            .as_str()
+            .is_some_and(|text| text.contains("[[step]]"))
+    );
+    let job = start(&client, &model).await;
+    let used = call(
+        &client,
+        "use_recipe",
+        json!({"job": job, "recipe": "miniatures"}),
+    )
+    .await;
+    assert!(!failed(&used), "{}", answer(&used));
+    client.cancel().await.expect("the server stops");
+    let steps = fs::read_to_string(dir.join("jobs").join(&job).join("2.recipe.toml"))
+        .expect("the revision keeps its steps");
+    assert!(steps.contains("Miniatures"), "{steps}");
 }
