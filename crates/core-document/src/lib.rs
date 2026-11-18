@@ -10,6 +10,7 @@ mod fixtures;
 mod piece;
 mod placement;
 mod plate_contents;
+mod split;
 
 pub use apply::{Applied, Report, apply};
 pub use cut::{CutAsked, CutModel, axis_normal, cut, pieces};
@@ -18,3 +19,4 @@ pub use error::ApplyError;
 pub use piece::{Piece, Role};
 pub use placement::{euler_degrees, moved, sized_to, turned_to};
 pub use plate_contents::mirrored;
+pub use split::{part_off_at, part_settings, split};

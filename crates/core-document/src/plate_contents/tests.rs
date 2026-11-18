@@ -1,6 +1,8 @@
 use core_edit::Edit;
 use core_geometry::{signed_volume, transform_mesh};
 
+use core_volume::Cancel;
+
 use super::*;
 use crate::apply::apply;
 use crate::fixtures::{SIDE_MM, cube, cubes_with_plug};
@@ -18,7 +20,12 @@ fn bounds_of(document: &Document, id: ObjectId) -> core_geometry::Aabb {
 fn a_deleted_cube_leaves_an_empty_plate() {
     let mut document = Document::from_project(cube());
 
-    let applied = apply(&mut document, &Edit::Delete { object: CUBE }).expect("it is there");
+    let applied = apply(
+        &mut document,
+        &Edit::Delete { object: CUBE },
+        Cancel::never(),
+    )
+    .expect("it is there");
 
     assert_eq!(applied.removed, [CUBE]);
     assert!(document.into_project().manifest.objects.is_empty());
@@ -33,6 +40,7 @@ fn deleting_an_object_not_on_the_plate_is_refused() {
         &Edit::Delete {
             object: ObjectId(9),
         },
+        Cancel::never(),
     )
     .expect_err("there is no object 9");
 
@@ -48,6 +56,7 @@ fn deleting_a_cube_takes_its_plugs_with_it_and_keeps_the_others() {
         &Edit::Delete {
             object: ObjectId(2),
         },
+        Cancel::never(),
     )
     .expect("it is there");
 
@@ -66,7 +75,7 @@ fn a_cube_duplicated_by_twenty_stands_beside_it_under_an_id_above_every_other() 
         offset_mm: Vec3::new(20.0, 0.0, 0.0),
     };
 
-    let applied = apply(&mut document, &edit).expect("a cube copies");
+    let applied = apply(&mut document, &edit, Cancel::never()).expect("a cube copies");
 
     let [(copy, role)] = applied.added[..] else {
         panic!("one copy, got {:?}", applied.added);
@@ -95,7 +104,7 @@ fn a_copy_beside_a_plugged_cube_leaves_the_plug_naming_that_cube() {
         offset_mm: Vec3::X,
     };
 
-    apply(&mut document, &edit).expect("a cube copies");
+    apply(&mut document, &edit, Cancel::never()).expect("a cube copies");
 
     let objects = document.into_project().manifest.objects;
     let plugs: Vec<Option<u32>> = objects.iter().map(|object| object.plug_of).collect();
@@ -116,6 +125,7 @@ fn a_cube_mirrored_across_x_keeps_its_bounds_and_its_volume() {
             object: CUBE,
             axis: Axis::X,
         },
+        Cancel::never(),
     )
     .expect("a cube mirrors");
 
@@ -147,7 +157,7 @@ fn mirroring_an_object_not_on_the_plate_is_refused() {
         axis: Axis::Z,
     };
 
-    let error = apply(&mut document, &edit).expect_err("there is no object 9");
+    let error = apply(&mut document, &edit, Cancel::never()).expect_err("there is no object 9");
 
     assert_eq!(error, ApplyError::NoObject(ObjectId(9)));
 }
@@ -160,7 +170,7 @@ fn duplicating_an_object_not_on_the_plate_is_refused() {
         offset_mm: Vec3::X,
     };
 
-    let error = apply(&mut document, &edit).expect_err("there is no object 9");
+    let error = apply(&mut document, &edit, Cancel::never()).expect_err("there is no object 9");
 
     assert_eq!(error, ApplyError::NoObject(ObjectId(9)));
 }

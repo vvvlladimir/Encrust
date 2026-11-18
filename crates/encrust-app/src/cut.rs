@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 use core_document::{CutAsked, CutModel, Role, axis_normal};
 use core_geometry::{Plane, Scalar, Vec3, transform_mesh};
 use core_joint::{JointKind, Joints};
-use core_volume::PartedOff;
+use core_volume::{PartSettings, PartedOff};
 
 pub use core_engine::project::Keep;
 
@@ -222,14 +222,29 @@ impl CutTool {
     /// marked on it, off the drawing thread, as the tool's `parts` settings say;
     /// [`CutTool::poll`] puts them on the plate.
     pub fn start_split(&mut self, scene: &Scene, id: ObjectId) -> Result<()> {
+        let at = (scene.get(id)).and_then(|object| self.marked_on(object));
+        self.start_split_asked(scene, id, self.state.parts, at)
+    }
+
+    /// Starts the split of one model into `settings`' parts, or the cutting off of the part at
+    /// plate point `at`, whatever the panel is set to: what an edit handed over the window
+    /// link asks (ADR 0466).
+    pub fn start_split_asked(
+        &mut self,
+        scene: &Scene,
+        id: ObjectId,
+        settings: PartSettings,
+        at: Option<Vec3>,
+    ) -> Result<()> {
         let object = scene
             .get(id)
             .ok_or_else(|| anyhow!(tr!("cut-nothing-to-split")))?;
         let mesh = object.printed();
         let job = spawn_split(SplitRequest {
+            id,
             placed: transform_mesh(mesh, object.transform),
-            settings: self.state.parts,
-            at: self.marked_on(object),
+            settings,
+            at,
         });
         self.splitting = Some((job, Taken::of(object)));
         Ok(())
@@ -284,6 +299,7 @@ fn piece_name(name: &str, role: Role) -> String {
         Role::Lower => tr!("cut-lower-name", name = name),
         Role::Upper => tr!("cut-upper-name", name = name),
         Role::Dowel(index) => tr!("cut-dowel-name", name = name, index = index),
+        Role::Part(index) => tr!("cut-part-name", name = name, index = index),
     }
 }
 

@@ -1,6 +1,7 @@
 use core_edit::{Edit, ObjectId};
 use core_engine::project::hollow_of;
 use core_geometry::{Mesh, Transform};
+use core_volume::Cancel;
 
 use crate::cut::{CutAsked, CutModel, cut, pieces};
 use crate::document::Document;
@@ -8,6 +9,7 @@ use crate::error::ApplyError;
 use crate::piece::Role;
 use crate::placement::{moved, sized_to, turned_to};
 use crate::plate_contents::{delete, duplicate, mirrored};
+use crate::split::{apply_part_off, apply_split};
 
 /// What an edit did, for a front end to name, select and report it.
 #[derive(Debug, Clone, PartialEq)]
@@ -33,14 +35,29 @@ pub enum Report {
         /// Pieces that did not come out sound and were mended.
         mended: usize,
     },
+    /// An object was broken into its parts, or left whole where it was one.
+    Split {
+        parts: usize,
+        /// Scraps too small to be parts, joined to the part they touch.
+        joined: usize,
+        /// Scraps too small to be parts and touching none, left out.
+        dropped: usize,
+    },
+    /// A part was cut off an object.
+    PartedOff,
     /// An object was moved, turned or sized where it stands.
     Placed,
     /// An object was deleted or copied.
     Contents,
 }
 
-/// Carries `edit` out on `document`, which an error leaves as it was.
-pub fn apply(document: &mut Document, edit: &Edit) -> Result<Applied, ApplyError> {
+/// Carries `edit` out on `document`, which an error leaves as it was; `cancel` stops one that
+/// takes long enough to be given up on.
+pub fn apply(
+    document: &mut Document,
+    edit: &Edit,
+    cancel: Cancel<'_>,
+) -> Result<Applied, ApplyError> {
     match *edit {
         Edit::Cut {
             object,
@@ -59,6 +76,11 @@ pub fn apply(document: &mut Document, edit: &Edit) -> Result<Applied, ApplyError
             };
             apply_cut(document, object, &asked)
         }
+        Edit::Split {
+            object,
+            smallest_mm3,
+        } => apply_split(document, object, smallest_mm3, cancel),
+        Edit::PartOff { object, at_mm } => apply_part_off(document, object, at_mm, cancel),
         Edit::Move { object, by_mm } => {
             place(document, object, |transform, _| Ok(moved(transform, by_mm)))
         }

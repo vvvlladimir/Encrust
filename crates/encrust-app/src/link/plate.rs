@@ -5,9 +5,10 @@ use std::collections::VecDeque;
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
-use core_document::{ApplyError, CutAsked, mirrored, moved, sized_to, turned_to};
+use core_document::{ApplyError, CutAsked, mirrored, moved, part_settings, sized_to, turned_to};
 use core_edit::{Edit, ObjectId};
-use core_geometry::{Mesh, Transform};
+use core_geometry::{Mesh, Transform, Vec3};
+use core_volume::PartSettings;
 use serde_json::{Value, json};
 
 use crate::panels::Window;
@@ -17,8 +18,9 @@ use crate::panels::Window;
 pub struct Applying {
     edits: VecDeque<Edit>,
     reply: Sender<Value>,
-    /// The object the edit under way replaces, there still if the edit did not land.
-    under_way: Option<ObjectId>,
+    /// The object the edit under way replaces, there still if the edit did not land, and
+    /// whether the edit may leave it in place and be done (a split of one body).
+    under_way: Option<(ObjectId, bool)>,
 }
 
 fn refused(why: String) -> Value {
@@ -93,8 +95,9 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     if window.tools.cut.is_busy() {
         return true;
     }
-    if let Some(id) = work.under_way.take()
+    if let Some((id, may_stay)) = work.under_way.take()
         && window.doc.scene.get(id).is_some()
+        && !(may_stay && !window.machine.status.is_error())
     {
         let why = window.machine.status.text();
         return finish(applying, refused(why));
@@ -102,9 +105,10 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     let Some(edit) = work.edits.pop_front() else {
         return finish(applying, json!({"applied": true}));
     };
+    let may_stay = matches!(edit, Edit::Split { .. });
     match start_edit(&edit, window) {
         Ok(id) => {
-            work.under_way = id;
+            work.under_way = id.map(|id| (id, may_stay));
             true
         }
         Err(why) => finish(applying, refused(why)),
@@ -142,6 +146,13 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
                 .map_err(|error| format!("{error:#}"))?;
             Ok(Some(object))
         }
+        Edit::Split {
+            object,
+            smallest_mm3,
+        } => start_split(window, object, part_settings(smallest_mm3), None),
+        Edit::PartOff { object, at_mm } => {
+            start_split(window, object, PartSettings::default(), Some(at_mm))
+        }
         Edit::Move { object, by_mm } => {
             place(window, object, |transform, _| Ok(moved(transform, by_mm)))
         }
@@ -167,6 +178,19 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             Ok(mirrored(transform, mesh, axis))
         }),
     }
+}
+
+/// Starts a split or a part-off as a tool job, answering the object it replaces.
+fn start_split(
+    window: &mut Window,
+    object: ObjectId,
+    settings: PartSettings,
+    at: Option<Vec3>,
+) -> Result<Option<ObjectId>, String> {
+    (window.tools.cut)
+        .start_split_asked(&window.doc.scene, object, settings, at)
+        .map_err(|error| format!("{error:#}"))?;
+    Ok(Some(object))
 }
 
 fn no_object(id: ObjectId) -> String {

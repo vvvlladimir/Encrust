@@ -1,6 +1,6 @@
 use core_edit::{Axis, JointKind, Joints, Keep};
 use core_geometry::{Mesh, Scalar, Vec3, signed_volume, transform_mesh};
-use core_volume::{DrainHole, HoleShape};
+use core_volume::{Cancel, DrainHole, HoleShape};
 
 use super::*;
 use crate::fixtures::{SIDE_MM, cube, cube_of, cubes_with_plug};
@@ -38,8 +38,12 @@ fn placed(document: &Document, ids: &[(ObjectId, Role)]) -> Vec<Mesh> {
 fn a_cube_cut_through_its_middle_leaves_two_halves_of_half_its_volume() {
     let mut document = Document::from_project(cube());
 
-    let applied = apply(&mut document, &cut_z(SIDE_MM / 2.0, Keep::Both, false))
-        .expect("the plane crosses the cube");
+    let applied = apply(
+        &mut document,
+        &cut_z(SIDE_MM / 2.0, Keep::Both, false),
+        Cancel::never(),
+    )
+    .expect("the plane crosses the cube");
 
     let half = SIDE_MM.powi(3) / 2.0;
     for mesh in placed(&document, &applied.added) {
@@ -57,7 +61,12 @@ fn a_cube_cut_through_its_middle_leaves_two_halves_of_half_its_volume() {
 fn the_cut_cube_is_gone_and_its_halves_take_new_ids_and_its_name() {
     let mut document = Document::from_project(cube());
 
-    let applied = apply(&mut document, &cut_z(5.0, Keep::Both, false)).expect("it cuts");
+    let applied = apply(
+        &mut document,
+        &cut_z(5.0, Keep::Both, false),
+        Cancel::never(),
+    )
+    .expect("it cuts");
 
     assert_eq!(applied.removed, [CUBE]);
     assert!(document.object(CUBE).is_none());
@@ -73,8 +82,12 @@ fn the_cut_cube_is_gone_and_its_halves_take_new_ids_and_its_name() {
 fn an_upper_half_laid_flat_stands_on_its_cut_face_at_its_own_height() {
     let mut document = Document::from_project(cube());
 
-    let applied =
-        apply(&mut document, &cut_z(7.0, Keep::Above, true)).expect("the plane crosses it");
+    let applied = apply(
+        &mut document,
+        &cut_z(7.0, Keep::Above, true),
+        Cancel::never(),
+    )
+    .expect("the plane crosses it");
 
     assert_eq!(applied.added.len(), 1);
     assert_eq!(applied.added[0].1, Role::Kept);
@@ -92,8 +105,12 @@ fn an_upper_half_laid_flat_stands_on_its_cut_face_at_its_own_height() {
 fn a_plane_that_misses_the_object_leaves_the_plate_as_it_was() {
     let mut document = Document::from_project(cube());
 
-    let error = apply(&mut document, &cut_z(SIDE_MM + 5.0, Keep::Both, false))
-        .expect_err("the plane is above the cube");
+    let error = apply(
+        &mut document,
+        &cut_z(SIDE_MM + 5.0, Keep::Both, false),
+        Cancel::never(),
+    )
+    .expect_err("the plane is above the cube");
 
     assert_eq!(error, ApplyError::Missed(CUBE));
     assert!(document.object(CUBE).is_some());
@@ -104,7 +121,7 @@ fn an_edit_naming_no_object_on_the_plate_is_refused() {
     let mut document = Document::from_project(cube());
     let edit = cut_of(ObjectId(9), 5.0, Keep::Both, false);
 
-    let error = apply(&mut document, &edit).expect_err("there is no object 9");
+    let error = apply(&mut document, &edit, Cancel::never()).expect_err("there is no object 9");
 
     assert_eq!(error, ApplyError::NoObject(ObjectId(9)));
 }
@@ -126,8 +143,12 @@ fn holes_that_would_leave_nothing_of_the_object_refuse_the_cut() {
     }];
     let mut document = Document::from_project(project);
 
-    let error = apply(&mut document, &cut_z(SIDE_MM / 2.0, Keep::Both, false))
-        .expect_err("nothing of the cube is left to cut");
+    let error = apply(
+        &mut document,
+        &cut_z(SIDE_MM / 2.0, Keep::Both, false),
+        Cancel::never(),
+    )
+    .expect_err("nothing of the cube is left to cut");
 
     assert_eq!(error, ApplyError::Undrilled(CUBE));
 }
@@ -148,7 +169,7 @@ fn the_dowels_a_dowel_joint_prints_stand_in_a_row_beside_the_lower_half() {
         lay_flat: false,
     };
 
-    let applied = apply(&mut document, &edit).expect("the plane crosses the cube");
+    let applied = apply(&mut document, &edit, Cancel::never()).expect("the plane crosses the cube");
 
     let meshes = placed(&document, &applied.added);
     let lower_maxs_x = meshes[0].aabb().expect("the lower half has faces").maxs.x;
@@ -185,6 +206,7 @@ fn a_cube_moved_by_five_millimetres_stands_five_further_along_x() {
             object: CUBE,
             by_mm: Vec3::new(5.0, 0.0, 0.0),
         },
+        Cancel::never(),
     )
     .expect("a cube moves");
 
@@ -208,6 +230,7 @@ fn a_cube_turned_a_quarter_about_x_is_still_a_cube_standing_on_the_plate() {
             object: CUBE,
             degrees: Vec3::new(90.0, 0.0, 0.0),
         },
+        Cancel::never(),
     )
     .expect("a cube turns");
 
@@ -235,6 +258,7 @@ fn a_cube_scaled_to_twice_its_length_holds_twice_the_volume_on_the_plate() {
             object: CUBE,
             factors: Vec3::new(2.0, 1.0, 1.0),
         },
+        Cancel::never(),
     )
     .expect("a cube scales");
 
@@ -266,6 +290,7 @@ fn a_scale_of_zero_is_refused_and_leaves_the_transform() {
             object: CUBE,
             factors: Vec3::new(0.0, 1.0, 1.0),
         },
+        Cancel::never(),
     )
     .expect_err("a zero factor is no size");
 
@@ -284,7 +309,7 @@ fn a_placement_naming_no_object_is_refused() {
         by_mm: Vec3::X,
     };
 
-    let error = apply(&mut document, &edit).expect_err("there is no object 9");
+    let error = apply(&mut document, &edit, Cancel::never()).expect_err("there is no object 9");
 
     assert_eq!(error, ApplyError::NoObject(ObjectId(9)));
 }
@@ -298,7 +323,12 @@ fn plug_of_last(document: Document) -> Option<u32> {
 fn a_plug_keeps_naming_its_cube_when_a_cube_before_it_is_cut_in_two() {
     let mut document = Document::from_project(cubes_with_plug());
 
-    apply(&mut document, &cut_of(CUBE, 5.0, Keep::Both, false)).expect("it cuts");
+    apply(
+        &mut document,
+        &cut_of(CUBE, 5.0, Keep::Both, false),
+        Cancel::never(),
+    )
+    .expect("it cuts");
 
     assert_eq!(
         plug_of_last(document),
@@ -311,7 +341,12 @@ fn a_plug_keeps_naming_its_cube_when_a_cube_before_it_is_cut_in_two() {
 fn a_plug_whose_cube_is_cut_away_names_nothing() {
     let mut document = Document::from_project(cubes_with_plug());
 
-    apply(&mut document, &cut_of(ObjectId(2), 5.0, Keep::Both, false)).expect("it cuts");
+    apply(
+        &mut document,
+        &cut_of(ObjectId(2), 5.0, Keep::Both, false),
+        Cancel::never(),
+    )
+    .expect("it cuts");
 
     assert_eq!(plug_of_last(document), None);
 }

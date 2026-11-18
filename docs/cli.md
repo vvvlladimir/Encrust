@@ -610,7 +610,9 @@ as a project. An edit that cannot be carried out stops the run and writes nothin
 project takes them yet; a model is shaped by its flags. Besides `cut`, `move` (`by_mm`),
 `rotate` (`degrees`) and `scale` (`factors`), each `[x, y, z]`, place an object; `delete`
 takes it and its plugs off, `duplicate` (`offset_mm`, `[x, y, z]`) puts a copy beside it and
-`mirror` (`axis`, `x`, `y` or `z`) flips it in place.
+`mirror` (`axis`, `x`, `y` or `z`) flips it in place; `split` (`smallest_mm3`, optional)
+replaces it by the bodies it is made of, and `part-off` (`at_mm`, `[x, y, z]`) cuts the part at
+that plate point off the rest.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json

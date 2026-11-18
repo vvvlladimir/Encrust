@@ -180,6 +180,7 @@ fn name_of(name: &str, role: Role) -> String {
         Role::Lower => format!("{name} (lower)"),
         Role::Upper => format!("{name} (upper)"),
         Role::Dowel(index) => format!("{name} dowel {index}"),
+        Role::Part(index) => format!("{name} (part {index})"),
     }
 }
 
