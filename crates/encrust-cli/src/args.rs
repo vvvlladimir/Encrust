@@ -18,6 +18,7 @@ use printer_profiles::SupportProfile;
 
 use crate::hollowing::HollowArgs;
 use crate::modelling::ModelArgs;
+use crate::plate_edits::EditArgs;
 use crate::profiles::Selection;
 use crate::raster_report::parse_grey_range;
 use crate::report::{parse_exposure_band, parse_rotation, parse_scale};
@@ -494,6 +495,9 @@ pub struct JobArgs {
 
     #[command(flatten)]
     pub model: ModelArgs,
+
+    #[command(flatten)]
+    pub edits: EditArgs,
 
     #[command(flatten)]
     pub hollow: HollowArgs,

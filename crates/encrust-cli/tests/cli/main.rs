@@ -17,6 +17,7 @@ mod measure;
 mod modelling;
 mod new_resin;
 mod plate;
+mod plate_edits;
 mod png_stack;
 mod prepare;
 mod profiles;
