@@ -129,3 +129,60 @@ Done when:
 - `cargo test -p core-edit -p core-document -p encrust-cli -p encrust-app` (one at a time),
   clippy per crate, `cargo fmt --all`.
 Not now: MCP wiring (C1b, orchestrator), Orient (C8), the window's own position panel.
+
+### C2. Delete, Duplicate, Mirror (and `plug_of` kept right)
+Read: `crates/core-document/src/{document.rs,apply.rs,apply/tests.rs,fixtures.rs}`,
+  `crates/core-engine/src/project.rs` (`ObjectState::plug_of`, an index into `objects`),
+  `crates/encrust-app/src/scene.rs` (`duplicate`, `mirror`, `remove`), `crates/encrust-app/src/link/plate.rs`
+Touch: those, `crates/core-edit/src/edit.rs` (+tests), new `crates/core-document/src/plate_contents.rs`,
+  `crates/core-document/src/lib.rs`, `crates/encrust-app/src/link/tests/plate.rs`, `docs/design/document.md`
+Fix first (its own commit, test failing before): `Document::replace` removes and inserts objects,
+  but `plug_of` is an index, so a plug of a later object then names the wrong one. Every remove
+  or insert in `Document` goes through two private helpers that renumber `plug_of`: an index
+  past the change shifts, one naming the removed object becomes `None`. Test: a plate of two
+  cubes and a plug of the second (`plug_of: Some(1)`); cutting the first leaves the plug naming
+  the second cube at its new index; cutting the second leaves the plug's `plug_of` `None`.
+Edit, in `core-edit`:
+- `Delete { object }` — removed; its plugs (objects whose `plug_of` names it) go with it.
+- `Duplicate { object, offset_mm: Vec3 }` — a copy with all its state (supports, cavity, own
+  settings) and meshes (`Arc` clones), a new id, `plug_of: None`, translation += offset,
+  inserted right after the original. `Applied.added = [(id, Role::Copy)]` (new `Role` variant).
+- `Mirror { object, axis: Axis }` — scale on that axis of the object's own frame negated,
+  then moved back so its bounds' centre is where it was (as `Scene::mirror`).
+Window: `start_edit` maps them to `Scene::remove` (and its plugs), `Scene::duplicate`,
+  `Scene::mirror`, answering `None` (nothing under way).
+Done when: core tests on the 10 mm cube fixture — `Delete` leaves no object and `NoObject`
+  for a missing id; `Duplicate` by (20,0,0) leaves two objects, the copy's bounds x 20..30 ±
+  1e-4, its id above every other; `Mirror` X keeps bounds 0..10 on every axis ± 1e-4 and the
+  volume 1000 ± 0.01 (winding fixed by `transform_mesh`); the `plug_of` test above; one window
+  link test applying `Duplicate`. Per-crate test and clippy, `cargo fmt --all`.
+Not now: Arrange (C2b: needs the plate's area and supports' footprints), MCP wiring.
+
+### C3. Split, PartOff (and `apply` takes a `Cancel`)
+Read: `crates/encrust-app/src/job/split.rs`, `crates/encrust-app/src/cut.rs` (`start_split`,
+  `land_parts`, `land_parted_off`), `crates/encrust-cli/src/modelling.rs` (`parted`),
+  `crates/core-document/src/{apply.rs,cut.rs,piece.rs,error.rs}`, `crates/core-volume/src/cancel.rs`
+Touch: those, `crates/core-edit/src/edit.rs` (+tests), new `crates/core-document/src/split.rs`,
+  `crates/core-document/src/lib.rs`, `crates/core-document/src/apply/tests.rs`,
+  `crates/encrust-cli/src/plate_edits.rs`, `crates/encrust-app/src/job/split.rs`,
+  `crates/encrust-app/src/link/plate.rs` (+ its test), `docs/design/document.md`
+Signature: `apply(&mut Document, &Edit, Cancel<'_>)` with `core_volume::Cancel` (it carries the
+  progress too): this is ADR 0466's `Run`. Callers that cannot cancel pass `Cancel::never()`.
+Edit, in `core-edit`:
+- `Split { object, smallest_mm3: Option<Scalar> }` — `core_volume::parts` with
+  `PartSettings { smallest_mm3 }` (default when `None`); one part and no scrap joined or dropped
+  leaves the object as it was (`Report::Split { parts, joined, dropped }`).
+- `PartOff { object, at_mm: Vec3 }` — `core_volume::part_off` at that plate point.
+Both run on the object's printed mesh placed on the plate (as `SplitRequest::placed`), and
+  replace it with `Piece::sound(Role::Part(n), mesh)` (new `Role::Part(usize)`, from one) through
+  `Document::replace`. Errors: `NoNeck | NotOnModel` → `ApplyError::NoNeck(ObjectId)`;
+  `Cancelled` → `ApplyError::Cancelled`; any other → `ApplyError::Failed { object, reason }`.
+Move: `job/split.rs`'s `run` becomes a call of core-document's split and part-off functions
+  (the window keeps its worker, its `tr!` names and its landing); `modelling::parted` calls the
+  same functions. Nothing of the two computations is left in the front ends.
+Done when: core tests — two 10 mm cubes 5 mm apart in one mesh (`core_geometry::cuboid` twice,
+  appended) split into 2 parts of 1000 ± 0.01 mm³ each; one cube splits into nothing new (object
+  unchanged, same id); `PartOff` at a point off the model → `NoNeck`; a `Cancel` already
+  stopped → `Cancelled` and the document unchanged. Window link test applying `Split` on two
+  cubes. All existing cut, split and CLI `--split`/`--part-off` tests still pass.
+Not now: Combine (C4), MCP wiring.
