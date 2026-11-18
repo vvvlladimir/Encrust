@@ -74,6 +74,9 @@ pub struct History {
     chosen: u64,
     /// Every change since the hold began waits to be one entry, see [`Self::hold`].
     held: bool,
+    /// How many times the plate has changed by an entry recorded, undone or redone: the
+    /// version the window link answers with (ADR 0466).
+    plate_version: u64,
 }
 
 impl Default for History {
@@ -88,6 +91,7 @@ impl Default for History {
             tools: None,
             chosen: 0,
             held: false,
+            plate_version: 0,
         }
     }
 }
@@ -139,12 +143,18 @@ impl History {
     /// Puts one entry on the stack, dropping the oldest when it is full, and with it the
     /// branch an undo had opened.
     fn record(&mut self, step: Step) {
+        self.plate_version += u64::from(step.scene().is_some());
         self.past.push_back((self.next, step));
         self.next += 1;
         if self.past.len() > DEPTH {
             self.past.pop_front();
         }
         self.future.clear();
+    }
+
+    /// The plate's version: raised by every recorded change of the plate, its undo and redo.
+    pub fn plate_version(&self) -> u64 {
+        self.plate_version
     }
 
     /// The number the next edit is recorded under: a run started now is asked for by it.
@@ -225,6 +235,7 @@ impl History {
         let Some((id, previous)) = self.past.pop_back() else {
             return false;
         };
+        self.plate_version += u64::from(previous.scene().is_some());
         let held = self.put_back(previous, scene, tools, slicing);
         self.follow_up(scene, tools);
         self.future.push((id, held));
@@ -239,6 +250,7 @@ impl History {
         let Some((id, next)) = self.future.pop() else {
             return false;
         };
+        self.plate_version += u64::from(next.scene().is_some());
         let held = self.put_back(next, scene, tools, slicing);
         self.follow_up(scene, tools);
         self.past.push_back((id, held));

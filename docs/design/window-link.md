@@ -10,7 +10,7 @@ user's cache directory — `ProjectDirs("", "", "Encrust").cache_dir()`, beside 
 `mcp-jobs` — readable by the user alone:
 
 ```json
-{"schema": 2, "port": 50123, "token": "9f0c…32 hex digits", "pid": 4242}
+{"schema": 3, "port": 50123, "token": "9f0c…32 hex digits", "pid": 4242}
 ```
 
 A window that closes takes the file away unless another has written over it; the last window
@@ -40,6 +40,35 @@ next frame, at most 10 s later:
 
 The tool's answer carries it as `window`, and beside it `unshown`: what the job asks that no
 recipe step says, which the window leaves out.
+
+## The plate and its edits (schema 3)
+
+The open window owns the plate (ADR 0466); `schema` in its file is the highest line it reads.
+A server asks for the plate as it stands:
+
+```json
+{"schema": 3, "token": "…", "job": "cube-18e4…", "want": "plate"}
+{"plate": "…/mcp-jobs/cube-18e4…/base-12.encrust", "version": 12}
+```
+
+The window writes the plate into the job's folder off its drawing thread, every object under
+the id it knows it by, and answers with the path and its plate's version: a count raised by
+every recorded change of the plate, its undo and its redo, not by a tool's setting. The server
+builds its edits on that file and hands them back with the version:
+
+```json
+{"schema": 3, "token": "…", "job": "cube-18e4…", "base_version": 12,
+ "apply": [{"edit": "cut", "object": 3, "axis": "z", "at_mm": 50.0}]}
+{"applied": true}
+{"applied": false, "stale": true, "version": 13}
+{"applied": false, "why_not": "…"}
+```
+
+Edits on a plate still at `base_version` run one after another as the tools' own jobs, each an
+undo entry, and are answered once all have landed, within 60 s; one that does not land stops
+the rest and is answered with why. A plate that moved on is answered `stale` with its version,
+and nothing is applied: the server asks for the plate again. A window not following its
+agents refuses both lines, and edits while others are still being applied are refused.
 
 ## What the window does with it
 

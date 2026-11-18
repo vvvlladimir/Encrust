@@ -294,7 +294,7 @@ fn store(path: &std::path::Path, project: &Project) -> Result<(), ProjectError> 
 }
 
 /// The plate as a project, which is both what gets written and what gets hashed.
-fn captured(window: &Window) -> Project {
+pub(crate) fn captured(window: &Window) -> Project {
     state::capture(state::Captured {
         scene: &window.doc.scene,
         slicing: &window.machine.slicing,
