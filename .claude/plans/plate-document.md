@@ -281,3 +281,42 @@ Done when: a 10 mm cube pressed 0.5 mm with a black-and-white checker picture (w
   ± 0.6 mm of 0..10; a picture path that is not there → `BadPicture`; a stopped `Cancel` →
   `Cancelled`. Window link test of `Relief`. Existing relief and `--relief` tests pass.
 Not now: the file texture's relief over the link, MCP wiring.
+
+### C8. Orient — not an edit (decided)
+`orient_for_print` is already the one call the window and `--orient` make (ADR 0290). What the
+window lacks is the pose a client's check chose, and that is a `Rotate` (C1). The MCP wiring
+hands the chosen pose over as `Edit::Rotate`; no `Orient` variant. `docs/design/document.md`'s
+Edits table drops Orient with a line saying so.
+
+### C9. Hollow
+Read: `crates/encrust-app/src/hollow.rs` (`settings_of`, `settings_for`, the tool's start of a
+  `HollowJob`), `crates/encrust-app/src/job/hollow.rs` (`HollowTask::of`, `shell_of`, `again_tasks`),
+  `crates/encrust-app/src/project/state.rs` (`built_cavity`), `crates/core-engine/src/project.rs`
+  (`BuiltCavity`, `Cavity`, `HollowState`) and `project/restore.rs` (`hollow_of`),
+  `crates/core-document/src/{apply.rs,document.rs,split.rs}`
+Touch: those, `crates/core-edit/src/edit.rs` (+tests), new `crates/core-document/src/hollow.rs`
+  (+ `hollow/tests.rs`), `crates/core-document/src/{lib.rs,error.rs}`, `crates/encrust-app/src/link/plate.rs`
+  (+ test), `docs/design/document.md`, `docs/cli.md` and `docs/features.md` (name the edit)
+Edit: `Hollow { object, settings: HollowState }` — the object keeps `settings` as its own
+  (`own_hollow`) and is hollowed by them: the window's numbers, the window's rule.
+Move (one home each):
+- `settings_of(&HollowState, Transform) -> HollowSettings` from encrust-app/src/hollow.rs →
+  core-document/src/hollow.rs; the window's `settings_for` calls it.
+- `built_cavity`'s body → core-engine `BuiltCavity::of(&Shell)` (a pure conversion beside the
+  type, as architecture rule 4 allows); the window's `built_cavity` calls it with its shell.
+In core-document: `shelled(mesh, bvh, &HollowSettings, shape: Mat3, Cancel) -> Result<Shell,
+  ApplyError>` = `cavity_field` then `carve` (the window's `shell_of` without its field cache,
+  which stays in the window). `apply`: `hollow_of` the object's state, `asking(settings_of(..))`,
+  `shelled` on its source mesh with `transform.unturned()`, then the shell into
+  `ModelMeshes::shell` and `BuiltCavity::of` into `ObjectHollowState::built`; supports stay.
+Window: the link's Hollow arm (a helper, `start_edit` under 80 lines) sets the object's own
+  hollow numbers and starts the tool's `HollowJob` for that object alone (as `again_tasks`
+  does), under way until it lands, as the cut.
+Errors: `Cancelled`; a cavity with no room (`VolumeError` the field gives for a wall thicker
+  than the model) → `ApplyError::NoRoom(ObjectId)`; others → `Failed`.
+Done when: a 20 mm cube hollowed with a 2 mm wall keeps 20³ − 16³ = 3904 ± 40 mm³ of material
+  (the lattice's error, stated in the message) and its `built` carries the wall; a 2 mm cube
+  with a 2 mm wall → `NoRoom` (or, if the field gives a solid instead, the test says what it
+  gives and the variant is not added); a stopped `Cancel` → `Cancelled`; the plate written and
+  read back keeps the shell. Window link test of `Hollow`. Existing hollow tests pass.
+Not now: Drain (C10), MCP wiring.
