@@ -218,7 +218,8 @@ that plate point, with `--label-height`, `--label-depth`, `--label-sunk`, `--lab
 both|lower|upper` picks the halves and `--joint dowels|pins|magnets|key` joins them at the
 window's default sizes; `--split` breaks a model into its bodies, scraps under
 `--split-smallest` joined or dropped, and `--part-off X,Y,Z` cuts off the part that point is
-on. A half that no longer reaches the floor is laid on its cut face, and a cut needs
+on. Each half is laid on its cut face as the window's Lay flat does, but a lower half pins or
+a key stand on, and dowels stand beside it (ADR 0466); a cut needs
 `--arrange`. A piece of several is not hollowed or supported, and a project refuses the
 flags.
 

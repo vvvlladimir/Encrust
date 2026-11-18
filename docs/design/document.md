@@ -36,14 +36,17 @@ them. Print settings, printer and resin are a revision's, not edits.
 
 ## apply
 
-`apply(&mut Document, &Edit, Run)` changes the document or leaves it as it was: an error
-never leaves half an edit. `Run` carries the cancel flag and the progress a window job shows.
+`apply(&mut Document, &Edit)` changes the document or leaves it as it was: an error never
+leaves half an edit. An edit long enough to be given up on part way takes the window job's
+cancel flag and progress when it comes.
 
 `Cut { object, axis, at_mm, keep, joints, lay_flat }` cuts the object's printed mesh, its
 drain holes taken out first, at `at_mm` along `axis` on the plate. The kept halves replace it
 with no supports or cavity of their own; with `lay_flat` each lies on its cut face, except a
 lower half carrying pins or a key; loose dowels stand in a row beside the lower half. A plane
-that misses the object is `ApplyError::Missed`.
+that misses the object is `ApplyError::Missed`. `cut` and `pieces` are the two steps, which the
+window runs on a worker and `--cut` on a mesh it has not made an object yet; `--cut` always
+lays flat.
 
 ## Undo
 

@@ -1032,6 +1032,10 @@ version = "0.9.0"
 dependencies = [
  "core-edit",
  "core-engine",
+ "core-geometry",
+ "core-joint",
+ "core-volume",
+ "thiserror 2.0.21",
  "workspace-hack",
 ]
 
@@ -1891,6 +1895,8 @@ dependencies = [
  "clap",
  "clap_complete",
  "core-analysis",
+ "core-document",
+ "core-edit",
  "core-engine",
  "core-format",
  "core-geometry",
