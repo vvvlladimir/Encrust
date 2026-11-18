@@ -1819,6 +1819,8 @@ dependencies = [
  "bytemuck",
  "core-analysis",
  "core-csg",
+ "core-document",
+ "core-edit",
  "core-engine",
  "core-format",
  "core-geometry",
