@@ -16,11 +16,13 @@ mod import_summary;
 mod object;
 mod plates;
 mod selection;
+mod shown_patch;
 mod support_surface;
 pub use import_summary::{ImportSummary, Imported, Mapped};
 pub use object::{OwnSettings, SceneObject, Taken};
 use object::{PlacedBounds, flip, onto_plate};
 use plates::plate_name;
+pub use shown_patch::ShownPatch;
 
 /// A mesh with what the window keeps beside it: its hierarchy, its centre of mass and what
 /// is wrong with it. Built where the mesh is made, on a worker, since on a million faces it
@@ -222,6 +224,8 @@ impl Scene {
             traps: Traps::default(),
             mapped: imported.mapped,
             relief_painted: Region::default(),
+            shown_painted: Region::default(),
+            shown_patch: ShownPatch::default(),
             own: OwnSettings::default(),
             lift_mm: None,
             plug_of: None,
@@ -318,14 +322,6 @@ impl Scene {
         true
     }
 
-    /// Puts back a model taken off, with its own identifier, unless one by it is standing.
-    pub fn restore(&mut self, object: SceneObject) {
-        if self.get(object.id).is_none() {
-            self.next_id = self.next_id.max(object.id.0 + 1);
-            self.objects.push(object);
-        }
-    }
-
     pub fn remove(&mut self, id: ObjectId) {
         self.objects.retain(|object| object.id != id);
         self.selected.retain(|picked| *picked != id);
@@ -339,7 +335,7 @@ impl Scene {
             Arc::as_ptr(object.printed()).hash(&mut hasher);
             let placed = object.transform.to_matrix().to_cols_array();
             placed.map(f32::to_bits).hash(&mut hasher);
-            for group in object.supports.drawn() {
+            for group in object.supports.drawn_every() {
                 Arc::as_ptr(&group.mesh).hash(&mut hasher);
             }
         }

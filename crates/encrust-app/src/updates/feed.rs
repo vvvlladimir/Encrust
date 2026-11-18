@@ -185,7 +185,9 @@ pub fn platform() -> Option<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "aarch64") => Some("macos-aarch64"),
         ("macos", "x86_64") => Some("macos-x86_64"),
+        ("linux", "aarch64") => Some("linux-aarch64"),
         ("linux", "x86_64") => Some("linux-x86_64"),
+        ("windows", "aarch64") => Some("windows-aarch64"),
         ("windows", "x86_64") => Some("windows-x86_64"),
         _ => None,
     }
@@ -449,15 +451,13 @@ pub mod tests {
 
     #[test]
     fn this_platform_has_an_archive_in_the_release() {
-        let built = cfg!(any(
-            all(
+        let built = cfg!(all(
+            any(
                 target_os = "macos",
-                any(target_arch = "aarch64", target_arch = "x86_64")
+                target_os = "linux",
+                target_os = "windows"
             ),
-            all(
-                any(target_os = "linux", target_os = "windows"),
-                target_arch = "x86_64"
-            ),
+            any(target_arch = "aarch64", target_arch = "x86_64")
         ));
         assert_eq!(platform().is_some(), built);
     }

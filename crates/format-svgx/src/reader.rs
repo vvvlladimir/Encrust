@@ -9,7 +9,7 @@ use core_slicer::{Contour, Layer};
 use glam::Vec2;
 
 use crate::document::{attribute, number};
-use crate::header::HEADER_BYTES;
+use crate::header::{HEADER_BYTES, read_bitmap};
 use crate::index;
 
 /// Reads the `.svgx`. Layout is in `docs/formats/svgx.md`.
@@ -34,7 +34,8 @@ impl SlicedFileReader for SvgxReader {
                 found: 0,
             });
         }
-        reads.skip(4 * 2)?;
+        reads.skip(4)?;
+        let large_preview = u64::from(reads.u32_le()?);
         let document = u64::from(reads.u32_le()?);
         if document < HEADER_BYTES || document >= end {
             return Err(FormatError::AddressPastEnd {
@@ -66,6 +67,7 @@ impl SlicedFileReader for SvgxReader {
                 size: group.size,
             })
             .collect();
+        let preview = read_bitmap(&mut reads, large_preview).ok();
 
         Ok(OpenSvgx {
             reads,
@@ -92,6 +94,7 @@ impl SlicedFileReader for SvgxReader {
                 grey_steps: 2,
                 stated: PrinterTuning::default(),
                 layers,
+                preview,
             },
         })
     }

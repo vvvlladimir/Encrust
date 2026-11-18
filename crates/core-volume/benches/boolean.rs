@@ -3,10 +3,12 @@
     reason = "a broken fixture must fail the run loudly"
 )]
 
+use std::sync::Arc;
+
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Vec3, ball, cuboid};
 use core_volume::{
-    Boolean, Cancel, HoleSize, HollowMode, HollowSettings, carve, cavity_field, combine_exact,
-    drill, drilled, drilled_pieces, hole_at, plugs,
+    Boolean, Cancel, HoleSize, HollowMode, HollowSettings, ModelRead, carve, cavity_field,
+    combine_exact, drill, drilled, drilled_pieces, hole_at, plugs,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -59,7 +61,7 @@ fn benchmarks(c: &mut Criterion) {
 
 /// Three plugs on a half-million-face ball, what a change of the plug gap asks for.
 fn plug_benchmarks(c: &mut Criterion) {
-    let dense = ball(Vec3::ZERO, 20.0, 512, 512);
+    let dense = Arc::new(ball(Vec3::ZERO, 20.0, 512, 512));
     let bvh = Bvh::build(&dense);
     let holes: Vec<_> = [Vec3::Z, Vec3::X, Vec3::NEG_Y]
         .into_iter()
@@ -71,14 +73,28 @@ fn plug_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("plugs");
     group.sample_size(10);
     group.bench_function("three plugs on a dense ball", |b| {
-        b.iter(|| plugs(&mut None, &dense, &bvh, &holes, None, 0.3).expect("the holes are sound"));
+        b.iter(|| {
+            plugs(
+                &mut None,
+                &ModelRead::new(Arc::clone(&dense)),
+                &bvh,
+                &holes,
+                None,
+                0.3,
+                Cancel::never(),
+            )
+            .expect("the holes are sound")
+        });
     });
     // What a second gap costs once the ball has been read round its holes for the first.
     let mut source = None;
-    plugs(&mut source, &dense, &bvh, &holes, None, 0.3).expect("the holes are sound");
+    let read = ModelRead::new(Arc::clone(&dense));
+    plugs(&mut source, &read, &bvh, &holes, None, 0.3, Cancel::never())
+        .expect("the holes are sound");
     group.bench_function("three plugs from a dense ball already read", |b| {
         b.iter(|| {
-            plugs(&mut source, &dense, &bvh, &holes, None, 0.3).expect("the holes are sound")
+            plugs(&mut source, &read, &bvh, &holes, None, 0.3, Cancel::never())
+                .expect("the holes are sound")
         });
     });
     group.finish();

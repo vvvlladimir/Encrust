@@ -11,6 +11,7 @@ use crate::{
 };
 
 mod edits;
+mod recipes;
 mod unreadable;
 
 pub use unreadable::Unreadable;
@@ -32,6 +33,8 @@ pub enum Kind {
     Drain,
     /// The user's copy of a shipped automatic profile: one can be retuned, none added.
     Auto,
+    /// A recipe of the user's own, kept as its text; `core-recipe` reads it (ADR 0405).
+    Recipe,
 }
 
 impl Kind {
@@ -43,6 +46,7 @@ impl Kind {
             Self::Hollow => "hollow",
             Self::Drain => "drain",
             Self::Auto => "auto",
+            Self::Recipe => "recipes",
         }
     }
 
@@ -54,6 +58,7 @@ impl Kind {
             Self::Hollow => "hollow profile",
             Self::Drain => "drain profile",
             Self::Auto => "automatic profile",
+            Self::Recipe => "recipe",
         }
     }
 }
@@ -87,6 +92,8 @@ pub struct Catalogue {
     /// Named tool settings, which nothing ships: each is the user's own.
     hollows: BTreeMap<String, Entry<Preset>>,
     drains: BTreeMap<String, Entry<Preset>>,
+    /// The user's recipes as their text, which nothing here reads.
+    recipes: BTreeMap<String, Entry<String>>,
     /// The user's files that would not read, left out rather than failing the catalogue.
     unreadable: Vec<Unreadable>,
     /// Where an edited profile is written. `None` until a store is laid over the
@@ -104,6 +111,7 @@ impl Catalogue {
             autos: bundled_table(BUNDLED_AUTOS, "auto", AutoProfile::from_toml_str)?,
             hollows: BTreeMap::new(),
             drains: BTreeMap::new(),
+            recipes: BTreeMap::new(),
             unreadable: Vec::new(),
             store: None,
         })
@@ -176,8 +184,15 @@ impl Catalogue {
             Preset::from_toml_str,
             Adds::Yes,
         )?;
+        let recipes = overlay(
+            &mut self.recipes,
+            &*store,
+            Kind::Recipe,
+            |text, _| Ok(text.to_owned()),
+            Adds::Yes,
+        )?;
         self.unreadable.extend(
-            [resins, supports, autos, hollows, drains]
+            [resins, supports, autos, hollows, drains, recipes]
                 .into_iter()
                 .flatten(),
         );
@@ -226,7 +241,7 @@ impl Catalogue {
         match kind {
             Kind::Hollow => Some(&self.hollows),
             Kind::Drain => Some(&self.drains),
-            Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto => None,
+            Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto | Kind::Recipe => None,
         }
     }
 
@@ -234,7 +249,7 @@ impl Catalogue {
         match kind {
             Kind::Hollow => Some(&mut self.hollows),
             Kind::Drain => Some(&mut self.drains),
-            Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto => None,
+            Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto | Kind::Recipe => None,
         }
     }
 
@@ -304,7 +319,7 @@ impl Catalogue {
             Kind::Resin => BUNDLED_RESINS,
             Kind::Support => BUNDLED_SUPPORTS,
             Kind::Auto => BUNDLED_AUTOS,
-            Kind::Hollow | Kind::Drain => return false,
+            Kind::Hollow | Kind::Drain | Kind::Recipe => return false,
         };
         table.iter().any(|(name, _)| *name == id)
     }
@@ -474,6 +489,10 @@ impl Catalogue {
                 if let Some(table) = self.preset_table_mut(kind) {
                     table.remove(id);
                 }
+                Ok(())
+            }
+            Kind::Recipe => {
+                self.recipes.remove(id);
                 Ok(())
             }
         }

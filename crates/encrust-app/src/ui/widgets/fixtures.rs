@@ -18,3 +18,21 @@ pub fn frame(ctx: &Context, input: RawInput, add: impl FnMut(&mut Ui)) {
     // No renderer takes the font atlas here.
     output.textures_delta.clear();
 }
+
+/// Whether a frame drawing `add` paints egui's warning of an id used twice.
+pub(in crate::ui::widgets) fn clashes(add: impl FnMut(&mut Ui)) -> bool {
+    let ctx = context();
+    ctx.options_mut(|options| options.warn_on_id_clash = true);
+    let mut add = add;
+    let mut said = false;
+    for _ in 0..2 {
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| add(ui));
+        // No renderer takes the font atlas here.
+        output.textures_delta.clear();
+        said = output.shapes.iter().any(|clipped| match &clipped.shape {
+            egui::Shape::Text(text) => text.galley.text().contains("use of"),
+            _ => false,
+        });
+    }
+    said
+}

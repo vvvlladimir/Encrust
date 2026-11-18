@@ -104,6 +104,7 @@ pub struct Modes {
     snap: Snap,
     target: Target,
     show_axes: bool,
+    along_surface: bool,
     axes: Axes,
     repair: RepairMode,
     picking: Picking,
@@ -118,6 +119,7 @@ impl Modes {
             snap: tools.measure.snap,
             target: tools.measure.target,
             show_axes: tools.measure.show_axes,
+            along_surface: tools.measure.along_surface,
             axes,
             repair: tools.repair.mode,
             picking: tools.repair.picking,
@@ -130,6 +132,7 @@ impl Modes {
         tools.measure.snap = self.snap;
         tools.measure.target = self.target;
         tools.measure.show_axes = self.show_axes;
+        tools.measure.along_surface = self.along_surface;
         *axes = self.axes;
         tools.repair.mode = self.repair;
         tools.repair.picking = self.picking;
@@ -154,6 +157,10 @@ pub struct General {
     pub reduce_motion: bool,
     /// Whether the window is light, dark, or follows the system.
     pub appearance: Appearance,
+    /// Whether an unsaved plate is copied aside, to be restored after a run that did not close.
+    pub autosave: bool,
+    /// How large the interface is drawn, in percent of the system's own size.
+    pub interface_scale_percent: u16,
 }
 
 /// The palette the user asked for. `System` follows the platform's own setting as it
@@ -188,6 +195,8 @@ impl Default for General {
             language: None,
             reduce_motion: false,
             appearance: Appearance::System,
+            autosave: true,
+            interface_scale_percent: crate::interface_scale::SYSTEM_PERCENT,
         }
     }
 }
@@ -277,7 +286,7 @@ impl Preferences {
             let held = match moved.kind {
                 Kind::Printer => &mut self.printer,
                 Kind::Resin => &mut self.resin,
-                Kind::Support | Kind::Hollow | Kind::Drain | Kind::Auto => continue,
+                Kind::Support | Kind::Hollow | Kind::Drain | Kind::Auto | Kind::Recipe => continue,
             };
             if held.as_deref() == Some(moved.from.as_str()) {
                 *held = Some(moved.to.clone());

@@ -108,6 +108,8 @@ pub fn ui(ui: &egui::Ui, window: &mut Window, corner: Pos2, viewport: Rect) -> R
         .pivot(Align2::RIGHT_TOP)
         .constrain_to(viewport.with_min_y(corner.y))
         .show(ui.ctx(), |ui| {
+            // A centred layout would take the whole viewport's width as the area's.
+            ui.set_max_width(SIZE);
             ui.spacing_mut().item_spacing = vec2(0.0, 4.0);
             ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                 let front = window.doc.plate.front_turn();

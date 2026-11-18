@@ -17,9 +17,11 @@ pub use table::{Action, BINDINGS, GESTURES, Group};
 /// The actions whose keys were pressed, taken out of the raw input before egui reads it; who
 /// owns a key while a control is focused or recording: `docs/decisions/0229`, `0386`.
 pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> {
-    if keymap::catch(raw_input) || ctx.text_edit_focused() {
+    if keymap::catch(raw_input) {
         return Vec::new();
     }
+    // A text box keeps every key but the interface's size, which no text box answers.
+    let typing = ctx.text_edit_focused();
     let focused = ctx.memory(|memory| memory.focused().is_some());
     let mut fired = Vec::new();
     raw_input.events.retain(|event| {
@@ -40,11 +42,11 @@ pub fn take(ctx: &egui::Context, raw_input: &mut egui::RawInput) -> Vec<Action> 
             return true;
         }
         match action_of(*key, *modifiers) {
-            Some(action) => {
+            Some(action) if !typing || matches!(action, Action::Scale(_)) => {
                 fired.push(action);
                 false
             }
-            None => true,
+            _ => true,
         }
     });
     fired

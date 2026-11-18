@@ -165,3 +165,127 @@ fn a_model_too_big_for_the_plate_is_reported_rather_than_moved() {
     assert!(!status.is_error(), "not fitting is news, not a failure");
     assert_eq!(scene.objects()[0].transform.translation, Vec3::ZERO);
 }
+
+#[test]
+fn clearing_the_way_moves_what_is_past_the_plate_and_leaves_the_rest() {
+    let mut scene = crate::scene::fixtures::scene_of_boxes(&[
+        (Vec3::new(20.0, 20.0, 0.0), Vec3::new(40.0, 40.0, 10.0)),
+        (Vec3::new(140.0, 20.0, 0.0), Vec3::new(160.0, 40.0, 10.0)),
+    ]);
+    let plate = BuildPlate {
+        name: Some("a printer".to_owned()),
+        ..BuildPlate::default()
+    };
+    let status = clear_the_way(&mut scene, &plate, &[], 3.0);
+    assert!(!status.is_error());
+    let bounds: Vec<Aabb> = scene
+        .objects()
+        .iter()
+        .filter_map(|object| object.world_bounds())
+        .collect();
+    assert!(
+        (bounds[0].mins.x - 20.0).abs() < 1e-3,
+        "the model inside the plate stays at x = 20 mm, got {}",
+        bounds[0].mins.x
+    );
+    assert!(
+        (bounds[1].maxs.x - 148.0).abs() < 1e-3,
+        "the far edge comes back to the 150 mm plate less its 2 mm margin, got {}",
+        bounds[1].maxs.x
+    );
+}
+
+#[test]
+fn clearing_the_way_parts_a_meeting_by_moving_one_model() {
+    let mut scene = crate::scene::fixtures::scene_of_boxes(&[
+        (Vec3::new(20.0, 20.0, 0.0), Vec3::new(50.0, 50.0, 10.0)),
+        (Vec3::new(45.0, 25.0, 0.0), Vec3::new(55.0, 35.0, 10.0)),
+    ]);
+    let ids: Vec<ObjectId> = scene.objects().iter().map(|object| object.id).collect();
+    clear_the_way(&mut scene, &BuildPlate::default(), &[[ids[0], ids[1]]], 3.0);
+    let bounds: Vec<Aabb> = scene
+        .objects()
+        .iter()
+        .filter_map(|object| object.world_bounds())
+        .collect();
+    assert!(
+        (bounds[0].mins.x - 20.0).abs() < 1e-3,
+        "the larger box stays"
+    );
+    assert!(
+        bounds[1].mins.x >= bounds[0].maxs.x + 3.0 - 1e-3
+            || bounds[1].mins.y >= bounds[0].maxs.y + 3.0 - 1e-3,
+        "the smaller stands 3 mm clear, got {:?}",
+        bounds[1]
+    );
+}
+
+/// A plate a printer named, so what stands past it counts as in the way.
+fn printer_plate() -> BuildPlate {
+    BuildPlate {
+        name: Some("a printer".to_owned()),
+        ..BuildPlate::default()
+    }
+}
+
+fn inside_the_plate(bounds: &Aabb, plate: &BuildPlate) -> bool {
+    bounds.mins.x >= -1e-3
+        && bounds.mins.y >= -1e-3
+        && bounds.maxs.x <= plate.x_mm + 1e-3
+        && bounds.maxs.y <= plate.y_mm + 1e-3
+}
+
+#[test]
+fn clearing_the_way_turns_a_model_deeper_than_the_plate_onto_it() {
+    // 100 mm deep on an 80 mm deep plate: no slide fits it, a turn about the vertical does.
+    let mut scene = crate::scene::fixtures::scene_of_boxes(&[(
+        Vec3::new(20.0, -10.0, 0.0),
+        Vec3::new(40.0, 90.0, 10.0),
+    )]);
+    let plate = printer_plate();
+    let status = clear_the_way(&mut scene, &plate, &[], 3.0);
+    let object = &scene.objects()[0];
+    let bounds = object.world_bounds().expect("a box has bounds");
+    assert!(inside_the_plate(&bounds, &plate), "got {bounds:?}");
+    assert!(
+        (bounds.mins.z).abs() < 1e-3 && (bounds.maxs.z - 10.0).abs() < 1e-3,
+        "turned about the vertical alone, 0 to 10 mm high, got {bounds:?}"
+    );
+    assert!(
+        matches!(status, Status::Noted(..)),
+        "the turn is told, got {status:?}"
+    );
+}
+
+#[test]
+fn arranging_turns_a_model_deeper_than_the_plate_onto_it() {
+    let mut scene = crate::scene::fixtures::scene_of_boxes(&[(
+        Vec3::new(20.0, -10.0, 0.0),
+        Vec3::new(40.0, 90.0, 10.0),
+    )]);
+    arrange_plate(&mut scene, &plate(), 3.0);
+    let bounds = scene.objects()[0].world_bounds().expect("a box has bounds");
+    assert!(inside_the_plate(&bounds, &plate()), "got {bounds:?}");
+}
+
+#[test]
+fn clearing_the_way_lays_out_the_plate_where_no_clear_place_is_left() {
+    // Neither side of the 70 mm box in the middle holds another 70 mm box; side by side,
+    // 70 + 3 + 70 mm, both fit the 150 mm plate less its 2 mm margins.
+    let mut scene = crate::scene::fixtures::scene_of_boxes(&[
+        (Vec3::new(40.0, 5.0, 0.0), Vec3::new(110.0, 75.0, 10.0)),
+        (Vec3::new(140.0, 5.0, 0.0), Vec3::new(210.0, 75.0, 10.0)),
+    ]);
+    let plate = printer_plate();
+    clear_the_way(&mut scene, &plate, &[], 3.0);
+    let bounds: Vec<Aabb> = scene
+        .objects()
+        .iter()
+        .filter_map(|object| object.world_bounds())
+        .collect();
+    assert!(
+        bounds.iter().all(|one| inside_the_plate(one, &plate)),
+        "got {bounds:?}"
+    );
+    assert!(!overlap(&bounds[0], &bounds[1]), "got {bounds:?}");
+}

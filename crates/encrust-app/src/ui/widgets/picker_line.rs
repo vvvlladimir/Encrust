@@ -154,9 +154,11 @@ pub fn picker_foot(ui: &mut Ui, glyph: &str, text: &str) -> Response {
         theme::icon(GLYPH_W),
         ink,
     );
-    let words_at = pos2(glyph_x + GLYPH_W / 2.0 + GAP, y);
-    painter.text(words_at, Align2::LEFT_CENTER, text, theme::label(), ink);
+    let words_x = glyph_x + GLYPH_W / 2.0 + GAP;
     let elsewhere_at = pos2(rect.right() - LEFT_PAD - GLYPH_W / 2.0, y);
+    let room = (elsewhere_at.x - GLYPH_W / 2.0 - GAP - words_x).max(0.0);
+    let words = super::dropdown::cut_to(painter, text, room, ink);
+    painter.galley(pos2(words_x, y - words.size().y / 2.0), words, ink);
     painter.text(
         elsewhere_at,
         Align2::CENTER_CENTER,

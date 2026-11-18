@@ -23,8 +23,8 @@ pub fn tile(ui: &mut Ui, fetches: &Fetches, index: usize, size: egui::Vec2) -> e
     picture_tile(ui, &shown, size).on_hover_text(remote.about())
 }
 
-/// Puts the `index`th remote test print on the plate once fetched, or starts fetching it; a
-/// browser, which keeps no files, opens it in a tab of its own instead.
+/// Puts the `index`th remote test print on the plate once fetched, or starts fetching it;
+/// with no folder to keep it in, opens its address in a tab instead.
 pub fn picked(ui: &Ui, window: &mut Window, index: usize) {
     let remote = &REMOTES[index];
     if let Some(path) = remote.fetched() {

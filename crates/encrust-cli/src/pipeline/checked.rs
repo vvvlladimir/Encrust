@@ -4,10 +4,10 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use core_engine::{PREPARE_REPAIR, hollowing, needs_repair};
+use core_engine::hollowing;
 use core_geometry::{
-    Aabb, Mat3, MendSettings, Mended, Mesh, Welded, diagnose, list_shells, orient_outward,
-    remove_duplicate_faces,
+    Aabb, Mat3, MendSettings, Mended, Mesh, MeshDiagnostics, Welded, diagnose, list_shells,
+    orient_outward, remove_duplicate_faces,
 };
 use core_volume::{Cancel, Progress, RepairSettings, VolumeError, repair};
 use printer_profiles::PrinterProfile;
@@ -39,44 +39,82 @@ pub(super) fn checked(
     let orientation = (!args.no_validate).then(|| orient_outward(mesh));
     let listed = with_shells.then(|| list_shells(mesh));
     let edited = edits::apply(mesh, args)?;
-    let repaired = repair_asked(mesh, args)
-        .map(|method| repaired(mesh, method, args, watch))
+    let repaired = args
+        .repair
+        .map(|method| repaired(mesh, method.into(), args, watch))
         .transpose()?;
     let (mended, wrapped) =
         repaired.map_or((None, None), |(mended, wrapped)| (Some(mended), wrapped));
-    let diagnostics = (!args.no_validate).then(|| diagnose(mesh));
-    let shells = diagnostics.as_ref().map(|found| found.shells);
-    let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;
-    let bounds = Aabb::new(stats.min, stats.max);
-    let fit = profile.map(|p| FitCheck::of(&bounds, p));
-    let hollowing_saves = diagnostics
-        .as_ref()
-        .and_then(|found| hollowing(mesh, Mat3::IDENTITY, found));
-
+    let facts = Facts::of(mesh, !args.no_validate, profile)?;
     Ok(ImportReport {
         path: input.to_path_buf(),
-        stats,
+        stats: facts.stats,
         welded,
         doubled,
-        diagnostics,
+        diagnostics: facts.diagnostics,
         orientation,
         mended,
         wrapped,
         crossing_pairs: None,
         edited,
         shells: listed,
-        fit,
-        hollowing_saves,
+        fit: facts.fit,
+        hollowing_saves: facts.hollowing_saves,
     })
 }
 
-/// The repair `--repair` names, or under `--prepare` the autopilot's for a model with defects.
-fn repair_asked(mesh: &Mesh, args: &ImportArgs) -> Option<core_volume::RepairMethod> {
-    match args.repair {
-        Some(method) => Some(method.into()),
-        None => (args.prepare && !args.no_validate && needs_repair(&diagnose(mesh)))
-            .then_some(PREPARE_REPAIR),
+/// What import reads off a mesh as it stands: its size, what is wrong with it when
+/// `validated`, how it fits `profile` and what hollowing it would save.
+struct Facts {
+    stats: MeshStats,
+    diagnostics: Option<MeshDiagnostics>,
+    fit: Option<FitCheck>,
+    hollowing_saves: Option<core_engine::Hollowing>,
+}
+
+impl Facts {
+    fn of(mesh: &Mesh, validated: bool, profile: Option<&PrinterProfile>) -> Result<Self> {
+        let diagnostics = validated.then(|| diagnose(mesh));
+        let shells = diagnostics.as_ref().map(|found| found.shells);
+        let stats = MeshStats::of(mesh, shells).context("mesh has no vertices")?;
+        let bounds = Aabb::new(stats.min, stats.max);
+        let hollowing_saves = diagnostics
+            .as_ref()
+            .and_then(|found| hollowing(mesh, Mat3::IDENTITY, found));
+        Ok(Self {
+            stats,
+            diagnostics,
+            fit: profile.map(|p| FitCheck::of(&bounds, p)),
+            hollowing_saves,
+        })
     }
+}
+
+/// `import` read again off `mesh` once a later step turned or mended it.
+pub(crate) fn read_again(
+    import: &mut ImportReport,
+    mesh: &Mesh,
+    profile: Option<&PrinterProfile>,
+) -> Result<()> {
+    let facts = Facts::of(mesh, import.diagnostics.is_some(), profile)?;
+    import.stats = facts.stats;
+    import.diagnostics = facts.diagnostics;
+    import.fit = facts.fit;
+    import.hollowing_saves = facts.hollowing_saves;
+    Ok(())
+}
+
+/// What a repair a later step asks of `mesh` changed, noted on `import` as `--repair` notes it.
+pub(crate) fn repaired_later(
+    import: &mut ImportReport,
+    mesh: &mut Mesh,
+    (method, args): (core_volume::RepairMethod, &ImportArgs),
+    watch: &Watch,
+) -> Result<()> {
+    let (mended, wrapped) = repaired(mesh, method, args, watch)?;
+    import.mended = Some(mended);
+    import.wrapped = wrapped;
+    Ok(())
 }
 
 /// Runs `method` on `mesh` in place: what it changed, and how a wrap went.

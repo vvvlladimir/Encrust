@@ -47,29 +47,32 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0209](0209-a-front-end-names-a-container-through-core-pipeline.md) | A front end names a container through `core-pipeline` | Accepted |
 | [0129](0129-what-a-model-carries-lives-in-its-core.md) | What a model carries lives in the core that makes it | Accepted |
 | [0159](0159-agpl-with-a-contributor-licence-agreement.md) | AGPL-3.0 with a contributor licence agreement | Accepted |
-| [0160](0160-a-release-is-an-installer-per-platform.md) | A release is an installer per platform, built in CI | Superseded by 0162 (the trigger only) |
+| [0160](0160-a-release-is-an-installer-per-platform.md) | A release is an installer per platform, built in CI | Superseded by 0162 (the trigger only); the targets amended by 0454 |
 | [0161](0161-the-readers-are-fuzzed-outside-the-workspace.md) | The readers are fuzzed from a crate outside the workspace | Superseded by 0173 (the CI trigger only) |
 | [0162](0162-release-please-cuts-the-release.md) | release-please cuts the release, and the build workflow is called by it | Accepted |
 | [0172](0172-the-window-offers-a-signed-update-and-never-applies-one.md) | The window offers a signed update, and never applies one by itself | Accepted; the default of the daily check is amended by 0213 |
 | [0213](0213-the-daily-update-check-is-on-by-default.md) | The daily update check is on by default | Accepted |
 | [0389](0389-a-support-profile-is-saved-by-a-press.md) | Save a support profile's form by a press, and ask before leaving it unsaved | Accepted |
 | [0388](0388-the-update-feed-dates-its-release-and-sizes-each-archive.md) | Date the release and size each archive in the update feed | Accepted |
-| [0286](0286-the-windows-build-also-ships-through-the-microsoft-store.md) | The Windows build also ships through the Microsoft Store | Accepted; the manual upload replaced by `store.yml`, the Store copy hearing of no update amended by 0292 |
+| [0286](0286-the-windows-build-also-ships-through-the-microsoft-store.md) | The Windows build also ships through the Microsoft Store | Accepted; the manual upload replaced by `store.yml`, the Store copy hearing of no update amended by 0292, the package bundled with ARM64 by 0454 |
+| [0454](0454-windows-and-linux-also-ship-for-arm64.md) | Windows and Linux also ship for ARM64, and the Store takes a bundle | Accepted |
 | [0292](0292-the-store-copy-asks-the-store-for-its-update.md) | The Store copy asks the Store for its update and sends the user there | Accepted |
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Superseded by 0273 |
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
 | [0176](0176-the-command-line-is-encrust-with-subcommands.md) | The command line is `encrust`, with subcommands, JSON and a clean Ctrl-C | Accepted |
-| [0396](0396-the-report-locates-every-finding-on-the-plate.md) | Locate every finding of the JSON report in plate millimetres, in schema 1 | Proposed |
+| [0400](0400-the-report-locates-every-finding-on-the-plate.md) | Locate every finding of the JSON report in plate millimetres, in schema 1 | Proposed |
 | [0177](0177-the-cores-build-for-a-browser.md) | The cores build for a browser: wasm32, one thread, no clock, a cavity budget | Accepted |
 | [0179](0179-a-plate-file-is-toml-read-by-the-command-line.md) | A plate file is TOML, read by the command line alone | Accepted |
 | [0181](0181-the-window-runs-in-a-browser-on-workers.md) | The window runs in a browser, on workers sharing its memory | Accepted |
-| [0183](0183-the-web-build-works-offline-and-the-command-line-completes-and-remembers.md) | The web build works offline, and the command line completes and remembers its flags | Accepted |
+| [0183](0183-the-web-build-works-offline-and-the-command-line-completes-and-remembers.md) | The web build works offline, and the command line completes and remembers its flags | Accepted; when a new web build takes over is superseded by 0399 |
 | [0207](0207-a-test-run-rebuilds-nothing-it-does-not-have-to.md) | A test run rebuilds nothing it does not have to | Accepted |
 | [0214](0214-the-libraries-terms-ship-generated-from-the-lockfile.md) | The libraries' terms ship with the binary, generated from the lockfile | Accepted |
 | [0215](0215-the-panels-are-pictured-and-compared-by-hand.md) | The panels are pictured and compared, by hand | Accepted |
 | [0272](0272-a-dependency-is-built-once-at-one-feature-set.md) | A dependency is built once, at one feature set, and a bump is checked once over the workspace | Accepted |
 | [0273](0273-ci-checks-a-tree-once-and-the-other-platforms-nightly.md) | CI checks a tree once, and the other platforms nightly | Accepted |
 | [0381](0381-dependabot-pull-requests-regenerate-what-the-lockfile-drives.md) | A dependabot pull request regenerates what the lockfile drives | Accepted |
+| [0398](0398-the-browser-build-is-opened-in-chromium-before-and-after-it-ships.md) | The browser build is opened in Chromium before it ships and once a week after | Proposed |
+| [0399](0399-a-reload-opens-a-newer-browser-build-and-the-page-keeps-the-module.md) | A reload opens a newer browser build, and the page keeps the module it downloaded | Proposed |
 | [0288](0288-the-windows-binaries-carry-their-c-runtime-and-the-window-no-console.md) | The Windows binaries carry their C runtime, and the window opens no console | Accepted |
 
 ### Geometry
@@ -81,8 +84,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0036](0036-rays-go-through-a-bounding-volume-hierarchy.md) | Every ray is cast through a bounding volume hierarchy | Accepted |
 | [0053](0053-nearest-surface-queries-live-beside-the-ray-ones.md) | Nearest-surface queries live beside the ray ones, in `core-geometry` | Accepted |
 | [0054](0054-inside-is-decided-by-the-generalised-winding-number.md) | Inside is decided by the generalised winding number | Accepted |
-| [0055](0055-the-sign-is-pseudonormal-with-winding-behind-it.md) | The sign is the pseudonormal, with the winding number behind it | Accepted |
-| [0075](0075-a-cut-is-its-own-operation.md) | A cut is its own operation, not part of hollowing | Accepted; amended by 0346 for a hole drilled before the cavity |
+| [0055](0055-the-sign-is-pseudonormal-with-winding-behind-it.md) | The sign is the pseudonormal, with the winding number behind it | Accepted; what `Auto` takes the pseudonormal on is superseded by 0448 |
+| [0075](0075-a-cut-is-its-own-operation.md) | A cut is its own operation, not part of hollowing | Accepted; amended by 0346 for a hole drilled before the cavity, by 0414 for one set by hand |
 | [0086](0086-an-edit-is-taken-back-by-restoring-a-scene.md) | An edit is taken back by restoring a scene, not by inverting it | Accepted |
 | [0089](0089-a-cut-is-exact-on-the-mesh.md) | A cut is exact on the mesh, capped with `earcutr` | Accepted |
 | [0194](0194-a-hole-is-closed-only-when-it-is-asked-for.md) | A hole is closed only when it is asked for, by the triangulator the cut already uses | Accepted; the triangulator and the question on import superseded by 0270 |
@@ -115,15 +118,18 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0309](0309-ship-a-dozen-height-maps-in-the-window.md) | Ship a dozen height maps in the window | Accepted |
 | [0310](0310-a-field-is-moved-as-it-is-built-and-flat-faces-collapse.md) | Move a relief's field as it is built, and collapse faces with no area | Accepted |
 | [0318](0318-a-relief-is-pressed-only-where-it-is-painted.md) | Press a relief only where it is painted, by moving the painted faces | Accepted |
+| [0400](0400-a-walk-over-a-surface-is-a-corridor-pulled-taut.md) | Find a walk over a surface as an A* corridor pulled taut | Accepted |
 
 ### Mesh and texture input
 
 | # | Decision | Status |
 |---|---|---|
-| [0038](0038-models-are-imported-on-a-worker-thread.md) | Models are imported on a worker thread | Accepted |
+| [0038](0038-models-are-imported-on-a-worker-thread.md) | Models are imported on a worker thread | Accepted; an import that cannot be cancelled is superseded by 0442 |
+| [0442](0442-an-import-can-be-cancelled-and-a-rebuild-stops.md) | Let an import be cancelled, and stop a sliced file's rebuild | Accepted |
 | [0111](0111-parse-obj-with-tobj.md) | OBJ is parsed with `tobj`, not by hand | Accepted |
 | [0112](0112-resolve-the-3mf-graph-ourselves.md) | 3MF is parsed with `threemf2`, and its graph resolved here | Superseded by 0395 |
-| [0395](0395-read-3mf-with-quick-xml-and-the-workspace-zip.md) | 3MF is read with `quick-xml` and the workspace's `zip` | Proposed |
+| [0395](0395-read-3mf-with-quick-xml-and-the-workspace-zip.md) | 3MF is read with `quick-xml` and the workspace's `zip` | Proposed; its `quick-xml` 0.41 is superseded by 0451 |
+| [0451](0451-read-3mf-with-quick-xml-0-42-and-refuse-what-is-not-utf-8.md) | 3MF is read with `quick-xml` 0.42, and a model part that is not UTF-8 is refused | Proposed |
 | [0115](0115-uvs-are-a-sidecar-beside-the-mesh.md) | UVs are a sidecar beside the mesh, and the OBJ loader reads `map_Kd` | Accepted |
 | [0121](0121-a-map-may-cover-part-of-a-mesh.md) | A UV map may cover part of a mesh; what it misses does not move | Accepted |
 | [0123](0123-a-face-names-its-own-image.md) | A face names its own image, so a model is textured by material | Accepted |
@@ -210,7 +216,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0042](0042-support-shapes-are-profile-data-swept-by-one-mesher.md) | Support shapes are data in the profile, swept by the one mesher | Accepted; the tip shapes are superseded by 0243 |
 | [0043](0043-the-base-is-three-solids-beside-the-supports.md) | The raft, the skate and the braces are solids beside the supports | Accepted; supports passing through the raft superseded by 0266 |
 | [0044](0044-joints-are-balls-and-every-foot-is-bevelled.md) | A joint is covered by a ball, every foot is bevelled, braces cross | Accepted; the ball over a joint is superseded by 0238 |
-| [0072](0072-trapped-resin-is-found-on-the-stack.md) | Trapped resin is found on the slice stack, in `core-supports` | Accepted |
+| [0072](0072-trapped-resin-is-found-on-the-stack.md) | Trapped resin is found on the slice stack, in `core-supports` | Accepted; its grid is superseded by 0411 |
+| [0411](0411-the-trap-scan-grows-the-material-a-cell-on-a-finer-grid.md) | Grow the material a cell before reading the air, on a 0.05 mm grid | Proposed |
 | [0077](0077-a-support-body-is-checked-as-a-beam.md) | A support body is checked as a beam, not as its axis | Accepted; the sampling by rays alone is superseded by 0337 |
 | [0078](0078-a-blocked-tip-leans-until-it-finds-room.md) | A blocked tip leans until it finds room | Accepted; the three reaches are superseded by 0338, with a further search for ground |
 | [0079](0079-a-standing-support-holds-a-ball.md) | A standing support holds a ball, not a column of air | Accepted |
@@ -224,22 +231,42 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0119](0119-support-profiles-join-the-catalogue.md) | Support profiles join the catalogue; a group tunes a copy | Accepted |
 | [0124](0124-a-support-standing-on-the-part-ends-in-a-contact.md) | End a support that stands on the part in a contact, and let a profile refuse one | Accepted |
 | [0125](0125-a-tip-leaves-the-surface-along-its-normal.md) | Leave the surface along its normal, and merge from the neck | Accepted; a head past 45 degrees is superseded by 0249 |
-| [0130](0130-a-pillar-flares-into-its-pad-at-forty-five-degrees.md) | Flare a pillar into its pad at forty-five degrees | Accepted; the flare's upper width is superseded by 0238, its straight cone by 0341 |
+| [0130](0130-a-pillar-flares-into-its-pad-at-forty-five-degrees.md) | Flare a pillar into its pad at forty-five degrees | Accepted; the flare's upper width is superseded by 0238, its straight cone by 0341, the pad's 59-degree wall by 0432 |
 | [0131](0131-the-shipped-presets-are-field-measurements.md) | Ship the field's measurements, and the two rules they broke | Accepted; the measurements and the order of the densities are superseded by 0254 |
-| [0237](0237-a-pad-is-fitted-to-the-room-it-has.md) | Fit a pad to the room it has, and lift a part by what its support needs | Accepted; the fitting of a pad is superseded by 0239 |
+| [0237](0237-a-pad-is-fitted-to-the-room-it-has.md) | Fit a pad to the room it has, and lift a part by what its support needs | Accepted; the fitting of a pad is superseded by 0239, the 5 mm lift by 0432 |
 | [0238](0238-a-support-has-one-width-and-its-joints-are-domes.md) | Give a support one width, round its joints, and let a raft lift the part | Accepted; the dome at the end of every strut is superseded by 0341 |
 | [0239](0239-a-pad-is-as-wide-as-its-profile-says.md) | Make a pad as wide as its profile says, and move it rather than narrow it | Accepted |
 | [0240](0240-braces-follow-a-gabriel-graph-and-a-lone-trunk-leans-in.md) | Tie trunks along a Gabriel graph, and lean a lone trunk into reach | Accepted; how far a trunk leans and towards what is superseded by 0250 |
 | [0241](0241-a-raft-covers-the-part-and-comes-in-three-styles.md) | Draw a raft around the part by a margin in millimetres, in one of three styles | Accepted; the radius a foot is drawn at superseded by 0266 |
 | [0242](0242-a-trunk-is-a-cone-sized-by-its-height-and-load.md) | Make a trunk a cone sized by its height and load, and no brace wider than it | Accepted |
 | [0243](0243-a-tip-is-a-plane-or-a-sphere-and-a-plane-bites-by-moving-in.md) | Offer a plane or a sphere tip, and bite a plane tip by pushing it in | Accepted; a bite of nought is allowed by 0323, the flat disc is superseded by 0339 |
-| [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted |
+| [0244](0244-a-press-on-a-support-carries-it-and-the-aim-has-slack.md) | Carry a support by the press that picks it, and give the aim slack | Accepted; the step on a plane facing the camera and the slack where the camera looks are superseded by 0435 |
 | [0132](0132-the-shipped-asset-is-the-preset.md) | The shipped TOML is the preset, and the constructor mirrors it | Superseded by 0335 |
 | [0254](0254-the-shipped-presets-are-tuned-on-prints.md) | Ship presets tuned on prints, and let Heavy stand fewer, thicker supports | Superseded by 0323 |
-| [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Ship presets that differ mostly in thickness, place densely, and let a tip meet the surface | Accepted |
+| [0323](0323-presets-differ-in-thickness-and-a-tip-meets-the-surface.md) | Ship presets that differ mostly in thickness, place densely, and let a tip meet the surface | Accepted; Auto's spacing and angle are superseded by 0424, Medium's and Heavy's spacing by 0447 |
+| [0447](0447-medium-and-heavy-space-their-contacts-by-what-a-tip-holds.md) | Space Medium's contacts 3.5 mm apart and Heavy's 4.5 mm, by what a tip holds | Accepted |
 | [0324](0324-contact-spacing-follows-the-angle-of-the-face.md) | Space contacts by the angle of the face they hold | Accepted |
-| [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted |
-| [0326](0326-a-step-and-a-gentle-slope-are-held-by-shapes-of-their-own.md) | Size a step by the resin it puts out, and steady a part sparsely on its gentle slopes | Accepted |
+| [0325](0325-an-automatic-profile-sizes-each-support-by-what-it-holds.md) | Size each support by what it holds, through an automatic profile over groups | Accepted; its contacts of 0.24 and 0.30 mm are superseded by 0422, sizing by area and volume by 0423 |
+| [0326](0326-a-step-and-a-gentle-slope-are-held-by-shapes-of-their-own.md) | Size a step by the resin it puts out, and steady a part sparsely on its gentle slopes | Accepted; the steadying shape's 0.18 mm contact is superseded by 0422, Auto's step reach by 0424 |
+| [0422](0422-placement-is-strengthened-where-a-tip-carries-too-much.md) | Strengthen automatic placement where a tip carries too much, on tips no thinner than 0.30 mm | Accepted |
+| [0423](0423-an-automatic-support-is-sized-by-its-share-of-what-it-holds.md) | Size each automatic support by its share of the model it holds | Accepted |
+| [0424](0424-auto-places-contacts-3-mm-apart-and-steadies-on-thin-supports.md) | Place Auto's contacts 3.0 mm apart, past 45 degrees, on 1.0 mm pillars, and steady a part on thin supports | Accepted |
+| [0425](0425-auto-holds-the-painted-side-sparser-on-its-lightest-tips.md) | Hold the side painted to be seen sparser, on Auto's lightest tips | Accepted |
+| [0426](0426-sweep-a-head-from-past-its-seat.md) | Sweep a head, and test a drawn tip, from past the seat its rim finds | Accepted |
+| [0427](0427-a-part-near-the-plate-stands-on-a-short-head.md) | Stand a part near the plate on a short head, and fillet a trunk at its own width | Accepted |
+| [0428](0428-no-branch-is-led-back-and-a-dragged-trunk-stands-upright.md) | Lead no branch back the way it came, and stand a dragged trunk upright | Accepted |
+| [0429](0429-a-support-with-no-room-turns-its-head-or-steps-along-its-face.md) | Turn a head or step a contact along its face before a support is left out, and say why | Accepted |
+| [0430](0430-a-merge-joint-stands-as-high-as-its-branches-are-long-and-holds-three.md) | Stand a merge's joint as high as its branches are long, and hang three branches at most | Accepted |
+| [0431](0431-a-support-standing-on-another-goes-with-it.md) | A support standing on another goes where that one is carried | Proposed |
+| [0432](0432-a-part-stands-two-millimetres-up-on-pads-bevelled-at-forty-five-degrees.md) | Lift a part 2 mm, on pads bevelled at forty-five degrees | Proposed |
+| [0433](0433-the-end-of-a-toe-is-held-by-a-support-of-its-own.md) | Hold the end of a toe with a support of its own | Proposed |
+| [0434](0434-a-front-runs-into-a-thicker-support-before-it-joins-another.md) | Run a front into a thicker support before it joins another front | Proposed |
+| [0435](0435-a-carried-support-follows-the-cursor-and-stands-only-where-allowed.md) | A carried support follows the cursor from the point taken, and stands only where growth would let it | Proposed |
+| [0436](0436-the-joints-beside-a-carried-part-give-way.md) | The joints beside a carried part give way before the carry is refused | Proposed |
+| [0437](0437-one-footing-rule-for-growing-and-carrying.md) | Growing and carrying stand a foot by one rule, and a refusal says why | Proposed |
+| [0438](0438-a-carried-small-pillar-is-grown-again-from-its-contact.md) | A carried small pillar is grown again from its contact | Proposed |
+| [0439](0439-growth-stands-beside-frozen-supports-and-counts-what-each-trunk-carries.md) | Growth stands beside frozen supports, counts what each trunk carries, and frozen supports follow their model | Proposed |
+| [0440](0440-picked-supports-merge-into-one-tree-by-the-growth-rule.md) | Merge picked supports into one tree by the rule growth joins two fronts by | Proposed |
 | [0327](0327-a-pad-is-tested-from-its-middle-and-cut-back.md) | Test a pad from its middle out, and cut it back where it cannot move | Accepted |
 | [0328](0328-bracing-is-zoned-and-starts-from-a-preset.md) | Zone the bracing up a pair, prop a free top, and start from a preset | Accepted |
 | [0329](0329-every-island-is-touched-where-it-begins.md) | Touch every island where it begins, and hold a contact inside the part on its underside | Accepted |
@@ -290,11 +317,29 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0302](0302-a-lattice-is-cut-exactly-from-the-cavity.md) | Cut the lattice exactly from the cavity's mesh, its cells joined by crossing holes | Accepted; its sizes for walls and holes superseded by 0320 |
 | [0320](0320-an-infill-is-a-cell-and-a-density.md) | State an infill by its cell and its density, and derive its walls and holes | Accepted |
 | [0313](0313-a-hole-takes-a-shape-and-a-plug-and-a-shell-an-open-floor.md) | A hole takes a shape and a plug, and a shell can open its floor | Accepted; the plug's shape superseded by 0321 |
-| [0321](0321-a-plug-is-the-model-cut-to-its-hole.md) | A plug is the model cut down to its hole | Accepted; amended by 0346 for a hole drilled before the cavity |
+| [0396](0396-a-blocker-reaches-past-the-wall-and-can-fit-the-model.md) | A blocker reaches past the wall, can fit the model, and runs on as a rod | Proposed |
+| [0321](0321-a-plug-is-the-model-cut-to-its-hole.md) | A plug is the model cut down to its hole | Accepted; amended by 0346 for a hole drilled before the cavity, by 0414 for one stopping short of the wall |
 | [0322](0322-a-hole-is-taken-out-of-its-own-model-exactly.md) | Take a hole out of its own model exactly | Accepted |
-| [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted |
-| [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted |
-| [0398](0398-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |
+| [0412](0412-a-model-is-read-once-for-its-drill-and-its-plugs.md) | Read a model into the engine once for its drill and its plugs, and build its shell on that read | Proposed |
+| [0346](0346-a-hole-drilled-before-the-cavity-is-part-of-the-shape.md) | A hole drilled before the cavity is part of the shape | Accepted; a hole clicked into a hollow model keeps its depth since 0414 |
+| [0347](0347-a-hole-can-be-drilled-into-the-supports.md) | A hole can be drilled into the supports | Accepted; a hole cutting a support tree is superseded by 0441 |
+| [0441](0441-a-hole-cuts-the-raft-and-never-a-support-tree.md) | A hole cuts the raft and never a support tree | Accepted |
+| [0443](0443-a-hole-takes-away-the-supports-whose-tips-it-drills-out.md) | A hole takes away the supports whose tips it drills out | Accepted |
+| [0414](0414-a-hole-set-by-hand-stops-at-its-depth.md) | A hole set by hand stops at its depth | Accepted |
+| [0415](0415-checks-buttons-answer-what-it-finds.md) | Check's buttons answer what it finds, through the calls the command line makes | Accepted |
+| [0416](0416-check-lays-out-its-issues-as-cards-and-fixes-them-by-a-recipe.md) | Check lays out its issues as cards and fixes them all by a built-in recipe | Accepted |
+| [0417](0417-check-vents-a-cup-by-its-thinnest-wall-and-holds-a-neck-by-its-stress.md) | Vent a cup through its thinnest wall, hold a neck by its stress, name a cup by its pull | Accepted |
+| [0418](0418-a-model-in-the-way-slides-then-turns-about-the-vertical.md) | Move a model onto the plate by a slide, then by the least turn about the vertical | Accepted |
+| [0419](0419-a-quick-check-runs-in-the-background-and-the-full-one-refines-it.md) | Check the plate quickly in the background, and let the full check refine it | Proposed |
+| [0420](0420-a-fix-that-had-its-turn-keeps-its-button.md) | Keep a fix's button on its card after the fix has had its turn | Proposed |
+| [0401](0401-drain-holes-are-proposed-and-proven-by-scanning-again.md) | Propose drain holes and prove each by scanning again | Proposed |
+| [0402](0402-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Superseded by 0403 (the command line's resolution of the flags only) |
+| [0403](0403-a-recipe-orders-and-conditions-the-steps-prepare-runs.md) | A recipe orders and conditions the steps Prepare runs | Proposed |
+| [0404](0404-keep-thin-parts-solid-by-opening-the-model.md) | Keep thin parts solid by opening the model with a ball | Proposed |
+| [0405](0405-a-users-recipe-is-kept-in-the-profile-store.md) | Keep a user's recipe in the profile store, and look recipes up in core-recipe | Proposed |
+| [0406](0406-prepare-for-print-stands-over-the-plate-card.md) | Stand Prepare for print over the plate card as a recipe and a run | Proposed |
+| [0407](0407-a-failed-or-paused-recipe-waits-with-the-plate-free.md) | Wait at a recipe's pause or failed step with the plate given back to the user | Proposed |
+| [0408](0408-ship-two-built-in-recipes-prepare-and-miniatures.md) | Ship two built-in recipes: prepare and miniatures | Proposed; miniatures orients with a clean surface by 0410 |
 | [0303](0303-exact-booleans-live-in-core-csg-over-boolmesh.md) | Do exact mesh booleans in `core-csg`, over `boolmesh` | Accepted; a result's triangle list varying from run to run is superseded by 0315 |
 | [0314](0314-a-solid-is-readied-on-every-core.md) | Ready a solid for the engine on every core | Accepted |
 | [0315](0315-boolmesh-comes-from-our-fork.md) | Take `boolmesh` from our fork, threaded and deterministic | Accepted |
@@ -305,6 +350,9 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0305](0305-a-label-is-outlined-by-ttf-parser-in-core-text.md) | Outline a label with `ttf-parser` in `core-text`, offer the machine's fonts, and let it follow the surface | Accepted |
 | [0311](0311-a-label-is-joined-through-the-side-of-the-model-it-stands-on.md) | Join a label through the side of the model it stands on | Accepted |
 | [0204](0204-a-field-build-is-given-up-on-between-tiles.md) | A field build is given up on between tiles | Accepted |
+| [0448](0448-a-cavity-keeps-only-what-lies-inside-the-model.md) | Sign by pseudonormal only on one manifold shell, and keep only the cavity inside the model | Accepted |
+| [0449](0449-the-wall-asked-for-is-the-thinnest.md) | Cut the cavity half a voxel past the wall, so the wall asked for is the thinnest | Accepted |
+| [0450](0450-faces-buried-in-another-body-are-left-out-of-the-field.md) | Leave out of the field the faces a closed body of the surface buries | Accepted |
 
 ### The plate
 
@@ -320,10 +368,12 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0278](0278-one-rule-ranks-every-stage-and-a-proof-stands-its-supports.md) | Rank the search and the proof by one rule, and prove a pose with its supports | Accepted; the band over islands, the proof's tie-break, the coarse layer it places supports on, what the fewest supports reads and the count a bare pose is checked by are superseded by 0279 |
 | [0279](0279-the-fewest-supports-is-support-volume-proven-on-the-prints-layer.md) | Choose the fewest supports by support volume, proven on the print's layer | Accepted; the band over islands and the proof's island count are superseded by 0285, the lift a pose is judged at in the window by 0291 |
 | [0280](0280-a-seat-is-ranked-with-the-lifted-poses-by-one-rule.md) | Rank a pose set on the plate with the lifted ones, by one rule | Accepted |
-| [0281](0281-a-section-pulls-by-its-area-and-reach-and-the-least-peel-stops-at-enough.md) | A section pulls by its area and reach, and the least peel stops at enough | Accepted |
+| [0281](0281-a-section-pulls-by-its-area-and-reach-and-the-least-peel-stops-at-enough.md) | A section pulls by its area and reach, and the least peel stops at enough | Accepted; the least peel's enough is superseded by 0410 |
 | [0282](0282-the-window-asks-which-goal-to-orient-for.md) | Ask which goal to orient for in the window | Accepted; what the picker lists is superseded by 0284, its default by 0291 |
-| [0283](0283-the-shortest-print-reads-the-stack-and-takes-a-pull-past-the-limit.md) | The shortest print reads the stack, and takes a pull past the limit | Accepted |
-| [0284](0284-auto-orient-balances-every-goal-by-the-product-of-its-shares.md) | Auto-orient balances every goal by the product of its shares, and the clean top goes | Accepted |
+| [0283](0283-the-shortest-print-reads-the-stack-and-takes-a-pull-past-the-limit.md) | The shortest print reads the stack, and takes a pull past the limit | Accepted; its band and its cups are superseded by 0410 |
+| [0284](0284-auto-orient-balances-every-goal-by-the-product-of-its-shares.md) | Auto-orient balances every goal by the product of its shares, and the clean top goes | Accepted; which goals auto weighs is narrowed by 0409 |
+| [0409](0409-a-clean-surface-keeps-supports-off-what-shows.md) | Orient for a clean surface: supports off what shows, read from the shape | Proposed; the preset and its policy are superseded by 0410, step 3 is taken by 0425 |
+| [0410](0410-a-single-goal-minimises-its-own-reading-alone.md) | A single goal minimises its own reading alone, and a clean surface is asked beside any preset | Proposed |
 | [0285](0285-a-proof-counts-islands-at-the-prints-own-pixel-over-the-low-points.md) | A proof counts islands at the print's own pixel and layer, over the low points | Accepted |
 | [0289](0289-the-search-checks-every-pose-against-the-build-volume.md) | The search checks every pose against the build volume | Accepted |
 | [0290](0290-the-window-and-the-command-line-orient-through-one-entry-point.md) | The window and the command line orient through one entry point | Accepted |
@@ -332,14 +382,15 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0088](0088-the-plate-is-packed-as-a-bitmap.md) | The plate is packed as a bitmap into the corner, and the block centred | Accepted; supports left out of a footprint is superseded by 0256 |
 | [0256](0256-a-footprint-carries-the-supports-and-the-raft.md) | Pack a model with its supports and its raft | Accepted |
 | [0392](0392-models-meeting-on-the-plate.md) | Warn of models that meet on the plate, by their faces and by winding, and of supports past it | Proposed |
-| [0393](0393-check-warns-of-a-sealed-cavity-and-a-solid-model-worth-hollowing.md) | Warn of a cavity with no drain hole and of a solid model worth hollowing | Proposed |
+| [0393](0393-check-warns-of-a-sealed-cavity-and-a-solid-model-worth-hollowing.md) | Warn of a cavity with no drain hole and of a solid model worth hollowing | Proposed; a hole set at a depth counts as a way out past the wall by 0414 |
 | [0098](0098-a-plate-is-a-number-on-the-object.md) | A plate is a number on the object, not a scene of its own | Accepted |
 | [0101](0101-a-tool-works-on-the-selection-or-the-plate.md) | A tool works on what is picked, and on the whole plate only when nothing is | Accepted |
-| [0227](0227-a-model-may-keep-its-own-hollow-and-drain-numbers.md) | Let a model keep its own Hollow and Drain numbers | Accepted; that supports are not scoped this way is superseded by 0246; the switch superseded by 0319 |
+| [0227](0227-a-model-may-keep-its-own-hollow-and-drain-numbers.md) | Let a model keep its own Hollow and Drain numbers | Accepted; that supports are not scoped this way is superseded by 0246; the switch superseded by 0319; the next click's sizes superseded by 0397 |
 | [0319](0319-a-picked-model-is-edited-without-a-switch.md) | Edit the picked model's Hollow and Drain numbers without a switch | Accepted |
+| [0397](0397-the-next-clicks-size-is-the-windows.md) | The size the next click puts down is the window's, not a model's | Proposed |
 | [0246](0246-a-model-keeps-the-support-profile-it-was-edited-to.md) | Keep an edited support profile on the picked models until it is saved | Accepted; what choosing another profile from the list does is superseded by 0247 |
 | [0247](0247-a-chosen-profile-is-a-group-of-its-own.md) | Make a profile chosen from the list a group of its own | Accepted |
-| [0248](0248-a-thinner-support-stands-on-a-thicker-one-of-another-group.md) | Stand a thinner support on the trunk of a thicker one of another group | Accepted; that tips merge within a group only is superseded by 0325 |
+| [0248](0248-a-thinner-support-stands-on-a-thicker-one-of-another-group.md) | Stand a thinner support on the trunk of a thicker one of another group | Accepted; that tips merge within a group only is superseded by 0325, the one order of both meetings by 0434 |
 | [0249](0249-nothing-that-carries-a-support-leans-past-45-degrees.md) | Hold everything that carries a support to 45 degrees, branches apart, and give a stranded tip a strut | Accepted; the head's 45 degrees is superseded by 0339 |
 | [0250](0250-a-trunk-leans-for-a-brace-no-further-than-a-branch-reaches.md) | Lean a trunk for a brace no further than a branch reaches, towards any group, and tie a brace to the trunk's own axis | Accepted; that bracing is asked of the ground profile is superseded by 0252 |
 | [0251](0251-a-small-pillar-stands-on-a-support-and-nothing-is-built-in-the-solid.md) | Stand a small pillar on the support beside it, never a support on a small pillar, and build nothing inside the model | Accepted; only a support no further than the part, by 0340 |
@@ -356,22 +407,27 @@ Grouped by what the decision governs; the number is still the order it was taken
 |---|---|---|
 | [0046](0046-ctb-layer-data-is-written-in-the-clear.md) | `.ctb` layer data is written unencrypted | Superseded by 0365 |
 | [0047](0047-the-output-extension-picks-the-format.md) | The output extension picks the sliced-file format, in each binary | Accepted |
-| [0048](0048-thumbnails-are-rendered-in-software.md) | A sliced file's thumbnail is rendered in software, in `core-thumbnail` | Accepted |
+| [0048](0048-thumbnails-are-rendered-in-software.md) | A sliced file's thumbnail is rendered in software, in `core-thumbnail` | Accepted; one 512-pixel square padded into each record is superseded by 0402, flat shading by 0403 |
+| [0402](0402-a-preview-record-is-cropped-to-the-parts-on-its-own-background.md) | A preview record is cropped to the parts, on its own background | Proposed; the `.pwsz` colours are superseded by 0403 |
+| [0403](0403-a-thumbnail-is-shaded-smooth-and-pwsz-previews-take-their-known-form.md) | Shade the thumbnail smooth with lines, and write `.pwsz` previews in their known form | Proposed |
+| [0404](0404-a-thumbnail-takes-the-viewport-colours-and-darkens-its-folds.md) | Draw the thumbnail in the viewport's colours, darken its folds, dither it into 16 bits | Proposed |
 | [0146](0146-the-chitu-family-is-one-crate-and-cbddlp-carries-grey-in-eight-passes.md) | Keep the Chitu family in one crate, and buy `.cbddlp` grey with eight passes | Accepted |
 | [0147](0147-one-crate-writes-every-anycubic-extension-at-version-one.md) | Write every Anycubic extension from one crate, at version 1 | Accepted |
 | [0148](0148-the-sl1-settings-go-in-last-and-a-varying-stack-is-refused.md) | Write the `.sl1` settings last, and refuse a stack it cannot carry | Accepted; `numFade` as our transition layers is superseded by 0296 |
 | [0149](0149-a-reader-is-a-trait-and-a-container-names-itself.md) | Make a reader a trait, and let a container name itself | Accepted |
 | [0150](0150-an-open-file-owns-the-source-it-reads-from.md) | Let an open file own the source it reads from | Accepted |
+| [0401](0401-a-reader-hands-over-the-largest-preview-it-carries.md) | A reader hands over the largest preview a file carries | Proposed |
 | [0167](0167-the-gcode-zip-is-its-own-crate-and-the-png-codec-moves-down.md) | Give the gcode zip its own crate, and move the PNG codec down into `core-format` | Accepted |
 | [0379](0379-an-archive-failure-is-turned-into-a-format-error-in-core-format.md) | Turn an archive's failure into a `FormatError` in `core-format` | Accepted |
 | [0168](0168-one-creality-crate-holds-both-revisions-and-the-chitu-codecs-move-down.md) | Write both `.cxdlp` revisions from one crate, and move the Chitu codecs down | Accepted; the version 4 codec, extension and model rule are superseded by 0367 |
 | [0169](0169-the-vector-container-traces-its-polygons-out-of-the-mask.md) | Trace the `.svgx` polygons out of the mask rather than carry contours to the writer | Accepted |
 | [0170](0170-the-cws-is-its-own-crate-and-only-the-plain-variant-is-written.md) | Write the `.cws` from its own crate, and only the plain variant | Accepted |
 | [0171](0171-a-count-read-from-a-file-is-checked-against-the-file.md) | Check every count a file states against the file before reserving for it | Accepted |
-| [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted |
+| [0180](0180-a-sliced-file-is-converted-in-the-write-stage.md) | A sliced file is converted in the write stage, never resampled | Accepted; blank previews are superseded by 0401 |
 | [0210](0210-a-picker-offers-only-what-the-machine-can-be-written.md) | A picker offers only the containers the machine in hand can be written | Accepted |
 | [0365](0365-write-the-ctb-the-printers-read.md) | Write the `.ctb` the printers read, and pick its revision by the panel | Accepted |
-| [0367](0367-write-the-cxdlpv4-the-printers-read.md) | Write the `.cxdlpv4` the printers read, with its own codec and model codes | Accepted |
+| [0367](0367-write-the-cxdlpv4-the-printers-read.md) | Write the `.cxdlpv4` the printers read, with its own codec and model codes | Accepted; the codec for every machine is superseded by 0413 |
+| [0413](0413-a-cxdlpv4-layer-takes-the-codec-its-machine-reads.md) | A `.cxdlpv4` layer takes the codec its machine reads | Accepted |
 
 ### Printer and material profiles
 
@@ -469,6 +525,10 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0151](0151-the-preview-shows-a-source-not-a-plate.md) | Let the preview show a source, which is either a plate or a file | Superseded by 0294 |
 | [0157](0157-the-slice-row-carries-two-actions.md) | The Slice row carries two actions, not a destination | Accepted; the Send button is superseded by 0217, the stale dot by 0262, the caret by 0348 |
 | [0217](0217-the-window-is-a-top-bar-a-flat-rail-and-a-layer-strip.md) | The window is a top bar, a flat rail, a docked inspector and a layer strip | Accepted; the return to the model on a tool press is superseded by 0218, the docked columns and layer strip by 0221, Find by 0230, the message under the jobs by 0231, the jobs top centre by 0263 |
+| [0444](0444-the-macos-app-menu-is-the-windows-own.md) | Build the macOS application menu in the window, and date About by the binary | Accepted |
+| [0445](0445-a-project-opens-from-the-system.md) | Register `.encrust` with each system, and take the files macOS hands over | Accepted |
+| [0446](0446-a-crash-is-offered-at-the-next-start-and-the-report-fills-the-issue-form.md) | Offer the panic a run closed on at the next start, and carry the report into the issue form | Accepted |
+| [0452](0452-an-unsaved-plate-is-copied-aside-and-offered-back.md) | Copy an unsaved plate aside every two minutes, and offer it back after a run that did not close | Proposed |
 | [0218](0218-twelve-tools-on-the-rail-and-print-settings-as-a-form.md) | Twelve tools on the rail, and the print settings as a form | Accepted; Select and the digits are superseded by 0231, Paint and Shape on the rail by 0336, Export and the column of tools by 0348 |
 | [0219](0219-the-viewport-is-lit-shadowed-and-turned-by-a-cube.md) | Light the viewport by a sky, a key and a fill, shadow it by contact, and turn it by a cube | Accepted; the hatching of overhangs is superseded by 0245 |
 | [0245](0245-an-overhang-is-filled-not-hatched.md) | Fill an overhang with its colour instead of hatching it | Accepted |
@@ -476,11 +536,13 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0220](0220-machines-and-resins-are-a-window-and-the-window-starts-on-a-page.md) | Edit the machines and resins in a window over the plate, and start on a page | Accepted; the start page's machine card is superseded by 0232, its recent list by 0234, and the Settings screen by 0233 |
 | [0221](0221-the-columns-float-over-a-stage-the-width-of-the-window.md) | Float the side columns over a stage the width of the window | Accepted; the plate column's fold is superseded by 0230 |
 | [0229](0229-tab-walks-the-controls-and-every-control-has-a-name.md) | Tab walks the controls, and every control has a name | Accepted |
-| [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted |
+| [0230](0230-find-is-a-palette-and-the-columns-stay-out.md) | Find is a palette, the plate column stays out, and a block explains itself on its question mark | Accepted; the reason under an action is superseded by 0421 |
+| [0421](0421-nothing-is-written-under-a-primary-button.md) | Write nothing under a primary button | Accepted |
 | [0231](0231-select-is-position-and-check-supports-its-islands.md) | Fold Select into Position, and let Check support the islands it finds | Accepted |
 | [0348](0348-the-plate-card-slices-and-sends-and-the-rail-stands-over-the-inspector.md) | Slice and send from the plate's card, and stand the rail over the inspector | Accepted; the rail over the inspector and Slice to a file under the primary are superseded by 0382 |
 | [0382](0382-tools-over-the-stage-a-shorter-plate-card-and-motion.md) | Stand the tools over the stage, shorten the plate card, ask by a second press, and move | Accepted |
 | [0383](0383-a-light-palette-chosen-each-frame.md) | Add a light palette, chosen each frame from egui's resolved theme | Accepted |
+| [0453](0453-the-interface-is-sized-by-egui-zoom-and-kept-with-the-preferences.md) | Size the interface by egui's zoom, kept with the preferences and capped by the screen | Proposed |
 | [0385](0385-a-picture-is-kept-as-shade-and-coverage.md) | Keep a plate's picture as shade and coverage, tinted when shown | Accepted |
 | [0312](0312-the-command-line-shapes-models-before-it-slices-them.md) | Combine, label, cut and split models on the command line before slicing them | Accepted |
 | [0232](0232-the-start-page-offers-resin-test-prints-of-its-own.md) | The start page offers resin test prints of its own, and leaves the machine to the top bar | Accepted; the row of tests under the recent files is superseded by 0234; a test print too large to bundle is added by 0394 |
@@ -491,9 +553,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0257](0257-what-an-edit-sets-off-is-part-of-it.md) | Record what an edit sets off as part of it, and do it again after an undo | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Superseded by 0294 |
-| [0397](0397-a-language-model-drives-the-command-line-over-mcp.md) | A language model drives the command line over MCP, a job of TOML revisions at a time | Proposed |
-| [0399](0399-prepare-is-the-engines-defaults-filling-the-flags-left-out.md) | Prepare a model by the engine's defaults, filling in the flags left out | Proposed |
-| [0400](0400-a-model-is-benched-through-its-own-client-against-the-autopilot.md) | Bench a language model through its own client, against the autopilot | Proposed |
-| [0401](0401-the-open-window-replays-each-revision-the-server-keeps.md) | The open window replays each revision the server keeps, over a loopback port | Proposed |
-| [0402](0402-the-command-line-places-supports-and-blockers-by-hand.md) | Place supports and Keep solid blockers by hand on the command line | Proposed |
-| [0403](0403-a-client-chooses-among-poses-the-engine-proved.md) | A client chooses among the poses the engine proved, and is held to its own last step | Proposed |
+| [0455](0455-a-language-model-drives-the-command-line-over-mcp.md) | A language model drives the command line over MCP, a job of TOML revisions at a time | Proposed |
+| [0456](0456-a-model-is-benched-through-its-own-client-against-the-autopilot.md) | Bench a language model through its own client, against the autopilot | Proposed |
+| [0457](0457-the-command-line-places-supports-by-hand.md) | Place supports by hand on the command line | Proposed |
+| [0458](0458-a-client-chooses-among-poses-the-engine-proved.md) | A client chooses among the poses the engine proved, and is held to its own last step | Proposed |

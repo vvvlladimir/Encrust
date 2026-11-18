@@ -4,7 +4,7 @@
 use std::io;
 
 use core_raster::LayerRuns;
-use core_thumbnail::{Rgb, Thumbnail};
+use core_thumbnail::{RGB15_BITS, Rgb, Thumbnail};
 
 use crate::{
     Fields, PREVIEW_SIZES_PX, PrintJob, PrinterTuning, Rle7Layer, SecondStage, stated_distance_mm,
@@ -105,7 +105,8 @@ pub const CHITU_SLICER_FLAGS: u32 = 0x07;
 pub fn write_chitu_previews(fields: &mut Fields<'_>, job: &PrintJob) -> io::Result<(u32, u32)> {
     let [large, small] = PREVIEW_SIZES_PX.map(|(width, height)| {
         let image =
-            Thumbnail::fitted_or_filled(job.thumbnail.as_ref(), width, height, PREVIEW_BACKGROUND);
+            Thumbnail::fitted_or_filled(job.thumbnail.as_ref(), width, height, PREVIEW_BACKGROUND)
+                .dithered(RGB15_BITS);
         (width, height, image)
     });
     let large = write_preview(fields, large.0, large.1, large.2.pixels())?;

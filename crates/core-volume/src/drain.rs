@@ -77,6 +77,15 @@ pub struct HoleSize {
     pub turn_deg: Scalar,
 }
 
+impl Default for HoleSize {
+    /// The hole drilled where nothing names a size, in the window and on the command line.
+    fn default() -> Self {
+        // Three millimetres is what a resin slicer offers by default, and drains a cavity of
+        // any size the machine can print.
+        Self::round(3.0, 3.0, 1.0)
+    }
+}
+
 impl HoleSize {
     /// A round hole, as every hole was before ADR 0313.
     pub fn round(diameter_mm: Scalar, depth_mm: Scalar, taper: Scalar) -> Self {
@@ -130,10 +139,13 @@ pub enum HoleKind {
     /// Lets the resin out of a cavity: carried on through the wall, closed by a plug.
     #[default]
     Drain,
+    /// Set by hand into a hollow model: stops at its depth, opening the cavity only if that
+    /// reaches it (ADR 0414).
+    AtDepth,
     /// Drilled into the solid model before it was hollowed: part of its shape, so the cavity
     /// keeps a wall around it and it keeps its depth and its plug.
     Walled,
-    /// Drilled into the supports or raft under the model: no plug, no wall, never deepened.
+    /// Drilled into the raft under the model: no plug, no wall, never deepened (ADR 0441).
     Support,
 }
 
@@ -153,11 +165,47 @@ impl DrainHole {
         }
     }
 
+    /// Whether it opens the cavity behind a wall of `thickness_mm`: a drain is carried through
+    /// by [`pierce`], a hole set at a depth only if that passes the wall (ADR 0414).
+    pub(crate) fn opens_wall(&self, thickness_mm: Scalar) -> bool {
+        match self.kind {
+            HoleKind::Drain => true,
+            HoleKind::AtDepth => self.depth_mm - self.lift_mm > thickness_mm,
+            HoleKind::Walled | HoleKind::Support => false,
+        }
+    }
+
+    /// Whether it lies wholly inside one of `drilled` at least as wide, all in one model's
+    /// space: drilling it again adds nothing.
+    pub fn lies_within(&self, drilled: &[DrainHole]) -> bool {
+        let tip = self.at + self.axis.normalize_or_zero() * self.depth_mm;
+        drilled
+            .iter()
+            .any(|old| old.holds(self.at) && old.holds(tip) && self.diameter_mm <= old.diameter_mm)
+    }
+
+    /// Whether `point` is inside the tube it cuts, in the model's own space.
+    pub(crate) fn holds(&self, point: Vec3) -> bool {
+        let axis = self.axis.normalize_or_zero();
+        let along = (point - self.at).dot(axis);
+        let radius = self.diameter_mm / 2.0;
+        (-radius..=self.depth_mm).contains(&along)
+            && (point - self.at - axis * along).length() <= radius
+    }
+
     /// The unit offset from the axis to the outline's first corner, in the model's own
     /// space, and how many corners there are; `None` for a round hole or no axis.
     pub fn corner(&self) -> Option<(Vec3, usize)> {
         Section::of(self.shape, self.turn_deg).first_corner(self.shape, self.axis)
     }
+}
+
+/// Whether one of `holes` drilled into the model takes away the surface at `point`, all in
+/// the model's own space; a hole in the raft takes nothing of the model (ADR 0443).
+pub fn drilled_out(holes: &[DrainHole], point: Vec3) -> bool {
+    (holes.iter())
+        .filter(|hole| hole.kind != HoleKind::Support)
+        .any(|hole| hole.holds(point))
 }
 
 /// A drainage channel: a tube of `diameter_mm` dug along a polyline in model space, round

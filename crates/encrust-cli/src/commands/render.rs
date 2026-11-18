@@ -61,7 +61,10 @@ impl RenderCommand {
         let placed = core_engine::parts(&models);
         let parts: Vec<Part<'_>> = placed
             .iter()
-            .map(|(mesh, transform)| Part::new(mesh, *transform))
+            .map(|(mesh, transform, look)| Part {
+                look: *look,
+                ..Part::new(mesh, *transform)
+            })
             .collect();
         let markers = self.markers();
         let settings = ThumbnailSettings {

@@ -210,7 +210,7 @@ fn bodies_of(scene: &Scene) -> (Vec<ObjectId>, Vec<MeetingBody>) {
             bvh,
             transform: object.transform,
         });
-        bodies.extend(object.supports.drawn().iter().map(|group| MeetingBody {
+        bodies.extend(object.supports.drawn_every().map(|group| MeetingBody {
             owner,
             kind: BodyKind::Supports,
             mesh: Arc::clone(&group.mesh),

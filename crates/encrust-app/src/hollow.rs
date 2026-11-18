@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::project::HollowState;
-use core_geometry::Transform;
-use core_volume::{HollowMode, HollowSettings, InfillSettings, plate_down};
+use core_geometry::{PlacedHit, Transform};
+use core_volume::{
+    Blocker, BlockerSize, HollowMode, HollowSettings, InfillSettings, blocker_under, plate_down,
+};
 
 use crate::i18n::tr;
 use crate::job::{
@@ -12,8 +14,6 @@ use crate::job::{
 };
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
-
-pub use core_volume::DEFAULT_BLOCKER_MM;
 
 /// What the Hollow tool is set to, and the run it has going.
 ///
@@ -24,6 +24,8 @@ pub use core_volume::DEFAULT_BLOCKER_MM;
 pub struct HollowTool {
     /// What the panel is set to, in the shape a project writes it down in (ADR 0191).
     pub state: HollowState,
+    /// How the next click sizes its blocker: the window's, whichever model it lands on (ADR 0397).
+    pub blocker: BlockerSize,
     pub job: Option<HollowJob>,
     /// Whether a run has just put a cavity on the plate, which is what takes the pockets
     /// an older check found off it; see ADR 0198.
@@ -43,9 +45,10 @@ impl Default for HollowTool {
                 precision: asked.precision,
                 infill_on: false,
                 infill: InfillSettings::default(),
-                blocker_mm: DEFAULT_BLOCKER_MM,
                 open_floor: false,
+                solid_under_mm: asked.solid_under_mm,
             },
+            blocker: BlockerSize::default(),
             job: None,
             hollowed: false,
             fields: SharedFields::default(),
@@ -64,8 +67,21 @@ impl HollowTool {
     /// What `object` is hollowed with: its own settings, or the plate's, with its floor
     /// opened toward the plate as it stands now.
     pub fn settings_for(&self, object: &SceneObject) -> HollowSettings {
-        let state = object.own.hollow.as_ref().unwrap_or(&self.state);
-        settings_of(state, object.transform)
+        settings_of(self.state_for(object), object.transform)
+    }
+
+    /// The numbers `object` is set to: its own, or the plate's.
+    fn state_for<'a>(&'a self, object: &'a SceneObject) -> &'a HollowState {
+        object.own.hollow.as_ref().unwrap_or(&self.state)
+    }
+
+    /// The blocker a click at `hit` on `object` puts down, with `rod` run on from the last one.
+    pub fn blocker_for(&self, object: &SceneObject, hit: &PlacedHit, rod: bool) -> Option<Blocker> {
+        let (mesh, bvh) = (&object.mesh, &object.bvh);
+        let (point, normal) = (hit.point, hit.normal);
+        let blocker = blocker_under(mesh, bvh, object.transform, point, normal, self.blocker)?;
+        let joined = rod.then(|| object.hollow.rod_to(&blocker)).flatten();
+        Some(joined.unwrap_or(blocker))
     }
 
     /// Why the Hollow button is greyed out, or `None` when it is not.
@@ -83,9 +99,9 @@ impl HollowTool {
         Ok(())
     }
 
-    /// A run over `models` alone, each at the settings beside it, handed back rather than
+    /// A run over `models` alone, each with the settings beside it, handed back rather than
     /// kept: what Prepare hollows.
-    pub fn start_settings(
+    pub fn start_asked(
         &self,
         scene: &Scene,
         models: &[(ObjectId, HollowSettings)],
@@ -193,7 +209,7 @@ impl HollowTool {
 
 /// The run settings a panel's numbers ask for, on a model standing under `transform`. An
 /// open floor faces the plate it stands on, so turning such a model makes its shell stale.
-pub(crate) fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings {
+fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings {
     let opens = state.open_floor && state.mode == HollowMode::Internal;
     HollowSettings {
         thickness_mm: state.thickness_mm,
@@ -201,6 +217,7 @@ pub(crate) fn settings_of(state: &HollowState, transform: Transform) -> HollowSe
         precision: state.precision,
         infill: state.infill_on.then_some(state.infill),
         open_toward: opens.then(|| plate_down(transform)),
+        solid_under_mm: state.solid_under_mm,
         ..HollowSettings::default()
     }
 }

@@ -27,7 +27,7 @@ known gaps are at the end, each closed in its own commit.
 | Heading | Glyph, name, `help_mark`; at the right either the tool's modes (pick, add, paint) as `icon_toggle`s, or one fact summing up its state (the wall, the picked model) |
 | Preset | If the tool keeps presets (ADR 0226): one `dropdown` showing the preset or "Unsaved", save and delete `icon_button`s; save asks the name in a popup |
 | Sections | `section`s ordered what it acts on → how → rarely changed, folded; a switch enabling a section sits in its heading |
-| Foot | One `primary_button`, at most one other action — an icon one is a square as tall as the primary; the only text is why the action cannot run |
+| Foot | One `primary_button`, at most one other action — an icon one is a square as tall as the primary; no text |
 
 A row is `number_row`, `count_row`, `switch` or `Segmented`: name left, control right at
 `FIELD_W`. Fields in a grid (Move, Scale) take a `field_label` over a full-width box.
@@ -44,6 +44,8 @@ disabled with one sentence why; the way to change that is offered once per panel
 - **Printed text** is only why something cannot be used, a verdict (`notice`), or a one-line
   empty state (`Nothing picked`). How to work the viewport is the `hint_bar` over the stage —
   `Click` place, `⇧ click` a line — never a paragraph in a panel.
+- **Under a primary button** nothing is printed: why it cannot run, or where its result
+  goes instead, is its tooltip (ADR 0421).
 - **Figures in a grid** stand under their name, the name cut with an ellipsis in a long
   language and the figure never wrapped nor cut but shrunk to fit (`figure_grid`).
 - **Spacing:** a line keeps its letters' own spacing; a menu or popup is never justified
@@ -79,7 +81,7 @@ never both, never neither. A typed value is clamped to its range; no error popup
 
 - **Undoable:** every change to the plate and every tool value; one gesture is one entry,
   recorded on a settled frame (no button down, no field focused). Prepare for print is one
-  entry however many frames its jobs land over, and undo waits while it runs (ADR 0399).
+  entry however many frames its jobs land over, and undo waits while it runs (ADR 0402).
 - **By snapshot:** a value is undoable because it lives in the scene's inputs or in
   `ToolSettings`. A new value anywhere else is not, and that is a bug.
 - **Not edits:** choosing a printer or resin (a new baseline), opening a project, a mesh a job

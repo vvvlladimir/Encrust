@@ -1,6 +1,6 @@
 # 0160. A release is an installer per platform, built in CI
 
-- **Status:** Superseded by 0162 (the trigger only)
+- **Status:** Superseded by 0162 (the trigger only); the targets amended by 0454
 - **Date:** 2026-10-02
 
 ## Context

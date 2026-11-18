@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -6,9 +7,11 @@ use core_geometry::{Aabb, Bvh, Mesh, Scalar, split};
 use rayon::prelude::*;
 
 use crate::boolean::solid_of;
+use crate::cancel::{Cancel, Step};
 use crate::drain::CUT_WEIGHT;
 use crate::error::VolumeError;
 use crate::mend::readable;
+use crate::model_read::ModelRead;
 
 /// `mesh` with the cuts [`crate::drill`] made taken out of it exactly, through the engine:
 /// a hole leaves its bore in the model it was drilled in and in nothing beside it (ADR 0322).
@@ -22,7 +25,16 @@ pub fn drilled(mesh: &Mesh, cuts: &Mesh) -> Result<Mesh, VolumeError> {
 
 /// `mesh`, mended where the engine refuses it, less `cutter`.
 fn cut_by(mesh: &Mesh, cutter: &Solid) -> Result<Mesh, VolumeError> {
-    let left = readable(mesh)?.difference(cutter)?.mesh();
+    let never = Cancel::never();
+    less(&readable(mesh, never)?, cutter, never)
+}
+
+/// `printed` less `cutter`, an error where that leaves nothing.
+fn less(printed: &Solid, cutter: &Solid, cancel: Cancel<'_>) -> Result<Mesh, VolumeError> {
+    cancel.begin(Step::Combining, 0);
+    let left = printed.difference(cutter)?;
+    cancel.begin(Step::Finishing, 0);
+    let left = left.mesh();
     if left.faces.is_empty() {
         return Err(VolumeError::NothingLeft);
     }
@@ -50,7 +62,67 @@ impl Drilled {
         cavity: Option<Range<usize>>,
         cuts: &Mesh,
     ) -> Result<Self, VolumeError> {
-        let left = drilled(source, cuts)?;
+        let cutter = solid_of(&once_over(cuts)?)?;
+        let printed = readable(source, Cancel::never())?;
+        Self::finished(&printed, &cutter, source, cavity, Cancel::never())
+    }
+
+    /// `source` drilled as the window drills it where no read is at hand: built on a read of its
+    /// model alone where `on_its_model`, the model beginning its shell byte for byte (ADR 0412).
+    pub fn of_printed(
+        source: &Mesh,
+        cavity: Option<Range<usize>>,
+        on_its_model: bool,
+        cuts: &Mesh,
+    ) -> Result<Self, VolumeError> {
+        match cavity {
+            Some(range) if on_its_model => {
+                let read = ModelRead::of_shell(source, &range);
+                Self::of_read(&read, source, Some(range), cuts, Cancel::never())
+            }
+            cavity => Self::of(source, cavity, cuts),
+        }
+    }
+
+    /// The same, `source` being what `read`'s model prints from, it or its shell, built on
+    /// that read where it can be, so the model's plugs and its drill read it once (ADR 0412).
+    pub fn of_read(
+        read: &ModelRead,
+        source: &Mesh,
+        cavity: Option<Range<usize>>,
+        cuts: &Mesh,
+        cancel: Cancel<'_>,
+    ) -> Result<Self, VolumeError> {
+        let cutter = solid_of(&once_over(cuts)?)?;
+        let shared = match &cavity {
+            None if std::ptr::eq(source, read.model().as_ref()) => {
+                Some(Cow::Borrowed(read.solid(cancel)?))
+            }
+            None => None,
+            Some(range) => read.shell(source, range, cancel).map(Cow::Owned),
+        };
+        if cancel.asked() {
+            return Err(VolumeError::Cancelled);
+        }
+        let printed = match shared {
+            Some(printed) => printed,
+            None => Cow::Owned(readable(source, cancel)?),
+        };
+        if cancel.asked() {
+            return Err(VolumeError::Cancelled);
+        }
+        Self::finished(&printed, &cutter, source, cavity, cancel)
+    }
+
+    /// `printed` less `cutter`, laid out as `source` is.
+    fn finished(
+        printed: &Solid,
+        cutter: &Solid,
+        source: &Mesh,
+        cavity: Option<Range<usize>>,
+        cancel: Cancel<'_>,
+    ) -> Result<Self, VolumeError> {
+        let left = less(printed, cutter, cancel)?;
         let Some(cavity) = cavity else {
             return Ok(Self {
                 mesh: Arc::new(left),

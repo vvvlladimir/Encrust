@@ -1,6 +1,10 @@
 use super::*;
-use crate::fixtures::{box_mesh, columns_on, landing_on, profile, ramp, under_a_gap_over_a_bar};
-use core_geometry::{Bvh, Mesh, Quat, Transform};
+use crate::Profiles;
+use crate::fixtures::{
+    box_mesh, columns_on, landing_on, meshed, profile, ramp, slab_with_lip, trees_on,
+    under_a_gap_over_a_bar,
+};
+use core_geometry::{Bvh, Mesh, Quat, Transform, diagnose};
 
 /// A wall filling 0..1 on x, standing on the plate.
 fn wall() -> Mesh {
@@ -191,11 +195,108 @@ fn the_light_preset_stands_a_support_under_a_part_at_its_own_lift() {
 }
 
 #[test]
-fn a_contact_with_no_room_under_it_has_no_landing() {
+fn a_part_a_millimetre_over_the_plate_stands_on_a_pad_and_a_short_head() {
+    // The head is cut to the room over the foot, which leaves the shortest pillar exactly.
+    let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
+    let model = box_mesh(Vec3::new(-3.0, -3.0, 1.0), Vec3::new(3.0, 3.0, 2.0));
+    let points = [SupportPoint::new(Vec3::new(0.0, 0.0, 1.0))];
+    let profiles = Profiles::single(&profile);
+    let trees = trees_on(&points, &model, Transform::default(), profiles);
+    let tree = trees.first().expect("a support stands under the part");
+    assert!(
+        !tree.landing().on_model,
+        "on its own pad on the plate, landed at {}",
+        tree.landing().base
+    );
+    let mesh = meshed(&trees, profiles);
+    assert!(
+        diagnose(&mesh).is_closed(),
+        "the short support is drawn closed"
+    );
+    let over_pad = profile.footing_height_mm() + 0.01;
+    let widest_mm = mesh
+        .vertices
+        .iter()
+        .filter(|vertex| vertex.z > over_pad)
+        .map(|vertex| vertex.truncate().length())
+        .fold(0.0, Scalar::max);
+    assert!(
+        widest_mm <= profile.pillar_radius_mm() + 1e-3,
+        "a straight head onto the pad, no fillet over it: {widest_mm} mm out against the pillar's {}",
+        profile.pillar_radius_mm()
+    );
+}
+
+#[test]
+fn a_part_lower_than_a_pad_stands_on_a_head_sunk_into_the_plate() {
+    let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
+    let profiles = Profiles::single(&profile);
+    for under_mm in [0.1, 0.4, 0.69] {
+        let model = box_mesh(Vec3::new(-3.0, -3.0, under_mm), Vec3::new(3.0, 3.0, 2.0));
+        let points = [SupportPoint::new(Vec3::new(0.0, 0.0, under_mm))];
+        let trees = trees_on(&points, &model, Transform::default(), profiles);
+        let tree = trees.first().expect("a support stands under the part");
+        assert!(
+            tree.landing().in_plate && tree.landing().base.z.abs() < 1e-4,
+            "{under_mm} mm up, the head runs into the plate; landed {:?}",
+            tree.landing()
+        );
+        let mesh = meshed(&trees, profiles);
+        let bounds = mesh.aabb().expect("the support is drawn");
+        assert!(
+            bounds.mins.z.abs() < 1e-3 && diagnose(&mesh).is_closed(),
+            "{under_mm} mm up, a closed cone cut at the plate, from z = {}",
+            bounds.mins.z
+        );
+        assert!(
+            bounds.maxs.x - bounds.mins.x < 2.0 * profile.pillar_radius_mm() + 1e-3,
+            "{under_mm} mm up, no wider than the pillar, no pad: {} mm across",
+            bounds.maxs.x - bounds.mins.x
+        );
+    }
+}
+
+#[test]
+fn a_head_run_into_the_plate_stands_straight_up_under_a_leaning_face() {
+    // A 1 mm slab leaning 30 degrees, its underside's middle 0.6 mm up and its low edge 0.35.
+    let slab = box_mesh(Vec3::new(-0.5, -3.0, 0.0), Vec3::new(0.5, 3.0, 1.0));
+    let leaning = Transform {
+        rotation: Quat::from_rotation_y(30.0_f32.to_radians()),
+        translation: Vec3::new(0.0, 0.0, 0.6),
+        ..Transform::default()
+    };
+    let model = core_geometry::transform_mesh(&slab, leaning);
+    let profile = SupportProfile::shipped("auto-light").expect("the preset ships");
+    let contact = Vec3::new(0.0, 0.0, 0.6);
+    let columns = columns_on(
+        &[SupportPoint::new(contact)],
+        &model,
+        Transform::default(),
+        Profiles::single(&profile),
+    );
+    let column = columns.first().expect("the head has room");
+    assert!(
+        column.landing.is_some_and(|landing| landing.in_plate),
+        "no room for a foot: {:?}",
+        column.landing
+    );
+    assert!(
+        (column.neck - Vec3::new(column.contact.x, column.contact.y, 0.0)).length() < 1e-4,
+        "on the plate straight under its contact {}, not along the face's lean: {}",
+        column.contact,
+        column.neck
+    );
+}
+
+#[test]
+fn a_contact_lower_than_its_foot_lands_in_the_plate() {
     let profile = profile();
-    // The foot alone is taller than this contact stands.
     let contact = Vec3::new(1.0, 1.0, profile.bottom.platform_thickness_mm);
-    assert!(landing_on(&Mesh::default(), Transform::default(), contact, &profile).is_none());
+    let landing = landing_on(&Mesh::default(), Transform::default(), contact, &profile);
+    assert!(
+        landing.is_some_and(|landing| landing.in_plate),
+        "no room for the foot, so the head runs into the plate: {landing:?}"
+    );
 }
 
 #[test]
@@ -374,7 +475,7 @@ fn a_point_with_nowhere_to_stand_keeps_its_place_and_has_no_landing() {
     // Kept rather than thrown away: `grow` is where a tip that cannot stand on its
     // own is carried to a trunk that can, or finally dropped.
     let points = [
-        SupportPoint::new(Vec3::new(1.0, 1.0, 0.05)),
+        SupportPoint::new(Vec3::new(1.0, 1.0, -1.0)),
         SupportPoint::new(Vec3::new(2.0, 2.0, 20.0)),
     ];
     let columns = columns_on(
@@ -385,7 +486,10 @@ fn a_point_with_nowhere_to_stand_keeps_its_place_and_has_no_landing() {
     );
 
     assert_eq!(columns.len(), 2);
-    assert!(columns[0].landing.is_none(), "it stands under its own foot");
+    assert!(
+        columns[0].landing.is_none(),
+        "under the plate, where a part sunk into it has nothing to stand on"
+    );
     assert!(columns[1].landing.is_some());
     assert_eq!(columns[1].point, 1, "every column knows its point");
 }
@@ -568,29 +672,53 @@ fn a_head_that_would_run_into_a_wall_across_from_it_is_not_placed() {
     );
 }
 
-/// A slab's underside at z = 10, and a lip 1.5 mm deep hanging from it at x = 10.
-fn slab_with_lip() -> Mesh {
-    let mut model = box_mesh(Vec3::new(0.0, -5.0, 10.0), Vec3::new(10.0, 5.0, 12.0));
-    model.append(&box_mesh(
-        Vec3::new(10.0, -5.0, 8.5),
-        Vec3::new(11.0, 5.0, 12.0),
-    ));
-    model
-}
-
 #[test]
-fn a_head_beside_a_lip_is_not_placed_rather_than_turned() {
+fn a_head_beside_a_lip_turns_away_from_it_within_the_lean_a_steep_face_gets() {
     // Straight down from 0.3 mm short of the lip, the widening head runs into it.
     let model = slab_with_lip();
     let bvh = Bvh::build(&model);
     let placed = Placed::new(&model, &bvh, Transform::default());
+    let contact = Vec3::new(9.7, 0.0, 10.0);
 
     let mut fixture = profile();
     fixture.small_pillar.enabled = false;
-    assert_eq!(neck_of(&placed, Vec3::new(9.7, 0.0, 10.0), &fixture), None);
+    let neck = neck_of(&placed, contact, &fixture).expect("a head turned off the lip fits");
+    let axis = (neck - contact).normalize();
+    assert!(
+        neck.x < contact.x,
+        "the head leaves away from the lip, to {neck}"
+    );
+    assert!(
+        axis.dot(-Vec3::Z) >= MAX_HEAD_LEAN_DEG.to_radians().cos() - 1e-4,
+        "turned no more than {MAX_HEAD_LEAN_DEG} degrees off the face, got {axis}"
+    );
     let clear = neck_of(&placed, Vec3::new(5.0, 0.0, 10.0), &profile())
         .expect("away from the lip the underside is open");
     assert!(clear.abs_diff_eq(Vec3::new(5.0, 0.0, 10.0 - profile().top.length_mm), 1e-4));
+}
+
+#[test]
+fn a_contact_no_head_fits_at_is_moved_along_its_face_to_where_one_does() {
+    // A rib 0.4 mm under the contact, 0.8 mm wide: no head clears it, turned or not, within the
+    // 0.3 mm a contact first steps; past its edge the underside is open.
+    let mut model = box_mesh(Vec3::new(-5.0, -5.0, 10.0), Vec3::new(5.0, 5.0, 12.0));
+    model.append(&box_mesh(
+        Vec3::new(-0.4, -5.0, 9.4),
+        Vec3::new(0.4, 5.0, 9.6),
+    ));
+    let bvh = Bvh::build(&model);
+    let placed = Placed::new(&model, &bvh, Transform::default());
+    let contact = Vec3::new(0.0, 0.0, 10.0);
+    let mut plain = profile();
+    plain.small_pillar.enabled = false;
+
+    let column = column(&placed, 0, 0, contact, &plain).expect("room within a millimetre");
+    let moved = column.contact - contact;
+    assert!(
+        moved.truncate().length() > 0.3 && moved.length() <= 1.0 + 1e-4 && moved.z.abs() < 1e-3,
+        "moved past the rib, over 0.3 mm and within 1 mm at its height, by {moved}"
+    );
+    assert!(has_head(column.contact, column.neck));
 }
 
 #[test]

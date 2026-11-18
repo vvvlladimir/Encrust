@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::SupportPlan;
-use core_geometry::{Adjacency, Mesh, Quat, Region, Scalar, Vec2, Vec3};
+use core_geometry::{Adjacency, Mesh, Region, Scalar, Vec2, Vec3};
 use core_plate::{OrientPreset, OrientSettings};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -11,9 +11,12 @@ use crate::job::{
     Costs, OrientJob, OrientOutcome, OrientRequest, OrientTask, Pose, Proof, Turn, orient_tasks,
 };
 use crate::plate::BuildPlate;
-use crate::prepare::Wish;
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::{Reading, Status};
+
+mod shown;
+
+pub use shown::{OrientState, ShownBrush, shows_clean_surface};
 
 /// A turn this small is the model already standing the way it should.
 const SETTLED_DEG: f32 = 0.5;
@@ -34,6 +37,8 @@ pub struct OrientTool {
     pub picking_face: bool,
     /// The flat face under the cursor while one is being picked.
     pub facet: Option<Facet>,
+    /// The brush that paints where the model shows, for a clean surface.
+    pub shown_brush: ShownBrush,
     /// The edges of the last mesh pointed at, which finding a face walks. Built once per
     /// mesh, since a mesh of a million faces takes a moment.
     adjacency: Option<(usize, Arc<Adjacency>)>,
@@ -53,11 +58,19 @@ impl Default for OrientTool {
             job: None,
             picking_face: false,
             facet: None,
+            shown_brush: ShownBrush::default(),
             adjacency: None,
             offers: Vec::new(),
             asked: None,
         }
     }
+}
+
+/// What [`OrientTool::start_on`] set going.
+pub enum Turning {
+    Search(OrientJob),
+    /// The last search's next good ways, stood by [`OrientTool::step`].
+    Step,
 }
 
 /// The models a run was asked about, and what it judged them by.
@@ -169,7 +182,7 @@ impl OrientTool {
         status: &mut Status,
     ) -> Result<()> {
         let tasks = orient_tasks(scene, only, plan_of);
-        let asked = self.asking(tasks, self.settings.preset, machine)?;
+        let asked = self.asking(tasks, self.settings, machine)?;
         if self.found_for(&asked) {
             *status = self.step(scene, plate);
             return Ok(());
@@ -178,45 +191,42 @@ impl OrientTool {
         Ok(())
     }
 
-    /// A fresh search for the way `ids` print best by `preset`, within `max_tilt_deg` of the
-    /// way each stands where given, whatever the panel is set to and whatever the last run
-    /// found, handed back rather than kept: what Prepare turns by, taking the way `wish` picks.
+    /// A search for the way `ids` print best as `wanted`, tilted at most `max_tilt_deg`, the
+    /// rest the engine's defaults, never the panel's, handed back: what Prepare turns by.
+    /// Asked as the last search was, of models standing as it left them, it steps instead.
     pub fn start_on(
         &mut self,
         scene: &Scene,
         ids: &[ObjectId],
-        (preset, max_tilt_deg, plan_of): (
-            OrientPreset,
+        (wanted, max_tilt_deg, plan_of): (
+            core_plate::Asked,
             Option<Scalar>,
             impl Fn(&SceneObject) -> SupportPlan,
         ),
-        (wish, machine): (&Wish, Option<(&PrinterProfile, &MaterialProfile)>),
-    ) -> Result<OrientJob> {
-        let plate_mm = machine.map_or(Vec2::ZERO, |(printer, _)| {
-            Vec2::new(printer.build_volume.x, printer.build_volume.y)
-        });
+        machine: Option<(&PrinterProfile, &MaterialProfile)>,
+    ) -> Result<Turning> {
         let tasks = scene
             .named(ids)
-            .map(|object| {
-                let task = OrientTask::of(object, plan_of(object));
-                let kept = wish.keep_clear.as_ref().map(|kept| (kept, plate_mm));
-                task.wishing(wish.pick, kept)
-            })
+            .map(|object| OrientTask::of(object, plan_of(object)))
             .collect();
-        let mut asked = self.asking(tasks, preset, machine)?;
-        asked.settings.max_tilt_deg = max_tilt_deg;
-        Ok(OrientJob::spawn(OrientRequest {
-            tasks: asked.tasks,
-            settings: asked.settings,
-            proof: asked.proof,
-        }))
+        let settings = OrientSettings {
+            preset: wanted.preset,
+            clean_surface: wanted.clean_surface,
+            max_tilt_deg,
+            ..OrientSettings::default()
+        };
+        let asked = self.asking(tasks, settings, machine)?;
+        if self.found_for(&asked) {
+            return Ok(Turning::Step);
+        }
+        Ok(Turning::Search(self.spawn(asked)))
     }
 
-    /// What a run over `tasks` by `preset` asks, printed for `machine` where there is one.
+    /// What a run over `tasks` by `settings` asks, printed for `machine` where there is one.
     fn asking(
         &mut self,
         tasks: Vec<OrientTask>,
-        preset: OrientPreset,
+        settings: OrientSettings,
         machine: Option<(&PrinterProfile, &MaterialProfile)>,
     ) -> Result<Asked> {
         if tasks.is_empty() {
@@ -226,14 +236,13 @@ impl OrientTool {
         Ok(Asked {
             tasks,
             settings: OrientSettings {
-                preset,
                 on_supports: true,
                 rest_on_plate: true,
                 build_volume_mm: machine.map(|(printer, _)| {
                     let volume = &printer.build_volume;
                     Vec3::new(volume.x, volume.y, volume.z)
                 }),
-                ..self.settings
+                ..settings
             },
             proof: machine.map(|(printer, material)| Proof {
                 printer: printer.clone(),
@@ -243,13 +252,32 @@ impl OrientTool {
     }
 
     fn search(&mut self, asked: Asked) {
+        self.job = Some(self.spawn(asked));
+    }
+
+    /// A search for `asked`, kept as what the next start is compared with.
+    fn spawn(&mut self, asked: Asked) -> OrientJob {
         self.offers.clear();
-        self.job = Some(OrientJob::spawn(OrientRequest {
+        let job = OrientJob::spawn(OrientRequest {
             tasks: asked.tasks.clone(),
             settings: asked.settings,
             proof: asked.proof.clone(),
-        }));
+        });
         self.asked = Some(asked);
+        job
+    }
+
+    /// Stands each model `turns` names its best way, its other good ways kept for the next
+    /// start asked the same to step through.
+    pub fn land(&mut self, scene: &mut Scene, plate: &BuildPlate, turns: Vec<Turn>) -> Status {
+        let said = stand_turned(scene, plate, &turns);
+        self.offers = turns.into_iter().map(|turn| (turn, 0)).collect();
+        said
+    }
+
+    /// What a search handed back failed: the next start searches again.
+    pub fn forget(&mut self) {
+        self.asked = None;
     }
 
     /// Whether the last run was asked `asked` and every model stands as it left it.
@@ -288,12 +316,9 @@ impl OrientTool {
 
         self.job = None;
         match outcome {
-            OrientOutcome::Turned(turns) => {
-                *status = stand_turned(scene, plate, &turns);
-                self.offers = turns.into_iter().map(|turn| (turn, 0)).collect();
-            }
+            OrientOutcome::Turned(turns) => *status = self.land(scene, plate, turns),
             OrientOutcome::Failed(message) => {
-                self.asked = None;
+                self.forget();
                 *status = Status::Error(message);
             }
         }
@@ -302,7 +327,7 @@ impl OrientTool {
 
     /// Stands every model the last run turned the next good way it found, round from the
     /// last to the first, and says what that one costs against the one before.
-    fn step(&mut self, scene: &mut Scene, plate: &BuildPlate) -> Status {
+    pub fn step(&mut self, scene: &mut Scene, plate: &BuildPlate) -> Status {
         let alone = self.offers.len() == 1;
         let mut stepped = 0;
         let mut said = None;
@@ -339,23 +364,6 @@ pub fn stand_turned(scene: &mut Scene, plate: &BuildPlate, turns: &[Turn]) -> St
         }
     }
     turned(turns, moved)
-}
-
-/// Turns each of `ids` by `rotation` from the way it came in, as `--rotate` does, and stands
-/// it back on the middle of where it was on `plate`.
-pub fn stand_rotated(
-    scene: &mut Scene,
-    plate: &BuildPlate,
-    ids: &[ObjectId],
-    rotation: Quat,
-) -> Status {
-    let mut moved = 0;
-    for id in ids {
-        if let Some(object) = scene.get_mut(*id) {
-            moved += usize::from(turn_in_place(object, rotation, plate));
-        }
-    }
-    Status::Info(tr!("orient-turned", count = moved))
 }
 
 /// What a run did: how many models it turned, how many stand on the plate, how many other
@@ -409,29 +417,22 @@ fn costed(headline: String, costs: Option<Costs>, was: Option<Costs>) -> Status 
 /// keeps it on `plate`, dropped back onto it and lifted `lift_mm` onto its supports where it
 /// is not set on it. Returns whether that turned it.
 fn stand(object: &mut SceneObject, pose: Pose, lift_mm: f32, plate: &BuildPlate) -> bool {
-    let turned = turn_in_place(object, pose.rotation, plate);
-    if !pose.on_plate {
-        object.transform.translation.z += lift_mm;
-    }
-    turned
-}
-
-/// Turns `object` to `rotation` about the middle of its footprint and stands it on `plate`;
-/// answers whether that turned it more than a settled pose differs by.
-fn turn_in_place(object: &mut SceneObject, rotation: Quat, plate: &BuildPlate) -> bool {
     let middle = |object: &SceneObject| {
         object
             .world_bounds()
             .map(|bounds| ((bounds.mins + bounds.maxs) / 2.0).truncate())
     };
     let before = middle(object);
-    let by = rotation * object.transform.rotation.inverse();
+    let by = pose.rotation * object.transform.rotation.inverse();
     object.transform = object.transform.turned(by);
     if let Some((before, after)) = before.zip(middle(object)) {
         object.transform.translation += (before - after).extend(0.0);
     }
     object.slide_onto_plate(Vec2::new(plate.x_mm, plate.y_mm));
     object.stand_on_plate();
+    if !pose.on_plate {
+        object.transform.translation.z += lift_mm;
+    }
     by.to_axis_angle().1.to_degrees() > SETTLED_DEG
 }
 

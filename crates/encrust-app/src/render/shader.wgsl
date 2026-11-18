@@ -250,6 +250,10 @@ fn hatch(world: vec3<f32>) -> f32 {
 // of what needs holding up is a line and not a row of stripe ends. See docs/decisions/0245.
 const OVERHANG_FILL = 0.85;
 
+// How much of the overhang colour is laid on after the light, so a ceiling, which only the
+// ambient reaches, still reads as marked instead of as near-black.
+const OVERHANG_GLOW = 0.35;
+
 // How much of its colour whatever stands past the build volume takes off a stripe and on
 // one. Not nothing between the stripes: a part narrower than the pitch would vanish.
 const OUTSIDE_GAP = 0.3;
@@ -518,10 +522,12 @@ fn model_colour(in: ModelFragment, front_facing: bool) -> vec4<f32> {
     // face the camera, because which way the surface hangs does not depend on where the
     // camera is. See docs/decisions/0034.
     var base = in.color.rgb;
+    var glow = 0.0;
     if (in.overhang >= 0.0) {
         let lean = -outward.z;
         let marked = smoothstep(in.overhang, in.overhang + OVERHANG_BAND, lean);
         base = mix(base, globals.overhang_color.rgb, marked * OVERHANG_FILL);
+        glow = marked * OVERHANG_GLOW;
     }
 
     base = banded(base, in.world.z);
@@ -540,6 +546,7 @@ fn model_colour(in: ModelFragment, front_facing: bool) -> vec4<f32> {
         }
         let grooves = layer_roughness(outward) * smoothstep(LAYER_FADE_FROM, LAYER_FADE_TO, per_px);
         shaded = shade(shaded, in.color.a, normal, in.world, grooves) * layered.w;
+        shaded = mix(shaded, globals.overhang_color.rgb, glow);
     }
     // The token arrives premultiplied, so the wash scales colour and alpha alike and the
     // result stays premultiplied for the blend.

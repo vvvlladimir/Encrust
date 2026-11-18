@@ -1,6 +1,6 @@
 # 0183. The web build works offline, and the command line completes and remembers its flags
 
-- **Status:** Accepted
+- **Status:** Accepted; when a new web build takes over is superseded by 0399
 - **Date:** 2026-10-04
 
 ## Context

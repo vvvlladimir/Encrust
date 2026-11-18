@@ -1,5 +1,5 @@
 use super::*;
-use core_geometry::{Mesh, Orientation, Transform, Vec3, diagnose};
+use core_geometry::{Mesh, Orientation, PlacedHit, Transform, Vec3, diagnose};
 use core_volume::Shell;
 use std::sync::Arc;
 
@@ -48,6 +48,37 @@ fn a_model_with_its_own_wall_is_hollowed_to_it() {
     assert!(
         (tasks[0].settings.thickness_mm - (plate_mm + 1.0)).abs() < 1e-6,
         "the model's own wall, not the plate's {plate_mm} mm"
+    );
+}
+
+#[test]
+fn a_click_takes_the_windows_blocker_size_on_a_model_with_its_own_settings() {
+    let mut scene = scene_with_a_tetrahedron();
+    let tool = HollowTool {
+        blocker: BlockerSize {
+            fit: false,
+            reach_mm: 3.0,
+        },
+        ..HollowTool::default()
+    };
+    let mut own = tool.state.clone();
+    own.thickness_mm += 1.0;
+    scene.objects_mut()[0].own.hollow = Some(own);
+    // Under (5, 5) the tetrahedron is 10 mm tall, so a fitted ball would be 5 mm.
+    let hit = PlacedHit {
+        point: Vec3::new(5.0, 5.0, 0.0),
+        normal: Vec3::NEG_Z,
+        distance: 0.0,
+        face: 0,
+    };
+
+    let blocker = tool
+        .blocker_for(&scene.objects()[0], &hit, false)
+        .expect("the model is not flattened");
+    assert!(
+        (blocker.radius_mm - 3.0).abs() < 1e-6,
+        "the window's fixed 3 mm, whatever the model keeps of its own: {}",
+        blocker.radius_mm
     );
 }
 
@@ -150,7 +181,7 @@ fn a_start_on_walls_hollows_only_the_models_named_at_their_wall() {
     let mut tool = HollowTool::default();
     tool.state.thickness_mm = 5.0;
     let mut job = tool
-        .start_settings(&scene, &[(named, HollowSettings::for_wall(1.5))])
+        .start_asked(&scene, &[(named, HollowSettings::for_wall(1.5))])
         .expect("a model is named");
     let outcome = loop {
         match job.poll() {

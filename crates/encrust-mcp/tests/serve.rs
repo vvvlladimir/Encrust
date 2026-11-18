@@ -70,8 +70,11 @@ async fn serve(cli: &Path, jobs: &Path) -> Client {
 async fn serve_with(cli: &Path, jobs: &Path, extra: &[&std::ffi::OsStr]) -> Client {
     let server = PathBuf::from(env!("CARGO_BIN_EXE_encrust-mcp"));
     let transport = TokioChildProcess::new(tokio::process::Command::new(server).configure(|cmd| {
-        cmd.arg("--encrust").arg(cli).arg("--jobs").arg(jobs);
-        cmd.arg("--no-window").args(extra);
+        cmd.arg("--encrust")
+            .arg(cli)
+            .arg("--jobs")
+            .arg(jobs)
+            .args(extra);
     }))
     .expect("the server binary starts");
     ().serve(transport)

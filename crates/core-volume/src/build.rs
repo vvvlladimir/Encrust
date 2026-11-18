@@ -84,9 +84,22 @@ pub fn build(
     settings: &FieldSettings,
     cancel: Cancel<'_>,
 ) -> Result<Sdf, VolumeError> {
+    build_signed(mesh, bvh, settings, None, cancel)
+}
+
+/// [`build`], its sides asked of `signer` where one is given rather than of one of its own.
+pub(crate) fn build_signed(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    settings: &FieldSettings,
+    signer: Option<&Signer<'_>>,
+    cancel: Cancel<'_>,
+) -> Result<Sdf, VolumeError> {
     let (band_mm, iso_mm) = (settings.band_voxels * settings.voxel_mm, settings.iso_mm);
     let value = |signed: Scalar, _: Vec3, _: &ClosestPoint| encode(signed - iso_mm, band_mm);
-    let built = built(mesh, bvh, settings, (&value, Quantised::MAX), cancel)?;
+    // Nearer the mesh than an inward wall's band, every value is the band's own: the default.
+    let record = ((&value as _, Quantised::MAX), iso_mm < 0.0);
+    let built = built(mesh, bvh, settings, signer, record, cancel)?;
     Ok(Sdf::new(built.grid, band_mm, built.tiles, built.solid))
 }
 
@@ -115,14 +128,22 @@ pub(crate) fn build_nearest(
     let record = |signed: Scalar, _: Vec3, found: &ClosestPoint| {
         found.face as u32 | if signed < 0.0 { INSIDE } else { 0 }
     };
-    built(mesh, bvh, settings, (&record, NO_FACE), cancel)
+    built(
+        mesh,
+        bvh,
+        settings,
+        None,
+        ((&record, NO_FACE), false),
+        cancel,
+    )
 }
 
 fn built<T: Copy + Send + Sync>(
     mesh: &Mesh,
     bvh: &Bvh,
     settings: &FieldSettings,
-    record: sweep::Record<'_, T>,
+    signer: Option<&Signer<'_>>,
+    record: (sweep::Record<'_, T>, bool),
     cancel: Cancel<'_>,
 ) -> Result<Built<T>, VolumeError> {
     if mesh.aabb().is_none() {
@@ -144,13 +165,23 @@ fn built<T: Copy + Send + Sync>(
     let iso_mm = settings.iso_mm;
     let grid = VoxelGrid::new(settings.voxel_mm);
     cancel.begin(Step::Preparing, 0);
-    let signer = Signer::new(mesh, settings.sign);
+    let own;
+    let signer = if let Some(signer) = signer {
+        signer
+    } else {
+        own = Signer::new(mesh, settings.sign);
+        &own
+    };
     let keep = settings.clip.map(|clip| clipped_tiles(grid, clip));
 
-    let (rings, candidates) = reach(
+    let Walked {
+        rings,
+        found: candidates,
+        sides,
+    } = reach(
         mesh,
         bvh,
-        &signer,
+        signer,
         grid,
         band_mm,
         iso_mm,
@@ -175,7 +206,7 @@ fn built<T: Copy + Send + Sync>(
         mesh,
         &faces,
         bvh,
-        &signer,
+        signer,
         grid,
         band_mm,
         iso_mm,
@@ -189,13 +220,30 @@ fn built<T: Copy + Send + Sync>(
         return Err(VolumeError::Cancelled);
     }
 
-    let solid = gap_runs(walls(tiles.keys().copied(), settings.clip, grid), |tile| {
-        let point = grid.tile_center(tile);
-        bvh.closest(point)
-            .is_some_and(|found| signed(&signer, mesh, point, &found) < iso_mm)
-    });
-
+    let stored = walls(tiles.keys().copied(), settings.clip, grid);
+    let solid = solid_runs(stored, &sides, (mesh, bvh, signer), grid, iso_mm);
     Ok(Built { grid, tiles, solid })
+}
+
+/// The runs of whole tiles below `iso_mm` between the `stored` ones of each column, each on
+/// the side the walk gave its lowest tile: no second question to part it from its neighbours.
+fn solid_runs(
+    stored: impl Iterator<Item = IVec3>,
+    sides: &FastMap<IVec3, Scalar>,
+    (mesh, bvh, signer): (&Mesh, &Bvh, &Signer<'_>),
+    grid: VoxelGrid,
+    iso_mm: Scalar,
+) -> HashMap<IVec2, Vec<(i32, i32)>> {
+    gap_runs(stored, |tile| {
+        sides.get(&tile).map_or_else(
+            || {
+                let point = grid.tile_center(tile);
+                bvh.closest(point)
+                    .is_some_and(|found| signed(signer, mesh, point, &found) < iso_mm)
+            },
+            |distance| *distance < iso_mm,
+        )
+    })
 }
 
 /// The stored tiles, with a tile just outside each end of a clipped column added to them.
@@ -306,7 +354,6 @@ fn clipped_tiles(grid: VoxelGrid, clip: Aabb) -> (IVec3, IVec3) {
 ///
 /// The shell comes back as the rings the walk found it in, because that is the order the
 /// sweep has to take it in: every tile of a ring has a neighbour in the ring before it.
-/// The tiles worth filling come with the signed distance at their centres.
 #[allow(clippy::too_many_arguments)]
 fn reach(
     mesh: &Mesh,
@@ -317,7 +364,7 @@ fn reach(
     iso_mm: Scalar,
     seeds: FastSet<IVec3>,
     keep: Option<(IVec3, IVec3)>,
-) -> (Vec<Vec<IVec3>>, Vec<(IVec3, Scalar)>) {
+) -> Walked {
     let edge_mm = band_mm + grid.tile_radius();
     let worth_filling = |distance: Scalar| (distance - iso_mm).abs() <= edge_mm;
     // A tile this much further from the mesh than the isosurface cannot lead to one that
@@ -342,28 +389,33 @@ fn reach(
         seeds.into_iter().map(|tile| (tile, None)).collect();
     let mut rings: Vec<Vec<IVec3>> = Vec::new();
     let mut found: Vec<(IVec3, Scalar)> = Vec::new();
+    let mut sides: FastMap<IVec3, Scalar> = FastMap::default();
 
     while !frontier.is_empty() {
         let measured: Vec<(IVec3, Scalar)> = frontier
             .par_iter()
-            .filter_map(|(tile, inside)| {
+            .filter_map(|(tile, inherited)| {
                 let center = grid.tile_center(*tile);
                 let found = bvh.closest(center)?;
-                let inside = inside.unwrap_or_else(|| signer.is_inside(mesh, center, &found));
-                Some((
-                    *tile,
-                    if inside {
-                        -found.distance
-                    } else {
-                        found.distance
-                    },
-                ))
+                // A tile either side could store asks its own side: an inherited one carries
+                // a single wrong answer on through every tile the walk reaches from it.
+                let stored = worth_filling(found.distance) || worth_filling(-found.distance);
+                let inside = inherited
+                    .filter(|_| !stored)
+                    .unwrap_or_else(|| signer.is_inside(mesh, center, &found));
+                let distance = if inside {
+                    -found.distance
+                } else {
+                    found.distance
+                };
+                Some((*tile, distance))
             })
             .collect();
 
         frontier = Vec::new();
         rings.push(measured.iter().map(|(tile, _)| *tile).collect());
         for (tile, distance) in measured {
+            sides.insert(tile, distance);
             if worth_filling(distance) {
                 found.push((tile, distance));
             }
@@ -378,7 +430,19 @@ fn reach(
             }
         }
     }
-    (rings, found)
+    Walked {
+        rings,
+        found,
+        sides,
+    }
+}
+
+/// What [`reach`] walked: its rings, the tiles worth filling with the signed distance at
+/// their centres, and that distance at the centre of every tile it measured.
+struct Walked {
+    rings: Vec<Vec<IVec3>>,
+    found: Vec<(IVec3, Scalar)>,
+    sides: FastMap<IVec3, Scalar>,
 }
 
 /// The twenty-six tiles touching one, so the walk crosses a corner as well as a face.

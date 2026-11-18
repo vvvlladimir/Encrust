@@ -45,17 +45,17 @@ pub(super) fn update_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bo
 
 /// What this build is, where it can be acted on: a click opens the sheet that writes a
 /// bug report. See `crate::report`.
-pub(super) fn alpha_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bool) {
+pub(super) fn beta_badge(ui: &mut egui::Ui, machine: &mut Machine, compact: bool) {
     let colors = theme::colors();
     let response = bar_pill(
         ui,
         icon::BUG,
-        &tr!("bar-alpha"),
+        &tr!("bar-beta"),
         compact,
         colors.warn,
         colors.warn_wash,
     );
-    if response.on_hover_text(tr!("bar-alpha-tooltip")).clicked() {
+    if response.on_hover_text(tr!("bar-beta-tooltip")).clicked() {
         machine.report.open = true;
     }
     ui.add_space(theme::ROW_GAP);

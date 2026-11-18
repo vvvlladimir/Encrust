@@ -17,8 +17,10 @@ mod fixtures;
 mod grid;
 mod hollow;
 mod infill;
+mod keep_solid;
 mod mend;
 mod model;
+mod model_read;
 mod parts;
 mod plug;
 mod relief;
@@ -37,18 +39,22 @@ pub use cancel::{Cancel, Progress, Step};
 pub use csg::{difference, intersection, offset, shell, union};
 pub use drain::{
     CUT_WEIGHT, Channel, DrainHole, HoleKind, HoleShape, HoleSize, Leg, MOUTH_LIFT_MM, Toward,
-    channel_under, drill, hole_at, holes_out, lift_for, pierce, turn_in_model,
+    channel_under, drill, drilled_out, hole_at, holes_out, lift_for, pierce, turn_in_model,
 };
 pub use drilled::{Drilled, drilled, drilled_pieces, drilled_reached};
 pub use error::VolumeError;
 pub use extract::extract;
 pub use grid::{TILE, VoxelGrid};
 pub use hollow::{
-    Blocker, CavityField, DEFAULT_BLOCKER_MM, HollowMode, HollowSettings, Hollowed, MIN_WALL_MM,
-    carve, cavity_field, hollow, hollow_at_scale, lattice_mm, plate_down, sleeves,
+    Blocker, CavityField, HollowMode, HollowSettings, Hollowed, MIN_WALL_MM, carve, cavity_field,
+    hollow, hollow_at_scale, lattice_mm, plate_down, sleeves,
 };
 pub use infill::{InfillPattern, InfillSettings};
-pub use model::{ModelHollow, PENDING_MARKER_MM, Shell, markers};
+pub use keep_solid::{
+    BLOCKER_REACH_MM, BlockerSize, across_mm, blocker_under, fitted_blocker, rod_on, walled_by,
+};
+pub use model::{ModelHollow, PENDING_MARKER_MM, Shell, blocker_markers, markers};
+pub use model_read::ModelRead;
 pub use parts::{PartSettings, PartedOff, Parts, part_off, parts};
 pub use plug::{PLUG_GAP_MM, PLUG_SPACING_MM, PlugSource, Plugs, laid_beside, plug_wall_mm, plugs};
 pub use relief::{
@@ -56,7 +62,10 @@ pub use relief::{
     press_painted_tiled, press_reusing, press_tiled, press_tiled_reusing,
 };
 pub use repair::{RepairMethod, RepairSettings, Repaired, repair, wrap};
-pub use resin::{MIN_SAVED_MM3, MIN_SAVED_SHARE, holds_resin, hollowing_saves_mm3};
+pub use resin::{
+    MIN_SAVED_MM3, MIN_SAVED_SHARE, holds_resin, hollowing_saves_mm3, placed_volume_and_area,
+    raw_saving_mm3,
+};
 pub use sdf::Sdf;
 pub use sign::SignMode;
 pub use stack::{Panel, StackField};

@@ -4,6 +4,7 @@ fn facts<'a>(settings: &'a ToolSettings, resin: &'a MaterialProfile) -> Facts<'a
     Facts {
         printer: None,
         printer_id: None,
+        printer_shipped: false,
         resin,
         resin_id: Some("grey"),
         format: "goo",
@@ -155,4 +156,103 @@ fn the_prefilled_issue_names_the_form_and_stays_under_the_budget() {
         !url.contains("what="),
         "the long one is left to the clipboard"
     );
+}
+
+#[test]
+fn a_crash_is_reported_whole_and_its_head_goes_to_the_form() {
+    let report = Report {
+        crash: Some("thread 'main' panicked at src/a.rs:1:2:\nboom\n\n0: frame".to_owned()),
+        ..Report::default()
+    };
+    assert!(
+        written(&report).contains("## The crash it closed on\n\n```text\nthread 'main'"),
+        "the report carries the panic and its backtrace"
+    );
+    let settings = ToolSettings::of(&crate::state::Tools::default(), &Default::default());
+    let resin = MaterialProfile::default();
+    let mut facts = facts(&settings, &resin);
+    facts.message = Some("an older failure".to_owned());
+    let url = report.issue_url(&facts);
+    assert!(
+        url.contains("log=thread%20%27main%27"),
+        "the crash wins the log field"
+    );
+    assert!(
+        url.contains("log=thread%20%27main%27%20panicked%20at%20src%2Fa.rs%3A1%3A2%3A%0Aboom&"),
+        "the log field takes the panic without its backtrace"
+    );
+}
+
+#[test]
+fn a_report_that_fits_goes_into_the_form_whole() {
+    let report = Report {
+        what: "the mask comes out mirrored".to_owned(),
+        ..Report::default()
+    };
+    let settings = ToolSettings::of(&crate::state::Tools::default(), &Default::default());
+    let resin = MaterialProfile::default();
+    let url = report.issue_url(&facts(&settings, &resin));
+    assert!(url.len() <= MAX_URL, "a URL GitHub refuses is no help");
+    assert!(
+        url.contains("&report=%23%23%20Encrust"),
+        "a short report goes into the form's report field"
+    );
+    assert!(
+        !url.contains("What%20happened"),
+        "the typed answers stand in their own fields, not twice"
+    );
+}
+
+#[test]
+fn a_report_too_long_for_the_form_asks_to_be_pasted() {
+    let report = Report {
+        crash: Some(format!("panicked\n\n{}", "  1: core_x::y\n".repeat(2_000))),
+        ..Report::default()
+    };
+    let settings = ToolSettings::of(&crate::state::Tools::default(), &Default::default());
+    let resin = MaterialProfile::default();
+    let url = report.issue_url(&facts(&settings, &resin));
+    assert!(url.len() <= MAX_URL, "a URL GitHub refuses is no help");
+    assert!(url.ends_with(&format!("&report={}", encoded(PASTE_HERE))));
+}
+
+#[test]
+fn a_shipped_printer_is_named_by_its_id_alone() {
+    let settings = ToolSettings::of(&crate::state::Tools::default(), &Default::default());
+    let resin = MaterialProfile::default();
+    let printer = printer_profiles::PrinterProfile::default();
+    let mut facts = facts(&settings, &resin);
+    facts.printer = Some(&printer);
+    facts.printer_id = Some("elegoo-saturn-4-ultra");
+    facts.printer_shipped = true;
+    let text = Report::default().markdown(&facts);
+    assert!(text.contains("The shipped `elegoo-saturn-4-ultra`, unchanged."));
+    assert!(!text.contains("## Printer profile\n\n```toml"));
+    facts.printer_shipped = false;
+    assert!(
+        Report::default()
+            .markdown(&facts)
+            .contains("## Printer profile\n\n```toml"),
+        "an edited printer is carried whole"
+    );
+}
+
+#[test]
+fn the_line_asking_for_a_paste_never_pushes_the_url_past_the_budget() {
+    let settings = ToolSettings::of(&crate::state::Tools::default(), &Default::default());
+    let resin = MaterialProfile::default();
+    let facts = facts(&settings, &resin);
+    let bare = Report::default().issue_url(&facts);
+    let before_report = bare
+        .find("&report=")
+        .expect("every URL names the report field");
+    let paste_here = format!("&report={}", encoded(PASTE_HERE));
+    let room = MAX_URL - paste_here.len() - before_report - "&what=".len();
+    let report = Report {
+        what: "x".repeat(room),
+        ..Report::default()
+    };
+    let url = report.issue_url(&facts);
+    assert!(url.len() <= MAX_URL, "{} is past {MAX_URL}", url.len());
+    assert!(url.ends_with(&format!("&report={}", encoded(PASTE_HERE))));
 }

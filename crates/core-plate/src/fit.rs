@@ -1,7 +1,6 @@
-use core_geometry::{Mesh, Scalar, Vec2, Vec3, fitting_turn};
+use core_geometry::{Mesh, Scalar, Vec2, Vec3, fitting_turn, sphere_directions};
 use rayon::prelude::*;
 
-use crate::candidates::sphere;
 use crate::orient::rotation_for;
 
 /// Directions the envelope takes the model's farthest vertex along, each one of its
@@ -26,7 +25,7 @@ pub struct Envelope {
 impl Envelope {
     /// The envelope of `mesh` in its own space, checked against a build volume `room_mm`.
     pub fn of(mesh: &Mesh, room_mm: Vec3) -> Self {
-        let mut points: Vec<Vec3> = sphere(ENVELOPE_DIRECTIONS)
+        let mut points: Vec<Vec3> = sphere_directions(ENVELOPE_DIRECTIONS)
             .into_par_iter()
             .filter_map(|along| {
                 let reach = |vertex: &&Vec3| vertex.dot(along);

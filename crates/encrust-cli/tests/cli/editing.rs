@@ -1,5 +1,5 @@
 //! Changing a model by hand from the command line: listing its shells, dropping and turning
-//! what is numbered, bridging two open edges.
+//! what is numbered, bridging two open edges, merging supports.
 
 use crate::support::*;
 
@@ -87,6 +87,36 @@ fn bridging_an_edge_two_faces_share_is_refused() {
     assert!(!output.status.success());
     assert!(
         stderr(&output).contains("--bridge 0-1:2-3"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn a_merge_with_no_supports_asked_for_is_refused() {
+    let path = write_box_stl("merge-no-supports", 10.0, 12, 0);
+    let output = estimate(&[path.to_str().unwrap(), "--merge-supports", "1,1,1;2,2,2"]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("--merge-supports"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn a_merge_naming_no_support_is_refused() {
+    let path = write_box_stl("merge-nowhere", 10.0, 12, 0);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--supports",
+        "medium",
+        "--merge-supports",
+        "100,100,100;101,100,100",
+    ]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("no support has its contact"),
         "{}",
         stderr(&output)
     );

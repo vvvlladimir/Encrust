@@ -22,11 +22,14 @@ another**, that is an ADR and belongs in `docs/decisions/`.
 | [ui-standards.md](ui-standards.md) | How every panel is built: text, units, undo, what is remembered |
 | [ui-screens.md](ui-screens.md) | Where every part of every screen stands, and how big it is |
 | [distance-queries.md](distance-queries.md) | The nearest point on a mesh, and the winding number that signs it |
+| [surface-path.md](surface-path.md) | The shortest walk over a surface between two of its points |
 | [volume.md](volume.md) | The distance field, its sparse storage, the CSG operators and extraction |
 | [hollowing.md](hollowing.md) | The three hollow modes, the blockers, and the lattices that fill a cavity |
+| [recipes.md](recipes.md) | A recipe's file, its steps and their order, the variables and the condition language |
 | [parts.md](parts.md) | How a model is split into parts: shells by edges, nesting, scraps, narrow joins |
 | [joints.md](joints.md) | Where a cut's pins, dowels, magnets and key go, how big they are, and the pillars under them |
 | [supports.md](supports.md) | Where a column can stand, the shape it is meshed as, placing one by hand |
+| [prominence.md](prominence.md) | How much each face of a model shows: its exposure to the open and its detail |
 | [analysis.md](analysis.md) | A layer's pieces from its runs, the pull on the film, islands and levers |
 | [hostile-files.md](hostile-files.md) | What a reader believes of a header, and the three guards under every count |
 | [ai-integration.md](ai-integration.md) | A model driving the pipeline: the tools, the transports, the plate state, the bench |

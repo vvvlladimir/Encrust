@@ -17,5 +17,5 @@ pub use format::{
     Sl1Flavour, SlicedFormat,
 };
 pub use panel::{FileLayout, PanelOverrides, file_layout, raster_settings};
-pub use read::{Opened, open, open_file, reads_sliced_file};
+pub use read::{Opened, SLICED_EXTENSIONS, open, open_file, reads_sliced_file};
 pub use write::{Observer, Writing, Written, measure, write, write_to};

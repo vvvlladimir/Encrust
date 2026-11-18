@@ -49,6 +49,24 @@ fn the_header_states_the_machine_and_the_panel() {
 }
 
 #[test]
+fn the_big_preview_reads_in_little_endian_words() {
+    let file = open();
+    let preview = file
+        .facts()
+        .preview
+        .as_ref()
+        .expect("a printed file has a preview");
+    assert_eq!((preview.width_px(), preview.height_px()), (290, 290));
+    // Read big-endian, the model's blue in the centre would come out a muddy green.
+    assert_eq!(preview.pixels()[0], [0, 0, 0], "the background is black");
+    assert_eq!(
+        preview.pixels()[145 * 290 + 145],
+        [8, 105, 173],
+        "the model is blue"
+    );
+}
+
+#[test]
 fn the_retract_reads_as_the_resin_stated_it() {
     // The file states 1.95 mm for a 2 mm lift at 0.05 mm layers.
     let retract = open().facts().stated.retract_distance_mm;

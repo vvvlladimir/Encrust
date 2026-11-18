@@ -21,6 +21,7 @@ pub struct Remote {
 }
 
 /// The test prints fetched from the repository, shown before [`super::SAMPLES`].
+#[cfg(not(target_arch = "wasm32"))]
 pub const REMOTES: [Remote; 1] = [Remote {
     file: "crustling.stl",
     name: || tr!("sample-crustling"),
@@ -30,6 +31,10 @@ pub const REMOTES: [Remote; 1] = [Remote {
         "/../../assets/samples/crustling.png"
     )),
 }];
+
+/// A browser has nowhere to keep one, and handing it over would download it; see ADR 0394.
+#[cfg(target_arch = "wasm32")]
+pub const REMOTES: [Remote; 0] = [];
 
 impl Remote {
     /// What the test print is called, in the window's language.
@@ -170,7 +175,6 @@ fn keep(path: &Path, bytes: &[u8]) -> Result<(), FetchError> {
     })
 }
 
-/// A browser keeps no paths, so a test print opens in a tab of its own there.
 #[cfg(not(target_arch = "wasm32"))]
 fn dir() -> Option<PathBuf> {
     Some(printer_profiles::user_dir()?.with_file_name("test-prints"))

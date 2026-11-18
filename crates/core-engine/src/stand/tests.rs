@@ -9,6 +9,7 @@ fn solid<'a>(mesh: &'a mut Mesh, cuts: &'a mut Option<Mesh>) -> ToStand<'a> {
     ToStand {
         mesh,
         cavity: None,
+        on_its_model: false,
         cuts,
         drill_exactly: true,
     }
@@ -124,8 +125,8 @@ fn contacts_over_a_body_that_may_not_be_stood_on_are_named_unheld() {
         stood.contacts.len() - stood.standing,
         "every contact is either held or named"
     );
-    for &contact in &stood.unheld {
-        let at = stood.contacts[contact];
+    for lost in &stood.unheld {
+        let at = stood.contacts[lost.point];
         assert!(
             (14.0..=26.0).contains(&at.x) && (14.0..=26.0).contains(&at.y),
             "an unheld contact lies under the slab, 15..25 mm across, found {at}"
@@ -199,4 +200,60 @@ fn a_seated_model_is_planned_onto_its_raft_only_when_something_hangs() {
     let cube = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
     let planned = planned_lift(&cube, &plan, true, 0.05).expect("a cube has bounds");
     assert_eq!(planned, Lift::ON_THE_PLATE, "nothing on a cube hangs");
+}
+
+#[test]
+fn contacts_alone_stand_a_column_each_and_lift_nothing() {
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    profile.raft.enabled = false;
+    let mut mesh = mushroom();
+    let island = Vec3::new(1.0, 1.0, 10.0);
+    let stood = stand_at(
+        solid(&mut mesh, &mut None),
+        &SupportPlan::of(profile),
+        &[island],
+    )
+    .expect("the cap's underside can be held up");
+    assert_eq!(stood.lifted_mm, 0.0, "the model stays where it stands");
+    assert_eq!(stood.contacts, vec![island], "the island alone");
+    assert_eq!(stood.standing, 1, "a column under it: {stood:?}");
+}
+
+#[test]
+fn a_shell_on_its_model_prints_drilled_with_its_cavity() {
+    let model = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(20.0));
+    let void = core_geometry::cuboid(Vec3::splat(5.0), Vec3::splat(15.0));
+    let offset = model.vertices.len() as u32;
+    let mut shell = model.clone();
+    shell.vertices.extend(&void.vertices);
+    shell.faces.extend(
+        void.faces
+            .iter()
+            .map(|[a, b, c]| [a + offset, c + offset, b + offset]),
+    );
+    let cavity = model.faces.len()..shell.faces.len();
+    let hole = core_volume::DrainHole {
+        at: Vec3::new(10.0, 10.0, 20.0),
+        axis: Vec3::NEG_Z,
+        diameter_mm: 2.0 * std::f32::consts::SQRT_2,
+        depth_mm: 8.0,
+        taper: 1.0,
+        lift_mm: 0.0,
+        shape: core_volume::HoleShape::Polygon { sides: 4 },
+        turn_deg: 45.0,
+        kind: core_volume::HoleKind::Drain,
+    };
+    let cuts = core_volume::drill(&[hole], &[]).expect("the hole drills");
+
+    let (surface, inner) = printed(&shell, (Some(cavity), true), Some(&cuts), true);
+    // 8000 mm3 less the 1000 mm3 cavity and the 2 x 2 x 5 mm bore through its wall.
+    let volume = core_geometry::signed_volume(&surface);
+    assert!(
+        (volume - 6980.0).abs() < 1e-2,
+        "expected 6980 mm3, got {volume}"
+    );
+    assert!(
+        inner.is_some_and(|inner| !inner.is_empty()),
+        "a cavity stays"
+    );
 }

@@ -8,7 +8,7 @@ Encrust is a free, open-source slicer for MSLA and SLA resin printers. It takes 
 and turns it into the file your printer prints. Everything runs on your own computer: no
 account, no cloud, nothing uploaded.
 
-**Status: alpha.** Every step works end to end, from opening a model to starting the print,
+**Status: beta.** Every step works end to end, from opening a model to starting the print,
 but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrote.
 
 ---
@@ -17,8 +17,8 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 
 | | What you get | What you don't |
 |---|---|---|
-| **Desktop window** | Windows 10/11 (installer, or the Microsoft Store), macOS 12+ (Apple silicon and Intel), Linux (AppImage, `.deb`). Every feature. | Downloaded builds are not code-signed yet, so the first launch needs one extra step; the Store copy does not. Needs a GPU with Vulkan, Metal or DirectX 12. |
-| **Browser** | The same core, at encrust.app/app. Nothing to install, keeps working offline after the first visit, and the model never leaves your machine. | Needs WebGPU (a recent Chrome or Edge). It cannot send to a printer: the sliced file is downloaded instead. No self-update. The section cut is drawn without its cap. A browser keeps Cmd N and Cmd Shift N for its own windows; use the menu for a new plate or project. It trails the desktop build. |
+| **Desktop window** | Windows 10/11 (installer, or the Microsoft Store), macOS 12+ (Apple silicon and Intel), Linux (AppImage, `.deb`); Windows and Linux on x86-64 and ARM64. Every feature. | Downloaded builds are not code-signed yet, so the first launch needs one extra step; the Store copy does not. Needs a GPU with Vulkan, Metal or DirectX 12. |
+| **Browser** | The same core, at encrust.app/app. Nothing to install, shows its progress while it loads, keeps working offline after the first visit, takes a new release on the next reload, and the model never leaves your machine. | Needs WebGPU (a recent Chrome or Edge, or Safari 26). It cannot send to a printer: the sliced file is downloaded instead. No Crustling test print. No self-update. No recovery copy of an unsaved plate. A browser keeps Cmd N and Cmd Shift N for its own windows; use the menu for a new plate or project. |
 | **Command line** (`encrust`) | The same pipeline with no window, for scripts and batches. | No painting, no manual supports. Anything you would click on a model is done in the window and saved as a project, which the command line can then slice. |
 
 ---
@@ -30,12 +30,18 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
   material, which the Relief tool uses.
 - Open an **`.encrust` project**. It opens exactly as it was saved, with its supports and
   cavities already built, so nothing is recalculated.
+- **Double-click an `.encrust` project** to open it in Encrust: after the macOS app, the Windows
+  installer or Store copy, or the `.deb` is installed. On macOS an open window takes the project,
+  and a drop on the Dock icon or `open` does the same. On Windows and Linux it opens in a window of
+  its own. The `.AppImage` and the archives register nothing; use Open With.
 - Open **any sliced file** Encrust can read, whoever made it, as a model: its layers are
   built back into a mesh that stands where it stood on the plate, so you can move it,
   support it again or cut it for another printer. Its supports and raft come back as part
-  of the model, edges are rounded by about a layer height (0.05 mm at the finest), and layer steps stay. A `.sl1` is slow
-  to open (a minute for a full 16K stack). A file
-  with the wrong extension is recognised by its first bytes.
+  of the model, edges are rounded by about a layer height (0.05 mm at the finest), and layer steps stay. A notice
+  shows how far the rebuild has got and can cancel it; a full 16K plate of 521 layers opens
+  in about 3 s. A `.sl1` is slow to open (a minute for a full 16K stack). The window
+  goes by the extension, so a file with the wrong one is read as a mesh; `encrust info`
+  recognises a sliced file by its first bytes.
 - Drag and drop onto the window, or use the **Recent** list, which shows a picture of each
   file in the window's light or dark colours and can be cleared from the start page or File →
   Open recent.
@@ -44,10 +50,13 @@ but only one printer, the ELEGOO Saturn 4 Ultra, has printed a file Encrust wrot
 - Start from **Crustling**, the mascot, 30 mm across, downloaded from the project's
   repository on the first click and opened from disk on the next; or from one of **four
   built-in test prints**: detail test, exposure check, surface finish and fit gauge. The
-  start page and the File menu's Test prints list all five, Crustling first.
+  start page and the File menu's Test prints list all five, Crustling first; the browser
+  build lists the four built-in ones only.
 
 **You cannot:**
 - Open other 3D formats (STEP, PLY, AMF and so on).
+- Open a 3MF whose model is not UTF-8, such as an object named in Latin-1: it is refused
+  as malformed.
 - Open a project saved by version 3 or older of the project format.
 
 ---
@@ -108,7 +117,8 @@ selection or take it out, instead of what a click does in that tool. In the Supp
 whole-surface fill is Cmd-Shift-click.
 
 **Position tool:**
-- Move, rotate and scale with typed numbers or the on-screen gizmo, in global or local axes.
+- Move, rotate and scale with typed numbers or the on-screen gizmo, in global or local axes;
+  in local axes Move and Rotate take a step from where the model stands and read zero again.
   Hold Shift to drag in 1 mm and 15° steps; a drag shows how far it has moved or turned
   beside the cursor, and where the model started.
 - Scale uniformly or per axis, keep the proportions, scale to fit the build volume, or go
@@ -119,29 +129,72 @@ whole-surface fill is Cmd-Shift-click.
   height, typed or a millimetre a press of − or +. Auto-orient keeps that height for a pose
   on supports; nought, or **On the plate**, hands it back to the support profile's lift.
 
-**Prepare for print:** in Select under Auto-orient, and in the Edit menu for the picked
-models or the whole plate, it does what `--prepare` does: turns a model you have not turned
+**Prepare for print:** from its row over the plate card — the recipe and the run — and in
+the Edit menu, for the picked models or the whole plate, it runs the steps of the recipe
+picked — the built-in `prepare` until you pick another of the built-in ones or one of your own
+(`docs/design/recipes.md`), remembered between runs and taken back by undo — each model
+decided step by step. A gate that holds, or a step that fails and does not skip, stops the
+run at that step with the plate yours: mend it by hand, then **Continue** (the play button)
+runs the step again and goes on, or **End** (the stop button) keeps the plate as it is, what
+the run did before it one undo. Like `--prepare`, it turns a model you have not turned
 by the auto preset, repairs one with defects, hollows a solid one at a 2 mm wall where that
 saves enough resin, drills the holes that drain it with a vent, and stands it on the
 catalogue's automatic supports, its cavity too. A model you turned keeps its turn, as
-`--rotate` keeps it. The notice and the section name the step under way over a bar;
-**Cancel** stops it and leaves the plate as it was, and one undo takes a finished run back.
-While it runs the tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and Grow wait.
-Select then lists what was decided for the model in the card.
+`--rotate` keeps it. Run again with the same orient step on models still standing as the
+last run turned them, it stands each the next good way that search found instead of
+searching again, as Auto-orient pressed again does. A recipe's other steps run as their tools do: `check` measures the
+layers as Check does and, by its `retry`, supports the islands again; `arrange` is Arrange
+plate; `save` writes the file as Slice to does, and sends it on to the printer when asked;
+`pause` waits the same way, the plate yours to change, for **Continue** or **End**, even when every
+step before it was skipped; the row names the step it waits at. The
+recipe's box in the row names the step under way and the share done, filling as it goes,
+or why the run waits; in Preview, where the row is not shown, a notice does. **Cancel**
+beside it stops a step under way and puts the plate back as the run, or its last
+**Continue**, found it, and one undo takes a finished run back. While a step runs the
+tools' own Auto-orient, Repair, Hollow, Check drainage, Auto and Grow wait. A recipe of yours that no longer reads or passes its check cannot be started, and
+its run button says why. **Settings → Recipes** lists every recipe, the built-in ones
+first: a built-in one opens to read and **Duplicate** makes a copy of your own, and **New
+recipe** starts one of no steps; yours you rename, give variables, and change step by step —
+the steps a chain of folded cards, each saying in one line when it runs and what it sets,
+unfolded by a press and remembered so, and saying what it does behind its question mark —
+add a step of any kind before, between or after the others, switch it off,
+drag it by its grip to another place or move it up or down, remove it, type its condition (checked as you type, the error under the
+field, and the button beside it listing every name a condition can read, what each means and
+its unit, your variables and the functions, to put one in),
+choose what a failure does, set or leave out each setting (a word by what it means, the
+file's word beside it), work a number or a switch out by an
+expression, add rules that choose other settings, and a gate's, a pause's or a check's own
+fields. **Save** writes it only once it passes its check, under a new file name when you
+renamed it, the picker following; a draft that does not pass stays in the form. **Delete**
+asks by a second press; **Import** and **Export** carry a recipe as its file.
 
 **Auto-orient:**
 - Searches for the best angle for one of four presets: **fewest supports**, **least
   peel**, **shortest print** or **auto**, picked in Position beside **Auto-orient**; the
   plate-wide **Auto-orient plate** uses the same preset. The preset resets to auto when
-  the window reopens.
+  the window reopens; **Clean surface** and the brush size are remembered and undone with
+  the other tool settings.
 - The search shows its step over a bar and **Cancel**: first it scores the ways to stand,
   then, with a printer chosen, prints the best of them to compare. Cancel leaves the models
   as they stand.
-- **Auto** balances the other three for each model. It never lets one of supports, pull
-  or print time go far worse for the sake of the others. Where some pose is about as good
-  as the best on all three, it takes that one. Otherwise it takes the pose where each
-  gives up the smallest, most even share of its best. Like least peel, it never takes a
-  suction cup or a pull past the warning.
+- **Clean surface**, a switch under the presets, works with any of them: of the poses that
+  put the fewest contacts where the model shows — within about one contact — the preset
+  takes its best. A pose with a few more contacts on show is offered beside the choice
+  when it wins at least a quarter more of the preset, such as a quarter less resin.
+- The brush in the **Clean surface** row paints the faces that must stay clean, such as a
+  face: alt to erase, **Clear what shows** to start again. The same switch and brush stand in
+  the Where section of Supports, painting the same faces. While it paints, the move and turn
+  handles are put away, so a stroke over them paints the model. Painted faces are drawn in
+  rose while the switch is on. Once
+  a model has any face painted, only the painted faces count as showing; with none, what
+  shows is found from the shape: open surface with fine detail, while folds, the underside
+  and smooth areas take the contacts. Painting is saved with the project and cleared when
+  the model is reshaped.
+- **Auto** balances supports, pull and print time for each model. It never lets one of
+  supports, pull or print time go far worse for the sake of the others. Where some pose is
+  about as good as the best on all three, it takes that one. Otherwise it takes the pose
+  where each gives up the smallest, most even share of its best. Unlike the single
+  presets, it never takes a suction cup or a pull past the warning.
 - When there are other good poses, pressing **Auto-orient** again with nothing changed
   stands the model the next of them, round to the first, without searching again. A
   change to the model, its supports, its lift, the preset, the printer or the resin
@@ -150,8 +203,9 @@ Select then lists what was decided for the model in the card.
   where one is chosen), green where it beats the pose before and red where it loses. Auto offers every
   trade that no other pose beats on all three; a single goal offers the poses it reads as
   just as good.
-- You can cap the tilt (for example "no more than 30° from how it stands now"). A cap of 0
-  leaves the model as it is.
+- You can cap the tilt with **Limit tilt** under the presets, off at first (for example "no
+  more than 30° from how it stands now"). A cap of 0 leaves the model as it is. It is
+  remembered and undone with the other tool settings.
 - It never picks an angle worse than the current one.
 - With a printer chosen, it only picks a pose that fits the build volume, supports and
   all, if any pose does. It turns a part about the vertical, even across the plate's
@@ -161,22 +215,20 @@ Select then lists what was decided for the model in the card.
 - With a printer chosen, it tries its best few poses with their supports and counts the
   islands each would leave at the printer's own pixel and layer, down to specks a tenth of
   a millimetre across. A pose standing on the plate with something hanging off it is
-  turned down by every preset but fewest supports.
+  turned down by auto.
+- Every preset but auto minimises its one problem alone. It takes the pose that reads
+  least on it, however small the saving, and ignores suction cups, pulls past the
+  warning, islands and supports with no room to stand; it only never picks a pose that
+  would not fit the printer or that would balance on a point. Use **auto** to have those
+  avoided, or fix them with the tools that do: **Drain** for a cup, Check for the rest.
 - **Fewest supports** picks the pose with the least resin in its supports, raft included,
-  whichever way up that is — strictly the least, however small the saving. It ignores
-  suction cups — drain them with **Drain**, or use **least peel**, which avoids them — and
-  islands, takes supports with no room to stand as they come, and never picks a pose that
-  would not fit the printer or that would balance on a point.
-- **Least peel** keeps the hardest layer's pull on the film low, without suction cups or
-  anything left hanging. Once every layer pulls under 10 N — a third of the 30 N warning —
-  it has nothing more to win, and takes the pose with the least support among those, so
-  a small model is not tilted or flipped for a fraction of a newton. The newtons are an
-  estimate good to about a factor of three, not a measurement of your printer.
+  whichever way up that is.
+- **Least peel** takes the pose whose hardest layer pulls least on the film, whatever
+  support it takes. The newtons are an estimate good to about a factor of three, not a
+  measurement of your printer.
 - **Shortest print** takes the pose with the fewest layers — the model's height plus its
-  lift onto supports, since a layer takes as long whatever its area — that seals no cup and
-  leaves nothing hanging. It ignores the peel warning and the support it takes: a flat
-  part lies flat, a figure on its side. Poses within 2 % and a millimetre of the shortest
-  count as just as fast, so a model is not turned for less.
+  lift onto supports, since a layer takes as long whatever its area — whatever support
+  it takes: a flat part lies flat, a figure on its side.
 - It either leaves a model standing on the plate, with supports only under what hangs
   over it, or lifts it onto supports by the support profile's **Lift** — whichever the
   goal prefers. Your raft setting is counted either way.
@@ -195,15 +247,32 @@ Select then lists what was decided for the model in the card.
   read: past the build volume (its overhang is cut off the layers) or in the inset (it
   still slices whole) once a printer is chosen, and meeting another model. A click on a row, or on a
   **Meets** tag, flies the camera there; on a meeting each further click goes to the next
-  place. None of it stops the slice. The Check tool on the rail carries a dot while any of
+  place. None of it stops the slice. The Check tool on the tool row carries a dot while any of
   them stands, before Check is opened: red past the build volume or for a meeting, amber for
   the rest, gone once each is fixed.
 - Under **On the plate** too: a hollowed model with no drain hole, whose cavity prints full of
   resin, and a solid model a wall Hollow would build would save at least 10 ml and 40 % of
   the resin of, marked worth hollowing. A click picks the model and opens Drain or Hollow.
+- Check reads the plate in the background once it has stood still for a moment, on half the
+  cores and at half the panel's resolution, so the dot on the Check tool and its first list
+  are there before Check is opened. Opening Check reads every pixel; until that is in, the
+  quick list is marked and its fixes wait. An island near the smallest one named can be missed
+  or wrongly named by the quick read, never by the full one. While Fix all or another recipe
+  runs, Check reads nothing of its own: it reads again once the run ends or pauses.
+- Check keeps each kind of issue on a card of its own, with its rows and the buttons that
+  answer it: **Placement**, **Hollow and drain**, then in the layers **Islands**, **Suction cups**,
+  **Weak necks**, **Hard peel** and **Thin sections**, one card open at a time. A fix folds its
+  card to what it did, with Undo on the latest, and opens the next. What a fix could not reach
+  stays on the card with the reason and with every button, the fix just made among them, so
+  issues a later step brought back can still be answered. **Fix all** at the foot takes every automatic answer on
+  the whole plate in a safe order, as one undo and with Cancel; `--recipe fix-issues` does the
+  same on the command line. The arrows step through every issue, of the plate and of the layers
+  alike, and go round. Move to free space and Arrange keep 2 mm from the plate's edge, and stand
+  a model flush with it where that is all the room there is.
 
 **Many models:**
-- **Arrange the plate** automatically, largest model first.
+- **Arrange the plate** automatically, largest model first, clear of a printer's plate inset;
+  a model longer than the plate is turned about the vertical by the least that fits it.
 - **Duplicate**, or lay copies out as an **array** of rows and columns with a gap you set.
   A copy is cut and hollowed once, not once per copy.
 - **Several plates in one project.** Move models between plates, duplicate a plate, slice
@@ -213,6 +282,12 @@ Select then lists what was decided for the model in the card.
 - Distance between two points, angle, or the gap between two flat faces.
 - Snap to a corner, an edge or the exact spot (hold Alt for free placement). It can also show
   dX, dY and dZ in the view.
+- Measure from a support as well as a model: a click on a tip, a joint or the foot takes
+  that point, one on a strut or the trunk the nearest point of its axis, or its nearer end
+  when snapping to corners.
+- **Measure along the surface:** the shortest way over the model between the two points,
+  drawn on it and read beside the straight distance. Both points must be on one model. A
+  long search shows its progress at the foot of the view, with Cancel.
 - Two faces that are not parallel have no single gap, and the tool says so.
 
 ---
@@ -221,7 +296,7 @@ Select then lists what was decided for the model in the card.
 
 ### Cut
 - Cut a model with a plane. Position the plane by height from the plate or by an offset
-  from the centre of mass, or click to place it on the model.
+  from the centre of mass.
 - The cut only divides: the halves keep the model's drain holes and channels, cut into them.
   A model whose holes cannot be cut into it exactly is left whole, and the window says so.
 - **Join the halves** so they glue back true, choosing one of four kinds:
@@ -309,7 +384,14 @@ Select then lists what was decided for the model in the card.
 - The mode and the built-in texture chosen are remembered between runs.
 
 ### Hollow
-- Hollow a model with a wall thickness and precision you choose.
+- Hollow a model with a wall thickness and precision you choose. The thickness is the
+  wall at its thinnest: on a coarse precision the wall comes out up to half a lattice step
+  thicker rather than thinner than asked.
+- The cavity holds only what can drain: a pocket smaller than a 3 mm drain hole's ball is
+  left solid, and nothing of the cavity lands outside the model or loose inside it, even on
+  a mesh with a stray film or shells crossing each other.
+- A model made of overlapping parts gets one cavity through them rather than a cavity per
+  part with walls along the faces where they meet, so it needs fewer drain holes.
 - **Inside** grows the wall inward and leaves the outside untouched. **Outside** grows it
   outward, which gives you a mould of the model; a mould takes no infill and keeps no
   wall solid, so the panel hides both.
@@ -326,33 +408,43 @@ Select then lists what was decided for the model in the card.
     every cell. Walls come out flat and holes round, at any precision.
   - **Scaffold** is struts on the edges of a cube stood on its corner. None of them is
     level, so none starts in mid-air, and it braces the part sideways too.
-- **Keep solid:** click spots on the model where the wall must stay solid (blockers), and
-  set their size.
+- **Keep solid:** click spots on the model where the wall must stay solid (blockers). A
+  blocker fits the thickness of the model where you click, or takes a size you set, which
+  is how far it reaches past the wall into the cavity. Shift-click runs a rod on from the
+  last blocker, to keep a whole limb solid. On the command line, `--keep-solid`.
+- **Keep thin parts solid:** a switch in Keep solid, off at first, keeps the wall solid
+  wherever the model is thinner than the thickness you set, so fingers, limbs and blades
+  are not hollowed; a mould takes it too. On the command line, `--keep-solid-under`, and in
+  a plate file's `hollow` and a recipe's hollow step, `keep_solid_under_mm`.
 - With one model picked, the settings you change are that model's own and are there again
   when you come back to it; with none picked they are the plate's, which every other model
-  uses. You can save settings as named presets.
+  uses. Fixed size or Fit to thickness, and the size, are the window's: whichever model is
+  picked, and the same after a restart. You can save settings as named presets.
 - While it runs, the panel names the step the model is on and shows how much of the run is
   done.
 - **Cancel** stops a run inside the model it is on, not only between models.
 - Undo with **Make solid again**.
 
 ### Drain
-- **Drill** a hole, with size, depth and taper, wherever you click: into a model, its
-  supports or its raft. A click on a hole already drilled at least as wide adds nothing; a
-  wider hole over it is drilled, and so is one drilled on from its floor or wall, a narrower
-  step for instance. A hole in the supports gets no plug.
-- A hole or a channel cuts only the model it was made in, and the supports and raft under
-  it, which the viewport shows open as they print: a model set down in another's hole is
-  printed whole. The cut is made for real in the
+- **Drill** a hole, with size, depth and taper, wherever you click: into a model or its
+  raft. A click passes through a support tree; a support whose tip the hole drills out goes.
+  A click on a hole already drilled at least as wide adds nothing; a wider hole over it is
+  drilled, and so is one drilled on from its floor or wall, a narrower step for instance. A
+  hole in the raft gets no plug.
+- A hole or a channel cuts only the model it was made in and the raft under it, which the
+  viewport shows open as they print, and never a support tree: a model set down in another's
+  hole is printed whole. The cut is made for real in the
   background a moment after each change; a model that cannot be read as a solid, even
   mended, keeps an approximate cut that also reaches what stands in it, and the window
   says so.
 - A hole or a channel is **round** or a **polygon** of 3 to 12 sides that you can turn about
   its axis: turn a corner to the top of a hole in a side wall and its roof prints without
   sagging.
-- Once the model is hollow, a hole is carried on through the wall into the cavity, however
-  shallow you set it. A hole drilled before hollowing is part of the model's shape: it keeps
-  its depth and its plug, the cavity keeps a wall around it, and it does not drain.
+- A hole you click into a hollow model stops at the depth you set: it opens the cavity only
+  if that depth reaches past the wall, and **Check drainage** says if it does not. Holes that
+  **Auto** chooses, and those a trapped pocket's button drills, always go through into the
+  cavity. A hole drilled before hollowing is part of the model's shape: it keeps its depth
+  and its plug, the cavity keeps a wall around it, and it does not drain.
 - **Plugs:** every hole gets a plug standing on the plate beside its model as soon as it is
   cut, at the nearest spot clear of every model, support and raft, and on the plate wherever
   there is room left on it; where there is none, it stays beside its model and the window
@@ -365,16 +457,20 @@ Select then lists what was decided for the model in the card.
   plug the gap narrows to nothing before its end stops there; a hole whose mouth the gap
   closes gets no plug, the window says so, and the other holes keep theirs. A model
   with flaws in its surface is mended for this first; one that cannot be mended gets plugs that follow its surface only
-  approximately, and the window says so. The plugs are cut in the background, so a dense
-  model keeps its old plugs for a moment after you change the holes or the gap; while you
+  approximately, and the window says so. The plugs are cut in the background, the model read
+  once for them and for its holes, with a notice at the foot of the view saying how far it has
+  got and a Cancel that leaves the holes cut approximately and the new ones without plugs;
+  the plugs appear once the holes are out, so a dense model keeps its old plugs for a moment after you change the holes or the gap; while you
   drag the gap, they follow when you let go. If the resin's tolerance compensation is off,
   its offsets are allowed for so the fit prints as set. Plugs are models like any other; a project opens with the plugs it was saved with,
   and a copied model gets plugs of its own.
 - **Channel:** dig a tube of the hole's width and outline through a path of points, open
   only at its two ends.
-- Settings work as in **Hollow**: one picked model keeps its own.
+- The hole's size, depth, taper and outline are the window's, kept after a restart, for
+  whichever model you click; one picked model keeps its own plug gap, as in **Hollow**.
 - **Check drainage:** Encrust follows the air through every layer and finds every pocket
-  of resin with no way out, with a bar and Cancel. Pockets are painted in the view, and
+  of resin with no way out, with a bar and Cancel, behind a wall as thin as a few hundredths
+  of a millimetre. Pockets are painted in the view, and
   you can see through the model to find them.
 - **Drill a hole into each** pocket automatically, at its lowest point.
 - **Auto**, beside Check drainage, finds the holes itself in the picked models as they stand,
@@ -390,6 +486,8 @@ Select then lists what was decided for the model in the card.
 
 ### Automatic
 - **Grow the supports** for the whole plate, one model or only the parts you picked.
+  **Grow them again** builds the group in hand anew, or every group Auto builds to while
+  Auto is chosen, in place of what stood in it; other groups stay and are grown around.
 - Supports go only under what actually hangs over nothing, stay out of the model, and each
   one holds only the part it stands under.
 - A point or a needle hanging down is held at its very tip, however thin, and every
@@ -400,27 +498,43 @@ Select then lists what was decided for the model in the card.
   part and its mark is a circle of the contact's width, however its head leans.
 - A face looking straight down is held at the contact spacing, and one leaning just past
   the overhang angle at the wider **spacing on steep faces**; between them the spacing
-  follows the angle.
+  follows the angle. A long narrow part leaning just past the angle is held along its
+  length, not only at its foot.
 - **Auto**, the first preset in the Supports card's list and the one a new plate starts on,
-  sizes every support by what it holds: an island over 2.4 mm² or an overhang under more
-  than 1000 mm³ of the model takes **Auto Medium**, over 3.2 mm² or 2000 mm³ **Auto
-  Heavy**, anything less **Auto Light**. Each shape is a group of its own, tuned like any
+  sizes every support by what it holds: the model above an island or overhang shared among
+  the supports holding it, each one's share from 100 mm³ taking **Auto Medium**, from
+  500 mm³ **Auto Heavy**, anything less **Auto Light**; so a few supports under much of a
+  heavy part are heavy, and the many under a wide base stay light. Auto places contacts
+  3.0 mm apart under a face looking straight down and 5.5 mm under a steep one, holds faces
+  leaning past 45°, and stands them on 1.0 mm pillars. The end of a toe or spike under 2 mm
+  across gets a contact of its own, however near one stands at its root. Each shape is a group of its own, tuned like any
   other, and the notice says how many of each were placed. A shelf put out in one layer
   is sized by its resin — from 7 mm³ medium, 12 mm³ heavy — and faces leaning past 20° just
   above it are held with it. A gentle slope too shallow to sag — past 10° from vertical
-  — gets a few thin **Auto Stabilization** supports about 8 mm apart so the part does not
-  rock on the peel. **Sizes**, at the foot of the shape mode, sets where each heavier shape starts; a merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,
+  — gets a few thin **Auto Stabilization** supports about 8 mm apart, on 0.27 mm tips and 0.7 mm pillars, so the part does not
+  rock on the peel. While **Clean surface** is on, on the faces its brush painted Auto puts its
+  contacts 1.3 times as far apart, all on Auto Light tips, and where one carries too much it
+  adds a neighbour rather than a heavier tip. **Sizes**, at the foot of the shape mode, sets where each heavier shape
+  starts; a merged support shows each tip in its own group's colour. Choose **Light**, **Medium**,
   **Heavy** or a preset of your own instead, and supports are built to it. The preset in
   hand, the automatic profile and its edited numbers are saved with the project and
   remembered between runs, and Undo takes them back. **Save** writes an edited Auto over the
   one that ships; Auto cannot be saved as a new preset, and no other automatic preset can be
-  added.
+  added. Auto saved in Settings, edited or reset to defaults, carries to a plate whose Auto
+  was not edited; a plate with numbers of its own keeps them, marked edited.
+- Every placement then reads what the film pulls on each tip, layer by layer, and
+  strengthens a tip left with less than half again what it holds: Auto builds it one size
+  heavier, and at its heaviest, or under one preset, puts a second tip beside it on the same
+  underside, low enough to share the load before it peaks. Supports you placed are never
+  changed. Auto's tips are 0.30, 0.35 and 0.40 mm, its steadying ones 0.27 mm.
 - Nearby tips merge into shared **branching trunks**, a higher tip running down onto the
   trunk of a lower one beside it. Where the part is in the way of a merge, the two drop
   straight down past it and merge lower. A support that has to step aside for room steps
   the least it can, a millimetre at a time. No strut of a merge runs
   longer than **Longest strut** (6 mm as shipped, 10 mm in Auto's light and steadying shapes) and no trunk carries more than **Tips
   per trunk** (6), so a wide spread of tips stands on several trees rather than one fan.
+  Tips merge only where the trunk under them stands at least as tall as their branches are
+  long, and no more than three branches meet at one joint.
   Trunks are cones sized by their height and load, and nothing carrying a load leans more
   than 45°. A tip's head meets its face square on wherever that is within 45° of straight
   down; off a steeper face it is turned back down to 45°, by at most 33°, so a support under
@@ -433,14 +547,22 @@ Select then lists what was decided for the model in the card.
   share one trunk, and the bracing ties the rows evenly. A tip no node can take stands as
   it would without the grid.
 - Only the tip touches the model, and its mark is the contact's width, at most 9 % wider on
-  one side under a turned head: a support whose head would run into the part beside its contact, where no small
-  pillar can hold it, or rise from a face looking up with nowhere to come down is not placed — by Grow or by a click —
-  and is counted among those with no room to stand. A pad beside a part that cannot be moved aside is cut back on that side.
+  one side under a turned head. A support whose head would run into the part beside its
+  contact, and that no small pillar can hold, turns its head up to 33° off its face or a
+  shorter head. Failing that, its contact steps along the face, never past a wall, up to 1 mm
+  to where a head fits. One that still has no room, or that rises from a face looking up with
+  nowhere to come down, is not placed, by Grow or by a click. A tip on a curved or faceted underside
+  that rises a little under its rim is seated there, not counted. A part from the pad's
+  height and 0.2 mm over the plate stands on its own pad, its head cut short and straight, with
+  no bulge at its neck or fillet round it, and a leaning trunk's fillet rings its axis; one lower than that stands on its head alone, run into the plate. A pad beside a part that cannot be moved aside is cut back on that side.
   Every support is checked once more as it is drawn, down to a rib thinner than itself; a
   merged one whose trunk meets the part is split into its two halves, each grown again.
 - A tip that has no room leans until it finds some, as far as a 25 mm strut at 45° reaches.
-  A support that still has no room is reported and left out of the print, never forced
-  into the model.
+  A support that still has no room is grown again on its own, from a turned head or a
+  contact stepped up to 1 mm along its face. One that still finds none is left out of the
+  print, never forced into the model. The tooltip of Grow gives one line for each reason: no
+  room for its tip, on a face that looks up, or nothing to stand on. `encrust` prints the same
+  counts and lists each reason in `--json`.
 - Supports are drawn round, 12 sides to a pillar shaded smooth, with rounded joints, and
   widen into their pad on a curved fillet.
 - Supports stand against the model **as it prints**: hollowed, its cavity, and drilled,
@@ -468,7 +590,37 @@ Select then lists what was decided for the model in the card.
 - **Block** areas where no support may go, the other half of Area. Alt erases whichever of
   the two is in hand, and **Clear** takes all of it off.
 - Click a standing support to select it, then rebuild, remove or move it to another group.
-  Shift-click adds a part to what is picked, or takes it back out.
+  Shift-click adds a part to what is picked, or takes it back out. Drag to move what is picked
+  the way the cursor goes on screen, the point you took staying under the cursor, or hold Alt
+  to move it level with the plate. The cursor turns to a hand over a part you can take. It
+  follows the cursor everywhere; where it would run into the model or lean too far it turns red
+  and a plate beside the cursor names why (touches the model, leans too far, no room for
+  the foot, no surface to hold); let go there it stays where it last could stand. A tip slides
+  over the model's surface, and a joint moved aside drops as far as its branches need. A foot
+  on the model slides over it as you move, and stands on a face up to 75° as a grown one may; a
+  head never turns off the face it holds, so a column whose head sits on its trunk bends on a
+  knee instead. Over an edge the foot keeps to the plate or the model it stood on until that is
+  2 mm away, so it switches once instead of jumping back and forth. Before a move is refused,
+  the joints next to what you hold step aside or down by up to 5 mm to make room. The trunk,
+  its foot and the joint on top move as one: the trunk stays upright and what it carries leans
+  down to it at 45 degrees, onto the plate or the model, and goes no further than that lean
+  reaches; no drag leaves a strut flatter than 45 degrees. Supports that stand on the one you
+  move go with it, climbing its trunk where they would lean further than 45 degrees, and taking
+  hold of one freezes what it stands on too. Removing a support, or growing it again, grows
+  again the ones that stood on it, so none is left in the air. A tip dragged off a joint other
+  branches share takes a neck of its own and leaves them as they were, and no drag turns a head
+  more than 33° off the face it holds. Supports grown later may stand on the ones you edited,
+  and are grown again if those go. Raising or turning a model keeps its edited supports on the
+  plate; tilting or resizing it grows them again from the same contacts. While supports grow
+  again after a model is moved or turned about the vertical, they are shown moving with it,
+  not where it stood. A small pillar moves
+  by where it touches: whichever part you drag, its tip goes along the face it holds, and it is
+  built again there as Grow would build it, a small pillar where one fits and a whole support
+  where none does, never half of each. Dragged out from under every face, it stays put.
+- Pick two or more supports of one model and **Merge into one** joins them into a single tree
+  on one trunk, each tip kept however many there are; where the model is in the way or the
+  trunk has nowhere to stand, the supports stay as they were and the stage says why.
+  `encrust --merge-supports` does the same by the contacts `--json` lists.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports
@@ -479,13 +631,15 @@ Select then lists what was decided for the model in the card.
   lists the shapes it built under it. Choosing a group takes its preset in hand.
 - A bin asks twice: the first click turns it red, the second removes. The bin beside the
   preset removes the group in hand with its supports, the one beside **Grow** every support.
-- A thin support may stand on a thicker one from another group. Tips of groups as thick as
+- A thin support may stand on a thicker one from another group, and goes to it directly
+  rather than first joining a thin neighbour, never past the tips the thicker one's trunk
+  may carry. Tips of groups as thick as
   each other merge into one trunk, built to the group with the heavier tip; each tip keeps
   its own.
 - Bundled profiles: **light**, **medium**, **heavy**, and the four shapes **Auto** builds
-  to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light, medium and heavy all
-  place contacts 1.8 mm apart, hold surfaces leaning past 40° (heavy past 45°),
-  lift a part 5 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
+  to, **auto light**, **auto medium**, **auto heavy** and **auto stabilization**. Light,
+  medium and heavy place contacts 1.8, 3.5 and 4.5 mm apart, each tip carrying a like share
+  of what it holds, hold surfaces leaning past 40° (heavy past 45°), lift a part 2 mm and centre their tips on the part's surface without biting further. Duplicate one, edit it, save it under a new name,
   export it or import it. A bundled profile cannot be deleted. Settings lists the automatic
   shapes apart from the profiles chosen by hand. In a profile's form every group is there,
   from the tip down, tabs over it scrolling to each; branching, the grid, the raft and
@@ -598,20 +752,38 @@ smoothing, not the original model.
 **It finds:**
 - **Islands:** parts that start in mid-air with nothing under them.
 - **Suction cups:** closed hollows that pull on the film.
-- **Thin sections and weak necks:** places too thin to hold.
+- **Thin sections and weak necks:** places too thin to hold. A neck is weak past the stress
+  printed support tips were measured to tear at; tips spread under a part bend as the
+  separate tips they are, as placement reads them, not as one stem of their area.
 - **Hard peel:** the layers that pull the film hardest, the widest step and the levers. A
   section's pull follows its area, less for a thin strip than for a disc of the same area.
 
 **It lets you:**
 - Jump to the layer of each issue: the 3D view is cut at that layer, the issue is ringed
   on the cut, and the camera flies to it past the models and supports in the way.
-- **Support every island** in one press.
+- **Support every island** in one press. Each support Check stands, under an island or a weak
+  neck, is built to the lightest shape of the automatic profile that bears what it holds,
+  whatever profile the Supports panel holds; a recipe's run keeps its own profiles.
+- **Fix the rest from the same panel:** vent a suction cup through the thinnest wall at its
+  bottom, a notch along the plate for one that stands on it, hold a weak neck
+  with as many supports, 0.6 mm across at least, as bring it under its limit (in their own
+  **Weak necks** group), or Auto-orient for a pose without them; turn for the least peel, or open
+  the lift settings on a printer that leaves them to the file. A cup on the plate with walls too
+  thick to drill is left for you to lift onto supports or turn, and the notice says so; a cup
+  with no wall thin enough and a neck with no underside to stand on are left to you, counted.
+  A cup is only named when a full vacuum in it would pull 10 N or more. Thin
+  sections have no fix here: nothing thickens a model.
+- **Fix the plate:** Move to free space moves only the models in the way, turns one longer
+  than the plate about the vertical by the least that fits it, and packs the whole plate when
+  no clear place is left; Scale to fit scales a model too large for it, Combine opens on two models that meet, and
+  Drill drain holes runs Drain's Auto on a hollow model with no way out.
 - **Remove islands** from the file, then step by step remove whatever was left hanging.
   Put them back if you change your mind.
 
 **Estimates:** print time, resin by volume and weight, and cost if the resin has a price.
 Resin is counted from what is actually cured. Before slicing, the plate's card states
-them from the meshes, and the time from the plate's height: time, resin, weight
+them from the meshes, and the time from the plate up to the top of what stands on it,
+lift included: time, resin, weight
 and price in view, the models' and the supports' share, vertices and triangles under
 *Details*, which stays open or shut between runs. In Preview the card states the layer
 shown: its exposure, the print time until it is done, the area it cures and the resin that comes to.
@@ -627,6 +799,9 @@ shown: its exposure, the print time until it is done, the area it cures and the 
   by edge, in its form.
 - **Front where the printer has it:** on a machine whose front is a long side of a portrait
   panel, the Front mark, the opening view and the view cube face that side.
+- **Zoom to the cursor:** the wheel zooms in towards the model or the plate under the cursor,
+  so a small model beside a large one is reached without panning; over empty space it zooms
+  on the middle of the view. Zooming out keeps the centre of rotation where it is.
 - **See through models** (x-ray) to find cavities and trapped resin.
 - **Show as printed:** the printer put away and the models in a light studio, standing on a
   cutting mat with real things round them at their real size: a pen, a ruler, a one-euro
@@ -667,7 +842,7 @@ Output in its settings, so the save dialog lists each extension once.
 | `.pwsz`, `.pm7`, `.pm7m`, `.pm4u`, `.pp1m` | Anycubic Photon Mono M7 line, Mono 4 Ultra, P1 Max | 4 bits | Edges dimmer than 1/16 are lost. Not yet printed from; the Photon P1 is not supported. |
 | `.sl1`, `.sl1s` | Prusa | full 8 bits | One exposure and one layer height for the whole print; the bottom layers fade to it from the first one rather than holding. |
 | `.zip`, `.crmaslice` (PNG layers + G-code) | Phrozen, Wanhao, Kelant, Zortrax, Carima | full 8 bits | Per-layer exposure and height are kept, and the bottom block's own light-off delay. No second lift or acceleration. `.crmaslice` is the same archive under Carima's name; not yet printed from. |
-| `.cxdlp`, `.cxdlpv4` | Creality, PIOCREAT, PioNext | 8 bits (`.cxdlp`), 6 bits (`.cxdlpv4`) | `.cxdlpv4` is laid out as the HALOT X1 Max reads it. |
+| `.cxdlp`, `.cxdlpv4` | Creality, PIOCREAT, PioNext | 8 bits (`.cxdlp`); 3, 6 or 7 bits by machine (`.cxdlpv4`) | Each `.cxdlpv4` machine gets its own layer codec; only the HALOT X1 Max's is checked against a known file, the others are not yet printed from. The 3-bit machines (HALOT-X1, HALOT-SKY 2025, PioNext Ultra) light a row in pairs of pixels, halving its resolution. |
 | `.cxline` | PioNext D158, D160 | none (vector polygons) | Edges below half grey are dropped. One exposure for the whole print. Not yet printed from. |
 | `.svgx` | FlashForge, Voxelab | none (vector polygons) | Warns above 3840 × 2400 px. |
 | `.cws` | Nova3D, Carima | full 8 bits | Only the plain variant is written. |
@@ -682,8 +857,9 @@ Encrust also opens the `.pws` of the original Photon and Photon S, which it does
 *Limits:* the masks are copied, never resampled, so the new printer's screen must have the
 same size in pixels. The file is taken as cut for that printer: where the new format lays
 the plate from the other edge, each layer is turned to match, so the part prints where it
-stood. A stack with varying layer heights cannot be converted yet, and the converted file's
-preview pictures are blank.
+stood. The file's own preview picture goes with it, cut to the new format's sizes; a format
+with no picture (`.cws`), or one that does not decode, leaves the new one blank. A stack with
+varying layer heights cannot be converted yet.
 
 The window offers only the machines whose format Encrust can actually write.
 
@@ -722,9 +898,8 @@ until you set it up on another one.
 **Switching in the top bar:** the machine and the resin in the chip each open a list: your
 machines with their maker, the file they write and whether a printer they list answers;
 the resins set up on the machine with their colour, kind, layer height and exposure. A
-row takes it in hand; *Add a machine*, *Machine and resin…*, *Edit this resin…* and *Add a
-resin* lead to the window. In a narrow window the chip names the machine without its
-maker.
+row takes it in hand; *Add a machine* and *Add a resin* lead to the window. In a narrow
+window the chip names the machine without its maker.
 
 **Take a resin from a sliced file:** in **Machine and resin**, press **Import** on a
 printer's resins (**Import a resin** on a printer with none yet) and pick a file another slicer wrote for it; the resin is saved on that
@@ -763,7 +938,9 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
   put away for the session; it comes back if another file breaks.
 - Export and import any profile as a file. An import never overwrites one you already have.
 - Profile forms have undo.
-- A project names its printer and resin by id, so it opens with your own profiles.
+- A project names its printer and resin by id, so it opens with your own profiles. When you
+  have its printer among your machines, the plate, the layers and the send target all switch
+  to it; when you do not, the printer in hand stays and the stage says which one it named.
 
 ---
 
@@ -779,15 +956,25 @@ encrypted profile, and a bundle of several materials in one file, cannot be read
 | Last prints, film wear | yes | no |
 | Camera | turns it on and gives you the RTSP address | no |
 
+- With a printer set up, the window looks for printers on the network when it opens and
+  every 30 s while it is open, and Scan again looks at once; with none set up, it does not
+  look. The browser build never looks.
 - Printer cards in the window show each printer's status, a picture of the plate, and its
   controls. Stop needs a second press, because a stopped print cannot be resumed.
 - Slice to a file from the plate's card, or, while the printer answers and is free, slice
   and send in one press from the button over it: a bar shows the slicing and the upload,
   then the same button starts the print, Slice to a file the square beside it; Cancel
   stops the slice or the upload. The card names the printer and what it is doing; a press
-  on it lists the others and scans again. A printer busy printing gets no file: the card
-  says the file is saved instead. **File > Slice to .goo** (Cmd Enter, named for the
+  on it lists the others and scans again. A printer busy printing gets no file: Slice
+  saves it instead, its tooltip says why. **File > Slice to .goo** (Cmd Enter, named for the
   format in hand) writes a file too.
+- **File > Send a sliced file** sends a file sliced earlier, by Encrust or another program,
+  as it is: pick it, watch the bar on the plate's card, then Start print there. It goes to the printer the plate's card names, once it answers and is free; a Prusa
+  machine is offered only `.sl1` and `.sl1s`. `encrust printer send FILE HOST --start` does
+  the same from the command line.
+- A sliced file carries a picture of the plate for the printer's screen: the models and
+  their supports in the viewport's resin and support colours, shaded smooth, darker in
+  folds, with a line where one part passes in front of another, cropped to fill each preview the format holds, on that preview's own background.
 - A Prusa login is kept in the window's settings, never in the profile.
 
 **You cannot:** send from the browser build, or watch the camera inside Encrust (open the
@@ -802,6 +989,8 @@ address in a video player).
   its printer's and resin's.
 - It reopens instantly, without rebuilding anything, and the command line can slice it
   directly.
+- Opening a project, from the menu, the recent list or by dropping it on the window, over
+  models that are not saved asks first: save them, let them go, or keep working.
 
 ---
 
@@ -809,6 +998,9 @@ address in a video player).
 
 - **Find (⌘K):** search every tool, action and model on the plate by name, found under
   those three headings.
+- **macOS menu Encrust:** About Encrust shows the version that runs, also after an update.
+  Settings… and Check for Updates… open Settings, the second on Updates while it looks.
+  Services, Hide, Show All and Quit work as in any Mac app, in the window's language.
 - **Tool row:** sits centred at the top of the stage between the inspector and the models,
   no wider than its tools need, each tool's name under its icon while there is room, icons alone when there is not. Drag
   the inspector's edge to set its width; double-click it to go back to the default. The
@@ -834,17 +1026,30 @@ address in a video player).
   the Microsoft Store is updated by the Store instead: it says when the Store has a new
   version, and its button opens Encrust in the Store app to update.
 - **Find a setting** at the top of Settings narrows its pages as you type (`⌘F`).
-- **Bug report:** builds a Markdown report (what happened, how to reproduce it, settings,
-  profiles) and gives it to you to copy or save. Encrust never sends it itself, and network
-  addresses are removed from it.
+- **Recovery:** while a plate holds models that are not saved, a copy of it is kept every two
+  minutes. If Encrust ends without closing — a crash, a forced quit, the power going — the
+  next start offers the copy over the empty plate, saying how long ago it was taken: Restore
+  opens it as it was, still unsaved and under its project's name, and the cross, pressed
+  twice, throws it away. Closing the window, saved or not, deletes the copy; several windows
+  each keep their own. Turned off in Settings → General. Not in the browser.
+- **Bug report:** builds a Markdown report (what happened, how to reproduce it, the
+  settings you changed, profiles) and gives it to you to copy, save or carry into a new
+  GitHub issue, filled in when it fits and on your clipboard to paste when it does not.
+  Encrust never sends it itself, and network addresses are removed from it. After the
+  window closes on an error, the next start opens the report with that error already in it
+  (not in the browser).
 - Choose where sliced files are saved and whether the window opens on the start page.
 - **File name** in Settings → General: a template a sliced file is named by, saved or sent
   to the printer — `{model}`, `{ext}` (the model's file type), `{printer}`, `{resin}`, `{layer}` (µm), `{plate}`, `{date}`,
   `{time}` — with the name it makes now shown under it; `encrust batch --name` takes the same.
   Slicing every plate at once fills it for each plate, its own number and first model; a name
   typed over the proposal is kept for all, each plate's name after it.
-- **Reduce motion** in Settings → General stops every animation in the window.
-- **Appearance** in Settings → General: Light, Dark, or System, which follows the computer's own light or dark setting as it changes — on macOS, Windows and in a browser; on Linux where the desktop reports it, otherwise dark.
+- **Reduce motion** in Settings → Appearance stops every animation in the window.
+- **Interface size** in Settings → Appearance draws text, panels and buttons from 75 to 200 %
+  of the system's size, kept between runs; `⌘ =` / `Ctrl =` and `⌘ -` / `Ctrl -` step it from
+  anywhere, a text box too, `⌘ 0` / `Ctrl 0` returns to 100 %. A screen too small for the window at a size
+  holds it at the largest that fits, and says so.
+- **Appearance** in Settings → Appearance: Light, Dark, or System, which follows the computer's own light or dark setting as it changes — on macOS, Windows and in a browser; on Linux where the desktop reports it, otherwise dark.
 - **Hint bar:** while a tool does something with the pointer in the viewport — Measure,
   Hollow, Drain, Relief's text and brush, Supports' pick, place and area, Repair's faces and
   edges, Cut's part mark — a pill under the tool row names the keys and what each does,
@@ -852,9 +1057,9 @@ address in a video player).
   icons, at the tool row's left, each saying what it does under the pointer.
 - With nothing on the plate the models card says so and offers Open a model; the stage
   stays clear.
-- **Check:** Previous and Next step through the layers with issues; the islands and the
-  suction cups each have their own section with what fixes them; the plate card gives the
-  plate's time, resin, weight and price.
+- **Check:** Previous and Next step through every issue, the plate's first, and go round; each
+  kind of issue has its own card with what fixes it; the plate card gives the plate's time,
+  resin, weight and price.
 - The support group picker lists what stands on the plate, then the profiles holding
   nothing, then *Edit the profiles*.
 - Hollow and Drain keep named settings as Supports does: a picker that marks `· edited`,
@@ -883,28 +1088,25 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `estimate` | Time, resin, weight, cost and risky layers, without writing a file. |
 | `inspect` | What is wrong with a model and whether it fits. |
 | `render` | The plate as `slice` would build it — hollowed, drilled, supported — drawn as PNG pictures from the sides you name, the bottom included, with points of your choosing marked even where the model hides them. For a person at a terminal, or a model that reads images. |
-| `info` | What a sliced file says, checked layer by layer. Export one layer as PNG. |
+| `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
 | `convert` | A sliced file to another format. |
 | `profiles` | List, show, export and import profiles. |
+| `recipes` | List the built-in and your own recipes, and show one as TOML to copy and edit. |
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
 | `completions` | Shell completion for bash, zsh, fish, elvish, PowerShell. |
 
 **For a chat client:** `encrust-mcp` gives Claude Desktop, Claude Code, Codex or Cursor the
 command line as tools, so a language model prepares a model step by step on your
-computer, checks it and writes the file; it asks you for the printer and resin. With the
-window open, each step it keeps is replayed on the plate as it makes it, one undo each —
-turn, scale, repair and faces by hand, relief, combine, label, cut, split, arrange, hollow,
-infill and Keep solid, drain holes and channels, supports by any profile and by hand, on the
-job's printer, resin and slicing; the check is still the command line's. Every flag of the command line is a tool's: `set_shape` cuts, labels,
-splits and presses reliefs, `set_repair` mends, `set_slicing` sets the layers.
+computer, checks it and writes the file; it asks you for the printer and resin. Every flag of
+the command line is a tool's: `set_shape` cuts, labels, splits and presses reliefs,
+`set_repair` mends, `set_slicing` sets the layers.
 `compare_poses` shows the model the best few ways the engine found to stand it, each drawn
 with what it prints, and the model picks one for what the print is — keeping supports off a
 face you named, say, which the search then ranks first. Every step it takes is set against
 the step before and the autopilot's own preparation, so it can undo one that made the print
-worse. Two models of two chat jobs on one plate each keep what their own job did.
+worse.
 
-**For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear
-exit codes, `--strict` (fail
+**For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,
 progress bars that turn off when not on a terminal, and Ctrl-C that stops cleanly and
 removes the half-written file.
@@ -915,8 +1117,18 @@ off the surface round a point. `estimate --against` sets a run beside a report k
 
 **Autopilot:** `--prepare` readies each model the way the engine's own defaults would: repair
 it if it has defects, orient it, hollow, drain and hold up its cavity where a wall saves
-resin, and stand it on Auto supports. Every flag you type wins over its step, and `--json` says
+resin, and stand it on Auto supports, stopping with why where the model does not fit or
+resin stays trapped. Every flag you type wins over its step, and `--json` says
 what was decided for each model. The window does the same as **Prepare for print**.
+Built-in recipes beside it: `fix-issues`, what Check's **Fix all** runs, and `miniatures`, a starting point for small detailed models;
+`encrust recipes list` names them and `recipes show` prints one.
+`--recipe` runs one of those, one of your own by file name, or a recipe file the same way, step by step and in any order: its
+conditions, gates, pauses, checks that support islands again, arranging, and saves (and sends)
+of the plate where the recipe says; a flag you type wins over its setting in every step, and
+`--orient`, `--repair`, `--hollow` or `--supports` runs every step of its kind. A hollow
+step keeps the wall solid where the model is thin (`keep_solid_under_mm`), and a drain step
+with `plugs = true` lays a plug beside the model for each hole it drills; without it, none,
+in the window's Prepare for print too.
 
 **Modelling:** combine the models given, write a label on one, cut it with a joint, split
 it into its parts or cut a part off, all at the window's default sizes, before it is sliced.
@@ -934,13 +1146,14 @@ still reported; the window's Drain tool does the same with Auto. A run whose plu
 room beside their model stops rather than printing them on a neighbour.
 
 **By hand:** stand a support under the surface nearest a point with `--support-at`, alone with
-`--support-only-at`, and keep a hollow model's wall solid round a point with `--keep-solid`.
+`--support-only-at`.
 
 **You cannot** (from the command line): paint supports or where a relief goes, take the pieces of a cut or a split out as meshes, or hollow or support
 a model a cut or a split broke into several pieces. Do that in the window, save a project, then slice it.
 Nor can you open a sliced file as a model, use a saved Hollow or Drain preset, press one of
-the built-in textures, pick an edge-smoothing look by name, set a model's lift off the plate
-by a number of your own, or support the islands and drill the suction cups Check finds.
+the built-in textures, pick an edge-smoothing look by name, or set a model's lift off the plate
+by a number of your own. Supporting the islands and weak necks and drilling the suction cups Check finds
+is a recipe's `check` step (`retry`, `hold_levers`, `drill_cups`).
 
 ---
 
@@ -952,9 +1165,9 @@ by a number of your own, or support the islands and drill the suction cups Check
 - **Orientation:** every file lays the plate out as the twenty known files checked do;
   `.sl1`, the DLP machines and nine FlashForge and Nova3D profiles have no known file.
 - **Adaptive layer height** needs a custom printer profile; no bundled one allows it.
-- **Convert** cannot carry varying layer heights or the preview pictures.
-- **Browser build:** no network sending, no updates, uncapped section cut.
+- **Convert** cannot carry varying layer heights.
+- **Browser build:** no network sending, no updates.
 - **Camera:** the address only, no video inside Encrust.
 - **Translations:** messages from inside the slicing engine (a file that cannot be read, a
   format it does not know) stay in English under a translated first line.
-- It is alpha: before a long print, compare the output with a slicer you already trust.
+- It is beta: before a long print, compare the output with a slicer you already trust.

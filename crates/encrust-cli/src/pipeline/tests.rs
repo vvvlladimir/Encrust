@@ -1,10 +1,9 @@
 use super::Watch;
-use super::place::{OrientSummary, centred, place};
+use super::place::{OrientSummary, centred, euler_degrees, place};
 use crate::args::ImportArgs;
 use crate::exit::{Stop, is_cancelled};
 use crate::profiles::Chosen;
 use core_engine::SupportPlan;
-use core_geometry::rotation_xyz_deg as euler_degrees;
 use core_geometry::{Mesh, Quat, Scalar, Vec3};
 use printer_profiles::{MaterialProfile, SupportProfile};
 

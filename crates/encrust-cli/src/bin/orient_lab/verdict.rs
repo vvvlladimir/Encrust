@@ -58,14 +58,18 @@ const PEEL_ENOUGH_N: f64 = 10.0;
 const SPARE_BAND: f64 = 1.25;
 const SPARE_SLACK_ML: f64 = 0.05;
 
+/// What `goal` counts as enough, past which the fewest supports decides, if it has one.
+fn enough(goal: OrientGoal) -> Option<f64> {
+    match goal {
+        OrientGoal::LeastPeel => Some(PEEL_ENOUGH_N),
+        OrientGoal::FewestSupports | OrientGoal::ShortestPrint => None,
+    }
+}
+
 /// `goal`'s reading of `pose`, no lower than what the goal counts as enough.
 fn effective(goal: OrientGoal, pose: &Pose) -> f64 {
     let reading = reading(goal, pose);
-    if goal == OrientGoal::LeastPeel {
-        reading.max(PEEL_ENOUGH_N)
-    } else {
-        reading
-    }
+    enough(goal).map_or(reading, |enough| reading.max(enough))
 }
 
 /// The support a pose takes, millilitres.
@@ -578,15 +582,13 @@ fn held_to(
     checks
 }
 
-/// Where the least peel has enough, what it took in support past the least any sound pose
-/// with enough takes, as the reason it fails; `None` when it took no more.
+/// Where a goal has enough, what it took in support past the least any sound pose with
+/// enough takes, as the reason it fails; `None` when it took no more.
 fn spare(goal: OrientGoal, chosen: &Pose, poses: &[Pose], floor: &Floor) -> Option<String> {
-    if goal != OrientGoal::LeastPeel || effective(goal, chosen) > PEEL_ENOUGH_N {
-        return None;
-    }
+    let enough = enough(goal).filter(|enough| effective(goal, chosen) <= *enough)?;
     let (name, least) = poses
         .iter()
-        .filter(|pose| floor.sound(pose) && effective(goal, pose) <= PEEL_ENOUGH_N)
+        .filter(|pose| floor.sound(pose) && effective(goal, pose) <= enough)
         .map(|pose| (pose.name.as_str(), support_ml(pose)))
         .min_by(|a, b| a.1.total_cmp(&b.1))?;
     let own = support_ml(chosen);
@@ -611,8 +613,8 @@ fn stays(goal: OrientGoal, chosen: &Pose, poses: &[Pose], floor: &Floor, limit: 
     let passed = match drawn_pose {
         Some(drawn) if chosen.tilt_deg >= SETTLED_DEG => {
             let won = reading(chosen) <= reading(drawn) - turn_cost(goal, reading(drawn));
-            let enough = goal == OrientGoal::LeastPeel
-                && reading(drawn).max(reading(chosen)) <= PEEL_ENOUGH_N;
+            let enough =
+                enough(goal).is_some_and(|enough| reading(drawn).max(reading(chosen)) <= enough);
             let spared = support_ml(chosen)
                 <= support_ml(drawn) - turn_cost(OrientGoal::FewestSupports, support_ml(drawn));
             won || (enough && spared)

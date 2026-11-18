@@ -1,15 +1,16 @@
 //! The archive's JSON entries and its two previews. Which keys, and the constants among
 //! them, are in `docs/formats/pwsz.md`.
 
-use core_format::{FormatError, LayerPeel, PrintJob, Rgb, Thumbnail, encode_colour};
+use core_format::{FormatError, LayerPeel, PrintJob, Rgb, Thumbnail, encode_colour_alpha};
 use serde_json::{Value, json};
 
 use super::PwszFlavour;
 use crate::peel::{paired_mm_s, single_mm_s};
 use crate::rle::GREY_STEPS;
 
-/// The two previews, in pixels, and the colour each is padded with.
-const PREVIEWS: [(u32, u32, Rgb); 2] = [(224, 168, [2, 72, 100]), (336, 252, [20, 27, 41])];
+/// The two previews, in pixels, and the colour behind the model in each: the near black of
+/// known files, so the picture stands out from the printer's own screen.
+const PREVIEWS: [(u32, u32, Rgb); 2] = [(224, 168, [10, 10, 11]), (336, 252, [10, 10, 11])];
 
 /// Which resin the settings name: the format's code for a standard resin.
 const STANDARD_RESIN_CODE: &str = "10";
@@ -24,7 +25,7 @@ pub(crate) fn previews(job: &PrintJob) -> Result<Vec<Vec<u8>>, FormatError> {
         .map(|&(width, height, background)| {
             let image =
                 Thumbnail::fitted_or_filled(job.thumbnail.as_ref(), width, height, background);
-            encode_colour(&image)
+            encode_colour_alpha(&image)
         })
         .collect()
 }

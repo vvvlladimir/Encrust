@@ -1,9 +1,10 @@
-//! Drain holes the engine proposes and proves, as `--drain-at auto` drills them (ADR 0398).
+//! Drain holes the engine proposes and proves, as `--drain-at auto` drills them (ADR 0401).
 
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_geometry::Scalar;
+use core_volume::HoleSize;
 
 use super::DrainTool;
 use crate::i18n::tr;
@@ -26,22 +27,35 @@ impl DrainTool {
     /// a vent, as the command line's `--drain-at auto` does.
     pub fn start_auto(&mut self, scene: &Scene, layer_height_mm: Scalar) -> Result<()> {
         let ids: Vec<ObjectId> = scene.targets().map(|object| object.id).collect();
-        self.auto = Some(self.search_on(scene, &ids, layer_height_mm, true)?);
+        let asked = (self.size(), true);
+        self.auto = Some(Self::search_on(scene, &ids, layer_height_mm, asked)?);
         Ok(())
     }
 
-    /// The same search on `ids` alone, whatever is picked, handed back rather than kept:
-    /// what Prepare drains.
-    pub fn search_on(
-        &self,
+    /// Starts the same search on `ids` alone, whatever is picked: what Check's Drill drain
+    /// holes looks for.
+    pub fn start_auto_on(
+        &mut self,
         scene: &Scene,
         ids: &[ObjectId],
         layer_height_mm: Scalar,
-        vents: bool,
+    ) -> Result<()> {
+        let asked = (self.size(), true);
+        self.auto = Some(Self::search_on(scene, ids, layer_height_mm, asked)?);
+        Ok(())
+    }
+
+    /// The same search on `ids` alone, whatever is picked, with holes of `size` and a vent
+    /// where `vents`, handed back rather than kept: what Prepare drains.
+    pub fn search_on(
+        scene: &Scene,
+        ids: &[ObjectId],
+        layer_height_mm: Scalar,
+        (size, vents): (HoleSize, bool),
     ) -> Result<DrainsJob> {
         let tasks: Vec<DrainsTask> = scene
             .named(ids)
-            .map(|object| DrainsTask::of(object, self.size_for(object)))
+            .map(|object| DrainsTask::of(object, size))
             .collect();
         if tasks.is_empty() {
             bail!(tr!("drain-nothing-visible"));
@@ -102,7 +116,7 @@ pub fn land(scene: &mut Scene, found: Vec<Proposed>) -> Landed {
             continue;
         }
         for hole in proposed.holes {
-            object.hollow.add_hole(hole);
+            object.drill_hole(hole);
             landed.holes += 1;
         }
         landed.trapped += proposed.trapped.len();

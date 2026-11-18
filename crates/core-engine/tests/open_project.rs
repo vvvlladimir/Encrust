@@ -69,6 +69,7 @@ fn object(name: &str, mesh: &Mesh, transform: Transform) -> ObjectState {
         own_raft: None,
         plug_of: None,
         relief_painted: Region::default(),
+        shown_painted: Region::default(),
     }
 }
 
@@ -115,8 +116,9 @@ fn project() -> Project {
                 precision: 0.5,
                 infill_on: false,
                 infill: InfillSettings::default(),
-                blocker_mm: 4.0,
+
                 open_floor: false,
+                solid_under_mm: None,
             },
             drain: DrainState::round(3.0, 3.0, 1.0),
             cut: CutState {
@@ -157,6 +159,7 @@ fn hollowed(saved: &mut Project, thickness_mm: f32) {
             precision: 0.5,
             infill: None,
             open_toward: None,
+            solid_under_mm: None,
         },
         cavity_faces: 0..12,
         cavity_mm3: 16.0f32.powi(3),
@@ -264,6 +267,27 @@ fn a_tree_the_file_keeps_stands_down_to_the_plate() {
         bounds.mins.z <= 0.0,
         "it stands on the plate, got {}",
         bounds.mins.z
+    );
+}
+
+#[test]
+fn a_raft_the_profile_lays_opens_apart_from_the_trees() {
+    let mut saved = project();
+    saved.manifest.supports.groups[0].profile.raft.enabled = true;
+    let lifted = Transform::from_translation(Vec3::new(30.0, 30.0, 10.0));
+    let object = &mut saved.manifest.objects[0];
+    object.transform = lifted;
+    object.supports.grown =
+        grown_under(&saved.models[0].source, lifted, Vec3::new(40.0, 40.0, 10.0));
+
+    let plate = open_plate(&saved, &machine(), &opening()).expect("the project is complete");
+    let model = &plate.models[0];
+    let raft = model.raft.as_ref().expect("the profile lays a raft");
+    let column = model.supports[0].aabb().expect("the column has geometry");
+    assert!(
+        raft.aabb()
+            .is_some_and(|raft| raft.maxs.z <= column.mins.z + 1.0),
+        "the raft lies under the tree, not in its mesh"
     );
 }
 

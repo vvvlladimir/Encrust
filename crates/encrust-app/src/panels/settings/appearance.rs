@@ -1,10 +1,13 @@
-//! The Appearance page: light or dark, the language, and whether the window moves.
+//! The Appearance page: light or dark, the language, how large it is drawn, and whether the
+//! window moves.
 
 use egui::{Theme, Ui};
 
 use crate::i18n::{self, Language, tr};
+use crate::interface_scale;
 use crate::panels::settings::form_card;
 use crate::prefs::Appearance;
+use crate::shortcuts::{Action, text};
 use crate::state::Machine;
 use crate::ui::theme::layout::settings_appearance::CARD_GAP;
 use crate::ui::{
@@ -19,6 +22,9 @@ pub fn form(ui: &mut Ui, machine: &mut Machine) {
     });
     form_card(ui, &tr!("general-language"), |ui| {
         language(ui, &mut general.language);
+    });
+    form_card(ui, &tr!("general-scale"), |ui| {
+        scale(ui, &mut general.interface_scale_percent);
     });
     form_card(ui, &tr!("general-motion"), |ui| {
         switch(
@@ -64,6 +70,43 @@ fn themes(ui: &mut Ui, choice: &mut Appearance) {
         }
     });
     describe(ui, &tr!("general-appearance-hint"));
+}
+
+/// How large the interface is drawn, a step at a time; the screen's limit named under it
+/// when it holds the window at less.
+fn scale(ui: &mut Ui, percent: &mut u16) {
+    let named = |percent: u16| tr!("value-percent", value = percent);
+    let shown = named(*percent);
+    let face = DropdownFace {
+        lead: None,
+        label: &shown,
+        edited: false,
+        count: None,
+        empty: false,
+    };
+    let response = dropdown(ui, &face, ui.available_width());
+    dropdown_menu(&response, |ui| {
+        for step in interface_scale::STEPS {
+            if dropdown_row(ui, &DropdownRow::named(&named(step), *percent == step)).clicked() {
+                *percent = step;
+                ui.close();
+            }
+        }
+    });
+    let drawn = interface_scale::drawn(ui.ctx(), *percent);
+    if drawn < f32::from(*percent) / 100.0 {
+        let most = named((drawn * 100.0).floor() as u16);
+        hint(ui, &tr!("general-scale-capped", percent = most));
+    }
+    describe(
+        ui,
+        &tr!(
+            "general-scale-help",
+            larger = text(Action::Scale(1)),
+            smaller = text(Action::Scale(-1)),
+            actual = text(Action::Scale(0))
+        ),
+    );
 }
 
 /// The language the window is written in. Each is named in itself, so a user who cannot

@@ -23,6 +23,11 @@ fn hole_in_the_top() -> DrainHole {
     }
 }
 
+/// `model`, not read yet.
+fn read(model: &Mesh) -> ModelRead {
+    ModelRead::new(std::sync::Arc::new(model.clone()))
+}
+
 /// `plugs` from `model` read afresh, as a front end asks for them the first time.
 fn cut_plugs(
     model: &Mesh,
@@ -31,7 +36,15 @@ fn cut_plugs(
     wall_mm: Option<Scalar>,
     gap_mm: Scalar,
 ) -> Result<Plugs, VolumeError> {
-    plugs(&mut None, model, bvh, holes, wall_mm, gap_mm)
+    plugs(
+        &mut None,
+        &read(model),
+        bvh,
+        holes,
+        wall_mm,
+        gap_mm,
+        Cancel::never(),
+    )
 }
 
 /// A bar 100 mm long, with a hole at each end of its top.
@@ -52,7 +65,12 @@ fn bar_with_holes_far_apart() -> (Mesh, Bvh, DrainHole, DrainHole) {
 #[test]
 fn a_model_read_round_one_hole_covers_its_gap_and_its_neighbour_but_not_far_off() {
     let (mesh, _, near, far) = bar_with_holes_far_apart();
-    let source = PlugSource::read(&mesh, &[near], Some(2.0));
+    let source = PlugSource::read(
+        read(&mesh).solid(Cancel::never()).ok(),
+        &mesh,
+        &[near],
+        Some(2.0),
+    );
     let beside = DrainHole {
         at: near.at + Vec3::new(3.0, 0.0, 0.0),
         ..near
@@ -71,8 +89,22 @@ fn a_model_read_round_one_hole_covers_its_gap_and_its_neighbour_but_not_far_off(
 #[test]
 fn a_hole_past_what_was_read_is_cut_from_the_model_read_again() {
     let (mesh, bvh, near, far) = bar_with_holes_far_apart();
-    let mut source = Some(PlugSource::read(&mesh, &[near], Some(2.0)));
-    let made = plugs(&mut source, &mesh, &bvh, &[far], Some(2.0), 0.1).expect("sound");
+    let mut source = Some(PlugSource::read(
+        read(&mesh).solid(Cancel::never()).ok(),
+        &mesh,
+        &[near],
+        Some(2.0),
+    ));
+    let made = plugs(
+        &mut source,
+        &read(&mesh),
+        &bvh,
+        &[far],
+        Some(2.0),
+        0.1,
+        Cancel::never(),
+    )
+    .expect("sound");
     // Cut from the piece round the other hole, it would meet nothing and be sampled.
     assert_eq!(
         made.sampled, 0,
@@ -139,7 +171,16 @@ fn a_cone_the_gap_closes_short_of_its_end_is_cut_off_where_it_does() {
 fn holes_far_apart_keep_only_the_model_round_each() {
     let (mesh, bvh, near, far) = bar_with_holes_far_apart();
     let mut source = None;
-    plugs(&mut source, &mesh, &bvh, &[near, far], Some(2.0), 0.1).expect("sound");
+    plugs(
+        &mut source,
+        &read(&mesh),
+        &bvh,
+        &[near, far],
+        Some(2.0),
+        0.1,
+        Cancel::never(),
+    )
+    .expect("sound");
     let read = source.expect("a piece of the bar is kept");
     let middle = DrainHole {
         at: Vec3::new(50.0, 10.0, 10.0),
@@ -164,7 +205,16 @@ fn a_model_held_whole_is_not_kept_for_the_next_cut() {
         ..hole_in_the_top()
     };
     let mut source = None;
-    plugs(&mut source, &mesh, &bvh, &[everywhere], None, 0.1).expect("sound");
+    plugs(
+        &mut source,
+        &read(&mesh),
+        &bvh,
+        &[everywhere],
+        None,
+        0.1,
+        Cancel::never(),
+    )
+    .expect("sound");
     assert!(
         source.is_none(),
         "a box round the whole slab crops nothing worth keeping"
@@ -232,7 +282,15 @@ fn an_unsound_hole_fails_before_the_model_is_read() {
         ..hole_in_the_top()
     };
     let mut source = None;
-    let made = plugs(&mut source, &mesh, &bvh, &[nowhere], None, 0.1);
+    let made = plugs(
+        &mut source,
+        &read(&mesh),
+        &bvh,
+        &[nowhere],
+        None,
+        0.1,
+        Cancel::never(),
+    );
     assert_eq!(made, Err(VolumeError::BadDrain { index: 0 }));
     assert!(
         source.is_none(),
@@ -376,6 +434,37 @@ fn a_plug_is_flush_with_the_surface_it_closes() {
 }
 
 #[test]
+fn a_hole_stopping_inside_the_wall_takes_a_plug_no_deeper_than_itself() {
+    let shallow = DrainHole {
+        depth_mm: 1.0,
+        kind: HoleKind::AtDepth,
+        ..hole_in_the_top()
+    };
+    let bounds = the_plug(shallow, Some(2.0), 0.1)
+        .aabb()
+        .expect("a plug has vertices");
+    assert!(
+        (bounds.mins.z - 9.0).abs() < 1e-4,
+        "the plug fills the hole's 1 mm, not the 2 mm wall, floor at 9, got {bounds:?}"
+    );
+}
+
+#[test]
+fn a_hole_set_past_the_wall_takes_a_plug_as_long_as_the_wall() {
+    let deep = DrainHole {
+        kind: HoleKind::AtDepth,
+        ..hole_in_the_top()
+    };
+    let bounds = the_plug(deep, Some(2.0), 0.1)
+        .aabb()
+        .expect("a plug has vertices");
+    assert!(
+        (bounds.mins.z - 8.0).abs() < 1e-4,
+        "the plug stops at the 2 mm wall, floor at 8, got {bounds:?}"
+    );
+}
+
+#[test]
 fn a_walled_hole_takes_a_plug_as_deep_as_itself_through_any_wall() {
     let walled = DrainHole {
         kind: HoleKind::Walled,
@@ -491,4 +580,25 @@ fn a_gap_wider_than_the_hole_leaves_no_plug() {
     let made = cut_plugs(&mesh, &bvh, &[hole_in_the_top()], Some(2.0), 2.5).expect("sound");
     assert_eq!(made.closed, 1);
     assert!(made.meshes[0].is_empty());
+}
+
+#[test]
+fn plugs_given_up_are_answered_as_given_up() {
+    let (mesh, bvh) = slab();
+    let asked = || true;
+    let mut source = None;
+    let made = plugs(
+        &mut source,
+        &read(&mesh),
+        &bvh,
+        &[hole_in_the_top()],
+        Some(2.0),
+        0.1,
+        Cancel::when(&asked),
+    );
+    assert_eq!(made.err(), Some(VolumeError::Cancelled));
+    assert!(
+        source.is_none(),
+        "a read given up is no refusal to remember"
+    );
 }

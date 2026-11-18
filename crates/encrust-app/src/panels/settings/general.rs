@@ -22,6 +22,12 @@ pub fn form(ui: &mut Ui, machine: &mut Machine, scene: &Scene) {
         switch(ui, &mut general.invert_zoom, &tr!("general-invert-zoom"));
     });
     #[cfg(not(target_arch = "wasm32"))]
+    form_card(ui, &tr!("general-recovery"), |ui| {
+        let general = &mut machine.general;
+        switch(ui, &mut general.autosave, &tr!("general-autosave"));
+        hint(ui, &tr!("general-autosave-hint"));
+    });
+    #[cfg(not(target_arch = "wasm32"))]
     sliced_folder(ui, machine);
     file_name(ui, machine, scene);
     #[cfg(not(target_arch = "wasm32"))]
@@ -44,7 +50,7 @@ fn file_name(ui: &mut Ui, machine: &mut Machine, scene: &Scene) {
                 *template = core_engine::DEFAULT_TEMPLATE.to_owned();
             }
         });
-        let name = crate::panels::slice::file_name(scene, &machine.slicing, template);
+        let name = crate::file_name::file_name(scene, &machine.slicing, template);
         hint(ui, &tr!("general-file-name-example", name = name));
         let unknown = core_engine::unknown_tags(template);
         if !unknown.is_empty() {

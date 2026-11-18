@@ -22,11 +22,17 @@ fn square(x0: u32, y0: u32, side: u32) -> Cured {
     layer(move |x, y| (x0..x0 + side).contains(&x) && (y0..y0 + side).contains(&y))
 }
 
-/// A 20 by 20 pixel square with a 10 by 10 hole in its middle, at 0.5 mm a pixel.
+/// A 30 by 30 pixel square with a 20 by 20 hole in its middle, at 0.5 mm a pixel.
 fn ring() -> Cured {
-    layer(|x, y| {
-        let outer = (10..30).contains(&x) && (10..30).contains(&y);
-        let hole = (15..25).contains(&x) && (15..25).contains(&y);
+    ring_around(20)
+}
+
+/// A 30 by 30 pixel square with a hole `side` pixels across in its middle.
+fn ring_around(side: u32) -> Cured {
+    let from = 25 - side / 2;
+    layer(move |x, y| {
+        let outer = (10..40).contains(&x) && (10..40).contains(&y);
+        let hole = (from..from + side).contains(&x) && (from..from + side).contains(&y);
         outer && !hole
     })
 }
@@ -56,33 +62,28 @@ fn a_ring_on_the_plate_is_one_suction_cup() {
     else {
         unreachable!("filtered to cups");
     };
-    // The hole is 10 px of 0.5 mm a side, 25 mm2, twenty layers of 0.05 mm.
-    assert!((area_mm2 - 25.0).abs() < 1e-3, "got {area_mm2}");
-    assert!((volume_mm3 - 25.0).abs() < 1e-3, "got {volume_mm3}");
+    // The hole is 20 px of 0.5 mm a side, 100 mm2, twenty layers of 0.05 mm.
+    assert!((area_mm2 - 100.0).abs() < 1e-3, "got {area_mm2}");
+    assert!((volume_mm3 - 100.0).abs() < 1e-3, "got {volume_mm3}");
 }
 
 #[test]
 fn a_shallow_cup_is_too_little_resin_to_name() {
-    // 25 mm2 three layers deep is under 4 mm3.
+    // 100 mm2 three layers deep is 15 mm3.
     assert!(cups(&fold(0, &rings(3))).is_empty());
 }
 
 #[test]
 fn a_narrow_cup_is_too_little_pull_to_name() {
-    let narrow = layer(|x, y| {
-        let outer = (10..30).contains(&x) && (10..30).contains(&y);
-        let hole = (18..22).contains(&x) && (18..22).contains(&y);
-        outer && !hole
-    });
-    // 4 mm2 however deep: the counter of a letter.
-    assert!(cups(&fold(0, &vec![narrow; 200])).is_empty());
+    // 25 mm2 however deep: a full vacuum in it pulls some 2.5 N, a quarter of the limit.
+    assert!(cups(&fold(0, &vec![ring_around(10); 200])).is_empty());
 }
 
 #[test]
 fn a_ring_on_posts_lets_the_air_in_from_below() {
     let posts = layer(|x, y| {
         let corner = |at: u32| (at..at + 3).contains(&x);
-        (corner(10) || corner(27)) && ((10..13).contains(&y) || (27..30).contains(&y))
+        (corner(10) || corner(37)) && ((10..13).contains(&y) || (37..40).contains(&y))
     });
     let measured = fold(0, &[&[posts][..], &rings(20)].concat());
     assert!(cups(&measured).is_empty(), "air runs in between the posts");
@@ -375,4 +376,48 @@ fn the_same_slab_centred_on_a_broad_neck_is_not() {
     let post = square(15, 15, 30);
     let slab = square(5, 5, 50);
     assert!(fold(0, &[post.clone(), post, slab]).risks().is_empty());
+}
+
+/// A 35 mm panel at 0.05 mm a pixel, fine enough to draw tips of a few tenths.
+fn fine(lit: impl Fn(f64, f64) -> bool) -> Cured {
+    let pitch = PixelPitch { x: 0.05, y: 0.05 };
+    let painted = paint(700, 700, |x, y| {
+        u8::from(lit(f64::from(x) + 0.5, f64::from(y) + 0.5)) * 255
+    });
+    cure(&painted, pitch)
+}
+
+/// Discs `radius` pixels across about `centres`, on the fine panel.
+fn discs(centres: &[(f64, f64)], radius: f64) -> Cured {
+    fine(|x, y| {
+        centres
+            .iter()
+            .any(|(cx, cy)| (x - cx).powi(2) + (y - cy).powi(2) <= radius * radius)
+    })
+}
+
+#[test]
+fn a_plate_on_tips_spread_under_it_is_no_lever_where_one_stem_of_their_area_is() {
+    // The same 30 x 30 mm plate on sixteen 0.4 mm tips 6 mm apart, and on one stem of the
+    // area they add up to: spread, they bend as separate discs, not as one round neck.
+    let plate = fine(|x, y| (50.0..650.0).contains(&x) && (50.0..650.0).contains(&y));
+    let spread: Vec<(f64, f64)> = (0..16)
+        .map(|i| {
+            (
+                170.0 + 120.0 * f64::from(i % 4),
+                170.0 + 120.0 * f64::from(i / 4),
+            )
+        })
+        .collect();
+    let levers = |under: Cured| {
+        let mut layers = vec![under; 3];
+        layers.push(plate.clone());
+        fold(0, &layers)
+            .risks()
+            .into_iter()
+            .filter(|risk| matches!(risk.kind, RiskKind::Lever { .. }))
+            .count()
+    };
+    assert_eq!(levers(discs(&[(350.0, 350.0)], 16.0)), 1, "one stem bends");
+    assert_eq!(levers(discs(&spread, 4.0)), 0, "spread tips do not");
 }

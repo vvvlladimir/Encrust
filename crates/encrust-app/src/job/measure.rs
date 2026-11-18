@@ -8,7 +8,7 @@ use core_raster::RasterSettings;
 use core_slicer::{Solid, Windows};
 
 use crate::i18n::tr;
-use crate::job::pipeline::{measure_stack, thread_pool, worker_threads};
+use crate::job::pipeline::{measure_stack, thread_pool};
 
 /// How a measuring pass ended.
 #[derive(Debug, Clone, PartialEq)]
@@ -26,20 +26,20 @@ pub struct MeasureJob {
 }
 
 impl MeasureJob {
-    /// Starts folding `windows` of `solid` into `fold`.
+    /// Starts folding `windows` of `solid` into `fold` on `threads` threads of its own.
     pub fn spawn(
         solid: Arc<Solid>,
         windows: Windows,
         settings: RasterSettings,
-        tolerance: Tolerance,
-        fold: Measured,
+        (tolerance, fold): (Tolerance, Measured),
+        threads: usize,
     ) -> Self {
         let (sender, result) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = Arc::clone(&cancel);
 
         crate::job::spawn(move || {
-            let measured = thread_pool(worker_threads()).and_then(|pool| {
+            let measured = thread_pool(threads).and_then(|pool| {
                 pool.install(|| {
                     measure_stack(
                         &solid,
@@ -123,8 +123,8 @@ mod tests {
             Arc::new(mesh.into()),
             windows,
             panel(),
-            Tolerance::default(),
-            Measured::new(0),
+            (Tolerance::default(), Measured::new(0)),
+            2,
         );
         let outcome = loop {
             if let Some(outcome) = job.poll() {

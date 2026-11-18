@@ -46,8 +46,8 @@ fn turns_left(a: Vec2, b: Vec2, c: Vec2) -> bool {
     (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) > SAME_PLACE_MM
 }
 
-/// The turn, radians counter-clockwise within a quarter either way, that stands `points`
-/// inside a rectangle `room` across, or `None` where none does.
+/// The smallest turn, radians counter-clockwise within a quarter either way, that stands
+/// `points` inside a rectangle `room` across, or `None` where none does.
 pub fn fitting_turn(points: &[Vec2], room: Vec2) -> Option<Scalar> {
     let outline = convex_hull(points);
     let fits = |turn: Scalar| {
@@ -63,8 +63,9 @@ pub fn fitting_turn(points: &[Vec2], room: Vec2) -> Option<Scalar> {
     events
         .windows(2)
         .flat_map(|span| at_the_walls(&outline, span[0], span[1], room))
-        .find(|turn| fits(*turn))
+        .filter(|turn| fits(*turn))
         .map(|turn| if turn > FRAC_PI_2 { turn - PI } else { turn })
+        .min_by(|a, b| a.abs().total_cmp(&b.abs()))
 }
 
 /// The width and depth of `outline` turned by `turn`.
@@ -193,6 +194,22 @@ mod tests {
         let size = turned_size(&rod, turn);
         assert!(size.max_element() <= 9.0 + FIT_SLACK_MM, "{size} at {turn}");
         assert!(turn.abs() > 0.1, "it had to turn, got {turn}");
+    }
+
+    #[test]
+    fn a_rod_is_turned_the_short_way_to_the_diagonal() {
+        // Lying at -30 degrees, the rod meets a diagonal 15 degrees clockwise, or 75
+        // counter-clockwise: the 15 is the one taken.
+        let rod: Vec<Vec2> = rectangle(12.6, 0.1)
+            .into_iter()
+            .map(|point| Vec2::from_angle(-PI / 6.0).rotate(point))
+            .collect();
+        let turn = fitting_turn(&rod, Vec2::splat(9.0)).expect("the rod fits turned");
+        assert!(
+            (turn + PI / 12.0).abs() < 0.03,
+            "about -15 degrees, got {} degrees",
+            turn.to_degrees()
+        );
     }
 
     #[test]

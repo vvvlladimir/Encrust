@@ -8,7 +8,7 @@ use core_engine::{Baked, trapped_in};
 
 use crate::i18n::tr;
 use crate::job::{Highest, Worker, pooled};
-use crate::scene::{ObjectId, Scene};
+use crate::scene::{ObjectId, Scene, SceneObject};
 
 /// One model to look through, owned so that it can cross to the worker thread.
 pub struct TrapTask {
@@ -104,13 +104,20 @@ pub fn trap_tasks(scene: &Scene) -> Vec<TrapTask> {
     scene
         .targets()
         .filter(|object| !object.mesh.is_empty())
-        .map(|object| TrapTask {
+        .map(TrapTask::of)
+        .collect()
+}
+
+impl TrapTask {
+    /// `object` as it will be printed.
+    pub fn of(object: &SceneObject) -> Self {
+        Self {
             id: object.id,
             mesh: Arc::clone(object.hollow.shell().unwrap_or(&object.mesh)),
             cuts: object.hollow.cut_bodies().map(Arc::clone),
             transform: object.transform,
-        })
-        .collect()
+        }
+    }
 }
 
 fn check(request: &TrapRequest, (stop, looked): (&AtomicBool, &Looked)) -> TrapOutcome {

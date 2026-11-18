@@ -1,5 +1,5 @@
 //! The findings of `--json` located in plate millimetres, the frame `--drain-at` takes, so
-//! whatever reads the report can act on each one (ADR 0396).
+//! whatever reads the report can act on each one (ADR 0400).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -122,9 +122,11 @@ fn a_sealed_cavity_is_located_inside_the_hollowed_cube() {
     let volume = pocket["volume_mm3"]
         .as_f64()
         .expect("a pocket holds a volume");
+    let side = f64::from(cavity_side_mm(16.0, 2.0));
+    let cavity = side.powi(3);
     assert!(
-        (volume - 1728.0).abs() / 1728.0 < 0.03,
-        "a 12 mm cavity holds 1728 mm^3, found {volume}"
+        (volume - cavity).abs() / cavity < 0.03,
+        "a {side} mm cavity holds {cavity} mm^3, found {volume}"
     );
     let (min, max) = (
         point(&pocket["bounds_mm"]["min"]),
@@ -216,6 +218,16 @@ fn contacts_nothing_can_stand_under_are_located_under_what_they_hold() {
         assert!(
             (15.0..=25.0).contains(&x) && (15.0..=25.0).contains(&y),
             "a contact with no room lies under the slab, 15..25 mm across, found {contact}"
+        );
+    }
+    let why = supports["no_room_why"]
+        .as_array()
+        .expect("supports says why each has no room");
+    assert_eq!(why.len(), unheld.len(), "one reason per contact");
+    for why in why {
+        assert!(
+            why == "head-blocked" || why == "no-ground",
+            "2 mm over a block is no room for a head or for a trunk, found {why}"
         );
     }
 }

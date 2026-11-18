@@ -252,7 +252,7 @@ measured from the panel's centre, then whether supports were generated and how d
 files state the mesh's box; ours is what the layers light, from the plate to the top of
 the stack, written once the last layer is in.
 
-**`SUBIMGS`**, stating one row's length, 44, whatever the layer count, as known files do: a
+**`SUBIMGS`**, stating its whole length, 24 and 44 per layer, as known files do: a
 `u32` layer count and a `u32` index of 1, then per layer the address, the length and the lit pixel count of the same layer data the first table
 points at, and eight floats nobody has identified, written as zero. It is filled in at the
 end, like the first table.

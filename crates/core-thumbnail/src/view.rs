@@ -2,7 +2,7 @@ use core_geometry::Vec3;
 
 /// Where the plate is looked at from in the isometric view, plate coordinates with Z up: the front
 /// right corner, a little above the part, so it shows a silhouette, a top and a side.
-const EYE: Vec3 = Vec3::new(1.0, -1.0, 0.75);
+pub(crate) const EYE: Vec3 = Vec3::new(1.0, -1.0, 0.75);
 
 /// A side the plate is looked at from, orthographic, the frame fitted to what is drawn. Plate
 /// coordinates have X to the right, Y away from the front and Z up.

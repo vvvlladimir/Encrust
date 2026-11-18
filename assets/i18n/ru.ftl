@@ -59,13 +59,19 @@ general-appearance-hint = Системная тема меняется вмес�
 settings-page-appearance = Оформление
 settings-group-help = Помощь
 settings-find = Найти настройку
-settings-words-appearance = тема светлая тёмная системная язык анимация движение
-settings-words-general = начальная страница область просмотра масштаб нарезанные файлы папка имя файла шаблон профили
+settings-words-appearance = тема светлая тёмная системная язык размер интерфейса масштаб крупнее мельче анимация движение
+settings-words-general = восстановление автосохранение копия сбой начальная страница область просмотра масштаб нарезанные файлы папка имя файла шаблон профили
 settings-words-updates = обновление релиз выпуск версия
 updates-this-build = Установлена версия { $version }
 general-viewport = Область просмотра
 general-invert-zoom = Прокрутка вниз приближает
+general-recovery = Восстановление
+general-autosave = Хранить копию несохранённой платформы
+general-autosave-hint = Каждые две минуты, чтобы несохранённая платформа не пропала, если Encrust неожиданно остановится. При закрытии окна копия удаляется.
 general-motion = Анимация
+general-scale = Размер интерфейса
+general-scale-capped = Экран слишком мал для большего размера, поэтому окно показано в { $percent }.
+general-scale-help = Размер текста, панелей и кнопок, но не модели. { $larger } и { $smaller } меняют его в любом месте окна. { $actual } возвращает системный размер.
 general-reduce-motion = Уменьшить движение
 general-sliced-files = Нарезанные файлы
 general-sliced-dir-system = Здесь открывается окно сохранения. Если папку забыть, оно откроется там, где система открывала его в последний раз.
@@ -240,6 +246,9 @@ action-remove = Убрать с платформы
 action-next-view = Следующий вид
 action-previous-view = Предыдущий вид
 action-frame-view = Показать всё
+action-interface-larger = Интерфейс крупнее
+action-interface-smaller = Интерфейс мельче
+action-interface-actual = Системный размер интерфейса
 action-settings = Настройки
 action-sheet = Сочетания клавиш
 action-find = Найти
@@ -329,6 +338,7 @@ binding-reset = Вернуть исходные клавиши
 settings-page-supports = Поддержки
 settings-page-hollow = Полость
 settings-page-drain = Дренаж
+settings-page-recipes = Рецепты
 settings-page-general = Общие
 settings-page-updates = Обновления
 settings-tab-resins = Смолы
@@ -337,6 +347,7 @@ settings-tab-network = Сеть
 settings-new-resin = Новая смола
 settings-new-printer = Новый принтер
 settings-new-profile = Новый профиль
+settings-new-recipe = Новый рецепт
 settings-copy-name = { $name } (копия)
 
 ## supports.rs
@@ -346,6 +357,10 @@ supports-placing-fill = Залить
 supports-placing-block = Запретить
 supports-placing-erase = Стереть
 supports-nothing-visible = На платформе нет видимых моделей, которые нужно поддерживать.
+supports-refused-collides = Касается модели
+supports-refused-leans = Слишком большой наклон
+supports-refused-no-footing = Основанию не на что встать
+supports-refused-no-hold = Наконечнику не за что держаться
 supports-nothing-visible-error = на платформе нет видимых моделей, которые нужно поддерживать
 supports-placed =
     { $count ->
@@ -358,15 +373,12 @@ supports-cancelled = Расстановка отменена
 supports-placed-sized = Поставлено поддержек: { $count }, из них лёгких { $light }, средних { $medium }, тяжёлых { $heavy } и стабилизирующих { $steady }
 supports-auto-no-shape = { $name } строит поддержки по профилю { $id }, которого нет в каталоге
 supports-no-automatic = В каталоге нет автоматического профиля поддержек
+supports-no-profile = В каталоге нет профиля поддержек { $id }
 supports-group-name = Группа { $index }
 supports-cannot-grow = Не удалось построить поддержки: { $reason }
 supports-growth-stopped = Построение поддержек прервалось без результата
 surfaces-cannot-build = Не удалось подготовить поверхность для поддержек: { $reason }
 surfaces-build-stopped = Подготовка поверхности для поддержек прервалась без результата
-
-## link.rs
-
-link-replaying = Показываю ревизию { $revision } задания чат-клиента { $job }
 
 ## measure.rs
 
@@ -392,21 +404,30 @@ supports-removed-inside =
        *[many] Из полостей убрано { $count } поддержек
     }
 supports-where = Где
+supports-clean-surface-about = Закрасьте грани, которые должны быть на виду. Автоматика делает там шаг контактов шире и ставит самые лёгкие наконечники.
 supports-picked = Выбрано
-supports-picked-help = «Построить заново» возвращает выбранные поддержки автоматике, и при следующем построении они создаются заново. «В группу» строит их по профилю текущей группы.
+supports-picked-help = «Построить заново» возвращает выбранные поддержки автоматике, и при следующем построении они создаются заново. «В группу» строит их по профилю текущей группы. «Слить в одну» соединяет поддержки одной модели в одно дерево на общем стволе.
 supports-stat-parts = Части
 supports-stat-supports = Поддержки
 supports-move-to-group = В группу
 supports-grow-these-again = Построить заново
+supports-merge-these = Слить в одну
+supports-merge-refused-collides = Не удалось слить поддержки: мешает модель.
+supports-merge-refused-leans = Не удалось слить поддержки: у ветви был бы слишком большой наклон.
+supports-merge-refused-no-footing = Не удалось слить поддержки: стволу негде встать.
+supports-merge-refused-no-hold = Не удалось слить поддержки: наконечнику не за что держаться.
 supports-remove-these = Удалить эти поддержки
 supports-grow-again = Построить заново
 supports-grow = Построить поддержки
 supports-grow-tooltip = Нарезает на слои { $scope } и ищет то, что нависает над пустотой.
 supports-placing = Расстановка поддержек
 supports-sizes = Размеры
+support-sizes-help = Поддержка строится тяжелее там, где держит больше. Доля поддержки — объём модели над её наконечником под островом или нависанием, разделённый между ней и всеми поддержками выше; размер уступа — объём смолы, который он добавляет за один слой. Каждое значение — наименьшее, при котором поддержка строится в этой форме.
+support-islands-help = Под малым островом наконечники стоят чаще, чем задаёт шаг контактов. От первой площади ниже они расходятся шире, от второй — встают с полным шагом.
+support-island-wider = Шаг на острове шире от
+support-island-full = Полный шаг на острове от
 supports-place = Расстановка
-support-size-island = Остров для { $shape }
-support-size-load = Нагрузка для { $shape }
+support-size-share = Доля для { $shape }
 support-size-step = Уступ для { $shape }
 support-group-steps = Уступы
 support-group-steadying = Стабилизация
@@ -425,11 +446,23 @@ supports-mode-pick = Выбрать поддержки
 supports-mode-place = Расставить поддержки
 supports-mode-area = Закрасить или запретить область
 supports-mode-shape = Форма поддержек
-supports-without-room =
+supports-lost-head-blocked =
     { $count ->
-        [one] { $count } поддержке негде встать
-        [few] { $count } поддержкам негде встать
-       *[many] { $count } поддержкам негде встать
+        [one] { $count } поддержке не хватает места для наконечника
+        [few] { $count } поддержкам не хватает места для наконечника
+       *[many] { $count } поддержкам не хватает места для наконечника
+    }
+supports-lost-faces-up =
+    { $count ->
+        [one] { $count } поддержка стоит на грани, обращённой вверх
+        [few] { $count } поддержки стоят на гранях, обращённых вверх
+       *[many] { $count } поддержек стоят на гранях, обращённых вверх
+    }
+supports-lost-no-ground =
+    { $count ->
+        [one] { $count } поддержке не на что встать
+        [few] { $count } поддержкам не на что встать
+       *[many] { $count } поддержкам не на что встать
     }
 supports-drop-preset =
     { $count ->
@@ -483,14 +516,8 @@ machines-cannot-delete-resin = не удалось удалить смолу
 
 ## panels/inspector/check.rs
 
-check-filter-all = Все
 check-filter-islands = Острова
-check-filter-levers = Рычаги
-check-filter-peel = Отрыв
-check-filter-cups = Присоски
-check-filter-thin = Тонкие
 check-support-islands = Поддержать
-check-issues = Найдено
 check-previous = Предыдущая проблема
 check-next = Следующая проблема
 check-stood =
@@ -508,8 +535,8 @@ check-fact-issues =
         [few] { $count } проблемы
        *[many] { $count } проблем
     }
-check-checking = Проверка
 check-reading = Чтение всех слоёв…
+check-quick-found = Найдено быстрой проверкой. Чтение каждого пикселя…
 check-reads-layers = Проверка читает слои. Они нарезаются, как только на платформе появляется модель и принтер, для которого её можно нарезать.
 check-measuring = измерение
 check-hardest-pull = Наибольшее усилие
@@ -547,9 +574,62 @@ check-more-layers =
         [few] и ещё { $count } слоя
        *[many] и ещё { $count } слоёв
     }
+check-section-cups = Присоски
+check-section-levers = Слабые перемычки
+check-drill-cups = Просверлить
+check-support-levers = Поддержать
+check-auto-orient = Автоориентация
+check-least-peel = Уменьшить отрыв
+check-lift-settings = Настройки подъёма
+check-place = Переместить на свободное место
+check-fit-volume = Подогнать по размеру
+check-combine = Объединить
+check-drill-drains = Просверлить дренаж
+check-cups-vent-help = «Просверлить» делает вентиляционное отверстие в самой тонкой стенке у основания каждой присоски: внутрь попадает воздух, и присоска отпускает плёнку. Если присоска стоит на платформе или её стенки слишком толстые, поднимите модель на поддержки или поверните её. Автоориентация ищет положение без присосок.
+check-necks-held-help = «Поддержать» ставит поддержки под часть, которую держит каждая слабая перемычка, — столько, сколько нужно, чтобы перемычка выдержала нагрузку. Автоориентация ищет положение, в котором нагрузка на перемычки меньше.
+check-stood-levers =
+    { $count ->
+        [0] Ни у одной слабой перемычки не нашлось нижней стороны для поддержки
+        [one] Поставлена { $count } поддержка в группе «{ $group }»
+        [few] Поставлены { $count } поддержки в группе «{ $group }»
+       *[many] Поставлено { $count } поддержек в группе «{ $group }»
+    }
+check-vented-cups =
+    { $count ->
+        [0] Ни одну присоску не удалось просверлить: стенки слишком толстые
+        [one] Просверлена { $count } присоска
+        [few] Просверлены { $count } присоски
+       *[many] Просверлено { $count } присосок
+    }
+check-cups-on-the-plate =
+    { $count ->
+        [one] { $count } присоска стоит на платформе: поднимите модель на поддержки или поверните её
+        [few] { $count } присоски стоят на платформе: поднимите модели на поддержки или поверните их
+       *[many] { $count } присосок стоят на платформе: поднимите модели на поддержки или поверните их
+    }
+check-left-to-you = Осталось исправить вручную: { $count }
+check-layers = В слоях
+check-card-way = Размещение
+check-card-resin = Полость и дренаж
+check-card-thin = Тонкие участки
+check-card-by-hand = вручную
+check-card-layers = слои { $first }–{ $last }
+check-thin-no-fix = Автоматически не исправить: утолщите эти участки в модели.
+check-fact-fixing = исправление
+check-undo-fix = Отменить исправление
+check-fix-all = Исправить всё
+check-fix-issues-tip = Отодвигает мешающие модели, сверлит дренажные отверстия и присоски, затем ставит поддержки — именно в таком порядке. Всё отменяется одним шагом.
+check-place-tip = Сдвигает только мешающие модели, каждую на ближайшее свободное место; модель, которая иначе не помещается, поворачивает. Если места не осталось, заново расставляет всю платформу.
+check-fit-volume-tip = Уменьшает модель, которая не помещается в область печати, до подходящего размера.
+check-combine-tip = Открывает «Рельеф» с двумя касающимися моделями, чтобы объединить их в одну.
+check-drill-drains-tip = Подбирает дренажные отверстия, через которые смола вытечет из каждой замкнутой модели.
+check-support-islands-tip = Ставит поддержку под каждый остров — в отдельную группу.
+check-put-islands-back-tip = Возвращает удалённые острова в файл.
+check-least-peel-tip = Поворачивает модели так, чтобы усилие отрыва от плёнки было наименьшим.
+check-lift-settings-tip = Открывает настройки подъёма.
 check-plate = На платформе
 check-plate-help = Находится сразу, как только модели перестают двигаться, ещё до чтения слоёв. Нажмите строку, чтобы перейти к месту.
-check-row-past = за областью печати
+check-row-past = вне области печати
 check-row-inset = в отступе от краёв
 check-row-meets = касается { $name }
 check-row-sealed = полая, без дренажного отверстия
@@ -557,18 +637,19 @@ check-row-solid = стоит сделать полой
 check-row-hanging = нависает над пустотой · { $area } мм²
 check-row-islands =
     { $count ->
-        [one] остров · { $area } мм²
+        [1] { $area } мм²
+        [one] { $count } остров · { $area } мм²
         [few] { $count } острова · { $area } мм²
        *[many] { $count } островов · { $area } мм²
     }
-check-row-lever = рычаг · { $lever } мм · { $stress } МПа
+check-row-lever = { $lever } мм · { $stress } МПа
 check-row-levers =
     { $count ->
         [one] { $count } рычаг · { $stress } МПа
         [few] { $count } рычага · { $stress } МПа
        *[many] { $count } рычагов · { $stress } МПа
     }
-check-row-cup = присоска · { $area } мм²
+check-row-cup = { $area } мм²
 check-row-cups =
     { $count ->
         [one] { $count } присоска · { $area } мм²
@@ -577,11 +658,12 @@ check-row-cups =
     }
 check-row-thin =
     { $count ->
-        [one] тонкий участок · { $width } мм
+        [1] { $width } мм
+        [one] { $count } тонкий участок · { $width } мм
         [few] { $count } тонких участка · { $width } мм
        *[many] { $count } тонких участков · { $width } мм
     }
-check-row-peel = отрыв · { $force } Н
+check-row-peel = { $force } Н
 check-issue-island = Остров без поддержки
 check-issue-hanging = Повисшая часть
 check-issue-lever = Слабая перемычка
@@ -594,6 +676,18 @@ check-removed =
         [few] { $count } острова удалены из файла
        *[many] { $count } островов удалено из файла
     }
+
+## panels/prepare_row.rs
+
+prepare-row-tooltip = Готовит к печати { $scope }.
+prepare-row-recipe = Рецепт, по которому идёт подготовка к печати
+prepare-row-built-in = Стандартные
+prepare-row-yours = Ваши
+prepare-row-edit-recipes = Изменить рецепты
+prepare-row-continue = Перейти к следующему шагу
+prepare-row-retry = Повторить шаг с ошибкой и продолжить
+prepare-row-end = Остановиться и оставить платформу как сейчас
+prepare-row-waits-at = Шаг { $number }: { $why }
 
 ## panels/plate_summary.rs
 
@@ -653,6 +747,10 @@ ago-weeks =
 field-back-to = Вернуть { $value } { $unit }
 field-printer-address = Адрес принтера
 
+## ui/widgets/field/condition.rs
+
+condition-insert = Вставить величину
+
 ## ui/widgets/layout.rs
 
 dialog-close = Закрыть  Esc
@@ -682,6 +780,13 @@ measure-snap-corner-note = Щелчок захватывает ближайши�
 measure-snap-edge-note = Щелчок захватывает ближайшее ребро, где поверхность меняет направление.
 measure-snap-free-note = Точно там, где пришёлся щелчок.
 measure-show-axes = Показывать dX, dY, dZ в области просмотра
+measure-along-surface = Измерять по поверхности
+measure-on-surface = По поверхности
+measure-walk-finding = Поиск кратчайшего пути по поверхности…
+measure-walk-apart = Точки не на одной модели, поэтому поверхность их не соединяет.
+measure-walk-unreachable = Точки на разных оболочках модели, поэтому поверхность их не соединяет.
+measure-walk-stopped = Отменено до того, как путь по поверхности был найден.
+measure-walk-failed = Путь по поверхности не найден: { $why }.
 measure-second-point = Щёлкните по второй точке.
 measure-two-points = Щёлкните по двум точкам на модели.
 measure-distance = Расстояние
@@ -697,7 +802,10 @@ measure-not-parallel = Не параллельны, поэтому единог�
 hollow-shell = Оболочка
 hollow-infill = Заполнение
 hollow-keep-solid = Оставить сплошным
-hollow-keep-solid-note = Щёлкните по модели, чтобы оставить стенку сплошной в этом месте; Alt + щелчок по блокиратору убирает его.
+hollow-keep-thin = Не делать полыми тонкие части
+hollow-keep-thin-note = Там, где модель тоньше этого значения, она остаётся сплошной: тонкие части вроде пальцев и лезвий не становятся полыми.
+hollow-thinner-than = Тоньше
+hollow-keep-solid-clicks = Щёлкните по модели, чтобы оставить стенку сплошной в этом месте; Shift + щелчок тянет стержень от последнего блокиратора, Alt + щелчок по блокиратору убирает его.
 hollow-drainage = Дренаж
 hollow-looking = Поиск запертой смолы
 hollow-drains = Из всех полостей на платформе смола может вытечь.
@@ -734,7 +842,11 @@ hollow-infill-struts-are = Стойки получаются толщиной { 
 hollow-infill-thin = Каркас получается толщиной { $mm } мм — слишком тонко для печати: увеличьте ячейку или плотность.
 hollow-walled-note = Ячейки стоят на платформе и соединены круглыми отверстиями ряд за рядом, поэтому смола перетекает из ячейки в ячейку к дренажному отверстию.
 hollow-scaffold-note = Стойки по рёбрам куба, поставленного на вершину: все наклонены, ни одна не начинается в воздухе, и каркас держит нагрузку и вбок.
-hollow-blocker-size = Размер блокиратора
+hollow-blocker-fit = По толщине
+hollow-blocker-fixed = Свой размер
+hollow-blocker-fit-note = Каждый блокиратор заполняет модель там, где вы щёлкнули, во всю её толщину.
+hollow-blocker-reach = За стенкой
+hollow-blocker-reach-note = Насколько каждый блокиратор заходит сквозь стенку в полость.
 hollow-clear-blockers =
     { $count ->
         [one] Убрать { $count } блокиратор
@@ -901,9 +1013,21 @@ boolean-done-sampled =
 job-thread-stopped-boolean = поток объединения остановился, не закончив
 job-thread-stopped-cut = поток разреза остановился, не закончив
 job-thread-stopped-split = поток разделения остановился, не закончив
+job-thread-stopped-measure-walk = поток измерения остановился, не закончив
 job-thread-stopped-plugs = поток вырезания пробок остановился, не закончив
 job-thread-stopped-drill = поток вырезания отверстий остановился, не закончив
 job-model-changed = пока шла работа, { $name } изменили, поэтому результат отброшен
+
+## app_menu.rs
+
+app-menu-about = О программе Encrust
+app-menu-settings = Настройки…
+app-menu-check-for-updates = Проверить обновления…
+app-menu-services = Службы
+app-menu-hide = Скрыть Encrust
+app-menu-hide-others = Скрыть остальные
+app-menu-show-all = Показать все
+app-menu-quit = Выйти из Encrust
 
 ## panels/title_bar.rs
 
@@ -956,8 +1080,8 @@ updates-looking-block = Проверка
 updates-every-change = Все изменения
 updates-and-more = И ещё { $count }.
 updates-last-looked = Последняя проверка: { $when }
-bar-alpha = Альфа
-bar-alpha-tooltip = Encrust в альфа-версии: расскажите, что пошло не так
+bar-beta = Бета
+bar-beta-tooltip = Encrust в бета-версии: расскажите, что пошло не так
 menu-new-plate = Новая платформа
 menu-new-project = Новый проект
 menu-open-project = Открыть проект…
@@ -985,6 +1109,8 @@ menu-orthographic = Ортогональный вид
 menu-import = Импорт
 menu-clear-recent = Очистить список
 menu-slicing-already = Платформа уже нарезается
+menu-send-file = Отправить нарезанный файл…
+menu-send-file-to = Файл уйдёт на { $name } без изменений.
 menu-pick-first = Сначала выберите модель
 menu-plate-empty = Платформа пуста
 menu-camera = Камера
@@ -1134,9 +1260,168 @@ diagram-max = макс. { $value }
 diagram-model = модель
 diagram-plate = платформа
 
+## settings/recipes.rs
+
+recipes-nothing-open = не открыт ни один рецепт
+recipes-built-in-why = Стандартный рецепт нельзя изменить или удалить. Нажмите «Дублировать», чтобы получить свою копию.
+recipes-cannot-save = не удалось сохранить рецепт
+recipes-unreadable-why = в файле рецепта есть ошибки
+recipes-copy-name = { $name } — копия
+recipes-new-name = Новый рецепт
+recipes-new-name-numbered = Новый рецепт { $number }
+
+## panels/settings/recipes.rs
+
+recipes-table-recipe = Рецепт
+recipes-table-kept = Тип
+recipes-table-steps = Шаги
+recipes-kept-built-in = Стандартный
+recipes-kept-yours = Ваш
+recipes-kept-broken = С ошибками
+recipes-fix-first = Перед сохранением исправьте то, что отмечено красным.
+recipes-saved = Рецепт { $recipe } сохранён
+
+## panels/settings/recipes/form.rs
+
+recipes-built-in = Стандартный рецепт
+recipes-built-in-how = Нажмите «Дублировать», чтобы получить свою копию и менять её.
+recipes-block-recipe = Рецепт
+recipes-block-recipe-help = Название показывается в списке «Подготовить к печати». Переменные — это ваши числа, которые можно использовать в условиях и настройках шагов. Например, сколько смолы должна сэкономить полость, чтобы модель стоило делать полой.
+recipes-does-not-run = Рецепт не запустится, пока в нём есть ошибки
+recipes-var-value = Значение
+recipes-var-remove = Удалить переменную
+recipes-var-add = Добавить переменную
+recipes-step-add = Добавить шаг
+recipes-no-steps = В рецепте пока нет шагов.
+
+## panels/settings/recipes/chain.rs
+
+recipes-step-drag = Перетащите, чтобы переместить шаг
+recipes-summary-off = Выключен
+recipes-summary-when = Когда { $condition }
+recipes-summary-skips = Пропускается при ошибке
+recipes-summary-set = { $count ->
+    [one] { $count } настройка изменена
+    [few] { $count } настройки изменены
+   *[many] { $count } настроек изменено
+}
+recipes-summary-rules = { $count ->
+    [one] { $count } правило
+    [few] { $count } правила
+   *[many] { $count } правил
+}
+
+## panels/settings/recipes/step.rs
+
+recipes-step-help = Шаги выполняются по порядку, каждый — с моделью в том виде, в каком её оставили предыдущие. «Когда» — условие для модели, например saves_ml >= 30; если поле пустое, шаг выполняется всегда. «При ошибке» решает, что делать, если шаг не удался: остановить подготовку или пропустить шаг. Если настройку не задать, берётся значение по умолчанию; число или переключатель можно также вычислить выражением. «Правила» меняют настройки, когда выполняется их условие; срабатывает первое подходящее правило.
+recipes-step-up = Переместить шаг выше
+recipes-step-down = Переместить шаг ниже
+recipes-step-remove = Удалить шаг
+recipes-when = Когда
+recipes-stop-if = Остановить, если
+recipes-message = Сообщение
+recipes-on-fail = При ошибке
+recipes-on-fail-stop = Остановить
+recipes-on-fail-skip = Пропустить
+recipes-retry = Добавить поддержки к найденным островам
+recipes-retry-while = Пока
+recipes-retry-max = Попыток, макс.
+recipes-choose = Правила
+recipes-rule-remove = Удалить правило
+recipes-rule-add = Добавить правило
+recipes-when-empty = Всегда
+recipes-stop-if-empty = Никогда
+recipes-retry-while-empty = например, islands > 0
+recipes-rule-when-empty = например, height_mm > 120
+recipes-conditions-help = В условии можно сравнивать величины и числа (< <= > >= == !=), объединять сравнения через && (и), || (или) и ! (не), считать с + - * / и функциями min, max, abs и clamp. Кнопка рядом с условием показывает все доступные величины.
+recipes-step-help-repair = Починка исправляет сетку, чтобы модель можно было нарезать: закрывает дыры и разворачивает грани наружу. «Метод» задаёт, насколько тщательно.
+recipes-step-help-orient = Ориентация поворачивает модель на платформе. «Цель» — что свести к минимуму: поддержки, усилие отрыва от плёнки или время печати. «Наклон, макс.» ограничивает, насколько сильно модель можно наклонить.
+recipes-step-help-hollow = Полость убирает материал внутри модели и оставляет стенку заданной толщины, чтобы расходовать меньше смолы.
+recipes-step-help-drain = Дренажные отверстия выпускают смолу из полой модели: туда, где поиск найдёт, что смола вытечет, или в заданные точки.
+recipes-step-help-supports = Шаг «Поддержки» строит поддержки под моделью по профилю поддержек.
+recipes-step-help-check = Проверка нарезает платформу и ищет острова, запертую смолу и сильный отрыв от плёнки. Величины islands, peel_n и support_ml доступны в условиях только после проверки.
+recipes-step-help-arrange = Расстановка раскладывает модели по платформе с заданным расстоянием между ними.
+recipes-step-help-save = Сохранение нарезает платформу в файл в указанной папке и может сразу отправить его на принтер.
+recipes-step-help-gate = Условие остановки останавливает подготовку и показывает своё сообщение, если выполняется «Остановить, если».
+recipes-step-help-pause = Пауза показывает своё сообщение и ждёт, пока вы не нажмёте «Продолжить».
+
+## panels/settings/recipes/setting.rs
+
+recipes-setting-set = Задать
+recipes-setting-default = Вернуть значение по умолчанию
+recipes-setting-expression = Вычислить выражением
+recipes-setting-left-out = По умолчанию
+recipes-point-remove = Удалить точку
+recipes-point-add = Добавить точку
+recipes-set-method = Метод
+recipes-set-goal = Цель
+recipes-set-max-tilt = Наклон, макс.
+recipes-set-clean-surface = Чистая поверхность
+recipes-set-wall = Стенка
+recipes-set-mode = Режим
+recipes-set-infill = Заполнение
+recipes-set-keep-solid = Сплошное, если тоньше
+recipes-set-at = Размещение
+recipes-set-points = Точки
+recipes-set-diameter = Диаметр
+recipes-set-depth = Глубина
+recipes-set-vent = Вентиляционное отверстие
+recipes-set-plugs = Пробки
+recipes-set-profile = Профиль поддержек
+recipes-set-cavity = Поддержки в полости
+recipes-set-spacing = Расстояние
+recipes-set-only-in-the-way = Двигать только мешающие модели
+recipes-set-drill-cups = Сверлить присоски
+recipes-set-hold-levers = Поддерживать слабые перемычки
+recipes-set-folder = Папка
+recipes-set-name = Имя файла
+recipes-set-send = Отправить на принтер
+recipes-expression-empty = например, height_mm / 50
+recipes-word-repair = Починка
+recipes-word-close-holes = Закрыть дыры
+recipes-word-wrap = Обернуть
+recipes-word-deep = Глубокая починка
+recipes-word-auto = Авто
+recipes-word-fewest-supports = Меньше всего поддержек
+recipes-word-least-peel = Слабый отрыв
+recipes-word-shortest-print = Быстрая печать
+recipes-word-inside = Внутрь
+recipes-word-outside = Наружу
+recipes-word-open-floor = Открытое дно
+recipes-word-points = В точках
+
+## panels/settings/recipes/names.rs
+
+recipes-names-model = Модель
+recipes-names-measured = После проверки
+recipes-names-yours = Ваши переменные
+recipes-names-functions = Функции
+recipes-names-your-value = Ваша переменная, { $value }
+recipes-names-min = Меньшее из двух
+recipes-names-max = Большее из двух
+recipes-names-abs = Модуль числа
+recipes-names-clamp = Ограничить диапазоном
+recipes-names-height = Высота, мм
+recipes-names-width = Ширина, мм
+recipes-names-depth = Глубина, мм
+recipes-names-volume = Объём, мл
+recipes-names-surface = Площадь поверхности, см²
+recipes-names-faces = Число граней
+recipes-names-sound = В сетке нет дефектов
+recipes-names-defects = Число дефектов сетки
+recipes-names-turned = Модель повёрнута вручную
+recipes-names-hollow = Модель полая
+recipes-names-saves-ml = Сколько смолы сэкономит полость, мл
+recipes-names-saves-share = Какую долю смолы сэкономит полость
+recipes-names-worth-hollowing = Полость имеет смысл
+recipes-names-fits = Помещается в область печати
+recipes-names-trapped = Карманы запертой смолы с учётом дренажа
+recipes-names-islands = Острова без поддержки
+recipes-names-peel = Наибольшее усилие отрыва от плёнки, Н
+recipes-names-support-ml = Смола на поддержки, мл
+
 ## panels/settings/presets.rs
 
-presets-blocker = Блокиратор
 presets-depth = Глубина
 presets-taper = Конусность
 presets-empty =
@@ -1344,7 +1629,7 @@ printer-build-volume = Область печати
 printer-output = Формат файла
 printer-firmware = Прошивка
 printer-browser-sends-nothing = Браузер не может подключиться к принтеру в вашей сети. Нарезанный файл скачивается, а на принтер его нужно перенести на флешке или через приложение самого принтера.
-printer-own-copy = Это ваша копия принтера, который есть и в стандартной библиотеке, и они различаются. Действует ваша копия, даже если в новом релизе стандартные значения исправлены.
+printer-edited-copy = Вы изменили принтер, который есть и в стандартной библиотеке. Изменённые поля сохраняют ваши значения, остальные обновляются с каждым релизом.
 printer-use-shipped = Использовать стандартный профиль
 printer-cannot-put-back = не удалось вернуть стандартный профиль
 printer-cannot-save = не удалось сохранить принтер
@@ -1354,15 +1639,15 @@ printer-grey-range-full = Оттенки серого на краях запис
 printer-grey-range-spread = Серый на краю поднимается до самого тёмного и растягивается до самого светлого; чёрный и чистый белый не меняются.
 printer-pitch = { $x } × { $y } мкм на пиксель
 printer-mirror = Отражение
-printer-mirror-normal = Обычное
-printer-mirror-lcd = Отражение для LCD
+printer-mirror-normal = Без отражения
+printer-mirror-lcd = Отражение по X (LCD)
 printer-mirror-dlp = Без отражения (DLP)
 printer-mirror-note = Большинство LCD-принтеров ждут маски, отражённые по X; какое отражение нужно, указано в настройках производителя.
 printer-inset = Отступ от краёв платформы
-printer-inset-min-x = Отступ у −X
-printer-inset-max-x = Отступ у +X
-printer-inset-min-y = Отступ у −Y
-printer-inset-max-y = Отступ у +Y
+printer-inset-min-x = Отступ с края −X
+printer-inset-max-x = Отступ с края +X
+printer-inset-min-y = Отступ с края −Y
+printer-inset-max-y = Отступ с края +Y
 printer-inset-note = Модель в полосе отступа помечается, но нарезается целиком.
 printer-per-layer-on = Экспозиция и движение читаются из каждого слоя; в .goo это называют расширенным режимом.
 printer-per-layer-off = Каждый слой печатается по значениям из заголовка, а переход нижних слоёв принтер выполняет сам.
@@ -1378,6 +1663,7 @@ network-printing = { $printer } печатает { $file }
 network-busy = { $name } занят: { $state }
 network-prusa-sl1 = Принтеры Prusa печатают .sl1; выберите его в поле «Формат файла» этого принтера.
 network-sending = Отправка на { $name }
+network-not-answering = { $name } не отвечает
 network-starting = Запуск { $file } на { $name }
 network-sent = { $file } передан на { $printer }
 network-cancelled = Передача отменена
@@ -1443,7 +1729,7 @@ slice-all = Нарезать все платформы ({ $count }) в .{ $exten
 slice-send = Нарезать и отправить
 slice-start-tooltip = Начать печать файла, загруженного на { $name }
 slice-start-print = Начать печать
-slice-saved-instead = { $why }; вместо этого файл сохранён на диск.
+slice-saved-instead = { $why }; вместо отправки файл будет сохранён на диск.
 slice-cannot-send = не удалось нарезать набор слоёв для отправки
 slice-slicing = Нарезка
 slice-all-started = Нарезка платформ ({ $count }) рядом с { $path }
@@ -1528,37 +1814,48 @@ orient-tall = высота { $value } мм
 
 ## prepare.rs
 
-prepare-nothing-visible = На платформе нет видимых моделей для подготовки.
-prepare-busy = Дождитесь окончания задания, идущего на платформе.
+prepare-nothing-visible = На платформе нет видимых моделей, которые можно подготовить.
+prepare-busy = Дождитесь, пока закончится текущая операция на платформе.
 prepare-running-why = Дождитесь окончания подготовки к печати.
 prepare-step-orient = Ориентация
 prepare-step-repair = Починка
 prepare-step-hollow = Создание полости
-prepare-step-mend = Правка граней вручную
-prepare-step-relief = Нанесение текстуры
-prepare-step-combine = Объединение
-prepare-step-label = Нанесение надписи
-prepare-step-cut = Разрез
-prepare-step-split = Разделение
-prepare-step-arrange = Расстановка на платформе
-prepare-step-support-holes = Сверление поддержек
-prepare-step-drill = Сверление дренажных отверстий
 prepare-step-drain = Поиск дренажных отверстий
-prepare-step-supports = Расстановка поддержек
-prepare-step-cavity = Расстановка поддержек в полости
-prepare-cancelled = Подготовка к печати отменена; платформа осталась как была
-prepare-drilled =
-    { $count ->
-        [one] Просверлено { $count } дренажное отверстие
-        [few] Просверлено { $count } дренажных отверстия
-       *[many] Просверлено { $count } дренажных отверстий
-    }
+prepare-step-supports = Построение поддержек
+prepare-step-cavity = Построение поддержек в полости
+prepare-step-scan = Проверка дренажа
+prepare-step-check = Проверка слоёв
+prepare-step-arrange = Расстановка на платформе
+prepare-step-save = Сохранение файла
+prepare-step-pause = Ожидание действия
+prepare-paused = Подготовка к печати приостановлена
+prepare-check-unread = Не удалось проверить слои
+prepare-save-no-printer-to-send = Нет принтера для отправки файла
+prepare-cancelled = Подготовка к печати отменена, платформа возвращена как была
+prepare-ended = Подготовка к печати остановлена, сделанные изменения сохранены
+prepare-gate-held = Рецепт остановлен на этом шаге
+prepare-step-cannot-run-yet = Шаг «{ $step }» здесь пока не работает
 prepare-done =
     { $count ->
         [one] К печати подготовлена { $count } модель
         [few] К печати подготовлены { $count } модели
        *[many] К печати подготовлено { $count } моделей
     }
+
+## prepare/recipes.rs
+
+prepare-recipe-missing = рецепт { $recipe } не найден
+prepare-recipe-cannot-run = рецепт «{ $recipe }» нельзя выполнить
+recipe-kind-repair = Починка
+recipe-kind-orient = Ориентация
+recipe-kind-hollow = Полость
+recipe-kind-drain = Дренаж
+recipe-kind-supports = Поддержки
+recipe-kind-check = Проверка
+recipe-kind-arrange = Расстановка
+recipe-kind-save = Сохранение
+recipe-kind-gate = Условие остановки
+recipe-kind-pause = Пауза
 
 ## relief.rs
 
@@ -1599,11 +1896,18 @@ position-axis-ratio = Коэффициент по { $axis }
 position-place = Размещение
 position-on-plate = На платформе
 position-centre = По центру
-position-scale-to-fit = Вписать в область печати
+position-scale-to-fit = Подогнать по размеру
 position-lift = Поднять над платформой
 position-click-face = Щёлкните по грани
 position-lay-on-face = Положить на грань
 position-auto-orient = Автоориентация
+position-limit-tilt = Ограничить наклон
+position-limit-tilt-note = Поворот не дальше этого числа градусов от того, как модель стоит сейчас; 0 оставляет её как есть.
+position-max-tilt = Наклон, макс.
+position-clean-surface = Чистая поверхность
+position-clean-surface-about = Убирает поддержки с того, что на виду, а затем ищет по пресету среди этих положений. Положение, где на виду ещё несколько касаний, но пресет выигрывает гораздо больше, предлагается рядом с выбранным. Если ничего не закрашено, видимое определяется по форме: открытые детализированные места.
+position-paint-shown = Закрасить
+position-paint-shown-clear = Очистить
 orient-looking = Оценка вариантов положения
 orient-proving = Пробная нарезка лучших вариантов
 orient-cancelled = Автоориентация отменена
@@ -1612,31 +1916,12 @@ orient-preset-peel = Отрыв
 orient-preset-shortest = Время
 orient-preset-auto = Авто
 orient-preset-supports-hint = Меньше всего смолы в поддержках, в каком бы положении ни стояла модель.
-orient-preset-peel-hint = Самое слабое усилие отрыва от плёнки, без присосок; если меньше 10 Н — меньше всего поддержек.
-orient-preset-shortest-hint = Наименьшее число слоёв, при котором модель ещё печатается.
+orient-preset-peel-only-hint = Самое слабое усилие отрыва от плёнки; присоски и острова не учитываются.
+orient-preset-shortest-only-hint = Наименьшее число слоёв; присоски и острова не учитываются.
 orient-preset-auto-hint = Баланс поддержек, отрыва и времени печати: ничем не жертвуют ради остального.
 position-mirror-across = Отразить по { $axis }
 position-mirror-copy = Отражать копию
 position-place-about = «На платформе» ставит модель на платформу; «По центру» переносит её к середине платформы; «Положить на грань» кладёт на платформу грань, по которой вы щёлкнете; «Отразить» переворачивает выбранные модели или их копии, поставленные рядом.
-
-## panels/inspector/position/prepare.rs
-
-position-prepare = Подготовка к печати
-# The button of the Prepare for print section.
-position-prepare-run = Подготовить к печати
-position-prepare-help-wall = Делает за один раз то, что сделали бы другие инструменты: модель, которую никто не поворачивал, ставит так, как она лучше печатается; сломанную чинит; сплошную делает полой со стенкой { $wall }, если это сберегает достаточно смолы; сверлит отверстия для слива и ставит её на автоматические поддержки, в том числе внутри полости. Всё сделанное отменяется одним действием «Отменить», а кнопка «Отмена» во время работы оставляет платформу как была.
-position-prepare-tooltip = Готовит к печати { $scope }.
-position-prepared = Подготовлено
-position-prepared-oriented = Ориентация
-position-prepared-repaired = Починка
-position-prepared-hollowed = Полость
-position-prepared-wall = Стенка
-position-prepared-saved = Сбережено смолы
-position-prepared-drained = Дренаж
-position-prepared-supports = Поддержки
-position-prepared-yes = Да
-position-prepared-no = Нет
-position-prepared-none = Нет
 
 ## panels/inspector/paint.rs
 
@@ -1681,7 +1966,7 @@ paint-dropped =
 drain-hole-size = Размер отверстия
 drain-trapped-resin = Запертая смола
 drain-opening = Отверстие
-drain-opening-note = Щёлкните по модели, её поддержкам или подложке, чтобы поставить отверстие, Alt + щелчок по отверстию убирает его. Каждое вырезается сразу при установке, полая модель или нет, а щелчок по дну отверстия сверлит дальше сквозь него.
+drain-raft-opening-note = Щёлкните по модели или её подложке, чтобы поставить отверстие; Alt + щелчок по отверстию убирает его. Каждое вырезается сразу при установке, полая модель или нет, а щелчок по дну отверстия сверлит дальше сквозь него. Поддержки остаются целыми: щелчок проходит сквозь них.
 drain-fact = заперто: { $count }
 drain-fact-unchecked = Не проверено
 drain-dig = Прорыть канал (точек: { $count })
@@ -1698,7 +1983,7 @@ drain-check-tooltip = Нарезает платформу на слои и пр�
 drain-checking = Проверка дренажа
 drain-cancelled = Проверка дренажа отменена
 drain-auto = Авто
-drain-auto-tooltip = Ищет дренажное и вентиляционное отверстие для каждого кармана запертой смолы в выбранных моделях и сверлит те, что по новой проверке его осушают.
+drain-auto-tooltip = Ищет дренажное и вентиляционное отверстия для каждого кармана запертой смолы в выбранных моделях и сверлит те, через которые, по повторной проверке, смола действительно вытекает.
 drain-auto-looking = Поиск дренажных отверстий
 drain-hole = Отверстие
 drain-channel = Канал
@@ -1840,7 +2125,17 @@ notice-delete-profiles = Удалить их
 ## panels/stage_notice.rs
 
 notice-cutting-preview = Нарезка слоёв для предпросмотра
+notice-finding-walk = Поиск кратчайшего пути по поверхности
+notice-drain-reading = Чтение модели для отверстий и пробок
+notice-drain-drilling = Сверление отверстий
+notice-drain-plugs = { $count ->
+    [one] Вырезание { $count } пробки
+    [few] Вырезание { $count } пробок
+   *[other] Вырезание { $count } пробок
+}
+notice-drain-stopped = Остановлено: отверстия остаются, вырезанные приближённо, а новые остаются без пробок.
 notice-preparing = Подготовка к печати: { $step }
+notice-prepare-continue = Продолжить
 notice-broken-one = { $name } повреждена
 notice-broken-several =
     { $count ->
@@ -1858,6 +2153,12 @@ notice-no-resin-why = Для нарезки нужно время экспози
 notice-no-printer-why = Для нарезки нужны экран и область печати принтера.
 notice-set-up = Настроить
 notice-put-away = Скрыть
+notice-recover = Прошлый сеанс прервался без сохранения
+notice-recover-when = Скопировано { $when }
+notice-recover-of = { $name }, скопировано { $when }
+notice-recover-restore = Восстановить
+notice-recover-discard = Удалить копию
+notice-recover-discard-again = Нажмите крестик ещё раз, чтобы удалить
 
 ## project.rs
 
@@ -1865,11 +2166,14 @@ project-save-and-close = Сохранить и закрыть
 project-save-and-new = Сохранить и начать новый проект
 project-close-without-saving = Закрыть без сохранения
 project-new-without-saving = Начать новый проект без сохранения
+project-save-and-open = Сохранить и открыть другой проект
+project-open-without-saving = Открыть другой проект без сохранения
 project-cannot-open = не удалось открыть проект { $path }
 project-opened-note = Открыто: { $path }; { $note }
 project-cannot-draw = не удалось создать миниатюру проекта
 project-cannot-write = не удалось записать проект { $path }
 project-unsaved = На этой платформе есть изменения, которых нет в файле проекта.
+project-recovered = Платформа восстановлена по последней копии; она ещё не сохранена.
 project-keep-working = Продолжить работу
 
 ## project/state.rs
@@ -1877,6 +2181,10 @@ project-keep-working = Продолжить работу
 project-missing-printer = принтера { $printer }, который в нём указан, нет среди ваших, поэтому остаётся ваш
 project-missing-resin = смолы { $resin }, которая в нём указана, нет среди ваших, поэтому остаётся ваша
 project-missing-both = принтера { $printer } и смолы { $resin }, которые в нём указаны, нет среди ваших, поэтому остаются ваши
+
+## autosave.rs
+
+autosave-cannot-write = Не удалось сделать копию платформы: { $reason }
 
 ## panels/section.rs
 
@@ -1917,17 +2225,20 @@ confirm-delete = Удалить
 
 ## panels/report.rs
 
-report-nothing-sent = Encrust пока в альфа-версии, и отчёты помогают исправлять ошибки. Отсюда ничего не отправляется: то, что вы видите ниже, остаётся на этом компьютере, пока вы сами его не передадите.
-report-no-model = Ваша модель никогда не попадает в отчёт. Прикрепляйте её к обращению сами и только если вправе ею делиться: небольшая модель, на которой воспроизводится та же ошибка, подойдёт ещё лучше.
 report-what-happened = Что произошло и чего вы ожидали
 report-steps = Как воспроизвести
 report-title = Сообщить о проблеме
+report-stays-here = Отсюда ничего не отправляется, а вашей модели в отчёте нет.
+report-crashed = В прошлый раз Encrust закрылся из-за ошибки
+report-crashed-why = Опишите ниже, что вы делали перед этим. Сама ошибка уже в отчёте.
+report-include = Добавить в отчёт
+report-handed-why = Форма обращения открылась в браузере. Если поле «Report from Encrust» в ней пустое, вставьте туда отчёт.
+report-open-issue-tooltip = Открывает форму обращения на GitHub с заполненным отчётом и заодно копирует отчёт
 report-include-profiles = Профили принтера и смолы
 report-include-settings = Настройки панелей инструментов
 report-include-plate = Сколько стоит на платформе
 report-the-report = Отчёт
 report-open-issue = Создать обращение
-report-copied-for-issue = Отчёт в буфере обмена: вставьте его в обращение
 report-copy = Копировать отчёт
 report-copied = Отчёт в буфере обмена
 report-save = Сохранить в файл
@@ -2056,6 +2367,7 @@ controls-camera = Поток с камеры
 
 import-opening = Открытие { $path }
 import-and-more = { $first } и ещё { $count }
+import-cancelled = Открытие отменено
 import-no-extension = у { $name } нет расширения файла
 import-cannot-load = не удалось загрузить { $name }
 import-no-vertices = в { $name } нет вершин
@@ -2281,6 +2593,7 @@ job-hollow-shaping = Завершение оболочки
 job-thread-stopped-import = поток импорта остановился, не закончив
 import-stage-reading = Чтение
 import-stage-repairing = Починка
+import-stage-surfacing = Построение поверхности
 import-stage-indexing = Индексация
 import-stage = { $stage } { $name }
 
@@ -2338,6 +2651,18 @@ arrange-done =
         [few] Расставлено { $count } модели
        *[many] Расставлено { $count } моделей
     }
+arrange-cleared =
+    { $count ->
+        [one] Отодвинута { $count } модель
+        [few] Отодвинуты { $count } модели
+       *[many] Отодвинуто { $count } моделей
+    }
+arrange-turned =
+    { $count ->
+        [one] Повёрнута { $count } модель, чтобы она поместилась на платформе
+        [few] Повёрнуты { $count } модели, чтобы они поместились на платформе
+       *[many] Повёрнуто { $count } моделей, чтобы они поместились на платформе
+    }
 arrange-short =
     { $count ->
         [one] Платформа расставлена; для { $count } модели не нашлось места
@@ -2359,20 +2684,23 @@ drain-found =
 ## drain/auto.rs
 
 drain-auto-cancelled = Поиск дренажных отверстий отменён
-drain-auto-drilled =
+drain-auto-drilled = 
     { $count ->
-        [0] Ни одного отверстия не просверлено
-       *[other] Просверлено отверстий: { $count }
+        [0] Отверстия не просверлены
+        [one] Просверлено { $count } отверстие
+        [few] Просверлено { $count } отверстия
+       *[many] Просверлено { $count } отверстий
     }
-drain-auto-trapped =
+drain-auto-trapped = 
     { $count ->
-        [one] Для { $count } кармана не нашлось осушающего отверстия, он остаётся красным.
-       *[other] Карманов без осушающего отверстия: { $count }, они остаются красными.
+        [one] Для { $count } кармана не нашлось отверстия для слива, он остаётся красным.
+       *[many] Для { $count } карманов не нашлось отверстия для слива, они остаются красными.
     }
-drain-auto-moved =
+drain-auto-moved = 
     { $count ->
         [one] { $count } модель изменилась во время поиска и осталась без отверстий.
-       *[other] Моделей, изменившихся во время поиска и оставшихся без отверстий: { $count }.
+        [few] { $count } модели изменились во время поиска и остались без отверстий.
+       *[many] { $count } моделей изменились во время поиска и остались без отверстий.
     }
 
 ## exchange.rs
@@ -2487,6 +2815,7 @@ hint-modifier-drag = { $key } + перетаскивание
 hint-clear = сбросить
 hint-remove = убрать
 hint-paint = закрасить
+hint-paint-shown = закрасить видимое
 hint-erase = стереть
 hint-measure-two-points = по двум точкам
 hint-measure-second-point = по второй точке
@@ -2499,8 +2828,10 @@ hint-relief-write = по модели, чтобы сделать надпись
 hint-pick-without-writing = выбрать, не создавая надпись
 hint-supports-pick = по части поддержки, чтобы выбрать её
 hint-supports-carry = перенести выбранное
+hint-supports-level = перенести по платформе
 hint-supports-add = добавить к выбранному
 hint-hollow-solid = по модели, чтобы оставить там сплошную стенку
+hint-hollow-rod = стержень от последнего блокиратора
 hint-area-paint = где нужны поддержки
 hint-area-block = где поддержек быть не должно
 hint-repair-faces = выбрать грани
@@ -2510,3 +2841,7 @@ hint-supports-place = по модели, чтобы поставить подд�
 hint-supports-line = поставить их линией
 hint-cut-part = по части, чтобы отметить её
 hint-gizmo-steps = за ручку шагами по 1 мм и 15°
+
+## panels/send_file.rs
+
+send-file-not-sliced = { $file } нельзя отправить: это не нарезанный файл

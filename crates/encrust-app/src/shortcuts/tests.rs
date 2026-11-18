@@ -154,6 +154,25 @@ fn a_control_in_focus_keeps_the_keys_that_drive_it() {
     assert_eq!(input.events.len(), 3, "Space, Esc and the bare arrow stay");
 }
 
+/// A text box keeps its keys, but the interface still grows and shrinks over it.
+#[test]
+fn a_text_box_in_focus_keeps_every_key_but_the_interface_size() {
+    let ctx = egui::Context::default();
+    let id = egui::Id::new("a text box");
+    egui::text_edit::TextEditState::default().store(&ctx, id);
+    ctx.memory_mut(|memory| memory.request_focus(id));
+    let mut input = egui::RawInput {
+        events: vec![
+            key_event(Key::M, Modifiers::NONE),
+            key_event(Key::Equals, Modifiers::COMMAND),
+            key_event(Key::Z, Modifiers::COMMAND),
+        ],
+        ..Default::default()
+    };
+    assert_eq!(take(&ctx, &mut input), vec![Action::Scale(1)]);
+    assert_eq!(input.events.len(), 2, "M and Cmd Z stay the text box's");
+}
+
 /// The looser chord must not fire in place of the busier one.
 #[test]
 fn shift_turns_a_save_into_a_save_as() {

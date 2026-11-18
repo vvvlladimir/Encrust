@@ -4,7 +4,7 @@ How a language model takes a model from its file to a checked printer file throu
 with no window open: from Claude Desktop through a local extension, from ChatGPT through a
 connector whose work runs in the user's browser, or from the window's own panel. The engine
 computes on the user's machine in every case; nothing that reads a model runs on encrust.app.
-The server is ADR 0397; the rest is the plan.
+The server is ADR 0455; the rest is the plan.
 
 ## What the model is for
 
@@ -74,12 +74,12 @@ a crate of its own when the window's panel or the connector needs it too.
 
 `start_job` runs the autopilot (`--prepare`) unless told not to, and each `set_*` tool
 overrides one of its steps. An edit is kept only if the command line took it; every finding
-is located (ADR 0396), so the next call can act on it.
+is located (ADR 0400), so the next call can act on it.
 
 ### Better than the autopilot
 
 A client beats the autopilot only by what it knows and the engine does not: what the model
-is. So it chooses, and the engine proves (ADR 0403). `compare_poses` lays the search's
+is. So it chooses, and the engine proves (ADR 0458). `compare_poses` lays the search's
 finalists side by side, each printed on a trial and drawn; the client picks one for a reason
 it can state, and names the places no support should touch — a face, a lip — which the proof
 ranks first. Each check answers with `compared`, set against the revision before and the
@@ -103,22 +103,21 @@ names its job, a directory in the user's cache of numbered revisions, each a TOM
 the model, printer, resin and each step's settings — that becomes `encrust` flags. An
 editing tool writes the next revision and checks it; `revert` copies an old one forward;
 `report_print` appends what a print did. The cost: each check stages the model again from
-its file (ADR 0397). The connector keeps the same revisions in the page's own state, never
+its file (ADR 0455). The connector keeps the same revisions in the page's own state, never
 on the server.
 
-## After the merge with main
+## What main brought
 
-`main` built parts of this plan under its own records and went further; the merge takes
-main's and drops the branch's copies:
+`main` built steps 1, 2 and 4 under its own records (0400, 0401, 0402) and went further; the
+merge kept main's, renumbered the branch's own after 0454 and left out what no longer fits:
 
-| Branch | Main | At the merge |
+| Here | In main | Now |
 |---|---|---|
-| 0396 located findings | 0400 | main's; the branch's record deleted |
-| 0398 drains proposed and proven | 0401 | main's |
-| 0399 `--prepare` fills the flags | 0402, superseded by 0403 (recipes) | `--prepare` is `--recipe prepare`; `start_job` runs it |
-| 0397, 0400–0403 of the branch | — | renumbered after main's last |
-| a job's TOML "recipe" | `core-recipe`'s recipe | a revision is renamed so; open decision 3 |
-| `keep_clear_at_mm` points | painted `Shown` faces (0410, 0425), window only | step 13 brings painting to the command line |
+| `--prepare` fills the flags left out | 0402, superseded by recipes (0403) | `--prepare` is `--recipe prepare`; `start_job` runs it |
+| a job's TOML "recipe" | `core-recipe`'s recipe | two meanings of one word; open decision 3 |
+| `--keep-solid X,Y,Z` | `--keep-solid` with blockers fitted to the model (0396) | main's; the branch's flag dropped |
+| `keep_clear_at_mm` points | painted `Shown` faces (0410, 0425), window only | both stand; step 13 brings painting to the command line |
+| the window replaying each revision | Prepare for print rebuilt on recipes | not merged: step 8 again, on `core-recipe` |
 
 Main also brings what the tools gain without new code: Check's issues located and fixed by
 the `fix-issues` recipe, cups vented by their thinnest wall, necks held by their stress, one
@@ -143,7 +142,7 @@ config. The files are the user's own paths and the printer is on the user's netw
 - **Updated by a new download.** Anthropic's directory no longer takes `.mcpb` listings, so
   nothing updates it in place; the bundle reports its version in `instructions`.
 - **No window needed.** Resins come from `import_resin` and the exposure test (step 15).
-  When the window is open, each revision is replayed on its plate (ADR 0401, `window-link.md`).
+  The window open beside it shows nothing of the job until step 8 lands again.
 
 Claude on the web and on a phone runs no local program and gives an MCP App page no file
 from the chat; it is served once one of those changes.
@@ -202,7 +201,7 @@ reliably, which the autopilot covers: it asks the model only what the engine can
 
 ## How quality is measured
 
-`agent-lab` (ADR 0400; `docs/cli.md`) prepares each model by the autopilot and by each
+`agent-lab` (ADR 0456; `docs/cli.md`) prepares each model by the autopilot and by each
 client under test, run as its own command against `encrust-mcp`, and scores both on the
 check's report — status, islands, suction cups, trapped pockets, contacts with no room,
 resin, print time — with the client's tool calls from the server's trace and its tokens from
@@ -228,10 +227,11 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 
 | Step | What | Where | After |
 |---|---|---|---|
-| 1–4 | Located findings, drains proposed, views with markers, the autopilot | engine and command line (done; in main as 0400–0403) | — |
-| 5–8 | The stdio server and its jobs, its tools and `.mcpb`, the bench, the open window replaying | `encrust-mcp`, `encrust-cli`, `encrust-app` (done, ADR 0397, 0400, 0401) | — |
-| 11 | Poses offered and chosen, places kept clear, each check compared, a judge | (done, ADR 0403) | 6, 7, 8 |
-| 12 | Merge main: records renumbered, `start_job` on `--recipe prepare`, the bench on main's check | all of the above | — |
+| 1–4 | Located findings, drains proposed, views with markers, the autopilot | engine and command line (done; main's 0400–0403) | — |
+| 5–7 | The stdio server and its jobs, its tools and `.mcpb`, the bench | `encrust-mcp`, `encrust-cli` (done, ADR 0455, 0456) | — |
+| 11 | Poses offered and chosen, places kept clear, each check compared, a judge; supports by hand | (done, ADR 0457, 0458) | 6, 7 |
+| 12 | Merge main | (done) | — |
+| 8 | The open window replays each revision, as a `core-recipe` run of Prepare for print | `encrust-mcp`, `encrust-app` | 12, decision 3 |
 | 13 | Shown faces painted from the command line, `--shown-at X,Y,Z[:R]`; `mark_shown` | `encrust-cli`, `encrust-mcp`; window parity (rule 9) | 12 |
 | 14 | Recipes chosen by purpose: `use_recipe`, the instructions ask what the print is for | `encrust-mcp` | 12 |
 | 15 | Resin with no window: `import_resin`; `encrust test-print exposure`, as the window's | `encrust-cli`, `encrust-mcp` | 12 |
@@ -244,7 +244,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 12 |
 | 10 | The MCP Apps page in Claude Desktop, the connector's page served locally | `encrust-mcp` | 19 |
 
-Order: 12, then 13–15 and 18 in parallel; 20 once 15 stands, so a user with no window can
+Order: 13–15, 18 and 8 in parallel; 20 once 15 stands, so a user with no window can
 finish a print; 16, 17 and 19 next; 21 grows with each; 9 and 10 last.
 
 ## How the work is run
@@ -267,7 +267,7 @@ finish a print; 16, 17 and 19 next; 21 grows with each; 9 and 10 last.
    once OpenAI's terms for apps are confirmed.
 2. **The connector's server** (before step 19, an ADR): where it is hosted on a free tier,
    and in what language; it sees a file's URL, never its bytes.
-3. **A revision and a recipe** (at step 12): a job's revision becomes a `core-recipe` file
+3. **A revision and a recipe** (before step 8): a job's revision becomes a `core-recipe` file
    with the job's inputs, run by `--recipe`, so the window's Prepare for print reruns what
    the model did — recommended — or keeps its own TOML under the name "revision".
 4. **Photos** (before step 16): the client names symptoms from the fixed list and no image

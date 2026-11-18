@@ -7,19 +7,19 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use std::sync::Arc;
 
-use core_engine::{SupportPlan, SupportShapes};
+use core_engine::{Strengthened, SupportPlan, SupportShapes, Underside, strengthen};
 use core_geometry::{
-    Bvh, Mat4, Mesh, Quat, Scalar, Transform, Vec3, center_over_plate, drop_to_plate,
-    lift_over_plate, orient_outward, transform_mesh, weld,
+    Bvh, Mat4, Mesh, Prominence, Quat, Region, Scalar, Transform, Vec3, center_over_plate,
+    drop_to_plate, lift_over_plate, orient_outward, transform_mesh, weld,
 };
 use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
 use core_supports::{
-    Blocked, Need, Placed, Profiles, SupportPoint, SupportTree, WallSide, columns,
+    Blocked, Need, Placed, Profiles, Reason, Shown, SupportPoint, SupportTree, WallSide, columns,
     generate_supports, grow, low_points, mesh_trees,
 };
 use core_volume::{Cancel, HollowSettings, hollow};
 use encrust_cli::pipeline;
-use printer_profiles::{AutoProfile, BuildVolume, SupportProfile};
+use printer_profiles::{BuildVolume, SupportProfile};
 
 use crate::corpus::{Pose, Up};
 
@@ -42,15 +42,43 @@ pub struct Supported {
     pub contacts: Vec<Vec3>,
     /// The group of `profiles` each of `contacts` is built to.
     pub groups: Vec<u16>,
+    /// Why placement asked for each of `contacts`; empty where a coupon set them by hand.
+    pub reasons: Vec<Reason>,
     pub profiles: Vec<SupportProfile>,
     pub trees: Vec<SupportTree>,
     /// The supports as one mesh, plate coordinates.
     pub supports: Mesh,
     pub place_s: f64,
     pub grow_s: f64,
+    /// What strengthening changed, unless `--no-strengthen` left it out.
+    pub strengthened: Option<Strengthened>,
+    /// Contacts on the side painted to be seen.
+    pub shown: usize,
 }
 
 impl Supported {
+    /// Grows the trees again over `contacts` as they stand now, each to its group.
+    pub fn regrow(&mut self) -> Result<()> {
+        let started = Instant::now();
+        let bvh = Bvh::build(&self.model);
+        let placed = Placed::new(&self.model, &bvh, Transform::default());
+        let profiles =
+            Profiles::new(&self.profiles).context("a table of profiles is never empty")?;
+        let points: Vec<SupportPoint> = self
+            .contacts
+            .iter()
+            .zip(&self.groups)
+            .map(|(&contact, &group)| SupportPoint {
+                group,
+                ..SupportPoint::new(contact)
+            })
+            .collect();
+        self.trees = grow(&columns(&points, &placed, profiles), &placed, profiles);
+        self.supports = mesh_trees(&self.trees, &placed, profiles);
+        self.grow_s += started.elapsed().as_secs_f64();
+        Ok(())
+    }
+
     /// The profile the support at `contact`, an index into `contacts`, is built to.
     pub fn profile_of(&self, contact: usize) -> &SupportProfile {
         let group = self.groups.get(contact).copied().unwrap_or(0);
@@ -105,13 +133,27 @@ fn rotation(rotation: Quat) -> Transform {
     }
 }
 
+/// How a run sizes the tips placement asks for.
+#[derive(Debug, Clone, Copy)]
+pub struct Sizing {
+    /// Strengthen tips under the wanted margin, as Generate does.
+    pub strengthening: bool,
+    /// Build every tip an automatic profile sizes to its lightest shape first, leaving its size
+    /// to what strengthening finds it carries.
+    pub lightest_first: bool,
+    /// Paint as the side meant to be seen every face that shows at least this much, 0 to 1,
+    /// as the clean surface reads it off the shape.
+    pub shown_from: Option<Scalar>,
+}
+
 /// `model` lifted by the placing profile's lift, hollowed to `wall_mm` where given, and supported
-/// from outside as Generate does with nothing painted, blocked or placed by hand.
+/// from outside as Generate does with nothing painted, blocked or placed by hand, sized as
+/// `sizing` says.
 pub fn supported(
     mut model: Mesh,
     asked: &SupportPlan,
     wall_mm: Option<Scalar>,
-    layer_mm: Scalar,
+    (layer_mm, sizing): (Scalar, Sizing),
 ) -> Result<Supported> {
     let placing = asked.placing();
     let bounds = model.aabb().context("the model has no vertices")?;
@@ -120,35 +162,26 @@ pub fn supported(
         model = transform_mesh(&model, Transform::from_translation(offset));
     }
     let (model, side) = printed(model, wall_mm)?;
-    let bvh = Bvh::build(&model);
     let started = Instant::now();
-    let needs = needs_under(&model, &placing, asked.sizing(), side.as_ref(), layer_mm)?;
+    let (needs, reasons, strengthened) =
+        needs_under(&model, asked, side.as_ref(), (layer_mm, sizing))?;
     let place_s = started.elapsed().as_secs_f64();
 
-    let started = Instant::now();
-    let placed = Placed::new(&model, &bvh, Transform::default());
-    let table = asked.table();
-    let profiles = Profiles::new(&table).context("a table of profiles is never empty")?;
-    let points: Vec<SupportPoint> = needs
-        .iter()
-        .map(|need| SupportPoint {
-            group: asked.group_of(need),
-            ..SupportPoint::new(need.contact)
-        })
-        .collect();
-    let trees = grow(&columns(&points, &placed, profiles), &placed, profiles);
-    let supports = mesh_trees(&trees, &placed, profiles);
-    let grow_s = started.elapsed().as_secs_f64();
-    Ok(Supported {
+    let mut supported = Supported {
         model,
-        contacts: points.iter().map(|point| point.contact).collect(),
-        groups: points.iter().map(|point| point.group).collect(),
-        profiles: table,
-        trees,
-        supports,
+        contacts: needs.iter().map(|need| need.contact).collect(),
+        groups: needs.iter().map(|need| asked.group_of(need)).collect(),
+        reasons,
+        profiles: asked.table(),
+        trees: Vec::new(),
+        supports: Mesh::default(),
         place_s,
-        grow_s,
-    })
+        grow_s: 0.0,
+        strengthened,
+        shown: needs.iter().filter(|need| need.shown).count(),
+    };
+    supported.regrow()?;
+    Ok(supported)
 }
 
 /// `model` as it prints: its shell with a wall of `wall_mm`, cavity and infill counted
@@ -175,15 +208,15 @@ fn printed(model: Mesh, wall_mm: Option<Scalar>) -> Result<(Mesh, Option<WallSid
     Ok((shell, Some(side)))
 }
 
-/// Where `model` needs holding up and what each contact holds, as automatic placement
-/// reads it off its own stack, kept to the outside of `side`'s wall.
+/// Where `model` needs holding up, as automatic placement reads it off its own stack, kept to
+/// the outside of `side`'s wall and sized as `sizing` says; why placement asked for each
+/// contact, and what strengthening changed where asked.
 fn needs_under(
     model: &Mesh,
-    profile: &SupportProfile,
-    sizing: Option<&AutoProfile>,
+    plan: &SupportPlan,
     side: Option<&WallSide>,
-    layer_mm: Scalar,
-) -> Result<Vec<Need>> {
+    (layer_mm, sizing): (Scalar, Sizing),
+) -> Result<(Vec<Need>, Vec<Reason>, Option<Strengthened>)> {
     if layer_mm <= 0.0 {
         bail!("a layer of {layer_mm} mm cannot be cut");
     }
@@ -198,18 +231,59 @@ fn needs_under(
         .context("the model cannot be cut for placement")?;
     let lows = low_points(model, Transform::default());
     let blocked = Blocked::keeping(None, side.cloned());
+    let shown = sizing.shown_from.and_then(|least| shown_of(model, least));
     let mut needs = generate_supports(
         &stack,
         layer_mm,
-        profile,
-        sizing,
+        &plan.placing(),
+        plan.sizing(),
         &[],
         &lows,
         blocked.as_ref(),
+        shown.as_ref(),
         &mut |_| true,
     );
     if let Some(side) = side {
         needs.retain(|need| side.keeps(need.contact));
     }
-    Ok(needs)
+    let asked: Vec<Reason> = needs.iter().map(|need| need.reason).collect();
+    if sizing.lightest_first {
+        for need in &mut needs {
+            need.reason = lightest(need.reason);
+        }
+    }
+    if !sizing.strengthening {
+        return Ok((needs, asked, None));
+    }
+    let underside = Underside {
+        stack: &stack,
+        layer_mm,
+        surface: model,
+        bvh: &Bvh::build(model),
+        blocked: blocked.as_ref(),
+    };
+    let done = strengthen(underside, &mut needs, &[], plan, &mut || true)
+        .context("the model cannot be read for what its tips carry")?;
+    let added = needs.iter().skip(asked.len()).map(|need| need.reason);
+    let reasons = asked.iter().copied().chain(added).collect();
+    Ok((needs, reasons, Some(done)))
+}
+
+/// Every face of `model` that shows at least `least`, painted as the side meant to be seen.
+fn shown_of(model: &Mesh, least: Scalar) -> Option<Shown> {
+    let prominence = Prominence::of(model);
+    let painted: Region = (0..model.faces.len())
+        .filter(|&face| prominence.face(face) >= least)
+        .collect();
+    Shown::new(model, &painted, Transform::default())
+}
+
+/// `reason` with nothing to hold, which an automatic profile builds to its lightest shape.
+fn lightest(reason: Reason) -> Reason {
+    match reason {
+        Reason::Island { .. } => Reason::POINT,
+        Reason::Overhang { .. } => Reason::Overhang { share_mm3: 0.0 },
+        Reason::Step { .. } => Reason::Step { new_mm3: 0.0 },
+        Reason::Steady => Reason::Steady,
+    }
 }

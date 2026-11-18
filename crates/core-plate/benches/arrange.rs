@@ -4,7 +4,7 @@
 )]
 
 use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3};
-use core_plate::{ArrangeSettings, Footprint, Rect, arrange, nearest_free};
+use core_plate::{ArrangeSettings, Footprint, PlateArea, Rect, arrange, nearest_free};
 use criterion::{Criterion, criterion_group, criterion_main};
 
 /// A star-shaped footprint: concave, so packing cannot fall back on bounding boxes.
@@ -46,7 +46,13 @@ fn packing(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("arrange");
     group.bench_function("eight-stars-on-a-mars-4-plate", |b| {
-        b.iter(|| arrange(&footprints, Vec2::new(153.4, 77.0), &settings));
+        b.iter(|| {
+            arrange(
+                &footprints,
+                PlateArea::whole(Vec2::new(153.4, 77.0)),
+                &settings,
+            )
+        });
     });
     group.finish();
 }

@@ -502,6 +502,72 @@ fn info_takes_one_layer_out_as_a_png() {
 }
 
 #[test]
+fn info_writes_the_files_own_preview_and_refuses_a_file_without_one() {
+    let path = write_box_stl("preview-out", 10.0, 12, 0);
+    let goo = output_file("preview-out.goo");
+    let panel = test_panel();
+    let written = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "2",
+        "-o",
+        goo.to_str().unwrap(),
+    ]);
+    assert!(written.status.success(), "{}", stderr(&written));
+
+    let png = output_file("preview-out.png");
+    let output = encrust(&[
+        "info",
+        goo.to_str().unwrap(),
+        "--thumbnail",
+        png.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(json(&output)["thumbnail"].as_str(), png.to_str());
+    let mut reader = png::Decoder::new(std::io::BufReader::new(
+        fs::File::open(&png).expect("a PNG was written"),
+    ))
+    .read_info()
+    .expect("the preview is a PNG");
+    let mut pixels = vec![0; reader.output_buffer_size().expect("a bounded image")];
+    let frame = reader.next_frame(&mut pixels).expect("one frame");
+    assert_eq!(
+        (frame.width, frame.height),
+        (290, 290),
+        "the .goo's large preview"
+    );
+    let colours: std::collections::HashSet<_> = pixels.chunks(3).collect();
+    assert!(colours.len() > 2, "the rendered plate, not a blank record");
+
+    let cws = output_file("preview-out.cws");
+    let written = slice(&[
+        path.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "2",
+        "-o",
+        cws.to_str().unwrap(),
+    ]);
+    assert!(written.status.success(), "{}", stderr(&written));
+    let none = encrust(&[
+        "info",
+        cws.to_str().unwrap(),
+        "--thumbnail",
+        png.to_str().unwrap(),
+    ]);
+    assert_eq!(none.status.code(), Some(1));
+    assert!(
+        stderr(&none).contains("carries no preview"),
+        "{}",
+        stderr(&none)
+    );
+}
+
+#[test]
 fn info_reports_one_layer_on_its_own_and_every_run_of_exposures() {
     let path = write_box_stl("layer-facts", 10.0, 12, 0);
     let goo = output_file("layer-facts.goo");

@@ -41,7 +41,7 @@ pub use hollow::{
     HollowJob, HollowOutcome, HollowRequest, HollowTask, SharedFields, again_tasks, hollow_tasks,
     lock as lock_fields, rebuild_tasks,
 };
-pub use import::{ImportJob, ImportOutcome, ImportStage};
+pub use import::{ImportJob, ImportOutcome, ImportStage, ImportWatch};
 pub use measure::{MeasureJob, MeasureOutcome};
 pub use meeting::{MeetingBody, MeetingJob, spawn_meeting};
 pub use orient::{
@@ -61,7 +61,7 @@ pub use relief::{
 pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};
 pub use split::{SplitJob, SplitOutcome, SplitRequest, spawn_split};
-pub use trapped::{TrapJob, TrapOutcome, TrapRequest, trap_tasks};
+pub use trapped::{Pockets, TrapJob, TrapOutcome, TrapRequest, TrapTask, trap_tasks};
 
 use std::path::PathBuf;
 use std::sync::Arc;

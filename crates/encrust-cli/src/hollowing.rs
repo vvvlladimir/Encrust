@@ -1,16 +1,18 @@
 use std::fmt;
 use std::ops::Range;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
-    Blocker, Cancel, Channel, DEFAULT_BLOCKER_MM, DrainHole, HoleKind, HoleShape, HoleSize,
-    HollowMode, HollowSettings, InfillPattern, InfillSettings, PLUG_GAP_MM, VolumeError, drill,
-    hole_at, hollow, laid_beside, pierce, plug_wall_mm, plugs, sleeves,
+    Blocker, Cancel, Channel, DrainHole, HoleKind, HoleShape, HoleSize, HollowMode, HollowSettings,
+    InfillPattern, InfillSettings, ModelRead, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow,
+    laid_beside, pierce, plug_wall_mm, plugs, sleeves, walled_by,
 };
 
 use crate::exit::{Cancelled, Stop};
+use crate::keep_solid::KeepSolidArgs;
 
 mod auto;
 
@@ -81,17 +83,8 @@ pub struct HollowArgs {
     #[arg(long = "infill-density", value_name = "0..1")]
     pub density: Option<Scalar>,
 
-    /// Keep the wall solid in a ball round this point, plate mm as the model prints, lift
-    /// included, as the window's Keep solid does. Repeat for more.
-    #[arg(long = "keep-solid", value_name = "X,Y,Z", value_parser = point, allow_hyphen_values = true)]
-    pub keep_solid: Vec<Vec3>,
-
-    /// The radius of each --keep-solid ball, millimetres.
-    #[arg(long = "keep-solid-radius", value_name = "MM", default_value_t = DEFAULT_BLOCKER_MM)]
-    pub keep_solid_mm: Scalar,
-
     /// Diameter of the drain holes, millimetres.
-    #[arg(long = "drain", value_name = "MM", default_value_t = 3.0)]
+    #[arg(long = "drain", value_name = "MM", default_value_t = HoleSize::default().diameter_mm)]
     pub drain_mm: Scalar,
 
     /// Drill a drain hole into the surface nearest this point, plate mm from the front left corner
@@ -106,11 +99,11 @@ pub struct HollowArgs {
     pub no_vent: bool,
 
     /// How far past the surface a drain hole reaches, millimetres.
-    #[arg(long = "drain-depth", value_name = "MM", default_value_t = 3.0)]
+    #[arg(long = "drain-depth", value_name = "MM", default_value_t = HoleSize::default().depth_mm)]
     pub drain_depth_mm: Scalar,
 
     /// Diameter of a hole's far end as a fraction of its mouth: 1 is a cylinder.
-    #[arg(long = "drain-taper", value_name = "0..1", default_value_t = 1.0)]
+    #[arg(long = "drain-taper", value_name = "0..1", default_value_t = HoleSize::default().taper)]
     pub drain_taper: Scalar,
 
     /// Cut the drain holes and channels as polygons of this many sides, their corners on the
@@ -132,8 +125,8 @@ pub struct HollowArgs {
     #[arg(long = "drain-walled")]
     pub walled: bool,
 
-    /// Drill a hole into the supports or raft nearest this point, plate mm, as they stand
-    /// once built, sized as --drain asks; needs supports. Repeat for more holes.
+    /// Drill a hole into the raft nearest this point, plate mm, as it stands once built, sized
+    /// as --drain asks; needs supports on a raft. Repeat for more holes.
     #[arg(long = "drain-support-at", value_name = "X,Y,Z", value_parser = point, allow_hyphen_values = true)]
     pub drain_support_at: Vec<Vec3>,
 
@@ -154,6 +147,9 @@ pub struct HollowArgs {
     /// Diameter of the drainage channels, millimetres.
     #[arg(long = "channel-size", value_name = "MM", default_value_t = 2.0)]
     pub channel_mm: Scalar,
+
+    #[command(flatten)]
+    pub keep_solid: KeepSolidArgs,
 }
 
 /// One `x,y,z` point of the command line, in plate millimetres.
@@ -187,7 +183,7 @@ fn drain_at(text: &str) -> Result<DrainAt, String> {
 }
 
 /// A polyline of points separated by colons.
-fn polyline(text: &str) -> Result<Vec<Vec3>, String> {
+pub(crate) fn polyline(text: &str) -> Result<Vec<Vec3>, String> {
     text.split(':').map(point).collect()
 }
 
@@ -222,26 +218,24 @@ impl HollowArgs {
     }
 
     /// What was asked for, cut on the lattice `precision` picks, or `None` without `--hollow`.
-    /// Every channel and walled hole `placed` cuts keeps a solid wall around it.
+    /// Every `kept` blocker, and every channel and walled hole `placed` cuts, keeps a solid
+    /// wall around it.
     fn settings(
         &self,
-        (precision, lifted_mm): (Scalar, Scalar),
+        precision: Scalar,
         placed: &Placed,
+        kept: &[Blocker],
     ) -> Option<HollowSettings> {
         let thickness_mm = self.thickness_mm?;
-        let mut blockers = sleeves(&placed.1, &placed.0, thickness_mm);
-        let up = Vec3::Z * lifted_mm;
-        let solid = self
-            .keep_solid
-            .iter()
-            .map(|at| Blocker::ball(*at - up, self.keep_solid_mm));
-        blockers.extend(solid);
+        let mut blockers: Vec<Blocker> = walled_by(kept, thickness_mm).collect();
+        blockers.extend(sleeves(&placed.1, &placed.0, thickness_mm));
         Some(HollowSettings {
             thickness_mm,
             mode: self.mode.into(),
             precision,
             infill: self.infill.map(|pattern| self.infill_settings(pattern)),
             blockers,
+            solid_under_mm: self.keep_solid.under_mm,
             // The model already stands where it prints, so the plate is straight down.
             open_toward: self.open_floor.then_some(Vec3::NEG_Z),
             ..HollowSettings::default()
@@ -252,11 +246,9 @@ impl HollowArgs {
     /// close or a gap that would make them wider than it.
     pub(crate) fn check_flags(&self) -> Result<()> {
         self.check_infill()?;
+        self.keep_solid.check_flags(self.wanted())?;
         if self.infill.is_some() && !self.wanted() {
             bail!("--infill fills a shell's cavity, and --hollow was not given");
-        }
-        if !self.keep_solid.is_empty() && !self.wanted() {
-            bail!("--keep-solid keeps part of a shell's wall solid, and --hollow was not given");
         }
         if self.open_floor && !self.wanted() {
             bail!("--hollow-open-floor opens a shell's floor, and --hollow was not given");
@@ -334,23 +326,31 @@ impl HollowArgs {
     /// A hole on the surface nearest each `--drain-at`, drilled straight into it, the point
     /// brought down `up` onto the model as it stands here.
     fn drains(&self, mesh: &Mesh, bvh: &Bvh, up: Vec3) -> Result<Vec<DrainHole>> {
+        let kind = if self.walled {
+            HoleKind::Walled
+        } else {
+            HoleKind::AtDepth
+        };
         self.points()
-            .map(|near| {
-                hole_at(mesh, bvh, near - up, self.hole_size())
-                    .map(|hole| refuse_off_a_face(near, hole, up))
-                    .transpose()?
-                    .map(|hole| DrainHole {
-                        kind: if self.walled {
-                            HoleKind::Walled
-                        } else {
-                            HoleKind::Drain
-                        },
-                        ..hole
-                    })
-                    .with_context(|| format!("no surface near {near} to drill a drain hole into"))
-            })
+            .map(|near| hole_near(mesh, bvh, (near, up), self.hole_size(), kind))
             .collect()
     }
+}
+
+/// A hole of `size` on the surface nearest `near`, which stands `up` over the model as it is
+/// here, drilled straight into it, refused off an edge or a corner as `--drain-at` is.
+pub(crate) fn hole_near(
+    mesh: &Mesh,
+    bvh: &Bvh,
+    (near, up): (Vec3, Vec3),
+    size: HoleSize,
+    kind: HoleKind,
+) -> Result<DrainHole> {
+    hole_at(mesh, bvh, near - up, size)
+        .map(|hole| refuse_off_a_face(near, hole, up))
+        .transpose()?
+        .map(|hole| DrainHole { kind, ..hole })
+        .with_context(|| format!("no surface near {near} to drill a drain hole into"))
 }
 
 /// Past this, the point is off an edge or corner rather than over the face the hole is
@@ -385,19 +385,19 @@ fn refuse_off_a_face(near: Vec3, hole: DrainHole, up: Vec3) -> Result<DrainHole>
     Ok(hole)
 }
 
-/// Hollows the mesh, keeping the cavity off the channels and walled holes `placed` cuts and the
-/// balls `--keep-solid` names, at `lattice`'s precision with the model lifted its second by
-/// its supports, and says what that cost and saved. `stop` is asked while the field is built.
+/// Hollows the mesh, keeping the cavity off the channels and walled holes `placed` cuts, and says
+/// what that cost and saved. `stop` is asked while the field is built, so a Ctrl-C lands inside it.
 pub fn run(
     mesh: &Mesh,
     placed: &Placed,
     args: &HollowArgs,
-    lattice: (Scalar, Scalar),
+    precision: Scalar,
     stop: &Stop,
 ) -> Result<(Mesh, Range<usize>, HollowReport)> {
     let started = Instant::now();
     let bvh = Bvh::build(mesh);
-    let Some(settings) = args.settings(lattice, placed) else {
+    let kept = args.keep_solid.blockers(mesh, &bvh)?;
+    let Some(settings) = args.settings(precision, placed, &kept) else {
         bail!("--hollow was not given, so there is nothing to hollow");
     };
     let asked = || stop.requested();
@@ -439,8 +439,22 @@ pub fn plugs_beside(
     let wall_mm = args
         .thickness_mm
         .and_then(|thickness_mm| plug_wall_mm(args.mode.into(), thickness_mm));
-    let gap_mm = args.plug_gap_mm - drift_mm;
-    let made = plugs(&mut None, mesh, &Bvh::build(mesh), holes, wall_mm, gap_mm)
+    let made = cut_plugs(mesh, holes, wall_mm, args.plug_gap_mm - drift_mm)?;
+    let bounds = mesh.aabb().context("mesh has no vertices")?;
+    Ok(laid_beside(&made, holes, Transform::default(), bounds))
+}
+
+/// A plug for each of `holes` cut out of the solid `mesh`, `wall_mm` long where there is a
+/// wall, `gap_mm` narrower a side, saying where one only follows the surface or gets none.
+pub(crate) fn cut_plugs(
+    mesh: &Mesh,
+    holes: &[DrainHole],
+    wall_mm: Option<Scalar>,
+    gap_mm: Scalar,
+) -> Result<Vec<Mesh>> {
+    let read = ModelRead::new(Arc::new(mesh.clone()));
+    let (bvh, cancel) = (Bvh::build(mesh), Cancel::never());
+    let made = plugs(&mut None, &read, &bvh, holes, wall_mm, gap_mm, cancel)
         .context("cutting the plugs for the drain holes")?;
     if made.sampled > 0 {
         tracing::warn!(
@@ -456,17 +470,11 @@ pub fn plugs_beside(
             made.meshes.len()
         );
     }
-    let bounds = mesh.aabb().context("mesh has no vertices")?;
-    Ok(laid_beside(
-        &made.meshes,
-        holes,
-        Transform::default(),
-        bounds,
-    ))
+    Ok(made.meshes)
 }
 
-/// `holes` as a model hollowed to `wall` cuts them: deepened through the wall, where there
-/// is one, so none stops inside it.
+/// `holes` as a model hollowed to `wall` cuts them: the drains deepened through the wall,
+/// where there is one, so none stops inside it.
 pub fn pierced(holes: &[DrainHole], wall: Option<(Scalar, Scalar)>) -> Vec<DrainHole> {
     match wall {
         Some((thickness_mm, voxel_mm)) => pierce(holes, thickness_mm, voxel_mm),
@@ -475,7 +483,7 @@ pub fn pierced(holes: &[DrainHole], wall: Option<(Scalar, Scalar)>) -> Vec<Drain
 }
 
 /// The bodies `placed` cuts out of a model hollowed to `wall`, and how many of each.
-/// Wound inward so they subtract wherever appended (ADR 0071, 0075); `wall` deepens shallow holes.
+/// Wound inward so they subtract wherever appended (ADR 0071, 0075); `wall` deepens shallow drains.
 pub fn cut(
     placed: (Vec<DrainHole>, Vec<Channel>),
     wall: Option<(Scalar, Scalar)>,
@@ -492,23 +500,23 @@ pub fn cut(
     ))
 }
 
-/// The bodies a hole into the supports nearest each `--drain-support-at` takes out, wound
-/// inward like the model's own cuts so the two append (ADR 0071, 0347).
-pub fn support_holes(supports: &Mesh, args: &HollowArgs) -> Result<Mesh> {
-    let bvh = Bvh::build(supports);
+/// The bodies a hole into the raft nearest each `--drain-support-at` takes out, wound
+/// inward like the model's own cuts so the two append (ADR 0071, 0347, 0441).
+pub fn support_holes(raft: &Mesh, args: &HollowArgs) -> Result<Mesh> {
+    let bvh = Bvh::build(raft);
     let holes = args
         .drain_support_at
         .iter()
         .map(|near| {
-            hole_at(supports, &bvh, *near, args.hole_size())
+            hole_at(raft, &bvh, *near, args.hole_size())
                 .map(|hole| DrainHole {
                     kind: HoleKind::Support,
                     ..hole
                 })
-                .with_context(|| format!("no support near {near} to drill a hole into"))
+                .with_context(|| format!("no raft near {near} to drill a hole into"))
         })
         .collect::<Result<Vec<_>>>()?;
-    drill(&holes, &[]).context("drilling the supports")
+    drill(&holes, &[]).context("drilling the raft")
 }
 
 /// What the cuts took out of the model.
@@ -548,6 +556,16 @@ impl HollowReport {
     /// hole has to reach through to drain it.
     pub fn wall(&self) -> (Scalar, Scalar) {
         (self.settings.thickness_mm, self.voxel_mm)
+    }
+
+    /// How long a plug for a hole through this wall is, millimetres: `plug_wall_mm`'s.
+    pub fn plug_wall_mm(&self) -> Option<Scalar> {
+        plug_wall_mm(self.settings.mode, self.settings.thickness_mm)
+    }
+
+    /// Whether the shell begins with the model byte for byte: a mould and an opened floor do not.
+    pub fn on_its_model(&self) -> bool {
+        self.settings.mode == HollowMode::Internal && self.settings.open_toward.is_none()
     }
 
     /// True when the wall left room for a cavity at all.

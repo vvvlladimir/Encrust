@@ -5,10 +5,11 @@
 )]
 
 use core_format::{
-    ExposurePlan, ExposureRange, LayerPlan, LayerSink, PrintJob, SlicedFileWriter, Thumbnail,
+    ExposurePlan, ExposureRange, LayerPlan, LayerSink, OpenFile, PrintJob, SlicedFileReader,
+    SlicedFileWriter, Thumbnail,
 };
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
-use format_goo::{GooSink, GooWriter, checksum, decode};
+use format_goo::{GooReader, GooSink, GooWriter, checksum, decode};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 use proptest::prelude::*;
 
@@ -284,6 +285,26 @@ fn both_previews_carry_the_job_thumbnail() {
         preview_pixel(&file, BIG_PREVIEW, 290 * 290 / 2),
         [248, 0, 0]
     );
+}
+
+#[test]
+fn a_written_file_reads_back_its_big_preview() {
+    let job = PrintJob {
+        thumbnail: Some(Thumbnail::filled(8, 8, [255, 0, 0])),
+        ..job(1)
+    };
+    let file = write_job(&job, &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()]);
+
+    let opened = GooReader
+        .open(std::io::Cursor::new(file))
+        .expect("a written file opens");
+
+    let preview = opened
+        .facts()
+        .preview
+        .as_ref()
+        .expect("the big preview is read");
+    assert_eq!(preview, &Thumbnail::filled(290, 290, [255, 0, 0]));
 }
 
 #[test]

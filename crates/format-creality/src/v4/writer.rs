@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use core_format::{
     Fields, FormatError, LayerSink, PrintJob, ReadWriteSeek, SlicedFileWriter, check_layer_pushed,
     check_layers_finished, validate,
@@ -8,14 +10,15 @@ use crate::family::{block, block_at, model_code};
 use core_format::Crc32;
 
 use super::blocks::{self, LAYER_BLOCK_BYTES, LAYER_ROW_BYTES, LayerRow, Offsets};
-use super::rle::RowRunsLayer;
+use super::codec::LayerCodecKind;
 
-/// Writes the Creality `.cxdlp` at version 4. Layout is in `docs/formats/creality.md`.
+/// Writes the Creality `.cxdlp` at version 4, its layers in codec `C`. Layout is in
+/// `docs/formats/creality.md`.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct CxdlpV4Writer;
+pub struct CxdlpV4Writer<C>(PhantomData<C>);
 
-impl SlicedFileWriter for CxdlpV4Writer {
-    type Sink<'w> = CxdlpV4Sink<'w>;
+impl<C: LayerCodecKind> SlicedFileWriter for CxdlpV4Writer<C> {
+    type Sink<'w> = CxdlpV4Sink<'w, C>;
 
     fn extension(&self) -> &'static str {
         "cxdlpv4"
@@ -64,12 +67,13 @@ impl SlicedFileWriter for CxdlpV4Writer {
             offsets,
             rows: Vec::with_capacity(job.layer_count() as usize),
             layers: Crc32::default(),
+            codec: PhantomData,
         })
     }
 }
 
 /// A version 4 `.cxdlp` with its tables reserved and its layers still to come.
-pub struct CxdlpV4Sink<'w> {
+pub struct CxdlpV4Sink<'w, C> {
     fields: Fields<'w>,
     job: PrintJob,
     model: String,
@@ -79,25 +83,34 @@ pub struct CxdlpV4Sink<'w> {
     /// The sum over the layers as they land. The three blocks either side of them are only
     /// final once the stack is, so each is summed in `finish` and the four are joined.
     layers: Crc32,
+    codec: PhantomData<C>,
 }
 
-impl LayerSink for CxdlpV4Sink<'_> {
-    /// The compressed layer and what it lights, which the table states and the codec does
-    /// not keep.
-    type Encoded = (RowRunsLayer, u64);
+/// One layer compressed, with the panel it was cut for and what it lights.
+pub struct EncodedLayer {
+    panel_px: (u32, u32),
+    data: Vec<u8>,
+    lit_px: u64,
+}
+
+impl<C: LayerCodecKind> LayerSink for CxdlpV4Sink<'_, C> {
+    type Encoded = EncodedLayer;
 
     fn encode(layer: &LayerRuns) -> Self::Encoded {
-        (RowRunsLayer::encode(layer), layer.lit_px())
+        EncodedLayer {
+            panel_px: (layer.width(), layer.height()),
+            data: C::CODEC.encode(layer),
+            lit_px: layer.lit_px(),
+        }
     }
 
     fn push(&mut self, encoded: Self::Encoded) -> Result<(), FormatError> {
-        let (encoded, lit_px) = encoded;
         let index = self.rows.len() as u32;
-        check_layer_pushed(&self.job, index, (encoded.width(), encoded.height()))?;
+        check_layer_pushed(&self.job, index, encoded.panel_px)?;
 
         let address = self.fields.position()?;
         let mut body = block(|fields| blocks::write_layer_block(fields, &self.job, index))?;
-        body.extend_from_slice(encoded.data());
+        body.extend_from_slice(&encoded.data);
 
         self.layers.update(&body);
         self.fields.bytes(&body)?;
@@ -106,8 +119,8 @@ impl LayerSink for CxdlpV4Sink<'_> {
             exposure_s: self.job.exposure_of_layer_s(index),
             light_off_delay_s: self.job.material.light_off_of_layer_s(index),
             address: address as u32,
-            size: LAYER_BLOCK_BYTES + encoded.data().len() as u32,
-            area: area_field(&self.job, lit_px),
+            size: LAYER_BLOCK_BYTES + encoded.data.len() as u32,
+            area: area_field(&self.job, encoded.lit_px),
         });
         Ok(())
     }
@@ -171,6 +184,10 @@ mod tests {
 
     use super::*;
     use crate::fixtures::sample_job;
+    use crate::v4::WholeImageRuns;
+
+    type Writer = CxdlpV4Writer<WholeImageRuns>;
+    type Sink<'w> = CxdlpV4Sink<'w, WholeImageRuns>;
 
     fn layer() -> LayerRuns {
         LayerRuns::builder(8, 4).finish()
@@ -179,7 +196,7 @@ mod tests {
     #[test]
     fn a_job_without_layers_is_rejected_before_anything_is_written() {
         let mut buffer = Cursor::new(Vec::new());
-        let err = CxdlpV4Writer
+        let err = Writer::default()
             .begin(&sample_job(0), &mut buffer)
             .err()
             .expect("an empty job cannot be written");
@@ -192,7 +209,7 @@ mod tests {
         job.printer.name = "Some Printer".to_owned();
         job.printer.machine_name = None;
         let mut buffer = Cursor::new(Vec::new());
-        let err = CxdlpV4Writer
+        let err = Writer::default()
             .begin(&job, &mut buffer)
             .err()
             .expect("a machine with no model code cannot be written");
@@ -202,11 +219,11 @@ mod tests {
     #[test]
     fn a_layer_of_the_wrong_size_is_rejected() {
         let mut buffer = Cursor::new(Vec::new());
-        let mut sink = CxdlpV4Writer
+        let mut sink = Writer::default()
             .begin(&sample_job(1), &mut buffer)
             .expect("the job is sound");
         let err = sink
-            .push(CxdlpV4Sink::encode(&LayerRuns::builder(4, 4).finish()))
+            .push(Sink::encode(&LayerRuns::builder(4, 4).finish()))
             .unwrap_err();
         assert!(matches!(
             err,
@@ -217,11 +234,11 @@ mod tests {
     #[test]
     fn more_layers_than_promised_are_refused() {
         let mut buffer = Cursor::new(Vec::new());
-        let mut sink = CxdlpV4Writer
+        let mut sink = Writer::default()
             .begin(&sample_job(1), &mut buffer)
             .expect("the job is sound");
-        sink.push(CxdlpV4Sink::encode(&layer())).expect("the first");
-        let err = sink.push(CxdlpV4Sink::encode(&layer())).unwrap_err();
+        sink.push(Sink::encode(&layer())).expect("the first");
+        let err = sink.push(Sink::encode(&layer())).unwrap_err();
         assert!(matches!(
             err,
             FormatError::LayerCountMismatch {
@@ -234,7 +251,7 @@ mod tests {
     #[test]
     fn fewer_layers_than_promised_are_refused_at_the_end() {
         let mut buffer = Cursor::new(Vec::new());
-        let sink = CxdlpV4Writer
+        let sink = Writer::default()
             .begin(&sample_job(2), &mut buffer)
             .expect("the job is sound");
         let err = sink.finish(0.0).unwrap_err();
@@ -253,7 +270,7 @@ mod tests {
         job.printer.display.width_px = 70_000;
         job.raster.width_px = 70_000;
         let mut buffer = Cursor::new(Vec::new());
-        let err = CxdlpV4Writer
+        let err = Writer::default()
             .begin(&job, &mut buffer)
             .err()
             .expect("a panel the header cannot describe is refused");

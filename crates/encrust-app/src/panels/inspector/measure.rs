@@ -1,5 +1,5 @@
 use crate::i18n::tr;
-use crate::measure::{Measure, Snap, Target};
+use crate::measure::{Measure, Snap, Target, Walk};
 use crate::panels::Window;
 use crate::state::Tools;
 use crate::ui::{
@@ -64,6 +64,11 @@ fn settings(ui: &mut egui::Ui, measure: &mut Measure) {
         },
     );
     switch(ui, &mut measure.show_axes, &tr!("measure-show-axes"));
+    switch(
+        ui,
+        &mut measure.along_surface,
+        &tr!("measure-along-surface"),
+    );
 }
 
 /// The span between two points, once both are picked. Returns whether there is one.
@@ -82,11 +87,30 @@ fn points(ui: &mut egui::Ui, measure: &Measure) -> bool {
         ("dY".to_owned(), mm(delta.y)),
         ("dZ".to_owned(), mm(delta.z)),
     ];
+    if let Some(path) = measure.surface_path() {
+        entries.insert(0, (tr!("measure-on-surface"), mm(path.length_mm())));
+    }
     if let Some(snapped) = measure.snapped() {
         entries.push((tr!("measure-caught"), snapped.label()));
     }
     readings(ui, &entries);
+    if measure.along_surface {
+        walk_note(ui, measure.walk());
+    }
     true
+}
+
+/// Why there is no length along the surface, while there is none.
+fn walk_note(ui: &mut egui::Ui, walk: Option<&Walk>) {
+    let note = match walk {
+        Some(Walk::Found(_)) => return,
+        None => tr!("measure-walk-finding"),
+        Some(Walk::Apart) => tr!("measure-walk-apart"),
+        Some(Walk::Unreachable) => tr!("measure-walk-unreachable"),
+        Some(Walk::Stopped) => tr!("measure-walk-stopped"),
+        Some(Walk::Failed(why)) => tr!("measure-walk-failed", why = why.clone()),
+    };
+    describe(ui, &note);
 }
 
 /// How two picked planes stand to each other. Returns whether both are picked.

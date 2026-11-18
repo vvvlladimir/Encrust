@@ -12,6 +12,7 @@ mod exposure;
 mod fixtures;
 mod job;
 mod png;
+mod preview;
 mod reader;
 mod rgb15;
 mod rle7;
@@ -30,12 +31,20 @@ pub use de::{MAX_ENTRY_BYTES, ReadSeek, Reads, read_entry};
 pub use error::FormatError;
 pub use exposure::{ExposurePlan, ExposureRange};
 pub use job::PrintJob;
-pub use png::{decode_grey, encode_colour, encode_grey, png_shape};
+pub use png::{
+    decode_colour, decode_grey, encode_colour, encode_colour_alpha, encode_grey, png_shape,
+};
+pub use preview::{
+    MAX_PREVIEW_PX, preview_in_range, read_png_preview, read_raw_preview, thumbnail_of_pixels,
+};
 pub use reader::{
     LayerEntry, MAX_PANEL_PX, OpenFile, SlicedFile, SlicedFileReader, layer_in_range,
     panel_in_range,
 };
-pub use rgb15::{PREVIEW_HEADER_BYTES, PREVIEW_SIZES_PX, encode_rgb15, rgb15, write_preview};
+pub use rgb15::{
+    PREVIEW_HEADER_BYTES, PREVIEW_SIZES_PX, decode_rgb15, encode_rgb15, read_rgb15_preview,
+    rgb_of_rgb15, rgb15, write_preview,
+};
 pub use rle7::{Rle7Layer, decode_rle7};
 pub use ser::{BufferedSink, Fields, ReadWriteSeek};
 pub use writer::{
@@ -64,4 +73,4 @@ pub use core_slicer::LayerPlan;
 
 // The thumbnail is rendered before a job starts and carried by it, so a format crate
 // needs the type but not the renderer.
-pub use core_thumbnail::{Rgb, Thumbnail, rgb565};
+pub use core_thumbnail::{RGB15_BITS, RGB565_BITS, Rgb, Thumbnail, rgb_of_565, rgb565};

@@ -251,8 +251,8 @@ fn stack(scene: &Scene, slicing: &Slicing) -> (Scalar, (usize, Option<usize>)) {
     let Some(bounds) = scene.world_bounds() else {
         return (0.0, (0, None));
     };
-    // Counted from the plate up, as it is cut: nothing under the plate is.
-    let height_mm = (bounds.maxs.z - bounds.mins.z.max(0.0)).max(0.0);
+    // From the plate itself to the top: the lift under a model is printed too, as supports.
+    let height_mm = bounds.maxs.z.max(0.0);
     let count = |height: Scalar| (height_mm / height).ceil().max(0.0) as usize;
     let fewest = slicing
         .adaptive
@@ -281,7 +281,7 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
             .to_cols_array()
             .map(f32::to_bits)
             .hash(&mut hasher);
-        for supports in object.supports.meshes().unwrap_or_default() {
+        for supports in object.supports.every_mesh() {
             Arc::as_ptr(supports).hash(&mut hasher);
         }
     }
@@ -300,9 +300,7 @@ pub fn tally(ctx: &egui::Context, scene: &Scene) -> Tally {
         tally.vertices += mesh.vertices.len();
         tally.triangles += mesh.faces.len();
         tally.model_mm3 += signed_volume(mesh).abs() * grows;
-        for supports in object.supports.meshes().unwrap_or_default() {
-            tally.supports_mm3 += signed_volume(supports).abs();
-        }
+        tally.supports_mm3 += object.supports_mm3();
     }
     ctx.data_mut(|data| data.insert_temp(id, (fingerprint, tally)));
     tally

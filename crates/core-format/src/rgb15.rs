@@ -3,7 +3,10 @@
 
 use std::io;
 
-use crate::Fields;
+use core_thumbnail::{Rgb, Thumbnail, widen};
+
+use crate::preview::{preview_in_range, thumbnail_of_pixels};
+use crate::{Fields, FormatError, ReadSeek, Reads};
 
 /// Set on a colour word when a repeat count follows it.
 const REPEAT_FLAG: u16 = 0x0020;
@@ -53,6 +56,13 @@ pub fn rgb15(pixel: [u8; 3]) -> u16 {
     rgb15_word(pixel) & !REPEAT_FLAG
 }
 
+/// The pixel an RGB15 word holds, its flag bit ignored and each five-bit channel widened by
+/// repeating its top bits, so that full intensity reads back as 255.
+pub fn rgb_of_rgb15(word: u16) -> Rgb {
+    let five_bits = |channel: u16| widen(channel, 5);
+    [five_bits(word >> 11), five_bits(word >> 6), five_bits(word)]
+}
+
 fn rgb15_word([r, g, b]: [u8; 3]) -> u16 {
     u16::from(b >> 3) | (u16::from(g >> 2) << 5) | (u16::from(r >> 3) << 11)
 }
@@ -90,6 +100,49 @@ pub fn write_preview(
     Ok(record as u32)
 }
 
+/// Decodes the run-length RGB15 of one preview record into a picture of the stated shape.
+pub fn decode_rgb15(data: &[u8], width_px: u32, height_px: u32) -> Result<Thumbnail, FormatError> {
+    let count = preview_in_range(width_px, height_px)?;
+    let mut pixels: Vec<Rgb> = Vec::with_capacity(count);
+    let mut words = data.as_chunks::<2>().0.iter().enumerate();
+    while let Some((index, pair)) = words.next() {
+        let word = u16::from_le_bytes(*pair);
+        let mut run = 1;
+        if word & REPEAT_FLAG != 0 {
+            let Some((_, count_pair)) = words.next() else {
+                return Err(FormatError::MalformedRun { offset: index * 2 });
+            };
+            run = usize::from(u16::from_le_bytes(*count_pair) & MAX_RUN as u16) + 1;
+        }
+        if pixels.len() + run > count {
+            return Err(FormatError::MalformedRun { offset: index * 2 });
+        }
+        pixels.extend(std::iter::repeat_n(rgb_of_rgb15(word), run));
+    }
+    thumbnail_of_pixels(width_px, height_px, pixels)
+}
+
+/// The preview whose record starts at `record`: its shape, where its data sits and how long
+/// it is, then the run-length pixels there. A record at zero is a header stating none.
+pub fn read_rgb15_preview<S: ReadSeek>(
+    reads: &mut Reads<S>,
+    record: u64,
+) -> Result<Thumbnail, FormatError> {
+    if record == 0 {
+        return Err(FormatError::Missing {
+            what: "a preview".to_owned(),
+        });
+    }
+    reads.seek_to(record)?;
+    let width_px = reads.u32_le()?;
+    let height_px = reads.u32_le()?;
+    let address = reads.u32_le()?;
+    let length = reads.u32_le()?;
+    reads.seek_to(u64::from(address))?;
+    let data = reads.bytes(length as usize)?;
+    decode_rgb15(&data, width_px, height_px)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +177,51 @@ mod tests {
             6,
             "a run of 0xFFF as a colour and a count, then the last pixel on its own"
         );
+    }
+
+    #[test]
+    fn a_written_preview_reads_back_as_the_picture_it_was_written_from() {
+        let mut pixels = vec![[255, 0, 0]; 6];
+        pixels.extend([[0, 0, 255], [255, 255, 255]]);
+        let mut buffer = std::io::Cursor::new(vec![0; 3]);
+        buffer.set_position(3);
+        let record = write_preview(&mut Fields::new(&mut buffer), 4, 2, &pixels)
+            .expect("a cursor does not fail");
+
+        let mut reads = Reads::new(std::io::Cursor::new(buffer.into_inner()));
+        let preview =
+            read_rgb15_preview(&mut reads, u64::from(record)).expect("it was just written");
+
+        assert_eq!(
+            preview,
+            Thumbnail::from_pixels(4, 2, pixels).expect("eight pixels fill 4x2")
+        );
+    }
+
+    #[test]
+    fn a_header_pointing_at_zero_states_no_preview() {
+        let mut reads = Reads::new(std::io::Cursor::new(vec![0; 64]));
+        let err = read_rgb15_preview(&mut reads, 0).unwrap_err();
+        assert!(matches!(err, FormatError::Missing { .. }));
+    }
+
+    #[test]
+    fn a_run_past_the_stated_shape_is_refused() {
+        let data = encode_rgb15(&[[0, 0, 0]; 9]);
+        let err = decode_rgb15(&data, 4, 2).unwrap_err();
+        assert!(matches!(err, FormatError::MalformedRun { .. }));
+    }
+
+    #[test]
+    fn a_repeat_flag_with_no_count_behind_it_is_refused() {
+        let err = decode_rgb15(&REPEAT_FLAG.to_le_bytes(), 4, 2).unwrap_err();
+        assert!(matches!(err, FormatError::MalformedRun { offset: 0 }));
+    }
+
+    #[test]
+    fn runs_that_stop_short_of_the_shape_are_refused() {
+        let data = encode_rgb15(&[[0, 0, 0]; 7]);
+        let err = decode_rgb15(&data, 4, 2).unwrap_err();
+        assert!(matches!(err, FormatError::PreviewShort { pixels: 7, .. }));
     }
 }

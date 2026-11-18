@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use core_engine::CupVent;
 use core_engine::project::DrainState;
 use core_geometry::Scalar;
 use core_supports::Trapped;
@@ -6,14 +7,16 @@ use core_volume::HoleSize;
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
-use crate::job::{DrainsJob, TrapJob, TrapOutcome, TrapRequest, trap_tasks};
+use crate::job::{DrainsJob, Pockets, TrapJob, TrapOutcome, TrapRequest, TrapTask, trap_tasks};
 use crate::scene::{ObjectId, Scene, SceneObject};
 use crate::status::Status;
 
 mod auto;
 mod plugs;
+mod points;
 
 pub use plugs::PlugsLaid;
+pub use points::drill_at_fractions;
 
 /// What a click in the viewport puts down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -44,36 +47,37 @@ pub struct DrainTool {
     laying: Vec<plugs::Laying>,
     /// Plugs asked for that wait for a cut under way, or a drag, to end.
     waiting: Vec<plugs::Waiting>,
+    /// Plugs cut that wait for their model's holes to be taken out, to land with them.
+    held: Vec<plugs::Ended>,
     read: Option<plugs::ReadModel>,
+}
+
+/// The panel's numbers before the user sets any: the engine's own hole.
+fn default_state() -> DrainState {
+    let hole = HoleSize::default();
+    DrainState::round(hole.diameter_mm, hole.depth_mm, hole.taper)
 }
 
 impl Default for DrainTool {
     fn default() -> Self {
         Self {
-            // Three millimetres is what a resin slicer offers by default, and drains a
-            // cavity of any size the machine can print.
-            state: DrainState::round(3.0, 3.0, 1.0),
+            state: default_state(),
             placing: Placing::default(),
             job: None,
             auto: None,
             checked: false,
             laying: Vec::new(),
             waiting: Vec::new(),
+            held: Vec::new(),
             read: None,
         }
     }
 }
 
 impl DrainTool {
-    /// The hole the plate's numbers drill.
-    #[cfg(test)]
+    /// The hole the next click drills, into whichever model: the window's (ADR 0397).
     pub fn size(&self) -> HoleSize {
         size_of(&self.state)
-    }
-
-    /// The hole drilled into `object`: its own size, or the plate's.
-    pub fn size_for(&self, object: &SceneObject) -> HoleSize {
-        size_of(self.state_for(object))
     }
 
     /// Starts looking for resin that cannot get out of anything visible on the plate.
@@ -89,6 +93,19 @@ impl DrainTool {
             layer_height_mm,
         }));
         Ok(())
+    }
+
+    /// The same check of `ids` alone, whatever is picked, handed back: what Prepare reads
+    /// `trapped` off.
+    pub fn scan_on(scene: &Scene, ids: &[ObjectId], layer_height_mm: Scalar) -> Result<TrapJob> {
+        let tasks: Vec<TrapTask> = scene.named(ids).map(TrapTask::of).collect();
+        if tasks.is_empty() {
+            bail!(tr!("drain-nothing-visible"));
+        }
+        Ok(TrapJob::spawn(TrapRequest {
+            tasks,
+            layer_height_mm,
+        }))
     }
 
     /// Gives up on the check going, which leaves what the last one found.
@@ -121,12 +138,7 @@ impl DrainTool {
         self.job = None;
         match outcome {
             TrapOutcome::Checked(models) => {
-                let found: usize = models.iter().map(|model| model.trapped.len()).sum();
-                for model in models {
-                    if let Some(object) = scene.get_mut(model.id) {
-                        object.traps.set(model.trapped);
-                    }
-                }
+                let found = land_checked(scene, models);
                 self.checked = true;
                 *status = Status::Info(tr!("drain-found", count = found));
             }
@@ -140,7 +152,7 @@ impl DrainTool {
         self.stale();
         let mut dug = 0;
         for object in scene.targets_mut() {
-            let size = self.size_for(object);
+            let size = self.size();
             let transform = object.transform;
             if !object.hollow.pending().is_empty() && object.hollow.finish_channel(size, transform)
             {
@@ -160,12 +172,37 @@ impl DrainTool {
             return false;
         };
         self.stale();
-        let size = self.size_for(object);
+        let size = self.size();
         let drilled =
             object
                 .hollow
                 .drill_into(&object.mesh, &object.bvh, target, size, object.transform);
         object.traps.remove(index);
+        drilled
+    }
+
+    /// Drills each of `vents` to its own depth, and says how many it put in.
+    pub fn drill_vents(&mut self, scene: &mut Scene, vents: &[(ObjectId, CupVent)]) -> usize {
+        self.stale();
+        let size = self.size();
+        let mut drilled = 0;
+        for (id, vent) in vents {
+            let Some(object) = scene.get_mut(*id) else {
+                continue;
+            };
+            let size = HoleSize {
+                depth_mm: vent.depth_mm,
+                ..size
+            };
+            let (mesh, bvh, transform) = (&object.mesh, &object.bvh, object.transform);
+            let (mouth, outward) = (vent.mouth_mm, vent.outward);
+            if object
+                .hollow
+                .add_drain(mesh, bvh, mouth, outward, size, transform)
+            {
+                drilled += 1;
+            }
+        }
         drilled
     }
 
@@ -178,7 +215,7 @@ impl DrainTool {
         let mut drilled = 0;
 
         for object in scene.targets_mut() {
-            let size = self.size_for(object);
+            let size = self.size();
             let targets: Vec<_> = object
                 .traps
                 .found()
@@ -201,9 +238,10 @@ impl DrainTool {
         drilled
     }
 
-    /// What `object` drills with: its own settings, or the plate's.
-    pub(crate) fn state_for<'a>(&'a self, object: &'a SceneObject) -> &'a DrainState {
-        object.own.drain.as_ref().unwrap_or(&self.state)
+    /// How much narrower than its hole a plug of `object` is drawn, millimetres a side: its
+    /// own gap, or the plate's.
+    pub(crate) fn plug_gap_for(&self, object: &SceneObject) -> Scalar {
+        object.own.plug_gap_mm.unwrap_or(self.state.plug_gap_mm)
     }
 }
 
@@ -215,6 +253,17 @@ fn size_of(state: &DrainState) -> HoleSize {
         shape: state.shape,
         turn_deg: state.turn_deg,
     }
+}
+
+/// Marks on each model checked the pockets the check found in it; answers how many in all.
+pub fn land_checked(scene: &mut Scene, models: Vec<Pockets>) -> usize {
+    let found = models.iter().map(|model| model.trapped.len()).sum();
+    for model in models {
+        if let Some(object) = scene.get_mut(model.id) {
+            object.traps.set(model.trapped);
+        }
+    }
+    found
 }
 
 /// The pockets of resin the last drainage check found in one model, in its own space.

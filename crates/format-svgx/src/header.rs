@@ -3,7 +3,10 @@
 
 use std::io;
 
-use core_format::{Fields, PrintJob, Rgb, Thumbnail};
+use core_format::{
+    Fields, FormatError, PrintJob, ReadSeek, Reads, Rgb, Thumbnail, preview_in_range,
+    thumbnail_of_pixels,
+};
 
 /// What the file is headed by, in a sixteen-byte field padded with nuls.
 pub(crate) const IDENTIFIER: &str = "DLP-II 1.1\n";
@@ -82,6 +85,44 @@ fn write_bitmap(
     Ok(at)
 }
 
+/// Reads the 24-bit bitmap at `at`: its shape, where its pixels begin, then the rows, each
+/// padded to four bytes, bottom first unless the height is negative.
+pub(crate) fn read_bitmap<S: ReadSeek>(
+    reads: &mut Reads<S>,
+    at: u64,
+) -> Result<Thumbnail, FormatError> {
+    reads.seek_to(at)?;
+    let head = reads.bytes(BITMAP_HEADER_BYTES as usize)?;
+    let bytes = |offset: usize| -> [u8; 4] { [0, 1, 2, 3].map(|byte| head[offset + byte]) };
+    let word = |offset: usize| u32::from_le_bytes(bytes(offset));
+    let bits = u16::from_le_bytes([head[28], head[29]]);
+    if &head[..2] != b"BM" || bits != 24 || word(30) != 0 {
+        return Err(FormatError::Encoding {
+            what: "a preview",
+            reason: format!("it is not an uncompressed 24-bit bitmap ({bits} bits)"),
+        });
+    }
+    let width_px = word(18);
+    let stated_height = i32::from_le_bytes(bytes(22));
+    let height_px = stated_height.unsigned_abs();
+    preview_in_range(width_px, height_px)?;
+
+    let stride = (width_px as usize * 3).next_multiple_of(4);
+    reads.seek_to(at + u64::from(word(10)))?;
+    let data = reads.bytes(stride * height_px as usize)?;
+    let mut pixels = Vec::with_capacity(width_px as usize * height_px as usize);
+    for row in 0..height_px as usize {
+        let stored = if stated_height > 0 {
+            height_px as usize - 1 - row
+        } else {
+            row
+        };
+        let line = &data[stored * stride..][..width_px as usize * 3];
+        pixels.extend(line.as_chunks::<3>().0.iter().map(|&[b, g, r]| [r, g, b]));
+    }
+    thumbnail_of_pixels(width_px, height_px, pixels)
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
@@ -120,5 +161,38 @@ mod tests {
             stated + 54 + 200 * 240 * 3,
             "the second preview follows the first with nothing between them"
         );
+    }
+
+    #[test]
+    fn a_written_bitmap_reads_back_top_row_first() {
+        let mut pixels = vec![[255, 0, 0]; 4];
+        pixels.extend([[0, 0, 255]; 4]);
+        let mut buffer = Cursor::new(Vec::new());
+        let at = write_bitmap(&mut Fields::new(&mut buffer), 4, 2, &pixels).expect("in memory");
+
+        let mut reads = Reads::new(Cursor::new(buffer.into_inner()));
+        let read = read_bitmap(&mut reads, u64::from(at)).expect("it was just written");
+
+        assert_eq!(
+            read,
+            Thumbnail::from_pixels(4, 2, pixels).expect("eight pixels fill 4x2")
+        );
+    }
+
+    #[test]
+    fn a_bitmap_of_another_depth_is_refused() {
+        let mut buffer = Cursor::new(Vec::new());
+        write_bitmap(&mut Fields::new(&mut buffer), 4, 1, &[[0; 3]; 4]).expect("in memory");
+        let mut bytes = buffer.into_inner();
+        bytes[28] = 32;
+
+        let err = read_bitmap(&mut Reads::new(Cursor::new(bytes)), 0).unwrap_err();
+        assert!(matches!(
+            err,
+            FormatError::Encoding {
+                what: "a preview",
+                ..
+            }
+        ));
     }
 }

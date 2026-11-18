@@ -1,6 +1,6 @@
 # 0321. A plug is the model cut down to its hole
 
-- **Status:** Accepted; amended by 0346 for a hole drilled before the cavity
+- **Status:** Accepted; amended by 0346 for a hole drilled before the cavity, by 0414 for one stopping short of the wall
 - **Date:** 2026-10-21
 
 ## Context

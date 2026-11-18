@@ -51,7 +51,7 @@ pub fn planned_lift(
     let mut lifted_mm = lift_of(&bounds, 0.0);
     if placing.raft.enabled {
         let bvh = Arc::new(Bvh::build(mesh));
-        if !needs_under(mesh, &bvh, None, plan, layer_height_mm)?.is_empty() {
+        if !needs_under(mesh, &bvh, None, plan, (layer_height_mm, false))?.is_empty() {
             lifted_mm += raft_mm;
         }
     }

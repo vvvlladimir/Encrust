@@ -1,5 +1,5 @@
 use crate::relief::ReliefMode;
-use core_geometry::Vec2;
+use core_geometry::{Vec2, Vec3};
 use drawing::{ghost, paint_plate};
 use egui::{PointerButton, Sense};
 
@@ -8,7 +8,7 @@ use crate::drain::Placing;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene};
-use crate::state::View;
+use crate::state::{Tools, View};
 use crate::viewport_input::{Drag, Pointer};
 use crate::workspace::Tool;
 
@@ -16,6 +16,7 @@ mod bounds;
 use bounds::draw_bounds;
 mod gizmo_drag;
 use gizmo_drag::draw_gizmo_drag;
+use refusal::draw_refusal;
 mod hollow;
 mod levels;
 mod marks;
@@ -24,6 +25,7 @@ mod drawing;
 mod overlays;
 mod paint;
 mod picking;
+mod refusal;
 mod repair;
 mod support_ghost;
 mod supports;
@@ -37,9 +39,11 @@ use overlays::{draw_aimed, draw_cut_plane, draw_facet, draw_measure, draw_part_m
 use paint::{draw_brush, paint_stroke};
 use picking::{
     lay_face_under_cursor, mark_part_under_cursor, measure_under_cursor, point_at_face,
-    select_under_cursor, takes_the_pick,
+    select_under_cursor, takes_the_pick, zoom_anchor,
 };
-use supports::{drag_support, place_support_under_cursor, remove_support_under_cursor};
+use supports::{
+    drag_support, place_support_under_cursor, remove_support_under_cursor, show_carrying,
+};
 
 /// Radians of orbit per point of cursor movement. A drag across a 600 point wide panel is
 /// a little under a full turn.
@@ -68,8 +72,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
         pointer_state(ui, rect)
     };
     // The gizmo's report is one frame old, which matters only on the frame a handle is crossed.
-    // Only Place reads a shift-click, as a line of supports; elsewhere shift pans.
-    let shift_clicks = *window.tool == Tool::Paint && !window.tools.supports.placing.paints();
+    let shift_clicks = reads_shift_click(*window.tool, window.tools);
     let gesture = window
         .view
         .input
@@ -81,12 +84,17 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> egui::Rect {
     // A support in hand has the whole gesture, shift and all: it neither turns the camera
     // nor slides it.
     let carrying = !painting && drag_support(window, rect, &pointer);
+    show_carrying(ui.ctx(), window);
     let drag = if carrying { Drag::None } else { gesture.drag };
 
     fly_to_marked(ui, window, rect);
     follow_turn(ui, window.view);
     let invert = window.machine.general.invert_zoom;
-    steer_camera(window.view, rect, &pointer, drag, painting, invert);
+    let anchor = pointer
+        .position
+        .filter(|_| pointer.zooms())
+        .and_then(|at| zoom_anchor(window, rect, egui::Pos2::new(at.x, at.y)));
+    steer_camera(window.view, rect, &pointer, drag, painting, invert, anchor);
     if gesture.clicked
         && let Some(position) = pointer.position
     {
@@ -124,8 +132,8 @@ fn follow_turn(ui: &egui::Ui, view: &mut View) {
     }
 }
 
-/// Orbits, pans and zooms the camera, the wheel the other way round when `invert`. Taking
-/// hold of it ends any swing still under way.
+/// Orbits, pans and zooms the camera, towards `anchor` when there is one and the wheel the
+/// other way round when `invert`. Taking hold of it ends any swing still under way.
 fn steer_camera(
     view: &mut View,
     rect: egui::Rect,
@@ -133,8 +141,9 @@ fn steer_camera(
     drag: Drag,
     painting: bool,
     invert: bool,
+    anchor: Option<Vec3>,
 ) {
-    let scrolled = pointer.over_viewport && pointer.scroll != 0.0;
+    let scrolled = pointer.zooms();
     if scrolled || (drag != Drag::None && !painting) {
         view.turn = None;
     }
@@ -154,7 +163,11 @@ fn steer_camera(
         } else {
             -pointer.scroll
         };
-        view.camera.zoom((scroll * ZOOM_PER_SCROLL_POINT).exp());
+        let factor = (scroll * ZOOM_PER_SCROLL_POINT).exp();
+        match anchor {
+            Some(anchor) => view.camera.zoom_at(factor, anchor),
+            None => view.camera.zoom(factor),
+        }
     }
 }
 
@@ -169,8 +182,9 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         return;
     }
     match *window.tool {
-        // Alt is the opposite of a click in modelling tools; other buttons belong to the camera.
         // A brush stroke has already painted whatever the click landed on.
+        _ if paint::paints_shown(window) => {}
+        // Alt is the opposite of a click in modelling tools; other buttons belong to the camera.
         Tool::Paint if window.tools.supports.placing.paints() => {}
         Tool::Relief if window.tools.relief.paints() => {}
         Tool::Paint if ui.input(|input| input.modifiers.alt) => {
@@ -185,7 +199,10 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         Tool::Hollow if ui.input(|input| input.modifiers.alt) => {
             remove_blocker_under_cursor(window, rect, cursor);
         }
-        Tool::Hollow => place_blocker_under_cursor(window, rect, cursor),
+        Tool::Hollow => {
+            let rod = ui.input(|input| input.modifiers.shift);
+            place_blocker_under_cursor(window, rect, cursor, rod);
+        }
         Tool::Drain if ui.input(|input| input.modifiers.alt) => {
             remove_drain_under_cursor(window, rect, cursor);
         }
@@ -200,6 +217,7 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
             let alt = ui.input(|input| input.modifiers.alt);
             measure_under_cursor(window, rect, cursor, alt);
         }
+        // A brush stroke has already painted whatever the click landed on.
         Tool::Position if window.tools.orient.picking_face => {
             lay_face_under_cursor(window, rect, cursor);
         }
@@ -210,6 +228,16 @@ fn click(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, cursor: egui::Pos
         // The brush has already picked whatever faces the click landed on.
         Tool::Repair if paint::picks_faces(window) => {}
         _ => select_under_cursor(window, rect, cursor, false),
+    }
+}
+
+/// Whether `tool` reads a shift press that stays put as a click — a line of supports, a rod
+/// of blockers; elsewhere shift pans.
+fn reads_shift_click(tool: Tool, tools: &Tools) -> bool {
+    match tool {
+        Tool::Paint => !tools.supports.placing.paints(),
+        Tool::Hollow => true,
+        _ => false,
     }
 }
 
@@ -242,12 +270,17 @@ fn draw_tool_overlays(ui: &egui::Ui, window: &mut Window, rect: egui::Rect, poin
     if (*window.tool == Tool::Paint && window.tools.supports.placing.paints())
         || (*window.tool == Tool::Relief && window.tools.relief.paints())
         || paint::picks_faces(window)
+        || paint::paints_shown(window)
     {
         draw_brush(ui, window, rect);
     }
     if *window.tool == Tool::Supports {
         draw_picked(ui, window, rect);
-        draw_aimed(ui, window, rect, pointer);
+        // A press paints what shows while that brush is out: it takes hold of nothing.
+        if !paint::paints_shown(window) {
+            draw_aimed(ui, window, rect, pointer);
+        }
+        draw_refusal(ui, window, rect);
     }
 }
 
@@ -291,6 +324,7 @@ fn pointer_state(ui: &egui::Ui, rect: egui::Rect) -> Pointer {
             pan_button_down: input.pointer.button_down(PointerButton::Secondary)
                 || input.pointer.button_down(PointerButton::Middle),
             shift: input.modifiers.shift,
+            alt: input.modifiers.alt,
             command: input.modifiers.command,
             delta: Vec2::new(delta.x, delta.y),
             scroll: input.smooth_scroll_delta.y,
@@ -314,10 +348,16 @@ fn over_the_model(
 /// them. While a face is being picked the click is for the model, not for a handle over it.
 pub(crate) fn moves_by_hand(window: &Window) -> bool {
     match *window.tool {
-        Tool::Position => !window.tools.orient.picking_face,
+        Tool::Position => handles_out(&window.tools.orient),
         Tool::Relief => window.tools.relief.mode == ReliefMode::Combine,
         _ => false,
     }
+}
+
+/// Whether Position has its handles out: not while a click lays a face or the brush
+/// paints what shows, which would take the press meant for the model.
+fn handles_out(orient: &crate::orient::OrientTool) -> bool {
+    !orient.picking_face && !orient.paints_shown(Tool::Position, crate::supports::Placing::Point)
 }
 
 /// Whether the handles are out this frame: the tool moves by hand and no modal covers them.
@@ -368,6 +408,26 @@ fn show_gizmo(ui: &egui::Ui, window: &mut Window, viewport: egui::Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_shift_click_is_a_click_where_it_lays_a_line_or_a_rod() {
+        let tools = Tools::default();
+        assert!(reads_shift_click(Tool::Paint, &tools), "a line of supports");
+        assert!(reads_shift_click(Tool::Hollow, &tools), "a rod of blockers");
+        assert!(!reads_shift_click(Tool::Position, &tools), "shift pans");
+    }
+
+    #[test]
+    fn the_handles_are_put_away_while_the_brush_paints_what_shows() {
+        let mut orient = crate::orient::OrientTool::default();
+        assert!(handles_out(&orient));
+        orient.settings.clean_surface = true;
+        orient.shown_brush.brushing = true;
+        assert!(
+            !handles_out(&orient),
+            "a press on the handles paints instead"
+        );
+    }
 
     #[test]
     fn framing_an_empty_scene_falls_back_to_the_plate() {

@@ -12,19 +12,18 @@ pub fn temporary_path(name: &str) -> PathBuf {
 
 /// A file the window wrote for itself is deleted once it has been sent; one the user
 /// named is theirs and stays.
-pub(super) fn is_temporary(path: &Path) -> bool {
+pub fn is_temporary(path: &Path) -> bool {
     path.starts_with(std::env::temp_dir())
 }
 
 impl Network {
-    /// Sends a file the window has just written, and deletes it after when it was
-    /// written only to be sent.
-    pub fn send(&mut self, path: PathBuf, status: &mut Status) {
+    /// Sends a file to the bound printer, and deletes it after when `temporary`: when the
+    /// window wrote it only to be sent.
+    pub fn send(&mut self, path: PathBuf, temporary: bool, status: &mut Status) {
         let Some(target) = self.target() else {
             return;
         };
         let (name, wire) = (self.label(&target), target.wire());
-        let temporary = is_temporary(&path);
         *status = Status::Info(tr!("network-sending", name = name.clone()));
         self.sent = None;
         self.job = Some(SendJob::spawn(SendRequest {
@@ -32,6 +31,43 @@ impl Network {
             wire,
             action: Action::Upload { path, temporary },
         }));
+    }
+
+    /// The bound printer a sliced file picked from disk goes to, by name, and why it cannot
+    /// take one now; `None` while the profile in hand sends to no printer over `connection`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn offer_picked(
+        &self,
+        connection: printer_profiles::Connection,
+    ) -> Option<(String, Option<String>)> {
+        if connection == printer_profiles::Connection::None {
+            return None;
+        }
+        let listed = self.chosen_machine()?;
+        let answering = self
+            .resolve(listed)
+            .filter(|target| self.reach(target) == super::Reach::Answered);
+        let Some(target) = answering else {
+            let name = listed.label().to_owned();
+            return Some((
+                name.clone(),
+                Some(tr!("network-not-answering", name = name)),
+            ));
+        };
+        let name = self.label(&target);
+        let refused = if !target.speaks(connection) {
+            Some(tr!(
+                "slice-speaks-other",
+                name = name.clone(),
+                theirs = target.protocol().label(),
+                ours = super::connection_label(connection)
+            ))
+        } else if self.job.is_some() {
+            Some(tr!("network-sending", name = name.clone()))
+        } else {
+            self.busy()
+        };
+        Some((name, refused))
     }
 
     /// Starts the file that was sent last, which is the one the user just watched land.
@@ -107,3 +143,6 @@ impl Network {
         false
     }
 }
+
+#[cfg(test)]
+mod tests;

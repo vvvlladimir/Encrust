@@ -40,26 +40,30 @@ pub struct Opened {
 }
 
 /// What the window is about to do to a plate nobody has written down.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 enum Asking {
     Close,
     NewProject,
+    /// Open this project in the plate's place, dropped or picked.
+    Open(Handed),
 }
 
 impl Asking {
     /// The button that saves first, then goes on.
-    fn save_and(self) -> String {
+    fn save_and(&self) -> String {
         match self {
             Self::Close => tr!("project-save-and-close"),
             Self::NewProject => tr!("project-save-and-new"),
+            Self::Open(_) => tr!("project-save-and-open"),
         }
     }
 
     /// The button that goes on and lets the changes go.
-    fn without_saving(self) -> String {
+    fn without_saving(&self) -> String {
         match self {
             Self::Close => tr!("project-close-without-saving"),
             Self::NewProject => tr!("project-new-without-saving"),
+            Self::Open(_) => tr!("project-open-without-saving"),
         }
     }
 }
@@ -106,8 +110,30 @@ pub fn open_dialog(window: &mut Window) {
     }
 }
 
-/// Opens a project over whatever the window was holding.
+/// Opens a project in place of the plate, asking first about models on it that are not
+/// written down.
 pub fn open(window: &mut Window, file: &Handed) {
+    if !window.doc.scene.is_empty() && is_dirty(window) {
+        window.doc.project.asking = Some(Asking::Open(file.clone()));
+        return;
+    }
+    open_now(window, file);
+}
+
+/// Opens a project over whatever the window was holding.
+fn open_now(window: &mut Window, file: &Handed) {
+    let Some(preview) = read_in(window, file) else {
+        return;
+    };
+    let path = file.path().to_path_buf();
+    remember(window, &path, preview);
+    window.doc.project.path = Some(path);
+    window.doc.project.saved = Some(digest(&captured(window).manifest));
+}
+
+/// Puts the plate of `file` in place of the one in hand, the undo history with it. Answers
+/// the file's picture, or `None` when it would not read.
+fn read_in(window: &mut Window, file: &Handed) -> Option<Option<Vec<u8>>> {
     let path = file.path().to_path_buf();
     let read = match file {
         Handed::Path(path) => load(path),
@@ -116,14 +142,13 @@ pub fn open(window: &mut Window, file: &Handed) {
     let read = read
         .map_err(anyhow::Error::new)
         .with_context(|| tr!("project-cannot-open", path = path.display().to_string()));
-    let Some(mut project) = window.machine.status.report(
+    let mut project = window.machine.status.report(
         &tr!("status-opened", path = path.display().to_string()),
         read,
-    ) else {
-        return;
-    };
+    )?;
     let preview = project.preview.take();
 
+    let printer_before = window.machine.slicing.printer_id.clone();
     let not_here = state::apply(
         project,
         state::CapturedMut {
@@ -132,6 +157,9 @@ pub fn open(window: &mut Window, file: &Handed) {
             tools: window.tools,
         },
     );
+    if window.machine.slicing.printer_id != printer_before {
+        crate::profiles::plate_follows_printer(window);
+    }
     if let Some(note) = not_here.note() {
         window.machine.status = Status::Info(tr!(
             "project-opened-note",
@@ -143,9 +171,6 @@ pub fn open(window: &mut Window, file: &Handed) {
         .tools
         .supports
         .start_automatic_unless_chosen(&window.doc.scene, &window.machine.slicing.catalogue);
-    remember(window, &path, preview);
-    window.doc.project.path = Some(path);
-    window.doc.project.saved = Some(digest(&captured(window).manifest));
     crate::prepare::forget(window.tools);
     window.doc.history = History::default();
     frame_view(
@@ -153,6 +178,30 @@ pub fn open(window: &mut Window, file: &Handed) {
         &window.doc.plate,
         &mut window.view.camera,
     );
+    Some(preview)
+}
+
+/// Opens the recovery copy at `copy` as the unsaved plate it was, under the project file it
+/// `belonged` to, so Save writes there and closing asks first. Answers whether it read.
+pub fn recover(window: &mut Window, copy: &std::path::Path, belonged: Option<PathBuf>) -> bool {
+    if read_in(window, &Handed::Path(copy.to_path_buf())).is_none() {
+        return false;
+    }
+    window.doc.project.path = belonged;
+    window.doc.project.saved = None;
+    window.machine.status = Status::Info(tr!("project-recovered"));
+    true
+}
+
+/// The plate as a project, with its digest, while it holds models its file does not have
+/// as they stand; `None` for an empty plate or one that matches its file.
+pub fn unsaved(window: &Window) -> Option<(Project, u64)> {
+    if window.doc.scene.is_empty() {
+        return None;
+    }
+    let project = captured(window);
+    let digest = digest(&project.manifest);
+    (window.doc.project.saved != Some(digest)).then_some((project, digest))
 }
 
 /// Writes over the file the plate came from, or asks for a name when it came from none.
@@ -288,7 +337,13 @@ pub fn guard_close(ui: &egui::Ui, window: &mut Window) {
         }
         return;
     }
-    let Some(asking) = window.doc.project.asking else {
+    let Some((save_and, without_saving)) = window
+        .doc
+        .project
+        .asking
+        .as_ref()
+        .map(|asking| (asking.save_and(), asking.without_saving()))
+    else {
         return;
     };
 
@@ -297,16 +352,14 @@ pub fn guard_close(ui: &egui::Ui, window: &mut Window) {
         ui.label(tr!("project-unsaved"));
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            if ui.button(asking.save_and()).clicked() {
+            if ui.button(save_and).clicked() {
                 // Where to write is asked on the next frame, once this modal is gone:
                 // a file dialog opened from under it never comes back.
-                window.doc.project.saving = Some(asking);
-                window.doc.project.asking = None;
+                window.doc.project.saving = window.doc.project.asking.take();
                 ui.ctx().request_repaint();
             }
-            if ui.button(asking.without_saving()).clicked() {
-                answered = Some(asking);
-                window.doc.project.asking = None;
+            if ui.button(without_saving).clicked() {
+                answered = window.doc.project.asking.take();
             }
             if ui.button(tr!("project-keep-working")).clicked() {
                 window.doc.project.asking = None;
@@ -319,7 +372,8 @@ pub fn guard_close(ui: &egui::Ui, window: &mut Window) {
     }
 }
 
-/// Does what the plate was held back from: closes the window, or empties it.
+/// Does what the plate was held back from: closes the window, empties it, or opens a
+/// project in its place.
 fn go_on(ctx: &egui::Context, window: &mut Window, asking: Asking) {
     match asking {
         Asking::Close => {
@@ -327,6 +381,7 @@ fn go_on(ctx: &egui::Context, window: &mut Window, asking: Asking) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         Asking::NewProject => clear(window),
+        Asking::Open(file) => open_now(window, &file),
     }
 }
 
@@ -344,3 +399,6 @@ fn with_extension(path: PathBuf) -> PathBuf {
         path.with_extension(EXTENSION)
     }
 }
+
+#[cfg(test)]
+mod tests;

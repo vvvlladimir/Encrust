@@ -49,6 +49,13 @@ pub use egui_phosphor::regular::{
     CIRCLE as STEP_LATER, LIST_BULLETS as CHANGES, PALETTE as APPEARANCE,
 };
 
+/// A recipe's editor: a step dragged or moved up or down, a stop condition, a name put into
+/// a condition, and a setting worked out by an expression.
+pub use egui_phosphor::regular::{
+    ARROW_DOWN as MOVE_DOWN, ARROW_UP as MOVE_UP, BRACKETS_CURLY as VARIABLE,
+    DOTS_SIX_VERTICAL as GRIP, FUNCTION as EXPRESSION, SIGN_OUT as GATE,
+};
+
 /// The faces of the keys the plain fonts have no glyph for: Shift, Option, Return and
 /// the rest of a Mac keyboard's symbols; a click and a drag of the mouse.
 pub use egui_phosphor::regular::{
@@ -161,6 +168,10 @@ mod tests {
         ("ERROR", ERROR),
         ("APPEARANCE", APPEARANCE),
         ("STEP_LATER", STEP_LATER),
+        ("MOVE_UP", MOVE_UP),
+        ("MOVE_DOWN", MOVE_DOWN),
+        ("EXPRESSION", EXPRESSION),
+        ("VARIABLE", VARIABLE),
         ("CHANGES", CHANGES),
         ("MOVE_TO_PLATE", MOVE_TO_PLATE),
         ("UNDO", UNDO),

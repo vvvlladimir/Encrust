@@ -1,7 +1,7 @@
 use core_geometry::{Scalar, Vec3};
 
 use crate::orient::OrientSettings;
-use crate::policy::{Noise, Readings, Ruling, rank, rulings};
+use crate::policy::{Asked, Noise, Readings, Ruling, rank, rulings};
 use crate::score::{Faces, OrientGoal, OrientPreset, Score};
 
 /// One way down, measured by both passes, on supports or set on the plate.
@@ -18,30 +18,42 @@ pub struct Candidate {
 /// A sliver of a dimensionless term, for a term that is zero at best.
 const SLIVER: f64 = 0.002;
 
-/// `measured` best first with what ruled each, `now` first when no turn is worth it, and
-/// for auto each goal's own best right behind: `docs/design/orientation.md`.
+/// `measured` best first with what ruled each, `now` first when no turn is worth it, for
+/// auto each goal's own best right behind, then the trades away from a clean surface:
+/// `docs/design/orientation.md`.
 pub fn ranked(
     faces: &Faces,
     settings: &OrientSettings,
     measured: &[Candidate],
     now: Vec3,
 ) -> Vec<(usize, Ruling)> {
+    let asked = |preset| Asked {
+        preset,
+        clean_surface: settings.clean_surface,
+    };
     let readings_for = |preset| readings(faces, settings, preset, measured, now);
     let readings = readings_for(settings.preset);
-    let mut order = rank(&readings, settings.preset, &NOISE);
-    if settings.preset == OrientPreset::Auto && !order.is_empty() {
-        let mut ends = vec![order[0]];
+    let mut order = rank(&readings, asked(settings.preset), &NOISE);
+    let rulings = rulings(&readings, asked(settings.preset), &NOISE);
+    if order.is_empty() {
+        return Vec::new();
+    }
+    let mut ends = vec![order[0]];
+    if settings.preset == OrientPreset::Auto {
         for goal in OrientGoal::ALL {
             let own = readings_for(goal.into());
-            let best = rank(&own, goal.into(), &NOISE).first().copied();
+            let best = rank(&own, asked(goal.into()), &NOISE).first().copied();
             ends.extend(best.filter(|at| !ends.contains(at)));
         }
-        order.retain(|at| !ends.contains(at));
-        ends.append(&mut order);
-        order = ends;
     }
-    let rulings = rulings(&readings, settings.preset, &NOISE);
-    order.into_iter().map(|at| (at, rulings[at])).collect()
+    for at in &order {
+        if rulings[*at] == Ruling::Traded && !ends.contains(at) {
+            ends.push(*at);
+        }
+    }
+    order.retain(|at| !ends.contains(at));
+    ends.append(&mut order);
+    ends.into_iter().map(|at| (at, rulings[at])).collect()
 }
 
 /// What each of `measured` reads ranked for `preset`, tie-broken on that preset's own total.
@@ -68,6 +80,7 @@ fn readings(
                 unheld: None,
                 roomless: 0.0,
                 goals: OrientGoal::ALL.map(|goal| f64::from(faces.reading(goal, score))),
+                seen: f64::from(faces.seen_contacts(score)),
                 tiebreak: tiebreak(preset, score, total),
                 standing: candidate.down == now,
             }
@@ -75,16 +88,19 @@ fn readings(
         .collect()
 }
 
-/// What of each goal's search reading is noise: half a newton of pull and a tenth of a
-/// millimetre of stack, as the proof reads them, and a sliver of every dimensionless term.
-const NOISE: Noise = [SLIVER, 0.5, 0.1];
+/// What of each search reading is noise: a sliver of a dimensionless term, then half a
+/// newton, a tenth of a millimetre and half a contact on show, as the proof reads them.
+const NOISE: Noise = Noise {
+    goals: [SLIVER, 0.5, 0.1],
+    seen: 0.5,
+};
 
 /// What orders candidates the goal's own rules leave alike: the total, but for the shortest
 /// print its stack to the noise it is read to first, support not being weighed (ADR 0283).
 fn tiebreak(preset: OrientPreset, score: &Score, total: f32) -> [f64; 2] {
     let total = f64::from(total);
     if preset == OrientGoal::ShortestPrint.into() {
-        let stack = f64::from(score.stack_mm()) / NOISE[OrientGoal::ShortestPrint.index()];
+        let stack = f64::from(score.stack_mm()) / NOISE.goals[OrientGoal::ShortestPrint.index()];
         [stack.round(), total]
     } else {
         [total, 0.0]

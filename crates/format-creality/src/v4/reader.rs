@@ -1,12 +1,13 @@
 use core_format::{
     Buffer, FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, layer_in_range, panel_in_range,
+    SlicedFileReader, layer_in_range, panel_in_range, read_rgb15_preview,
 };
 use core_raster::Run;
 
 use crate::family::MAGIC;
 
 use super::blocks::{LAYER_BLOCK_BYTES, LAYER_ROW_BYTES, VERSION};
+use super::codec::LayerCodec;
 
 /// Reads the Creality `.cxdlp` at version 4. Layout is in `docs/formats/creality.md`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -37,7 +38,7 @@ impl SlicedFileReader for CxdlpV4Reader {
         reads.skip(4)?;
         let table = u64::from(reads.u32_le()?);
         let layer_count = reads.u32_le()?;
-        reads.skip(4)?;
+        let large_preview = u64::from(reads.u32_le()?);
         let print_time_s = reads.u32_le()?;
         reads.skip(4)?;
         let print_parameters = u64::from(reads.u32_le()?);
@@ -62,10 +63,15 @@ impl SlicedFileReader for CxdlpV4Reader {
         } = read_print_parameters(&mut reads)?;
 
         let layers = read_table(&mut reads, table, layer_count, end)?;
+        let preview = read_rgb15_preview(&mut reads, large_preview).ok();
+        let codec = machine
+            .as_deref()
+            .map_or(LayerCodec::WholeImage, LayerCodec::of_model);
 
         Ok(OpenCxdlpV4 {
             reads,
             pixel_count,
+            codec,
             facts: SlicedFile {
                 format: "cxdlp",
                 version: Some(version),
@@ -81,13 +87,13 @@ impl SlicedFileReader for CxdlpV4Reader {
                 bottom_layers,
                 print_time_s: Some(print_time_s),
                 volume_mm3: Some(volume_ml * 1000.0),
-                // The codec carries six bits of grey, so a layer reads back in 64 steps.
-                grey_steps: 64,
+                grey_steps: codec.grey_steps(),
                 stated: PrinterTuning {
                     buffer: Some(buffer),
                     ..PrinterTuning::default()
                 },
                 layers,
+                preview,
             },
         })
     }
@@ -203,6 +209,7 @@ fn read_text<S: ReadSeek>(reads: &mut Reads<S>) -> Result<Option<String>, Format
 pub struct OpenCxdlpV4<S> {
     reads: Reads<S>,
     pixel_count: u32,
+    codec: LayerCodec,
     facts: SlicedFile,
 }
 
@@ -216,7 +223,8 @@ impl<S: ReadSeek> OpenFile for OpenCxdlpV4<S> {
         let entry = self.facts.layers[index as usize];
         self.reads.seek_to(entry.offset)?;
         let data = self.reads.bytes(entry.size as usize)?;
-        super::rle::decode(&data, self.pixel_count)
+        self.codec
+            .decode(&data, self.facts.width_px, self.pixel_count)
     }
 }
 

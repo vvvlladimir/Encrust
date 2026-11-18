@@ -20,7 +20,7 @@ permissions:
 
 env:
   PRODUCT_ID: 9NB0ZMB3M8H8
-  PACKAGE: Encrust-windows-x86_64-store.msixupload
+  PACKAGE: Encrust-windows-store.msixupload
 
 jobs:
   publish:

@@ -7,7 +7,7 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use core_analysis::{Cured, Measured, cure};
-use core_engine::{Cutting, DrainSearch, Model, Plate, Run, suggest_drains};
+use core_engine::{Cutting, DrainSearch, Model, Plate, QUICK_CHECK_BIN, Run, suggest_drains};
 use core_format::ExposurePlan;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_pipeline::{PanelOverrides, SlicedFormat};
@@ -112,6 +112,12 @@ fn plates(c: &mut Criterion) {
         let run = Run::of(&plate).expect("the plate has geometry");
         group.bench_function(format!("measure_{copies}_spheres"), |b| {
             b.iter(|| run.measure(&mut ()).expect("the stack measures"));
+        });
+        group.bench_function(format!("quick_check_{copies}_spheres"), |b| {
+            b.iter(|| {
+                run.measure_binned(QUICK_CHECK_BIN, &mut ())
+                    .expect("the stack measures")
+            });
         });
         group.bench_function(format!("write_goo_{copies}_spheres"), |b| {
             b.iter(|| {

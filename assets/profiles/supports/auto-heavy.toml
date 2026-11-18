@@ -10,9 +10,9 @@ facets = 12
 # counted over an area: doubling it puts down twice as many.
 density = 1.0
 
-# How far the lowest point of a part should stand clear of the plate: room for the pad,
-# the flare and a whole top segment under its lowest contact, see ADR 0237.
-z_lift_mm = 5.0
+# How far the lowest point of a part should stand clear of the plate: room for the pad
+# and the flare under its lowest contact, a low tip's neck cut short, see ADR 0432.
+z_lift_mm = 2.0
 
 # How much clear air a support's body keeps between itself and the model.
 clearance_mm = 0.5
@@ -36,7 +36,7 @@ contact_depth_mm = 0.0
 length_mm = 2.0
 
 [middle]
-diameter_mm = 1.2
+diameter_mm = 1.0
 
 [bottom]
 # cylinder, cone, prism or cube.

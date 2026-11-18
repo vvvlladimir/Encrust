@@ -25,6 +25,7 @@ core-engine.workspace = true
 jiff.workspace = true
 core-pipeline.workspace = true
 core-plate.workspace = true
+core-recipe.workspace = true
 core-slicer.workspace = true
 core-raster.workspace = true
 core-supports.workspace = true
@@ -68,24 +69,26 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 # container's crate (ADR 0209).
 format-goo.workspace = true
 # Pictures of the panels, compared against the ones committed; see docs/decisions/0215.
-egui_kittest.workspace = true
+egui_kittest = { workspace = true, features = ["eframe"] }
 # The catalogues read as syntax, so a test can compare their messages and arguments.
 fluent-syntax.workspace = true
 
 [features]
 # The panel snapshots need a GPU, which no CI runner has, so they run by hand.
 snapshots = []
+# Full-window screenshots for the website, viewport drawn; see src/app/showcase.rs.
+showcase = []
 
 # A browser has no TLS stack to build and no native dialogs; see docs/decisions/0181.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# Where the file that tells encrust-mcp of an open window goes; see docs/decisions/0401.
-directories.workspace = true
 fontdb.workspace = true
 ureq = { workspace = true, features = ["rustls"] }
 rfd.workspace = true
 
-# The window buttons macOS draws, set on the top bar's centre line; see docs/decisions/0217.
+# The window buttons macOS draws, set on the top bar's centre line, and the application menu;
+# see docs/decisions/0217 and 0444.
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2.workspace = true
 objc2-app-kit.workspace = true
 objc2-foundation.workspace = true
 raw-window-handle.workspace = true
@@ -138,6 +141,9 @@ category = "GraphicsAndDesign"
 # The .icns is the squircled macOS grid (ADR 0135); Linux takes the PNG, Windows the .ico.
 icons = ["../../assets/icon/encrust.icns", "../../assets/icon/encrust-256.png", "../../assets/icon/encrust.ico"]
 binaries = [{ path = "encrust-gui", main = true }, { path = "encrust" }]
+# A project opens in the window: the Windows installer writes it to the registry and the .deb to
+# its desktop entry. macOS takes its own declaration from the Info.plist below (ADR 0445).
+file-associations = [{ extensions = ["encrust"], mime-type = "application/x-encrust", name = "Encrust.Project", description = "Encrust project" }]
 
 [package.metadata.packager.macos]
 minimum-system-version = "11.0"
@@ -151,3 +157,5 @@ installer-mode = "currentUser"
 
 [package.metadata.packager.deb]
 depends = ["libgtk-3-0 | libgtk-3-0t64", "libxkbcommon0"]
+# The project's MIME type; the shared-mime-info package's trigger rebuilds the database.
+files = { "../../assets/linux/encrust.xml" = "/usr/share/mime/packages/encrust.xml" }

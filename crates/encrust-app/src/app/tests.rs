@@ -255,6 +255,24 @@ fn a_sliced_file_opens_as_a_model_where_its_pixels_stood() {
 }
 
 #[test]
+fn a_cancelled_sliced_file_never_reaches_the_plate() {
+    let path = crate::preview::tests::written_goo("app-cancelled", 3);
+    let mut app = SlicerApp::default();
+    app.open_model(Handed::Path(path));
+    app.doc.imports.cancel(&mut app.machine.status);
+
+    let busy = app.doc.imports.poll(
+        &mut app.doc.scene,
+        &app.doc.plate,
+        &mut app.view.camera,
+        &mut app.machine.status,
+    );
+    assert!(!busy, "nothing is left to open");
+    assert!(app.doc.scene.is_empty());
+    assert!(!app.machine.status.is_error(), "{:?}", app.machine.status);
+}
+
+#[test]
 fn a_file_no_reader_claims_is_opened_as_a_model() {
     assert!(!core_pipeline::reads_sliced_file(Path::new("cube.stl")));
     assert!(core_pipeline::reads_sliced_file(Path::new("plate.ctb")));
@@ -299,6 +317,21 @@ fn the_view_key_runs_through_the_three_views_and_back() {
         (Mode::Preview, true),
         "and back the other way"
     );
+}
+
+#[test]
+fn the_interface_keys_size_it_even_over_the_settings_window() {
+    let mut app = SlicerApp::default();
+    app.machine.settings.open = true;
+    let press = |app: &mut SlicerApp, by| {
+        shortcuts::act(&mut app.window(), shortcuts::Action::Scale(by));
+        app.machine.general.interface_scale_percent
+    };
+
+    assert_eq!(press(&mut app, 1), 110);
+    assert_eq!(press(&mut app, 1), 125);
+    assert_eq!(press(&mut app, -1), 110);
+    assert_eq!(press(&mut app, 0), 100, "back to the system's size");
 }
 
 /// Only the layer strip switches the view; a tool opens in the inspector beside it.

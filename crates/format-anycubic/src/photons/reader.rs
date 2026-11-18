@@ -1,7 +1,7 @@
 use core_format::{
     FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, layer_in_range, panel_in_range, stated_distance_mm, stated_speed_mm_min,
-    stated_wait_s,
+    SlicedFileReader, layer_in_range, panel_in_range, read_raw_preview, rgb_of_rgb15,
+    stated_distance_mm, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
@@ -46,6 +46,11 @@ impl SlicedFileReader for PhotonsReader {
         let header = read_header(&mut reads)?;
 
         let (preview_width, preview_height) = header.preview_px;
+        reads.seek_to(HEADER_BYTES)?;
+        let preview = read_raw_preview(&mut reads, preview_width, preview_height, |pair| {
+            rgb_of_rgb15(u16::from_le_bytes(pair))
+        })
+        .ok();
         let preview_bytes =
             (u64::from(preview_width) * u64::from(preview_height)).saturating_mul(2);
         reads.seek_to(HEADER_BYTES.saturating_add(preview_bytes))?;
@@ -75,6 +80,7 @@ impl SlicedFileReader for PhotonsReader {
                 grey_steps: 2,
                 stated: stated(&header),
                 layers,
+                preview,
             },
             pixel_count,
         })

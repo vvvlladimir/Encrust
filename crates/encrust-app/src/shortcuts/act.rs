@@ -96,7 +96,9 @@ fn held_by_a_modal(window: &mut Window, action: Action) -> bool {
 /// Does what a key asked for. Every action of the table is answered here, so a binding
 /// cannot be added without the work behind it.
 pub fn act(window: &mut Window, action: Action) {
-    if held_by_a_modal(window, action) {
+    // The size of the interface is the whole window's, whatever stands over it.
+    let scales = matches!(action, Action::Scale(_));
+    if !scales && held_by_a_modal(window, action) {
         return;
     }
     match action {
@@ -128,6 +130,11 @@ pub fn act(window: &mut Window, action: Action) {
         Action::Duplicate => duplicate_selection(window),
         Action::Remove => remove(window),
         Action::View(step) => section::turn_view(window, step),
+        Action::Scale(by) => {
+            let general = &mut window.machine.general;
+            general.interface_scale_percent =
+                crate::interface_scale::step(general.interface_scale_percent, by);
+        }
         Action::FrameView => frame_view(
             &window.doc.scene,
             &window.doc.plate,

@@ -11,13 +11,13 @@ fn two_picks_make_a_span_and_the_third_starts_again() {
     let mut measure = Measure::default();
     assert!(measure.span().is_none());
 
-    measure.pick(Vec3::ZERO, Snapped::Free);
+    measure.pick(Vec3::ZERO, Snapped::Free, None);
     assert!(measure.span().is_none(), "one end is not a measurement");
 
-    measure.pick(Vec3::new(3.0, 4.0, 0.0), Snapped::Free);
+    measure.pick(Vec3::new(3.0, 4.0, 0.0), Snapped::Free, None);
     assert_eq!(measure.distance_mm(), Some(5.0), "a 3-4-5 triangle");
 
-    measure.pick(Vec3::new(1.0, 1.0, 1.0), Snapped::Free);
+    measure.pick(Vec3::new(1.0, 1.0, 1.0), Snapped::Free, None);
     assert!(measure.span().is_none());
     assert_eq!(measure.start(), Some(Vec3::new(1.0, 1.0, 1.0)));
 }
@@ -25,8 +25,8 @@ fn two_picks_make_a_span_and_the_third_starts_again() {
 #[test]
 fn the_span_is_reported_axis_by_axis() {
     let mut measure = Measure::default();
-    measure.pick(Vec3::new(1.0, 2.0, 3.0), Snapped::Free);
-    measure.pick(Vec3::new(4.0, 2.0, 8.0), Snapped::Free);
+    measure.pick(Vec3::new(1.0, 2.0, 3.0), Snapped::Free, None);
+    measure.pick(Vec3::new(4.0, 2.0, 8.0), Snapped::Free, None);
     assert_eq!(measure.delta_mm(), Some(Vec3::new(3.0, 0.0, 5.0)));
 }
 
@@ -35,13 +35,17 @@ fn clearing_forgets_both_ends_and_keeps_the_settings() {
     let mut measure = Measure {
         snap: Snap::Edge,
         show_axes: true,
+        along_surface: true,
         ..Measure::default()
     };
-    measure.pick(Vec3::ZERO, Snapped::Free);
-    measure.pick(Vec3::X, Snapped::Free);
+    measure.pick(Vec3::ZERO, Snapped::Free, None);
+    measure.pick(Vec3::X, Snapped::Free, None);
     measure.clear();
     assert!(measure.span().is_none() && measure.start().is_none());
-    assert_eq!((measure.snap, measure.show_axes), (Snap::Edge, true));
+    assert_eq!(
+        (measure.snap, measure.show_axes, measure.along_surface),
+        (Snap::Edge, true, true)
+    );
 }
 
 #[test]
@@ -80,6 +84,13 @@ fn an_edge_snap_passes_over_a_corner_for_its_edge() {
 }
 
 fn cube_object(scale: Scalar) -> SceneObject {
+    let mut scene = crate::scene::Scene::default();
+    let id = add_cube(&mut scene, scale);
+    scene.get(id).expect("just inserted").clone()
+}
+
+/// Adds the unit cube scaled by `scale` to `scene`.
+pub(super) fn add_cube(scene: &mut crate::scene::Scene, scale: Scalar) -> ObjectId {
     let mesh = Arc::new(unit_cube());
     let summary = crate::scene::ImportSummary {
         vertices_merged: 0,
@@ -95,14 +106,12 @@ fn cube_object(scale: Scalar) -> SceneObject {
         scale: Vec3::splat(scale),
         ..Transform::default()
     };
-    let mut scene = crate::scene::Scene::default();
-    let id = scene.insert(crate::scene::Imported::new(
+    scene.insert(crate::scene::Imported::new(
         "cube".to_owned(),
         mesh,
         transform,
         summary,
-    ));
-    scene.get(id).expect("just inserted").clone()
+    ))
 }
 
 #[test]

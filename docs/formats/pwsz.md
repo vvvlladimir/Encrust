@@ -37,8 +37,8 @@ and a reader finds an entry by name.
 
 | Entry | What it holds |
 |---|---|
-| `preview_images/preview_0.png` | 224 × 168, padded with `#024864` |
-| `preview_images/preview_1.png` | 336 × 252, padded with `#141B29` |
+| `preview_images/preview_0.png` | 224 × 168, an RGBA PNG; behind the model `#0A0A0B`, opaque |
+| `preview_images/preview_1.png` | 336 × 252, the same |
 | `software_info.conf` | `mark`, `os` and `version`: which program wrote it; `opengl` is `3.3-CoreProfile`, as known files state |
 | `layer_images/layer_N.pw0Img` | layer `N`, from 0, in the PW0 codec, nothing in front |
 | `layers_controller.conf` | `count`, then per layer `exposure_time` s, `layer_index`, `layer_minheight` mm (its floor), `layer_thickness` mm, `zup_height` mm, `zup_speed` mm/s |

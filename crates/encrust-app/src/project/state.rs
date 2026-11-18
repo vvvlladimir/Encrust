@@ -17,8 +17,9 @@ use crate::state::Tools;
 use crate::supports::with_own;
 use crate::tool_settings::ToolSettings;
 use core_engine::project::{
-    BuiltCavity, Cavity, Manifest, ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState,
-    OwnSupportState, Project, Summary, VERSION, hollow_of, supports_of,
+    BuiltCavity, Cavity, DrainState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
+    ObjectSupportState, OwnDrain, OwnSupportState, Project, Summary, VERSION, hollow_of,
+    supports_of,
 };
 use printer_profiles::{Raft, SupportProfile};
 
@@ -134,13 +135,17 @@ fn object_state(scene: &Scene, object: &SceneObject) -> ObjectState {
             built: built_cavity(object),
         },
         own_hollow: object.own.hollow.clone(),
-        own_drain: object.own.drain.clone(),
+        own_drain: object
+            .own
+            .plug_gap_mm
+            .map(|plug_gap_mm| OwnDrain { plug_gap_mm }),
         own_raft: object.own.raft,
         plug_of: object
             .plug_of
             .and_then(|model| scene.objects().iter().position(|other| other.id == model))
             .and_then(|index| u32::try_from(index).ok()),
         relief_painted: object.relief_painted.clone(),
+        shown_painted: object.shown_painted.clone(),
         own_supports: object
             .own
             .supports
@@ -194,15 +199,22 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
         },
         supports: manifest.supports,
         hollow: manifest.hollow,
-        drain: manifest.drain,
+        // The next hole's size is the window's; a project brings only its plugs' gap (ADR 0397).
+        drain: DrainState {
+            plug_gap_mm: manifest.drain.plug_gap_mm,
+            ..tools.drain.state.clone()
+        },
         cut: manifest.cut,
-        // The manifest has no entry for the Relief, Text, Combine or Repair tools, so they
-        // keep what they are set to.
+        // The manifest has no entry for the Relief, Text, Combine, Repair or Auto-orient
+        // tools, how the next blocker is sized or the recipe picked, so they keep theirs.
         relief: tools.relief.state,
         array: manifest.array,
         text: tools.text.state.clone(),
         combine: tools.boolean.op,
         repair: tools.repair.state,
+        keep_solid: tools.hollow.blocker,
+        orient: tools.orient.state(),
+        recipe: tools.prepare.recipe.clone(),
         print: None,
     }
     .apply(tools, slicing);
@@ -221,17 +233,18 @@ pub fn apply(project: Project, plate: CapturedMut<'_>) -> NotHere {
     not_here
 }
 
-/// Takes the printer and resin of these ids where the catalogue has them, and answers the
-/// ones it does not: the window keeps its own in their place.
+/// Takes the printer of this id where it is among the user's machines, and the resin where
+/// the catalogue has it; answers the ones not here: the window keeps its own in their place.
 fn take_machine(printer: Option<String>, resin: Option<String>, slicing: &mut Slicing) -> NotHere {
     let mut not_here = NotHere::default();
     if let Some(id) = printer {
+        // A shipped machine the user never added is still in the library, but not theirs.
         match slicing.catalogue.printer(&id) {
-            Ok(entry) => {
+            Ok(entry) if crate::settings::installed(&entry.source) => {
                 let profile = entry.profile.clone();
                 slicing.set_printer(profile, Some(id));
             }
-            Err(_) => not_here.printer = Some(id),
+            _ => not_here.printer = Some(id),
         }
     }
     if let Some(id) = resin {
@@ -244,6 +257,8 @@ fn take_machine(printer: Option<String>, resin: Option<String>, slicing: &mut Sl
             Err(_) => not_here.resin = Some(id),
         }
     }
+    // A resin not set up on the machine in hand gives way to one that is, or to none.
+    slicing.reload_resin();
     not_here
 }
 
@@ -301,7 +316,7 @@ fn restore_objects(
             .collect();
         let own = OwnSettings {
             hollow: state.own_hollow,
-            drain: state.own_drain,
+            plug_gap_mm: state.own_drain.map(|own| own.plug_gap_mm),
             supports: own_supports,
             raft: state.own_raft,
         };
@@ -313,6 +328,7 @@ fn restore_objects(
         let (surface, surface_bvh) = (Arc::clone(surface), Arc::clone(surface_bvh));
         object.supports = supports_of(
             &state.supports,
+            object.hollow.drains(),
             &meshes.source,
             &surface,
             &surface_bvh,
@@ -320,6 +336,7 @@ fn restore_objects(
             &with_own(table.to_vec(), &own, plate_raft),
         );
         object.relief_painted = state.relief_painted;
+        object.shown_painted = state.shown_painted;
         object.own = own;
     }
     // A plug names its model by its place in the file, which is known once all are in.

@@ -34,5 +34,13 @@ harness = false
 name = "boolean"
 harness = false
 
+[[bench]]
+name = "opening"
+harness = false
+
+[[bench]]
+name = "stack"
+harness = false
+
 [lints]
 workspace = true

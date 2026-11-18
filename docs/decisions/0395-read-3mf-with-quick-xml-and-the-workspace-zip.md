@@ -1,6 +1,6 @@
 # 0395. Read 3MF with `quick-xml` and the workspace's `zip`
 
-- **Status:** Proposed
+- **Status:** Proposed; its `quick-xml` 0.41 is superseded by 0451
 - **Date:** 2026-11-03
 
 ## Context

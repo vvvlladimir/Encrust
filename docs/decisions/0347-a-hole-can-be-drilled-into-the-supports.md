@@ -1,6 +1,6 @@
 # 0347. A hole can be drilled into the supports
 
-- **Status:** Accepted
+- **Status:** Accepted; a hole cutting a support tree is superseded by 0441
 - **Date:** 2026-10-25
 
 ## Context

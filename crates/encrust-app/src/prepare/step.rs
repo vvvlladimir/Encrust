@@ -2,46 +2,41 @@
 //! reaches it, and its outcome comes back to the run rather than through the status line.
 
 use anyhow::Result;
+use core_geometry::Scalar;
+use core_plate::Asked;
 
-use super::plan::{Drains, Orient, Wish};
-use super::{Chosen, Plan, Step};
+use super::check::Checking;
+use super::save::Saving;
+use super::work::{Batch, Hollowed, Work};
+use crate::drain::DrainTool;
 use crate::i18n::tr;
 use crate::job::{
-    DrainsJob, DrainsOutcome, HollowJob, HollowOutcome, OrientJob, OrientOutcome, RepairJob,
-    SupportJob, SupportOutcome,
+    DrainsJob, DrainsOutcome, HollowJob, HollowOutcome, OrientOutcome, RepairJob, SupportJob,
+    SupportOutcome, TrapJob, TrapOutcome,
 };
-use crate::orient::stand_turned;
+use crate::orient::Turning;
 use crate::repair::RepairState;
 use crate::scene::{ObjectId, Scene, Taken};
 use crate::state::{Doc, Machine, Tools};
 use crate::status::Status;
-use crate::supports::{Side, Sizing, SupportTool};
-use core_geometry::Vec3;
-use core_volume::HollowSettings;
+use crate::supports::{BuiltTo, Side, SupportTool};
 
 /// A step's job, running.
 pub(super) enum Going {
-    Orient(OrientJob),
+    Orient(Turning),
     /// One repair a model, each with the model it took, and how many there were.
     Repair(Vec<(RepairJob, Taken)>, usize),
     Hollow(HollowJob),
     Drain(DrainsJob),
-    /// Sized by the automatic profile where it carries one, built to a named profile where not,
-    /// and the supports placed by hand that land with it.
-    Supports(SupportJob, Side, Option<Box<Sizing>>, Vec<Vec3>),
-    /// A step done as it started, with what it said: a turn given outright, holes drilled.
-    Done(Status),
-    /// A modelling step, done by the window's own tool, which says what it did.
-    Shaped(Box<super::shape::Shaped>),
-    /// Holes to drill into the supports of these models at these points, once built.
-    SupportHoles(Vec<ObjectId>, Vec<Vec3>),
+    Supports(SupportJob, Side, Box<BuiltTo>),
+    Scan(TrapJob),
+    Check(Checking),
+    Save(Saving),
 }
 
 /// How a step's job ended: landed, with what it said, or stopped short with why.
 pub(super) enum Ended {
     Landed(Status),
-    /// Landed, the tool that did it having said what it did.
-    Kept,
     Stopped(Status),
 }
 
@@ -52,89 +47,69 @@ impl std::fmt::Debug for Going {
 }
 
 impl Going {
-    /// Starts `step` of `plan` on the models `chosen` names.
+    /// Starts `batch`'s job, or `None` where none of its models has anything for it to do:
+    /// no cavity to drain or to hold up.
     pub(super) fn start(
-        (step, plan): (Step, &Plan),
-        chosen: &[Chosen],
-        doc: &mut Doc,
+        batch: &Batch,
+        doc: &Doc,
         tools: &mut Tools,
-        machine: &mut Machine,
-    ) -> Result<Self> {
-        let ids: Vec<ObjectId> = chosen.iter().map(|(id, _)| *id).collect();
-        let layer_mm = machine.slicing.layer_height_mm();
-        Ok(match step {
-            Step::Orient => match plan.orient() {
-                Orient::Turn(rotation) => {
-                    let turned =
-                        crate::orient::stand_rotated(&mut doc.scene, &doc.plate, &ids, rotation);
-                    Self::Done(turned)
-                }
-                Orient::Search {
-                    preset,
-                    max_tilt_deg,
-                    wish,
-                } => Self::orient(&ids, (preset, max_tilt_deg, &wish), doc, tools, machine)?,
-            },
-            Step::Repair => Self::repair(&ids, plan, doc),
-            Step::Hollow => {
-                super::placed::keep_solid(&ids, plan, &mut doc.scene);
-                if let Some(drains) = plan.drains.as_ref().filter(|drains| drains.walled) {
-                    let points = Drains {
-                        channels: Vec::new(),
-                        ..drains.clone()
-                    };
-                    super::placed::drill(&ids, &points, &mut doc.scene, tools);
-                }
-                Self::hollow(chosen, plan, doc, tools)?
+        machine: &Machine,
+    ) -> Result<Option<Self>> {
+        let (scene, slicing) = (&doc.scene, &machine.slicing);
+        let layer_mm = slicing.layer_height_mm();
+        let ids = &batch.ids;
+        let hollow: Vec<ObjectId> = scene
+            .named(ids)
+            .filter(|object| object.hollow.is_hollow())
+            .map(|object| object.id)
+            .collect();
+        Ok(Some(match &batch.work {
+            Work::Orient {
+                wanted,
+                max_tilt_deg,
+            } => Self::orient(ids, (*wanted, *max_tilt_deg), doc, tools, machine)?,
+            Work::Repair(method) => Self::repair(ids, doc, *method),
+            Work::Hollow(hollowed) => Self::hollow(ids, hollowed, scene, tools)?,
+            Work::DrainAuto { .. } if hollow.is_empty() => {
+                return Ok(None);
             }
-            Step::Drill => match &plan.drains {
-                Some(drains) if drains.walled => {
-                    let channels = Drains {
-                        at_mm: Vec::new(),
-                        ..drains.clone()
-                    };
-                    Self::Done(super::placed::drill(&ids, &channels, &mut doc.scene, tools))
-                }
-                Some(drains) => {
-                    Self::Done(super::placed::drill(&ids, drains, &mut doc.scene, tools))
-                }
-                None => Self::Done(Status::default()),
-            },
-            Step::SupportHoles => {
-                let drains = plan.drains.as_ref();
-                Self::SupportHoles(ids, drains.map_or_else(Vec::new, |d| d.support_at.clone()))
+            Work::DrainAuto { size, vent, .. } => {
+                let asked = (*size, *vent);
+                Self::Drain(DrainTool::search_on(scene, &hollow, layer_mm, asked)?)
             }
-            Step::Drain => {
-                let vents = plan.drains.as_ref().is_none_or(|drains| drains.vent);
-                Self::Drain(tools.drain.search_on(&doc.scene, &ids, layer_mm, vents)?)
+            // Drilled where it is decided, in one frame, by `drill_points`.
+            Work::DrainPoints { .. } => return Ok(None),
+            Work::Supports { profile, side } => {
+                let clean = tools.orient.settings.clean_surface;
+                return Self::supports(ids, (profile, *side, clean), doc, machine);
             }
-            Step::Mend
-            | Step::Relief
-            | Step::Combine
-            | Step::Label
-            | Step::Cut
-            | Step::Split
-            | Step::Arrange => {
-                let shaping = &plan.shape;
-                let asked = (&mut *doc, &mut *tools, machine);
-                Self::Shaped(Box::new(super::shape::Shaped::start(
-                    step, &ids, shaping, asked,
-                )?))
-            }
-            Step::Supports | Step::Cavity => {
-                let side = if step == Step::Cavity {
-                    Side::Inside
-                } else {
-                    Side::Outside
-                };
-                Self::supports(&ids, (side, plan), doc, tools, machine)?
-            }
-        })
+            Work::Scan if hollow.is_empty() => return Ok(None),
+            Work::Scan => Self::Scan(DrainTool::scan_on(scene, &hollow, layer_mm)?),
+            Work::Check { .. } => Self::Check(Checking::default()),
+            // Done where it is decided, in one frame, by `advance`.
+            Work::Arrange { .. } => return Ok(None),
+            Work::Save(saved) => Self::Save(Saving::new(saved, scene, machine)?),
+        }))
     }
 
+    /// Hollows each of `ids` to the step's settings, placed as it stands.
+    fn hollow(
+        ids: &[ObjectId],
+        hollowed: &Hollowed,
+        scene: &Scene,
+        tools: &mut Tools,
+    ) -> Result<Self> {
+        let asked: Vec<_> = scene
+            .named(ids)
+            .map(|object| (object.id, hollowed.settings_for(object.transform)))
+            .collect();
+        Ok(Self::Hollow(tools.hollow.start_asked(scene, &asked)?))
+    }
+
+    /// Turns `ids` to the orient step's preset and tilt, proved on the printer where it has one.
     fn orient(
         ids: &[ObjectId],
-        (preset, max_tilt_deg, wish): (core_plate::OrientPreset, Option<f32>, &Wish),
+        (wanted, max_tilt_deg): (Asked, Option<Scalar>),
         doc: &Doc,
         tools: &mut Tools,
         machine: &Machine,
@@ -145,85 +120,41 @@ impl Going {
             .printer
             .as_ref()
             .map(|printer| (printer, &slicing.material));
-        let asked = (preset, max_tilt_deg, plans);
-        Ok(Self::Orient(tools.orient.start_on(
-            &doc.scene,
-            ids,
-            asked,
-            (wish, proof),
-        )?))
-    }
-
-    /// Each model at the settings given, else at Hollow's defaults round the wall decided.
-    fn hollow(chosen: &[Chosen], plan: &Plan, doc: &Doc, tools: &Tools) -> Result<Self> {
-        let given = plan.hollow_given();
-        let models: Vec<(ObjectId, HollowSettings)> = chosen
-            .iter()
-            .filter_map(|(id, wall)| {
-                let object = doc.scene.get(*id)?;
-                let settings = match given {
-                    Some(state) => crate::hollow::settings_of(state, object.transform),
-                    None => HollowSettings::for_wall(wall.as_ref()?.wall_mm),
-                };
-                Some((*id, settings))
-            })
-            .collect();
-        Ok(Self::Hollow(
-            tools.hollow.start_settings(&doc.scene, &models)?,
+        let asked = (wanted, max_tilt_deg, plans);
+        Ok(Self::Orient(
+            tools.orient.start_on(&doc.scene, ids, asked, proof)?,
         ))
     }
 
-    /// Supports sized by the automatic profile, or built to the one the plan names: each
-    /// model keeps that profile as its own for the group in hand, so they are drawn to it.
+    /// Stands `ids` on supports to `profile` on `side`, `None` where none holds a cavity
+    /// to hold up inside.
     fn supports(
         ids: &[ObjectId],
-        (side, plan): (Side, &Plan),
-        doc: &mut Doc,
-        tools: &Tools,
+        (profile, side, clean): (&str, Side, bool),
+        doc: &Doc,
         machine: &Machine,
-    ) -> Result<Self> {
-        let slicing = &machine.slicing;
+    ) -> Result<Option<Self>> {
+        let (scene, slicing) = (&doc.scene, &machine.slicing);
+        let held: Vec<ObjectId> = match side {
+            Side::Outside => ids.to_vec(),
+            Side::Inside => scene
+                .named(ids)
+                .filter(|object| object.supported_inside())
+                .map(|object| object.id)
+                .collect(),
+        };
+        if held.is_empty() {
+            return Ok(None);
+        }
+        let built = BuiltTo::of(profile, &slicing.catalogue)?;
         let layer_mm = slicing.layer_height_mm();
-        let stand = plan.supports.clone().unwrap_or_default();
-        let by_hand = if side == Side::Outside {
-            stand.at_mm.clone()
-        } else {
-            Vec::new()
-        };
-        if stand.only {
-            let group = tools.supports.active;
-            return Ok(Self::Done(super::placed::by_hand_on(
-                ids,
-                &by_hand,
-                group,
-                &mut doc.scene,
-            )));
-        }
-        let Some(named) = stand.profile.as_ref() else {
-            let asked = (layer_mm, &slicing.catalogue);
-            let (job, sizing) = SupportTool::start_automatic_on(&doc.scene, ids, asked, side)?;
-            return Ok(Self::Supports(job, side, Some(Box::new(sizing)), by_hand));
-        };
-        let profile = if named.to_ascii_lowercase().ends_with(".toml") {
-            printer_profiles::SupportProfile::load(std::path::Path::new(named))?
-        } else {
-            slicing.catalogue.support(named)?.profile.clone()
-        };
-        for id in ids {
-            if let Some(object) = doc.scene.get_mut(*id) {
-                object
-                    .own
-                    .supports
-                    .insert(tools.supports.active, profile.clone());
-            }
-        }
-        let job = SupportTool::start_profile_on(&doc.scene, ids, (layer_mm, &profile), side)?;
-        Ok(Self::Supports(job, side, None, by_hand))
+        let job = SupportTool::start_built_on(scene, &held, (layer_mm, &built), (side, clean))?;
+        Ok(Some(Self::Supports(job, side, Box::new(built))))
     }
 
-    fn repair(ids: &[ObjectId], plan: &Plan, doc: &Doc) -> Self {
+    fn repair(ids: &[ObjectId], doc: &Doc, method: core_volume::RepairMethod) -> Self {
         let state = RepairState {
-            method: plan.method(),
+            method,
             ..RepairState::default()
         };
         let jobs: Vec<(RepairJob, Taken)> = ids
@@ -234,11 +165,10 @@ impl Going {
         Self::Repair(jobs, count)
     }
 
-    /// The run's models once this step has landed, where it is one that makes pieces in place
-    /// of the models it took.
-    pub(super) fn models_after(&self, ids: &[ObjectId], scene: &Scene) -> Option<Vec<ObjectId>> {
+    /// What a supports job builds to.
+    pub(super) fn built(&self) -> Option<&BuiltTo> {
         match self {
-            Self::Shaped(shaped) => Some(shaped.models_after(ids, scene)),
+            Self::Supports(_, _, built) => Some(built),
             _ => None,
         }
     }
@@ -246,7 +176,8 @@ impl Going {
     /// The share of the step's job done, where it counts it.
     pub(super) fn fraction(&self) -> Option<f32> {
         match self {
-            Self::Orient(job) => job.counted().map(|(_, share)| share),
+            Self::Orient(Turning::Search(job)) => job.counted().map(|(_, share)| share),
+            Self::Orient(Turning::Step) => None,
             Self::Repair(jobs, count) => {
                 let going: f32 = jobs
                     .iter()
@@ -259,29 +190,38 @@ impl Going {
             Self::Hollow(job) => job.fraction(),
             Self::Drain(job) => Some(job.fraction()),
             Self::Supports(job, ..) => job.fraction(),
-            Self::Done(_) => Some(1.0),
-            Self::Shaped(_) | Self::SupportHoles(..) => None,
+            Self::Scan(job) => job.fraction(),
+            Self::Check(_) | Self::Save(_) => None,
         }
     }
 
     /// Lands the job into the plate once it has ended, and `None` while it runs.
-    pub(super) fn poll(&mut self, doc: &mut Doc, tools: &mut Tools) -> Option<Ended> {
+    pub(super) fn poll(
+        &mut self,
+        doc: &mut Doc,
+        tools: &mut Tools,
+        machine: &mut Machine,
+    ) -> Option<Ended> {
+        match self {
+            Self::Check(checking) => return checking.poll(doc, machine),
+            Self::Save(saving) => return saving.poll(&doc.scene, machine),
+            _ => {}
+        }
         let scene = &mut doc.scene;
         match self {
-            Self::Orient(job) => Some(match job.poll()? {
+            Self::Orient(Turning::Step) => {
+                Some(Ended::Landed(tools.orient.step(scene, &doc.plate)))
+            }
+            Self::Orient(Turning::Search(job)) => Some(match job.poll()? {
                 OrientOutcome::Turned(turns) => {
-                    Ended::Landed(stand_turned(scene, &doc.plate, &turns))
+                    Ended::Landed(tools.orient.land(scene, &doc.plate, turns))
                 }
-                OrientOutcome::Failed(message) => Ended::Stopped(Status::Error(message)),
+                OrientOutcome::Failed(message) => {
+                    tools.orient.forget();
+                    Ended::Stopped(Status::Error(message))
+                }
             }),
             Self::Repair(jobs, _) => Self::poll_repairs(jobs, scene),
-            Self::Done(said) => Some(Ended::Landed(std::mem::take(said))),
-            Self::SupportHoles(ids, at) => super::placed::support_holes(ids, at, scene, tools),
-            Self::Shaped(shaped) => match shaped.poll(doc, tools) {
-                Ok(false) => None,
-                Ok(true) => Some(Ended::Kept),
-                Err(error) => Some(Ended::Stopped(Status::failed(&error))),
-            },
             Self::Hollow(job) => Some(match job.poll()? {
                 outcome @ HollowOutcome::Hollowed(_) => {
                     Ended::Landed(tools.hollow.land(scene, outcome))
@@ -295,19 +235,24 @@ impl Going {
                 }
                 DrainsOutcome::Failed(message) => Ended::Stopped(Status::Error(message)),
             }),
-            Self::Supports(job, side, sizing, by_hand) => Some(match job.poll()? {
+            Self::Supports(job, side, built) => Some(match job.poll()? {
                 SupportOutcome::Placed(placements) => {
-                    let sizing = sizing.as_deref().cloned();
-                    let ids: Vec<ObjectId> = placements.iter().map(|placed| placed.id).collect();
-                    let said = tools.supports.land_placed(scene, placements, *side, sizing);
-                    super::placed::by_hand_on(&ids, by_hand, tools.supports.active, scene);
-                    Ended::Landed(said)
+                    let built = (**built).clone();
+                    Ended::Landed(tools.supports.land_built(scene, placements, *side, built))
                 }
                 SupportOutcome::Cancelled => {
                     Ended::Stopped(Status::Info(tr!("supports-cancelled")))
                 }
                 SupportOutcome::Failed(message) => Ended::Stopped(Status::Error(message)),
             }),
+            Self::Scan(job) => Some(match job.poll()? {
+                TrapOutcome::Checked(models) => {
+                    let found = crate::drain::land_checked(scene, models);
+                    Ended::Landed(Status::Info(tr!("drain-found", count = found)))
+                }
+                TrapOutcome::Failed(message) => Ended::Stopped(Status::Error(message)),
+            }),
+            Self::Check(_) | Self::Save(_) => None,
         }
     }
 

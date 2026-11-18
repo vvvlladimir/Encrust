@@ -58,13 +58,18 @@ aspect wider than tall, which is every viewport panel in practice.
 |---|---|
 | Left drag | Orbit, 0.009 rad per point |
 | Right, middle or shift + left drag | Pan the target across the view plane |
-| Scroll | Zoom, `exp(-delta * 0.0015)` on the distance |
+| Scroll | Zoom, `exp(-delta * 0.0015)` on the distance, towards the point under the cursor |
 | Click | Select the object under the cursor, or clear |
 | Double click | Frame the plate's contents, or the plate when empty |
 
 None fire while a gizmo handle is hovered or dragged. Zoom is exponential so a notch
 changes the view by the same proportion at any distance and no amount of scrolling reaches
-zero. Panning converts points to millimetres with
+zero. It closes on the visible face or cut cap under the cursor, else where the line of sight
+meets the plate, else on the target: `zoom_at` scales eye and target about that point, which
+keeps it on its line of sight, so it stays under the cursor. The point must be the nearest
+drawn one: scaling about one behind it carries the eye through what is in front. Zooming out
+scales about the target, so repeated notches over a corner never carry the orbit centre off
+the plate. Panning converts points to millimetres with
 `2 * distance * tan(fov_y / 2) / viewport_height_points`, the world height of the view
 plane over its height on screen, which keeps the same world point under the cursor.
 
@@ -265,7 +270,8 @@ a matt resin, scaled by the fragment's alpha so a translucent surface stays prem
 The shares are shader constants; the colours and directions are tokens.
 
 A surface leaning past the overhang angle is filled with the overhang colour at 0.85, so
-where the need for a support ends is one line (ADR 0245). Whatever stands past the build
+where the need for a support ends is one line (ADR 0245); 0.35 of it is laid on again after
+the light, so a ceiling that only the ambient reaches does not go near-black. Whatever stands past the build
 volume, or in the plate's inset where the printer has one (ADR 0371, the plate darker there), is hatched rather than filled: stripes 3.4 mm apart along `x + y - z`, so they run
 diagonally on any face, smoothed over a pixel with `fwidth` and evened out to half where
 they are closer together than pixels. Between the stripes the mark keeps a light wash, so

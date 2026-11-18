@@ -18,6 +18,8 @@ pub enum Action {
     /// Views to move along the strip's three, wrapping: the next is positive.
     View(i8),
     FrameView,
+    /// Steps of the interface's size: larger is positive, 0 the system's own.
+    Scale(i8),
     Settings,
     Sheet,
     Find,
@@ -47,6 +49,9 @@ impl Action {
             Self::View(step) if step > 0 => tr!("action-next-view"),
             Self::View(_) => tr!("action-previous-view"),
             Self::FrameView => tr!("action-frame-view"),
+            Self::Scale(by) if by > 0 => tr!("action-interface-larger"),
+            Self::Scale(by) if by < 0 => tr!("action-interface-smaller"),
+            Self::Scale(_) => tr!("action-interface-actual"),
             Self::Settings => tr!("action-settings"),
             Self::Sheet => tr!("action-sheet"),
             Self::Find => tr!("action-find"),
@@ -79,6 +84,9 @@ impl Action {
             Self::View(step) if step > 0 => "next-view",
             Self::View(_) => "previous-view",
             Self::FrameView => "frame-view",
+            Self::Scale(by) if by > 0 => "interface-larger",
+            Self::Scale(by) if by < 0 => "interface-smaller",
+            Self::Scale(_) => "interface-actual",
             Self::Settings => "settings",
             Self::Sheet => "sheet",
             Self::Find => "find",
@@ -245,6 +253,14 @@ pub const BINDINGS: &[Binding] = &[
     bind(Group::View, Action::FrameView, &[plain(Key::F)]),
     bind(Group::Window, Action::Settings, &[cmd(Key::Comma)]),
     bind(Group::Window, Action::Find, &[cmd(Key::K)]),
+    // Cmd = as well as Cmd +, which a US layout reaches only with Shift.
+    bind(
+        Group::Window,
+        Action::Scale(1),
+        &[cmd(Key::Equals), cmd(Key::Plus)],
+    ),
+    bind(Group::Window, Action::Scale(-1), &[cmd(Key::Minus)]),
+    bind(Group::Window, Action::Scale(0), &[cmd(Key::Num0)]),
     bind(
         Group::Window,
         Action::Sheet,

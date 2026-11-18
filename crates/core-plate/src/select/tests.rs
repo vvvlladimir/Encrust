@@ -17,6 +17,7 @@ fn candidate(down: Vec3, overhang_mm2: f32, total: f32, cup_mm2: f32) -> Candida
             support_mm3: overhang_mm2 * 10.0,
             under_mm2: overhang_mm2,
             under_mm3: overhang_mm2 * 10.0,
+            seen_mm2: 0.0,
             bottom_mm2: 0.0,
             height_mm: 10.0,
             shadow_mm2: 100.0,
@@ -58,16 +59,20 @@ fn place_for(
 }
 
 #[test]
-fn a_suction_cup_loses_whatever_it_scores_but_for_the_fewest_supports() {
+fn a_suction_cup_loses_whatever_it_scores_for_auto_alone() {
     let cupping = candidate(Vec3::X, 0.0, 0.1, 400.0);
     let clean = candidate(Vec3::Y, 50.0, 9.0, 0.0);
-    let peel = OrientGoal::LeastPeel;
-    assert_eq!(place_for(peel, &[cupping, clean], 1, Vec3::NEG_Z), 0);
     assert_eq!(
-        place(&[cupping, clean], 0, Vec3::NEG_Z),
-        0,
-        "a cup is a drain hole's to fix, not more support's"
+        place_for(OrientPreset::Auto, &[cupping, clean], 1, Vec3::NEG_Z),
+        0
     );
+    for goal in OrientGoal::ALL {
+        assert_eq!(
+            place_for(goal, &[cupping, clean], 0, Vec3::NEG_Z),
+            0,
+            "{goal:?}: a cup is a drain hole's to fix"
+        );
+    }
 }
 
 #[test]
@@ -201,4 +206,32 @@ fn ranked_for(preset: OrientPreset, measured: &[Candidate]) -> Vec<(usize, Rulin
         .expect("a cube has faces")
         .for_settings(&settings);
     ranked(&faces, &settings, measured, Vec3::NEG_Z)
+}
+
+#[test]
+fn a_trade_away_from_a_clean_surface_is_offered_right_behind_the_first() {
+    let showing = |down, overhang_mm2, seen_mm2| {
+        let mut shown = candidate(down, overhang_mm2, 0.0, 0.0);
+        shown.score.seen_mm2 = seen_mm2;
+        shown
+    };
+    let measured = [
+        showing(Vec3::X, 50.0, 0.0),
+        showing(Vec3::Y, 52.0, 0.0),
+        showing(Vec3::Z, 5.0, 96.0),
+    ];
+    let settings = OrientSettings {
+        clean_surface: true,
+        ..OrientSettings::default()
+    };
+    let mesh = cube();
+    let faces = Faces::of(&mesh)
+        .expect("a cube has faces")
+        .for_settings(&settings);
+    let order = ranked(&faces, &settings, &measured, Vec3::NEG_Z);
+    assert_eq!(
+        order[..2],
+        [(0, Ruling::Chosen), (2, Ruling::Traded)],
+        "six contacts on show for a tenth of the support"
+    );
 }

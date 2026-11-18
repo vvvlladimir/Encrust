@@ -1,5 +1,74 @@
 # Changelog
 
+## [0.9.0](https://github.com/vvvlladimir/Encrust/compare/v0.8.0...v0.9.0) (2026-11-17)
+
+
+### ✨ New
+
+* **app:** give macOS an Encrust menu and an About that names the ([58ca7f7](https://github.com/vvvlladimir/Encrust/commit/58ca7f75ff7d61e3882e0dca27f154d1d4092dd4))
+* **app:** keep a copy of an unsaved plate and offer it after a crash ([a17cf36](https://github.com/vvvlladimir/Encrust/commit/a17cf36e4b1c7792d0e3f2bb48e461705497b4a6))
+* **app:** offer the panic the window closed on at the next start & ([cc01f4a](https://github.com/vvvlladimir/Encrust/commit/cc01f4a52200308efc6073ce4ee394d89bae1919))
+* **app:** open an .encrust project from the file manager ([447571f](https://github.com/vvvlladimir/Encrust/commit/447571ff676597e49e53a552de8828ae2651af8a))
+* **app:** size the interface from Settings and ctrl/cmd +/-/0 ([10ff30c](https://github.com/vvvlladimir/Encrust/commit/10ff30c8d9fd52a05f285b20379f17f4a7888fab))
+* **hollow:** one cavity through parts, wall at its thinnest ([da676e4](https://github.com/vvvlladimir/Encrust/commit/da676e4bb06a7997dbfd28b85fd59fe644408f38))
+* **supports:** space Medium and Heavy by what a tip holds ([ff8b3b6](https://github.com/vvvlladimir/Encrust/commit/ff8b3b66f4cf7fccb7c330555b0021ad0f8c9966))
+
+
+### 🐛 Fixed
+
+* **app:** a plate left on Auto follows Auto saved or reset in Settings ([7d842bf](https://github.com/vvvlladimir/Encrust/commit/7d842bf059ad5b49c41586de33ccc160c482d113))
+* **hollow:** keep only cavity pieces inside the model and clean of stray ([f5688ca](https://github.com/vvvlladimir/Encrust/commit/f5688ca16c128cc07b817dc0c3200dea0622aaec))
+
+## [0.8.0](https://github.com/vvvlladimir/Encrust/compare/v0.7.0...v0.8.0) (2026-11-12)
+
+
+### ✨ New
+
+* **app:** let an import be cancelled and show its progress ([01ddf29](https://github.com/vvvlladimir/Encrust/commit/01ddf298c4df4cc634f1b7709fbace2ffff0a38f))
+* **app:** Measure takes a point on a support as well as on a model ([20e4159](https://github.com/vvvlladimir/Encrust/commit/20e4159f57a29c952c193ad6518014f605884706))
+* **app:** send a file sliced earlier to the plate's printer from the ([c3cba7a](https://github.com/vvvlladimir/Encrust/commit/c3cba7aa88e7788b6e8253e0c97584d063738b3f))
+* **app:** zoom towards the point under the cursor ([01fca9e](https://github.com/vvvlladimir/Encrust/commit/01fca9e802dbbbcf543a0fab574c3d8b44a3ed32))
+* **check:** Enhance and optimise check features ([#259](https://github.com/vvvlladimir/Encrust/issues/259)) ([07b1e46](https://github.com/vvvlladimir/Encrust/commit/07b1e4625d1067e0b2b4f0d74ea7b114c21e5fc0))
+* **inspector:** step Move and Rotate along the model's own axes in ([96c72ce](https://github.com/vvvlladimir/Encrust/commit/96c72ce6c9ec820cc53d9637a03458906bb019f2))
+* **measure:** measure along a model's surface ([c748577](https://github.com/vvvlladimir/Encrust/commit/c748577e97911f7848fd558d16b7cc1b17e3e88c))
+* **recipe:** Refactor and enhance recipe handling, CLI, and add auto-pipeline feature ([#258](https://github.com/vvvlladimir/Encrust/issues/258)) ([8730279](https://github.com/vvvlladimir/Encrust/commit/873027944594354186899cc2152621633e2f7220))
+* **support:** Enhance support structures and automatic tip sizing features ([#260](https://github.com/vvvlladimir/Encrust/issues/260)) ([d4b387e](https://github.com/vvvlladimir/Encrust/commit/d4b387ec9702712ffa782f27688c17cdc0cd6441))
+* **thumbnails:** Enhance preview handling and rendering for thumbnails ([#257](https://github.com/vvvlladimir/Encrust/issues/257)) ([5743d0e](https://github.com/vvvlladimir/Encrust/commit/5743d0ea0e4b8343428599c1d464fad16c99a58c))
+* **web:** add loading progress and instant updates for browser build ([6671d8c](https://github.com/vvvlladimir/Encrust/commit/6671d8cc78e69ff83259ae487b01fd4c3579d456))
+
+
+### 🐛 Fixed
+
+* **anycubic:** state the SUBIMGS table's whole length at revision 518 ([95d4553](https://github.com/vvvlladimir/Encrust/commit/95d45534799183ad97124f9454c40556248c2473))
+* **app:** an opened project stands the plate under the printer it names ([984bede](https://github.com/vvvlladimir/Encrust/commit/984bede05d1817c08f78e8a298618d83f8cebe5f))
+* **app:** no line under the plate card's primary; notices fit a split ([c1bf8f7](https://github.com/vvvlladimir/Encrust/commit/c1bf8f7ed4a890e8e7b00ce6443600f5c864d90b))
+* **app:** only scan network when a printer is selected ([67deb3a](https://github.com/vvvlladimir/Encrust/commit/67deb3a611031b40a81ab3074889d571e4712f4d))
+* **app:** the hint bar stays centred under the tool row with the ([404f9d0](https://github.com/vvvlladimir/Encrust/commit/404f9d01d9a300e9931bc0abe6280e50696e02a9))
+* **creality:** write each .cxdlpv4 machine the layer codec it reads ([46889e3](https://github.com/vvvlladimir/Encrust/commit/46889e3ca7d38e6123a61af657ea5f9dd2d233ea))
+* **drain:** a hole cuts the raft and never a support tree ([9ff36ee](https://github.com/vvvlladimir/Encrust/commit/9ff36eed5b508568cd951c517232b084da9fd5a0))
+* **drain:** a hole takes away the supports whose tips it drills out ([5a4e64f](https://github.com/vvvlladimir/Encrust/commit/5a4e64fc097102dfe836f6f46bc2cef175cbc4bf))
+* **drain:** stop a hole set by hand at its depth on a hollow model ([7bc5cc0](https://github.com/vvvlladimir/Encrust/commit/7bc5cc0c8ab92d31427669c8f2a508998484bd6b))
+* **picker:** name the file a machine is sliced into ([8b087ca](https://github.com/vvvlladimir/Encrust/commit/8b087ca81dd3347365b30f1f8ff1343cfafecbee))
+* **summary:** time the plate from its floor, lift included ([c802de8](https://github.com/vvvlladimir/Encrust/commit/c802de81e515ffc97fa32a19702e56dd6b879501))
+* **supports:** carry the drawn columns and patches with a model moved ([c037073](https://github.com/vvvlladimir/Encrust/commit/c037073d83003a0475844a0f04d7d0f10be7e31d))
+
+## [0.7.0](https://github.com/vvvlladimir/Encrust/compare/v0.6.0...v0.7.0) (2026-11-04)
+
+
+### ✨ New
+
+* **hollow:** add model-fitting and rod placement for keep-solid ([a1d0a17](https://github.com/vvvlladimir/Encrust/commit/a1d0a17c2472c54f9b8e988e05be29b06d53993d))
+* **intersection:** Add plate standing check and warning for models on plate ([#250](https://github.com/vvvlladimir/Encrust/issues/250)) ([28454b0](https://github.com/vvvlladimir/Encrust/commit/28454b076d848ac6ba69132fc49bcd874bc1b118))
+* **mesh-io:** read 3MF with quick-xml and zip 9, drop threemf2 ([cf129a2](https://github.com/vvvlladimir/Encrust/commit/cf129a23bea65d7db0e26e918df32076a2bb2904))
+* **render:** Add render UI layout, widgets, and viewport interactions ([#248](https://github.com/vvvlladimir/Encrust/issues/248)) ([de34a2d](https://github.com/vvvlladimir/Encrust/commit/de34a2dab657d3d73a7eafd41450564455f87b3f))
+* **samples:** fetch large remote test prints on demand ([71631ea](https://github.com/vvvlladimir/Encrust/commit/71631eac0073923c9698dcaa5a3bb6ad49d24492))
+
+
+### 🐛 Fixed
+
+* **app:** list each extension once in the save dialog ([4149102](https://github.com/vvvlladimir/Encrust/commit/41491020fd83ebeef5fb7a1685d31e9d6af40ac1)), closes [#251](https://github.com/vvvlladimir/Encrust/issues/251)
+* **mesh-io:** refuse OBJ relative face indices before the first element ([5e316a3](https://github.com/vvvlladimir/Encrust/commit/5e316a30909a6b372de25b6af14f6117dec87669))
+
 ## [0.6.0](https://github.com/vvvlladimir/Encrust/compare/v0.5.0...v0.6.0) (2026-10-29)
 
 

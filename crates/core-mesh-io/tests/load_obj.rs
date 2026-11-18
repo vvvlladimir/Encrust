@@ -276,3 +276,15 @@ fn a_material_file_that_is_not_there_is_not_an_error() {
         "there is no material file to read"
     );
 }
+
+#[test]
+fn a_relative_index_reaching_before_the_first_texcoord_is_refused() {
+    let err = ObjLoader
+        .load(&fixture("crashes/texcoord_index_before_the_first.obj"))
+        .expect_err("`8/-7` after four `vt` names no texture coordinate");
+    let MeshIoError::Malformed { format, reason, .. } = err else {
+        panic!("an index out of range is a malformed file, not an I/O fault");
+    };
+    assert_eq!(format, "OBJ");
+    assert!(reason.contains("-7"), "{reason}");
+}

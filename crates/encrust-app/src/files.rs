@@ -167,32 +167,30 @@ pub const PICTURES: [&str; 5] = ["png", "jpg", "jpeg", "bmp", "tga"];
 pub const PROJECTS: [&str; 1] = [core_engine::project::EXTENSION];
 
 /// What a model is read from: a mesh, or a sliced file built back into one (ADR 0294).
-pub const MODELS: [&str; 17] = [
-    "stl", "obj", "3mf", "goo", "ctb", "cbddlp", "photon", "pwmx", "pwmo", "pwms", "pws", "sl1",
-    "sl1s", "zip", "cxdlp", "svgx", "cws",
-];
+pub const MODELS: [&str; MESHES.len() + crate::sliced::EXTENSIONS.len()] =
+    joined(MESHES, crate::sliced::EXTENSIONS);
 
 /// What the plate can be filled from in one dialog: a model or a project.
-pub const OPENABLE: [&str; 18] = [
-    "stl",
-    "obj",
-    "3mf",
-    "goo",
-    "ctb",
-    "cbddlp",
-    "photon",
-    "pwmx",
-    "pwmo",
-    "pwms",
-    "pws",
-    "sl1",
-    "sl1s",
-    "zip",
-    "cxdlp",
-    "svgx",
-    "cws",
-    core_engine::project::EXTENSION,
-];
+pub const OPENABLE: [&str; MODELS.len() + PROJECTS.len()] = joined(MODELS, PROJECTS);
+
+/// `a` then `b` as one list, for the lists above.
+const fn joined<const A: usize, const B: usize, const N: usize>(
+    a: [&'static str; A],
+    b: [&'static str; B],
+) -> [&'static str; N] {
+    assert!(A + B == N, "the joined list holds both");
+    let mut out = [""; N];
+    let mut i = 0;
+    while i < A {
+        out[i] = a[i];
+        i += 1;
+    }
+    while i < N {
+        out[i] = b[i - A];
+        i += 1;
+    }
+    out
+}
 
 /// Whether `path` ends in one of `extensions`, whatever case it was written in.
 pub fn has_extension(path: &Path, extensions: &[&str]) -> bool {
@@ -205,6 +203,15 @@ pub fn has_extension(path: &Path, extensions: &[&str]) -> bool {
         })
 }
 
+/// The file's own name, extension and all, as a message names it; the whole path when it
+/// has none.
+pub fn file_name(path: &Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
+}
+
 /// What a mesh refers to and is read with: an `.obj`'s materials and its textures.
 #[cfg_attr(
     not(target_arch = "wasm32"),
@@ -212,10 +219,13 @@ pub fn has_extension(path: &Path, extensions: &[&str]) -> bool {
 )]
 pub const SIBLINGS: [&str; 6] = ["mtl", "png", "jpg", "jpeg", "bmp", "tga"];
 
-/// Something a browser's dialog or download came back with.
+/// Something a browser's dialog or download came back with, or a file macOS handed over.
 #[cfg_attr(
     not(target_arch = "wasm32"),
-    allow(dead_code, reason = "only a browser hands over bytes, and only later")
+    allow(
+        dead_code,
+        reason = "beyond a browser, only macOS hands over files, and only paths"
+    )
 )]
 #[derive(Debug)]
 pub enum Arrived {
@@ -305,14 +315,18 @@ pub fn save_text(name: &str, _wanted: Wanted, text: &str) -> anyhow::Result<Opti
     Ok(Some(PathBuf::from(name)))
 }
 
-/// What a browser's dialogs and downloads came back with since the last frame. Always
-/// empty at the desk, where a dialog answers at once.
+/// What a browser's dialogs and downloads came back with since the last frame, or the files
+/// macOS asked the window to open. Otherwise empty: a dialog at the desk answers at once.
 pub fn arrived() -> Vec<Arrived> {
     #[cfg(target_arch = "wasm32")]
     {
         crate::web::files::arrived()
     }
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(target_os = "macos")]
+    {
+        crate::system_open::taken()
+    }
+    #[cfg(not(any(target_arch = "wasm32", target_os = "macos")))]
     {
         Vec::new()
     }

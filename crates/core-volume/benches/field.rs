@@ -3,11 +3,13 @@
     reason = "a broken fixture must fail the run loudly"
 )]
 
-use core_geometry::{Bvh, Heightmap, Mesh, Region, Scalar, Transform, UvMap, Vec2, Vec3, ball};
+use core_geometry::{
+    Bvh, Heightmap, Mat3, Mesh, Region, Scalar, Transform, UvMap, Vec2, Vec3, ball, cuboid,
+};
 use core_volume::{
     Cancel, FieldSettings, HollowMode, HollowSettings, InfillPattern, InfillSettings, Panel,
-    ReliefSettings, SignMode, StackField, build, extract, hollow, offset, press, press_painted,
-    shell,
+    ReliefSettings, SignMode, StackField, build, extract, hollow, hollow_at_scale, offset, press,
+    press_painted, shell,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
@@ -83,7 +85,43 @@ fn benchmarks(c: &mut Criterion) {
     });
 
     hollowing(c, &mesh, &bvh);
+    dense(c);
     stacking(c);
+}
+
+/// A scan-sized model as it reaches hollowing: two million faces finer than the lattice,
+/// a stray film and a crumb on the surface, standing scaled on the plate.
+fn dense(c: &mut Criterion) {
+    let mut mesh = ball(Vec3::ZERO, 20.0, 1000, 1000);
+    mesh.append(&cuboid(
+        Vec3::new(0.0, -3.0, 17.0),
+        Vec3::new(0.0, 3.0, 23.0),
+    ));
+    mesh.append(&cuboid(
+        Vec3::new(20.0, 0.0, 0.0),
+        Vec3::new(20.1, 0.1, 0.1),
+    ));
+    let bvh = Bvh::build(&mesh);
+    let settings = HollowSettings {
+        thickness_mm: 1.3,
+        precision: 0.5,
+        ..HollowSettings::default()
+    };
+    let shape = Mat3::from_diagonal(Vec3::splat(1.5));
+    let mut group = c.benchmark_group("dense");
+    group.sample_size(10);
+    group.bench_function("hollow_a_2m_triangle_ball_of_three_shells_scaled", |b| {
+        b.iter(|| {
+            hollow_at_scale(
+                std::hint::black_box(&mesh),
+                &bvh,
+                &settings,
+                shape,
+                Cancel::never(),
+            )
+        });
+    });
+    group.finish();
 }
 
 /// A sliced file read back: a 40 mm disc 20 mm tall on a 16K panel, 400 layers.

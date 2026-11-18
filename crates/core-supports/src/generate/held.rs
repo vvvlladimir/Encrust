@@ -33,10 +33,10 @@ impl Held {
     }
 
     /// Whether anything here already holds `at` on the layer whose contacts sit at `z`,
-    /// each by its own ball, which is no wider than the side of a bucket.
-    pub(super) fn holds(&self, at: Vec2, z: Scalar, above_mm: Scalar) -> bool {
+    /// each by its own ball, no wider than a bucket's side nor than `within_mm`.
+    pub(super) fn holds(&self, at: Vec2, z: Scalar, above_mm: Scalar, within_mm: Scalar) -> bool {
         self.buckets.around(at).any(|hold| {
-            let reach = reach_at(z - hold.at.z, hold.reach_mm, above_mm);
+            let reach = reach_at(z - hold.at.z, hold.reach_mm.min(within_mm), above_mm);
             (hold.at.truncate() - at).length_squared() < reach * reach
         })
     }

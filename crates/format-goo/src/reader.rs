@@ -1,11 +1,11 @@
 use core_format::{
     FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SecondStage, SlicedFile,
-    SlicedFileReader, WaitMode, Waits, layer_in_range, panel_in_range, stated_distance_mm,
-    stated_pwm, stated_speed_mm_min, stated_wait_s,
+    SlicedFileReader, Thumbnail, WaitMode, Waits, layer_in_range, panel_in_range, read_raw_preview,
+    rgb_of_565, stated_distance_mm, stated_pwm, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
-use crate::header::HEADER_SIZE;
+use crate::header::{BIG_PREVIEW_PX, HEADER_SIZE};
 use crate::rle;
 use crate::rle5::{decode_half, join_halves};
 use crate::version::{ByteOrder, GooVersion};
@@ -20,6 +20,7 @@ const MAGIC_TAG: [u8; 8] = [0x07, 0x00, 0x00, 0x00, 0x44, 0x4C, 0x50, 0x00];
 const SOFTWARE: u64 = 12;
 const MACHINE: u64 = 92;
 const RESIN: u64 = 156;
+const BIG_PREVIEW: u64 = 27_108;
 const GEOMETRY: u64 = 195_310;
 const LAYER_HEIGHT: u64 = 195_332;
 const TOTALS: u64 = 195_446;
@@ -73,6 +74,7 @@ impl SlicedFileReader for GooReader {
             GooVersion::V3 => (walk_layers(&mut reads, layer_count)?, Vec::new()),
             GooVersion::V5 => v5::walk_tables(&mut reads, layer_count)?,
         };
+        let preview = read_big_preview(&mut reads, order).ok();
         Ok(OpenGoo {
             reads,
             right_halves,
@@ -98,9 +100,24 @@ impl SlicedFileReader for GooReader {
                 },
                 stated,
                 layers,
+                preview,
             },
         })
     }
+}
+
+/// The larger of the two square previews, in the byte order of the rest of the header.
+fn read_big_preview<S: ReadSeek>(
+    reads: &mut Reads<S>,
+    order: ByteOrder,
+) -> Result<Thumbnail, FormatError> {
+    reads.seek_to(BIG_PREVIEW)?;
+    let side_px = BIG_PREVIEW_PX as u32;
+    let pixel: fn([u8; 2]) -> _ = match order {
+        ByteOrder::Big => |pair| rgb_of_565(u16::from_be_bytes(pair)),
+        ByteOrder::Little => |pair| rgb_of_565(u16::from_le_bytes(pair)),
+    };
+    read_raw_preview(reads, side_px, side_px, pixel)
 }
 
 /// The version string and the revision it names, once the tag behind it says this is a `.goo`.
