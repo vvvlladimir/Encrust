@@ -1,0 +1,109 @@
+use std::path::PathBuf;
+
+use core_edit::Edit;
+use core_geometry::{Scalar, signed_volume};
+
+use super::*;
+use crate::apply::apply;
+use crate::fixtures::{SIDE_MM, cube};
+
+const CUBE: ObjectId = ObjectId(1);
+/// How far a 0.5 mm relief may move a face, with a lattice's rounding on top, mm.
+const BOUNDS_MM: Scalar = 0.6;
+
+/// A black-and-white checker of 2 by 2 squares as a 24-bit BMP, in a file of its own.
+fn checker_picture(name: &str) -> PathBuf {
+    const SIDE_PX: u32 = 16;
+    let mut bytes = Vec::new();
+    let pixels = SIDE_PX * SIDE_PX * 3;
+    bytes.extend_from_slice(b"BM");
+    bytes.extend_from_slice(&(54 + pixels).to_le_bytes());
+    bytes.extend_from_slice(&[0; 4]);
+    bytes.extend_from_slice(&54u32.to_le_bytes());
+    bytes.extend_from_slice(&40u32.to_le_bytes());
+    bytes.extend_from_slice(&SIDE_PX.to_le_bytes());
+    bytes.extend_from_slice(&SIDE_PX.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&24u16.to_le_bytes());
+    bytes.extend_from_slice(&[0; 24]);
+    for row in 0..SIDE_PX {
+        for column in 0..SIDE_PX {
+            let white = (row / 8 + column / 8) % 2 == 0;
+            bytes.extend_from_slice(&[if white { 255 } else { 0 }; 3]);
+        }
+    }
+    let path = std::env::temp_dir().join(format!("{}-{name}.bmp", std::process::id()));
+    std::fs::write(&path, bytes).expect("the temp folder takes a file");
+    path
+}
+
+fn relief_of(image: PathBuf) -> Edit {
+    Edit::Relief {
+        object: CUBE,
+        depth_mm: 0.5,
+        image,
+        tile_mm: 5.0,
+        angle_deg: 0.0,
+        invert: false,
+        symmetric: false,
+        smoothing_px: 0.0,
+        hold_bottom_deg: 0.0,
+        hold_top_deg: 0.0,
+        precision: 0.5,
+    }
+}
+
+#[test]
+fn a_checker_pressed_into_a_cube_changes_its_volume_and_keeps_its_bounds() {
+    let mut document = Document::from_project(cube());
+    let picture = checker_picture("checker");
+
+    let applied = apply(&mut document, &relief_of(picture.clone()), Cancel::never())
+        .expect("a readable picture presses into a cube");
+    std::fs::remove_file(&picture).expect("the picture is there to remove");
+
+    let (_, meshes) = document.object(CUBE).expect("the cube stays on the plate");
+    let volume = signed_volume(&meshes.source);
+    let wanted = SIDE_MM.powi(3);
+    assert!(
+        (volume - wanted).abs() > 1.0,
+        "a 0.5 mm checker moves more than 1 mm³ of the cube's {wanted}, got {volume}"
+    );
+    let bounds = meshes.source.aabb().expect("the pressed cube has faces");
+    for axis in 0..3 {
+        assert!(
+            bounds.mins[axis].abs() <= BOUNDS_MM
+                && (bounds.maxs[axis] - SIDE_MM).abs() <= BOUNDS_MM,
+            "the bounds stay within {BOUNDS_MM} mm of 0..{SIDE_MM}: {bounds:?}"
+        );
+    }
+    assert!(matches!(applied.report, Report::Relieved { .. }));
+}
+
+#[test]
+fn a_picture_that_is_not_there_is_refused() {
+    let mut document = Document::from_project(cube());
+    let missing = std::env::temp_dir().join("encrust-no-such-picture.bmp");
+
+    let error = apply(&mut document, &relief_of(missing), Cancel::never())
+        .expect_err("there is no such file");
+
+    assert!(matches!(error, ApplyError::BadPicture { .. }), "{error:?}");
+}
+
+#[test]
+fn a_stopped_relief_is_cancelled() {
+    let mut document = Document::from_project(cube());
+    let picture = checker_picture("stopped");
+    let stopped = || true;
+
+    let error = apply(
+        &mut document,
+        &relief_of(picture.clone()),
+        Cancel::when(&stopped),
+    )
+    .expect_err("a stopped run does not finish");
+    std::fs::remove_file(&picture).expect("the picture is there to remove");
+
+    assert_eq!(error, ApplyError::Cancelled);
+}

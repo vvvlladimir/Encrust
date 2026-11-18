@@ -46,10 +46,13 @@ pub enum ApplyError {
     /// A shell number past the last shell of the object's mesh, counted from 1.
     #[error("object {object:?} has no shell {number}")]
     NoSuchShell { object: ObjectId, number: usize },
+    /// A relief picture that is missing or cannot be decoded.
+    #[error("the picture {} could not be read: {reason}", path.display())]
+    BadPicture { path: PathBuf, reason: String },
     /// The run was stopped before it finished.
     #[error("the edit was cancelled")]
     Cancelled,
-    /// A split, part-off, combination, repair or bridge failed in the geometry; `reason` is the geometry's own message.
+    /// A split, part-off, combination, repair, bridge or relief failed in the geometry; `reason` is the geometry's own message.
     #[error("the edit of object {object:?} failed: {reason}")]
     Failed { object: ObjectId, reason: String },
 }

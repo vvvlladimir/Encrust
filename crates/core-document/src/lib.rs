@@ -12,6 +12,7 @@ mod label;
 mod piece;
 mod placement;
 mod plate_contents;
+mod relief;
 mod repair;
 mod split;
 
@@ -24,5 +25,6 @@ pub use label::{LabelAsked, Lettering, label_prisms, labelled};
 pub use piece::{Piece, Role};
 pub use placement::{euler_degrees, moved, sized_to, turned_to};
 pub use plate_contents::mirrored;
+pub use relief::{ReliefAsked, Relieved, press_picture, read_picture, relieved};
 pub use repair::{MendAsked, Mended, mended, repaired};
 pub use split::{part_off_at, part_settings, split};

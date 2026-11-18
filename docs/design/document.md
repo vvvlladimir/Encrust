@@ -98,6 +98,16 @@ them); the object keeps its id (`Report::Repaired`, `Report::Mended`). Errors: a
 last `NoSuchFace` (from 0), a shell `NoSuchShell` (from 1), a bridge the mesh refuses `Failed`,
 `Cancelled`. The window runs a repair as its Repair tool's job and a mend as one job of the Faces mode.
 
+`Relief { object, depth_mm, image, tile_mm, angle_deg, invert, symmetric, smoothing_px,
+hold_bottom_deg, hold_top_deg, precision }` presses a picture tiled over the object, the
+options defaulting as `--relief`'s flags do; `relieved` is what the CLI's `--relief-image` runs
+too. core-document reads the picture through core-mesh-io's `Texture::decode`, its one reader.
+The press is at the size the object prints at, so its scale and stretch go into the mesh, which
+`Document::reshape` replaces (`Report::Relieved`); the faces painted for relief limit it where
+any are. A picture that does not read is `BadPicture { path, reason }`, else `Cancelled` or
+`Failed`. The model is left solid, its cavity gone, until Hollow is an edit. A file's own texture is not an edit: a `.encrust` keeps none. The window's Relief tool
+runs the edit as its own job, `press_picture` being the call both make.
+
 ## Undo
 
 The window keeps snapshots of its scene (ADR 0086); a document applied is one entry. The

@@ -1,7 +1,7 @@
 use core_engine::project::{Axis, Keep, ObjectId};
 use core_geometry::{Scalar, Vec3};
 use core_joint::Joints;
-use core_volume::RepairMethod;
+use core_volume::{ReliefSettings, RepairMethod, Tiling};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -99,6 +99,40 @@ pub enum Edit {
         #[serde(default)]
         bridge: Vec<[[u32; 2]; 2]>,
     },
+    /// Presses the picture at `image`, tiled `tile_mm` wide and turned `angle_deg`, into
+    /// `object` `depth_mm` deep, as the CLI's `--relief` flags do; `hold_bottom_deg` and
+    /// `hold_top_deg` leave the faces that near down or up unmoved, `smoothing_px` blurs the
+    /// picture first and `precision` is the lattice's, 0 to 1. Only the object's painted
+    /// faces move where any are painted.
+    Relief {
+        object: ObjectId,
+        depth_mm: Scalar,
+        image: PathBuf,
+        #[serde(default = "tile_mm_by_default")]
+        tile_mm: Scalar,
+        #[serde(default)]
+        angle_deg: Scalar,
+        #[serde(default)]
+        invert: bool,
+        #[serde(default)]
+        symmetric: bool,
+        #[serde(default)]
+        smoothing_px: Scalar,
+        #[serde(default)]
+        hold_bottom_deg: Scalar,
+        #[serde(default)]
+        hold_top_deg: Scalar,
+        #[serde(default = "precision_by_default")]
+        precision: Scalar,
+    },
+}
+
+fn tile_mm_by_default() -> Scalar {
+    Tiling::default().tile_mm
+}
+
+fn precision_by_default() -> Scalar {
+    ReliefSettings::default().precision
 }
 
 fn raised_by_default() -> bool {

@@ -6,8 +6,8 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use core_document::{
-    ApplyError, CutAsked, LabelAsked, MendAsked, boolean_of, mirrored, moved, part_settings,
-    sized_to, turned_to,
+    ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, boolean_of, mirrored, moved,
+    part_settings, sized_to, turned_to,
 };
 use core_edit::{Edit, ObjectId};
 use core_geometry::{Mesh, Transform, Vec3};
@@ -112,7 +112,7 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     };
     let may_stay = matches!(
         edit,
-        Edit::Split { .. } | Edit::Repair { .. } | Edit::Mend { .. }
+        Edit::Split { .. } | Edit::Repair { .. } | Edit::Mend { .. } | Edit::Relief { .. }
     );
     match start_edit(&edit, window) {
         Ok(id) => {
@@ -130,6 +130,7 @@ fn tool_is_busy(window: &Window) -> bool {
         || window.tools.text.is_busy()
         || repairs.is_busy()
         || repairs.hand.is_busy()
+        || window.tools.relief.is_busy()
 }
 
 fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
@@ -139,7 +140,7 @@ fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
     false
 }
 
-/// Carries `edit` out: a cut, combine, label, repair or mend starts a tool job, answering the object it replaces; any
+/// Carries `edit` out: a cut, combine, label, repair, mend or relief starts a tool job, answering the object it replaces; any
 /// other edit is made at once, answering `None`.
 fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, String> {
     match *edit {
@@ -184,6 +185,7 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
         Edit::Label { object, .. } => start_label(window, edit, object),
         Edit::Repair { object, method } => start_repair(window, object, method),
         Edit::Mend { object, .. } => start_mend(window, edit, object),
+        Edit::Relief { object, .. } => start_relief(window, edit, object),
         Edit::Move { object, by_mm } => {
             place(window, object, |transform, _| Ok(moved(transform, by_mm)))
         }
@@ -268,6 +270,22 @@ fn start_mend(
     if !hand.mend(scene, object, asked, &mut window.machine.status) {
         return Err(no_object(object));
     }
+    Ok(Some(object))
+}
+
+/// Starts pressing a picture into an object as the Relief tool's job, answering the object it
+/// reshapes.
+fn start_relief(
+    window: &mut Window,
+    edit: &Edit,
+    object: ObjectId,
+) -> Result<Option<ObjectId>, String> {
+    let asked = ReliefAsked::of(edit).ok_or_else(|| no_object(object))?;
+    let scene = &window.doc.scene;
+    scene.get(object).ok_or_else(|| no_object(object))?;
+    (window.tools.relief)
+        .start_asked(scene, object, &asked)
+        .map_err(|error| format!("{error:#}"))?;
     Ok(Some(object))
 }
 

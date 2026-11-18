@@ -16,6 +16,7 @@ core-edit.workspace = true
 core-engine.workspace = true
 core-geometry.workspace = true
 core-joint.workspace = true
+core-mesh-io.workspace = true
 core-text.workspace = true
 core-volume.workspace = true
 thiserror.workspace = true

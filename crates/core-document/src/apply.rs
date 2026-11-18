@@ -11,6 +11,7 @@ use crate::label::{LabelAsked, apply_label};
 use crate::piece::Role;
 use crate::placement::{moved, sized_to, turned_to};
 use crate::plate_contents::{delete, duplicate, mirrored};
+use crate::relief::{ReliefAsked, apply_relief};
 use crate::repair::{MendAsked, Mended, apply_mend, apply_repair};
 use crate::split::{apply_part_off, apply_split};
 
@@ -63,6 +64,13 @@ pub enum Report {
     },
     /// An object's faces were turned, bridged or dropped by hand.
     Mended(Mended),
+    /// A picture was pressed into an object's mesh.
+    Relieved {
+        /// The lattice it came out on, mm.
+        voxel_mm: Scalar,
+        /// Whether the memory budget made the lattice coarser than precision asked for.
+        coarsened: bool,
+    },
     /// An object was moved, turned or sized where it stands.
     Placed,
     /// An object was deleted or copied.
@@ -112,6 +120,10 @@ pub fn apply(
         Edit::Mend { object, .. } => {
             let asked = MendAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
             apply_mend(document, object, &asked)
+        }
+        Edit::Relief { object, .. } => {
+            let asked = ReliefAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
+            apply_relief(document, object, &asked, cancel)
         }
         Edit::Move { object, by_mm } => {
             place(document, object, |transform, _| Ok(moved(transform, by_mm)))

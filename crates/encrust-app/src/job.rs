@@ -55,8 +55,8 @@ pub use plate::models_of;
 pub use plugs::{PlugsJob, PlugsRequest, spawn_plugs};
 pub use preview::{PreviewJob, PreviewOutcome};
 pub use relief::{
-    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, painting, relief_tasks,
-    spawn_relief,
+    Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, painting, relief_task_of,
+    relief_tasks, spawn_relief,
 };
 pub use repair::{RepairJob, RepairOutcome, RepairRequest, Repaired};
 pub use send::{Action, SendJob, SendOutcome, SendRequest};

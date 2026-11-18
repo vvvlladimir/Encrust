@@ -157,6 +157,28 @@ fn a_repair_by_a_mend_method_reads_in_kebab_case_and_in_the_old_case() {
 }
 
 #[test]
+fn a_relief_names_only_what_it_changes_from_the_cli_defaults() {
+    let text = r#"{"edit":"relief","object":2,"depth_mm":0.5,"image":"knurl.png"}"#;
+    let edit: Edit = serde_json::from_str(text).expect("a relief needs a depth and a picture");
+    assert_eq!(
+        edit,
+        Edit::Relief {
+            object: ObjectId(2),
+            depth_mm: 0.5,
+            image: "knurl.png".into(),
+            tile_mm: 12.0,
+            angle_deg: 0.0,
+            invert: false,
+            symmetric: false,
+            smoothing_px: 0.0,
+            hold_bottom_deg: 0.0,
+            hold_top_deg: 0.0,
+            precision: 0.5,
+        }
+    );
+}
+
+#[test]
 fn an_edit_of_an_unknown_kind_is_refused() {
     let text = r#"{"edit": "melt", "object": 3}"#;
     assert!(serde_json::from_str::<Edit>(text).is_err());

@@ -128,6 +128,43 @@ fn a_mend_naming_a_face_the_object_lacks_is_answered_with_why_and_leaves_the_cub
     assert_eq!(object.mesh.faces.len(), 12);
 }
 
+fn relief_of(object: ObjectId, base_version: u64, image: &Path) -> Value {
+    json!({"base_version": base_version,
+           "apply": [{"edit": "relief", "object": object.0, "depth_mm": 0.5,
+                      "image": image, "tile_mm": 5.0}]})
+}
+
+#[test]
+fn a_relief_presses_a_picture_into_the_cube_which_keeps_its_id() {
+    let file = scratch("relief");
+    let picture = file.with_extension("png");
+    let checker = image::GrayImage::from_fn(16, 16, |x, y| {
+        image::Luma([((x / 8 + y / 8) % 2 * 255) as u8])
+    });
+    std::fs::create_dir_all(picture.parent().expect("the scratch file has a folder"))
+        .expect("the scratch folder is made");
+    checker.save(&picture).expect("the picture is written");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let before = signed_volume(&bench.doc.scene.get(cube).expect("the cube is there").mesh);
+
+    let reply = bench.hand_over_running(&file, asking(&file, relief_of(cube, version, &picture)));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench
+        .doc
+        .scene
+        .get(cube)
+        .expect("a relief keeps the object's id");
+    let after = signed_volume(&object.mesh);
+    assert!(
+        (after - before).abs() > 1.0,
+        "a 0.5 mm checker moves more than 1 mm³ of the cube's {before}, got {after}"
+    );
+}
+
 #[test]
 fn edits_built_on_a_plate_since_changed_are_answered_stale_and_not_applied() {
     let file = scratch("stale");
