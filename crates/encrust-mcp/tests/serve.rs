@@ -110,15 +110,7 @@ async fn call(client: &Client, tool: &'static str, args: Value) -> CallToolResul
 }
 
 fn answer(result: &CallToolResult) -> Value {
-    let text: String = result
-        .content
-        .iter()
-        .filter_map(|block| match block {
-            ContentBlock::Text(text) => Some(text.text.clone()),
-            _ => None,
-        })
-        .collect();
-    serde_json::from_str(&text).expect("every answer is JSON")
+    serde_json::from_str(&answer_text(result)).expect("every answer is JSON")
 }
 
 fn failed(result: &CallToolResult) -> bool {
@@ -784,4 +776,65 @@ async fn a_jobs_steps_are_kept_as_a_recipe_of_the_users_and_one_that_would_not_r
     .await;
     assert!(failed(&both), "a job and a toml at once is refused");
     client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn a_project_the_window_saved_is_checked_drawn_and_written_as_it_stands() {
+    let dir = scratch("project");
+    let client = serve(&encrust(), &dir.join("jobs")).await;
+    let project = profile("cube.encrust");
+    let started = call(
+        &client,
+        "start_job",
+        json!({
+            "model": project,
+            "printer": profile("project-panel.toml"),
+            "resin": profile("test-resin.toml"),
+        }),
+    )
+    .await;
+    assert!(!failed(&started), "start_job failed: {}", answer(&started));
+    let job = answer(&started)["job"]
+        .as_str()
+        .expect("a job id")
+        .to_owned();
+    let drawn = call(&client, "render", json!({"job": job, "views": ["iso"]})).await;
+    assert!(!failed(&drawn), "render failed: {}", answer(&drawn));
+    let output = dir.join("cube.goo");
+    let written = call(
+        &client,
+        "write_file",
+        json!({"job": job, "output": output, "accept_defects": true}),
+    )
+    .await;
+    assert!(!failed(&written), "write_file failed: {}", answer(&written));
+    assert!(output.is_file());
+    let hollowed = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+    )
+    .await;
+    assert!(
+        failed(&hollowed),
+        "a project's models are shaped in the window"
+    );
+    let inspected = call(&client, "inspect_model", json!({"path": project})).await;
+    assert!(
+        answer_text(&inspected).contains("start_job"),
+        "inspect_model points a project to start_job: {}",
+        answer_text(&inspected)
+    );
+    client.cancel().await.expect("the server stops");
+}
+
+fn answer_text(result: &CallToolResult) -> String {
+    result
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            ContentBlock::Text(text) => Some(text.text.clone()),
+            _ => None,
+        })
+        .collect()
 }

@@ -11,7 +11,9 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    and `inspect_model` on the user's file. Repair only what it reports as wrong.
 3. `start_job`. The engine's autopilot prepares the model at once — repair, orientation, a
    hollow where it saves resin, drains, supports — and `report.models[].prepared` says what it
-   decided. Each tool below overrides one step. Every editing tool answers with the new
+   decided. A project (`.encrust`) the user saved in the window starts as it was saved: check,
+   `render`, `set_slicing` and `write_file` it; its models are changed in the window. Each
+   tool below overrides one step. Every editing tool answers with the new
    revision and its check: read `status` and the findings before the next step. An edit the
    command line refuses is not applied, and the latest revision stays as it was.
    `list_recipes` shows the other ways to prepare, each with its steps; `use_recipe` takes

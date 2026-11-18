@@ -920,6 +920,9 @@ tool_timeout_sec = 1800
 `printer_query`; `inspect_model` reads a model. `start_job` takes a model, a printer and a
 resin — ids or TOML paths — and answers with the job and its first revision checked; it
 runs under `--prepare` unless `prepare: false`, so every step no tool sets is the autopilot's.
+A project (`.encrust`) starts as it was saved, with neither `--prepare` nor `--center`, which
+the command line refuses for one; the tools that shape a model are refused for it as those
+flags are, it is set against no autopilot, and the open window is not sent it.
 `set_shape` — scale, combine with other models, label, cut with a joint, split, part off,
 arrange, relief — `set_repair` — the repair, its seam and shell limits, faces flipped or
 dropped and shells dropped by number, bridges — and `set_slicing` — layer height, adaptive
