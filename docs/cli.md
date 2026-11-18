@@ -621,7 +621,11 @@ is named; `repair` (`method`: `"wrap"`, `"deep"` or `{"mend": "repair"}`, also `
 `close-small-holes` and `turn`) repairs the object's mesh as the window's Repair tool does, and `mend`
 (`flip_faces`, `drop_faces` from 0, `drop_shells` from 1, `bridge`, pairs of open edges as
 `[[a, b], [c, d]]`, all optional) does what `--flip-faces`, `--drop-faces`, `--drop-shells` and
-`--bridge` do; both drop the object's supports and cavity, and keep its plugs.
+`--bridge` do; both drop the object's supports and cavity, and keep its plugs; `relief` (`object`,
+`depth_mm`, `image`, a picture file, and optional `tile_mm` (12), `angle_deg`, `invert`, `symmetric`,
+`smoothing_px`, `hold_bottom_deg`, `hold_top_deg` and `precision` (0.5)) presses the picture tiled
+into the object as `--relief-image` does, only into its painted faces where any are, and drops
+its supports and cavity, and keeps its plugs; the model is left solid until Hollow is an edit.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json

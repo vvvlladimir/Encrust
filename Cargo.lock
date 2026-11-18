@@ -1034,6 +1034,7 @@ dependencies = [
  "core-engine",
  "core-geometry",
  "core-joint",
+ "core-mesh-io",
  "core-text",
  "core-volume",
  "thiserror 2.0.21",

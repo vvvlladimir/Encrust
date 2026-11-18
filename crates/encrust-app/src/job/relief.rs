@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use core_geometry::{Bvh, Heightmap, Mesh, Region, Transform, Vec3, transform_mesh};
+use core_document::press_picture;
+use core_geometry::{Bvh, Heightmap, Mesh, Region, Scalar, Transform, Vec3, transform_mesh};
 use core_volume::{
-    AngleMask, Cancel, Progress, ReliefBasis, ReliefSettings, Tiling, press_painted,
-    press_painted_tiled, press_reusing, press_tiled_reusing,
+    AngleMask, Cancel, Progress, ReliefBasis, ReliefSettings, Tiling, press_painted, press_reusing,
 };
 use rayon::prelude::*;
 
@@ -60,6 +60,8 @@ pub struct Pressed {
     pub shaped: Shaped,
     /// Whether the memory budget made the lattice coarser than precision asked for.
     pub coarsened: bool,
+    /// How deep it was asked to press, mm: the run's, which is not always the tool's.
+    pub depth_mm: Scalar,
     /// What the press stood on, for the window to keep while another picture may follow;
     /// a painted press stands on none.
     pub basis: Option<Arc<ReliefBasis>>,
@@ -102,17 +104,23 @@ pub fn relief_tasks(scene: &Scene, tiled: bool, brushing: bool) -> Vec<ReliefTas
         .targets()
         .filter(|object| tiled || object.mapped.is_some())
         .filter(|object| painting(object, brushing).is_none_or(|painted| !painted.is_empty()))
-        .map(|object| ReliefTask {
-            taken: Taken::of(object),
-            mesh: Arc::clone(&object.mesh),
-            bvh: Arc::clone(&object.bvh),
-            mapped: object.mapped.clone(),
-            sizing: object.transform.sizing(),
-            up: object.transform.rotation.inverse() * Vec3::Z,
-            painted: painting(object, brushing).cloned(),
-            basis: None,
-        })
+        .map(|object| relief_task_of(object, brushing))
         .collect()
+}
+
+/// The task that presses `object` alone, held to what is painted on it where `brushing` or
+/// anything is.
+pub fn relief_task_of(object: &SceneObject, brushing: bool) -> ReliefTask {
+    ReliefTask {
+        taken: Taken::of(object),
+        mesh: Arc::clone(&object.mesh),
+        bvh: Arc::clone(&object.bvh),
+        mapped: object.mapped.clone(),
+        sizing: object.transform.sizing(),
+        up: object.transform.rotation.inverse() * Vec3::Z,
+        painted: painting(object, brushing).cloned(),
+        basis: None,
+    }
 }
 
 fn run(request: &ReliefRequest, stop: &AtomicBool, progress: &Progress) -> ReliefOutcome {
@@ -154,14 +162,10 @@ fn pressed(
     let (mesh, bvh, uvs) = printed(task);
     let basis = task.basis.clone();
     let (relief, basis) = match (&request.source, &task.mapped, uvs, &task.painted) {
-        (ReliefSource::Tiled { image, tiling }, _, _, Some(painted)) => (
-            press_painted_tiled(&mesh, image, *tiling, settings, painted, cancel)?,
-            None,
-        ),
-        (ReliefSource::Tiled { image, tiling }, _, _, None) => {
-            let (relief, basis) =
-                press_tiled_reusing(&mesh, &bvh, image, *tiling, settings, basis, cancel)?;
-            (relief, Some(basis))
+        (ReliefSource::Tiled { image, tiling }, ..) => {
+            let picture = (image.as_ref(), *tiling);
+            let painted = task.painted.as_ref();
+            press_picture(&mesh, &bvh, picture, settings, painted, basis, cancel)?
         }
         (ReliefSource::Mapped, Some(mapped), Some(uvs), Some(painted)) => (
             press_painted(&mesh, &uvs, &mapped.heights, settings, painted, cancel)?,
@@ -179,6 +183,7 @@ fn pressed(
         taken: task.taken.clone(),
         shaped: Shaped::of(Arc::new(relief.mesh)),
         coarsened: relief.coarsened,
+        depth_mm: settings.amplitude_mm,
         basis,
     })
 }

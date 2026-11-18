@@ -13,10 +13,12 @@ use crate::files::{self, Handed, Wanted};
 use crate::i18n::tr;
 use crate::job::{
     Counted, Pressed, ReliefJob, ReliefOutcome, ReliefRequest, ReliefSource, painting,
-    relief_tasks, spawn_relief,
+    relief_task_of, relief_tasks, spawn_relief,
 };
 use crate::scene::{Mapped, ObjectId, Scene};
 use crate::status::Status;
+use core_document::ReliefAsked;
+use core_mesh_io::decode_picture;
 
 mod library;
 
@@ -46,16 +48,12 @@ struct Look {
     smoothing_px: Scalar,
 }
 
-/// The widest a picture is read at, pixels. Past this a tile of a few millimetres has
-/// more pixels than the lattice can show, and the samples only cost memory.
-const MAX_PICTURE_PX: u32 = 1024;
-
 /// A greyscale picture chosen to press in as tiles, in place of a model's own texture.
 #[derive(Debug, Clone)]
 pub struct Picture {
     pub name: String,
     pub heights: Arc<Heightmap>,
-    /// The size of the file, pixels, before it was read down to `MAX_PICTURE_PX`.
+    /// The size of the file, pixels, before it was read down to `core_mesh_io::MAX_PICTURE_PX`.
     pub size_px: [u32; 2],
     /// Which of [`BUILTINS`] it is, for one that came with the window.
     pub builtin: Option<usize>,
@@ -261,6 +259,29 @@ impl ReliefTool {
         Ok(())
     }
 
+    /// Starts pressing the picture of `asked` into `object` alone, as a run of the tool's own
+    /// but for the settings, which are the edit's; the faces painted on it limit it.
+    pub fn start_asked(
+        &mut self,
+        scene: &Scene,
+        object: ObjectId,
+        asked: &ReliefAsked,
+    ) -> Result<()> {
+        let object = scene.get(object).context(tr!("relief-nothing-to-press"))?;
+        let image = core_document::read_picture(&asked.image)?;
+        let task = relief_task_of(object, false);
+        self.kept.clear();
+        self.job = Some(spawn_relief(ReliefRequest {
+            tasks: vec![task],
+            settings: asked.settings,
+            source: ReliefSource::Tiled {
+                image: Arc::new(image),
+                tiling: asked.tiling,
+            },
+        }));
+        Ok(())
+    }
+
     /// Drains a running job into the scene and the stage notice. Returns whether one is
     /// still going, which is what tells the window to keep repainting.
     pub fn poll(&mut self, scene: &mut Scene, status: &mut Status) -> bool {
@@ -283,6 +304,9 @@ impl ReliefTool {
     /// reshaped, turned or resized since, and keeps the bases there is room for.
     fn land(&mut self, scene: &mut Scene, models: Vec<Pressed>) -> Status {
         let count = models.len();
+        let depth_mm = models
+            .first()
+            .map_or(self.state.amplitude_mm, |model| model.depth_mm);
         let coarsened = models.iter().filter(|model| model.coarsened).count();
         let mut changed = None;
         let mut room = KEPT_BYTES;
@@ -318,7 +342,7 @@ impl ReliefTool {
         if let Some(name) = changed {
             return Status::Error(tr!("job-model-changed", name = name));
         }
-        let depth = format!("{:.2}", self.state.amplitude_mm);
+        let depth = format!("{depth_mm:.2}");
         match coarsened {
             0 => Status::Info(tr!("relief-done", depth = depth, count = count)),
             _ => Status::Info(tr!(
@@ -579,23 +603,14 @@ fn builtin_picture(index: usize) -> Result<Picture> {
     })
 }
 
-/// `bytes` of any picture format read as grey, no wider than `MAX_PICTURE_PX`.
+/// `bytes` of any picture format read as grey, no wider than `core_mesh_io::MAX_PICTURE_PX`.
 fn decoded(name: String, bytes: &[u8]) -> Result<Picture> {
-    let image = image::load_from_memory(bytes)?;
-    let size_px = [image.width(), image.height()];
-    let image = if size_px[0].max(size_px[1]) > MAX_PICTURE_PX {
-        image.thumbnail(MAX_PICTURE_PX, MAX_PICTURE_PX)
-    } else {
-        image
-    };
-    let grey = image.to_luma32f();
-    let (width, height) = (grey.width() as usize, grey.height() as usize);
-    let heights =
-        Heightmap::new(width, height, grey.into_raw()).context(tr!("relief-no-pixels"))?;
+    let picture =
+        decode_picture(&name, bytes).map_err(|_| anyhow::anyhow!(tr!("relief-no-pixels")))?;
     Ok(Picture {
         name,
-        heights: Arc::new(heights),
-        size_px,
+        heights: Arc::new(picture.heights),
+        size_px: picture.size_px,
         builtin: None,
     })
 }
