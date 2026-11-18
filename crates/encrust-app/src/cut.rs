@@ -125,6 +125,15 @@ impl CutTool {
             joints: self.state.joints,
             lay_flat: self.lay_flat,
         };
+        self.start_asked(scene, id, asked)
+    }
+
+    /// Starts the cut `asked` describes on one model, as [`CutTool::start`] does, whatever the
+    /// panel is set to: what an edit handed over the window link asks (ADR 0466).
+    pub fn start_asked(&mut self, scene: &Scene, id: ObjectId, asked: CutAsked) -> Result<()> {
+        let object = scene
+            .get(id)
+            .ok_or_else(|| anyhow!(tr!("cut-nothing-selected")))?;
         let uncut = object.uncut();
         let drilled = object.hollow.drilled(uncut).map(|drilled| &drilled.mesh);
         let job = spawn_cut(CutRequest {

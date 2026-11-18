@@ -10,19 +10,20 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use serde_json::json;
+use serde_json::{Value, json};
 
-use super::request::{Reply, Request, SCHEMA};
+use super::line::{Line, PLATE_SCHEMA, read as read_line};
+use super::request::Reply;
 
 /// The longest line read from a connection, bytes: a recipe is a few hundred.
 const MOST_BYTES: u64 = 1 << 20;
 /// How long a connection may take to send its line.
 const READ_WAIT: Duration = Duration::from_secs(5);
 /// How long a line waits for the window's frame to answer it.
-const REPLY_WAIT: Duration = Duration::from_secs(10);
+const REPLY_WAIT: Duration = Duration::from_secs(60);
 
 /// A request from the server, and where its reply goes.
-pub type Asked = (Request, Sender<Reply>);
+pub type Asked = (Line, Sender<Value>);
 
 /// The port listened on, while its file says so.
 #[derive(Debug)]
@@ -83,15 +84,11 @@ fn answer(
     if read.is_err() {
         return Ok(());
     }
-    let reply = match serde_json::from_str::<Request>(&line) {
-        Err(error) => refused(format!("the line does not read: {error}")),
-        Ok(request) if request.token != token => refused("the token is not this window's".into()),
-        Ok(request) if request.schema != SCHEMA => {
-            refused(format!("schema {} is not {SCHEMA}", request.schema))
-        }
-        Ok(request) => {
+    let reply = match read_line(&line, token) {
+        Err(why) => refused(why),
+        Ok(line) => {
             let (reply, answered) = mpsc::channel();
-            sender.send((request, reply)).map_err(|_| Gone)?;
+            sender.send((line, reply)).map_err(|_| Gone)?;
             wake();
             answered
                 .recv_timeout(REPLY_WAIT)
@@ -104,8 +101,8 @@ fn answer(
     Ok(())
 }
 
-fn refused(why: String) -> Reply {
-    Reply::refused(why)
+fn refused(why: String) -> Value {
+    serde_json::to_value(Reply::refused(why)).unwrap_or_default()
 }
 
 /// Where the server looks for an open window, beside its jobs in the user's cache.
@@ -119,7 +116,7 @@ fn write_file(file: &Path, port: u16, token: &str) -> Result<()> {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
     let text = json!({
-        "schema": SCHEMA, "port": port, "token": token, "pid": std::process::id(),
+        "schema": PLATE_SCHEMA, "port": port, "token": token, "pid": std::process::id(),
     });
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);

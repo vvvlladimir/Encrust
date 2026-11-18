@@ -2,14 +2,18 @@
 //! the open plate as Prepare for print by the revision's recipe, one undo entry a revision
 //! (ADR 0459, `docs/design/window-link.md`).
 
+mod line;
 mod listen;
 mod machine;
+mod plate;
 mod request;
 
 use std::path::PathBuf;
+use std::sync::mpsc::Sender;
 
 use anyhow::Result;
 use core_recipe::Plan;
+use serde_json::Value;
 
 use crate::files::Handed;
 use crate::i18n::tr;
@@ -17,6 +21,7 @@ use crate::panels::Window;
 use crate::scene::{ObjectId, SceneObject};
 use crate::status::Status;
 
+use line::Line;
 use listen::{Listening, default_file};
 use request::{Reply, Request};
 
@@ -30,9 +35,14 @@ pub struct Link {
     replaying: Option<(usize, Vec<ObjectId>)>,
     /// Where the server keeps its jobs, beside the window's file.
     jobs: PathBuf,
+    /// Edits a server handed over, being applied one after another (ADR 0466).
+    applying: Option<plate::Applying>,
 }
 
 /// What the server is told of a revision handed over while the window does not follow.
+/// What a server is told of edits handed over while others are still being applied.
+const EDITS_UNDER_WAY: &str = "the window is still applying the edits handed over before";
+
 const NOT_FOLLOWING: &str = "the window is not following its agents; it lists the revision, \
     which the user can show, or show_in_window shows it";
 
@@ -76,6 +86,7 @@ impl Link {
             followed: Vec::new(),
             replaying: None,
             jobs,
+            applying: None,
         })
     }
 
@@ -93,20 +104,41 @@ impl Link {
             }
         }
         let follow = window.machine.general.follow_agents;
-        while let Ok((request, reply)) = self.listening.asked.try_recv() {
-            let answer = if request.open || follow {
-                self.take(request, window)
-            } else {
-                Reply::refused(NOT_FOLLOWING.to_owned())
-            };
-            let _ = reply.send(answer);
+        while let Ok((line, reply)) = self.listening.asked.try_recv() {
+            self.answer(line, reply, follow, window);
         }
+        let applying = plate::advance(&mut self.applying, window);
         self.take_asked(window);
         self.note_what_was_left(window);
         for index in 0..self.followed.len() {
             self.replay(index, window);
         }
-        self.replaying.is_some() || self.followed.iter().any(|f| f.waiting.is_some())
+        applying || self.replaying.is_some() || self.followed.iter().any(|f| f.waiting.is_some())
+    }
+
+    /// Answers one line: a revision is taken as ADR 0459 runs it, the plate handed over or
+    /// edits applied as ADR 0466 does, all only while the window follows its agents.
+    fn answer(&mut self, line: Line, reply: Sender<Value>, follow: bool, window: &mut Window) {
+        let refused = |why: &str| serde_json::to_value(Reply::refused(why.to_owned()));
+        match line {
+            Line::Revision(request) if request.open || follow => {
+                let answer = self.take(request, window);
+                let _ = reply.send(serde_json::to_value(answer).unwrap_or_default());
+            }
+            _ if !follow => {
+                let _ = reply.send(refused(NOT_FOLLOWING).unwrap_or_default());
+            }
+            Line::Revision(_) => {}
+            Line::Plate { job } => plate::hand_plate(&self.jobs, &job, window, reply),
+            Line::Apply { .. } if self.applying.is_some() => {
+                let _ = reply.send(refused(EDITS_UNDER_WAY).unwrap_or_default());
+            }
+            Line::Apply {
+                edits,
+                base_version,
+                ..
+            } => self.applying = plate::start(edits, base_version, window, reply),
+        }
     }
 
     /// Takes the revisions the user asked to see from the agents' list.

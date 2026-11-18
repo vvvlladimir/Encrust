@@ -7,14 +7,12 @@ use anyhow::{Context, Result};
 use core_recipe::{Plan, Recipe, validate};
 use serde::{Deserialize, Serialize};
 
-/// The schema of the line this window reads.
+/// The schema of a revision handed over (ADR 0459).
 pub const SCHEMA: u64 = 2;
 
 /// One revision of a chat client's job: its model, its machine and the recipe its check ran.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Request {
-    pub schema: u64,
-    pub token: String,
     pub job: String,
     pub revision: u32,
     pub model: PathBuf,
@@ -49,8 +47,6 @@ impl Request {
             value.unwrap_or_default().to_owned()
         };
         Ok(Self {
-            schema: SCHEMA,
-            token: String::new(),
             job: job.to_owned(),
             revision,
             model: flags
