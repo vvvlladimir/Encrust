@@ -11,6 +11,7 @@ use core_recipe::{
 };
 
 mod drain;
+mod folded;
 pub mod library;
 mod piece;
 mod plate;
@@ -19,6 +20,7 @@ mod report;
 mod settings;
 mod steps;
 
+pub use folded::folded;
 use piece::Piece;
 pub use prepared::Prepared;
 pub use report::RecipeRun;

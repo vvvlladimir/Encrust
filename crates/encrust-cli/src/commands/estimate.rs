@@ -1,9 +1,9 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use std::collections::BTreeMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -31,11 +31,18 @@ pub struct EstimateCommand {
     /// one preparation against another; the report's `compared` says how it stands. Repeat.
     #[arg(long, value_name = "NAME=FILE", value_parser = crate::score::parse_against)]
     pub against: Vec<(String, PathBuf)>,
+    /// Write the recipe this run takes each model through to FILE, the flags typed written
+    /// into its steps, for the window to run the same steps (`--prepare`, `--recipe` or none).
+    #[arg(long, value_name = "FILE")]
+    pub recipe_out: Option<PathBuf>,
 }
 
 impl EstimateCommand {
     pub fn run(&self, global: &GlobalArgs, stop: &Stop) -> Result<Exit> {
         self.plate.check()?;
+        if let Some(path) = &self.recipe_out {
+            write_recipe(&self.job, path)?;
+        }
         let started = Instant::now();
         let watch = Watch {
             writes: false,
@@ -89,4 +96,13 @@ struct Compared<'a> {
     report: &'a EstimateReport,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     compared: BTreeMap<String, Value>,
+}
+
+/// The recipe `job` takes a model through, its flags folded in, written to `path`.
+fn write_recipe(job: &JobArgs, path: &Path) -> Result<()> {
+    let asked = crate::recipe::Asked::of(job)?;
+    let shaping = stage::Shaping::of(job)?;
+    let recipe = crate::recipe::folded(asked.as_ref().map(|asked| &asked.plan), &shaping);
+    std::fs::write(path, recipe.to_toml())
+        .with_context(|| format!("cannot write the recipe to {}", path.display()))
 }
