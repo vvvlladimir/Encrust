@@ -227,3 +227,33 @@ Errors: blank text, no surface near `at_mm`, a font that does not read → new `
 Done when: "I" raised 1 mm on the 10 mm cube's top face adds volume (> 1000 + 1 mm³), sunk
   removes it (< 1000 − 1); each new error variant has a test; window link test stamping one.
 Not now: the window's font picker over the link, MCP wiring.
+
+### C6. Repair, Mend
+Read: `crates/encrust-app/src/job/{repair.rs,edit.rs}`, `crates/encrust-app/src/scene/object.rs`
+  (`reshape`), `crates/encrust-cli/src/{edits.rs,pipeline/checked.rs}` (`repaired`,
+  `watched_repair`), `crates/core-document/src/{apply.rs,document.rs,error.rs}`
+Touch: those, `crates/core-edit/src/edit.rs` (+tests), new `crates/core-document/src/repair.rs`,
+  `crates/core-document/src/{lib.rs,apply/tests.rs}`, `crates/encrust-app/src/link/plate.rs`
+  (+ test), `docs/design/document.md`, `docs/cli.md` and `docs/features.md` (name the two edits
+  where `--edits` lists the others)
+Edit:
+- `Repair { object, method: RepairMethod }` — `core_volume::repair` with the window's default
+  `RepairSettings`, on the object's source mesh; `RepairMethod` from core-volume (serde kebab;
+  add the derives there if missing).
+- `Mend { object, flip_faces: Vec<usize>, drop_faces: Vec<usize>, drop_shells: Vec<usize>,
+  bridge: Vec<[[u32; 2]; 2]> }` — numbered as `--flip-faces` and the window's Repair list number
+  them; turns and bridges first, drops last (as `edits::apply`).
+Both replace the object's source mesh and drop what was built on the old surface — supports,
+  cavity, painted regions, plugs of it — as `SceneObject::reshape` does: one
+  `Document::reshape(id, Mesh)` holds that rule.
+Move: `edits::apply`'s body → core-document `mended(&mut Mesh, &MendAsked) -> Result<Mended,
+  ApplyError>` (the CLI keeps only flag→asked and its message); `watched_repair`'s call and
+  `job/repair.rs::run`'s call → core-document `repaired(mesh, method, Cancel)`. Errors: a face or
+  shell number past the last → `ApplyError::NoSuchFace { object, number }` / `NoSuchShell`; a
+  bridge the mesh refuses → `ApplyError::Failed`; `Cancelled`.
+Done when: a 10 mm cube with one face's winding turned (fixture) mended by `flip_faces [n]` is
+  closed and orientable, volume 1000 ± 0.01; `Mend` with face 13 on a 12-face cube →
+  `NoSuchFace`; shell 2 on one shell → `NoSuchShell`; `Repair` of a cube with a face removed
+  closes it; a stopped `Cancel` → `Cancelled`. Window link test of `Mend`. Existing repair,
+  `--repair`, `--flip-faces`, `--bridge` tests pass.
+Not now: Relief (C7), MCP wiring.
