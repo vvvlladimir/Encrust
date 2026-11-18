@@ -174,14 +174,19 @@ impl History {
         asked_by: u64,
         mut change: impl FnMut(&mut Scene) -> T,
     ) -> T {
+        let before = fingerprint(scene);
         if self.held {
-            return change(scene);
+            let answer = change(scene);
+            self.plate_version += u64::from(fingerprint(scene) != before);
+            return answer;
         }
-        let caught_up = fingerprint(scene) == self.fingerprint;
+        let caught_up = before == self.fingerprint;
         if let Some(index) = self.past.iter().position(|(id, _)| *id == asked_by) {
             self.carry_since(index, caught_up, &mut change);
         }
         let answer = change(scene);
+        // What lands joins an edit already counted, yet the plate a server built on is gone.
+        self.plate_version += u64::from(fingerprint(scene) != before);
         if caught_up {
             self.settle(scene);
         }

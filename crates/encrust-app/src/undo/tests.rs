@@ -601,3 +601,20 @@ fn a_tool_set_anew_leaves_the_plate_version_as_it_was() {
 
     assert_eq!(bench.history.plate_version(), start);
 }
+
+#[test]
+fn what_a_run_lands_on_the_plate_raises_its_version_though_it_joins_an_edit() {
+    let mut bench = Bench::default();
+    bench.add();
+    bench.observe(true);
+    let asked_by = bench.history.next_edit() - 1;
+    let before = bench.history.plate_version();
+
+    bench.land_plug(asked_by);
+    bench.observe(true);
+
+    assert!(
+        bench.history.plate_version() > before,
+        "a plate built on before the plug is stale"
+    );
+}

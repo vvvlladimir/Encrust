@@ -22,8 +22,9 @@ const CONNECT_WAIT: Duration = Duration::from_secs(1);
 const REPLY_WAIT: Duration = Duration::from_secs(15);
 /// The schema that asks for the plate and applies edits to it (ADR 0466).
 const PLATE_SCHEMA: u64 = 3;
-/// How long edits handed over may take to land: each runs as a tool's job.
-const APPLY_WAIT: Duration = Duration::from_secs(90);
+/// How long edits handed over may take to land, each a tool's job: longer than the window
+/// waits for them, so its answer always arrives.
+const APPLY_WAIT: Duration = Duration::from_mins(11);
 
 /// How long a window started for `show_in_window` may take to listen.
 const START_WAIT: Duration = Duration::from_secs(30);

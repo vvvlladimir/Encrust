@@ -1,9 +1,9 @@
-use core_edit::{Axis, Joints, Keep};
+use core_edit::{Axis, JointKind, Joints, Keep};
 use core_geometry::{Mesh, Scalar, Vec3, signed_volume, transform_mesh};
 use core_volume::{DrainHole, HoleShape};
 
 use super::*;
-use crate::fixtures::{SIDE_MM, cube};
+use crate::fixtures::{SIDE_MM, cube, cube_of};
 
 /// What f32 sums over a cube's cut faces drift by, mm³.
 const VOLUME_MM3: Scalar = 1e-2;
@@ -130,4 +130,42 @@ fn holes_that_would_leave_nothing_of_the_object_refuse_the_cut() {
         .expect_err("nothing of the cube is left to cut");
 
     assert_eq!(error, ApplyError::Undrilled(CUBE));
+}
+
+#[test]
+fn the_dowels_a_dowel_joint_prints_stand_in_a_row_beside_the_lower_half() {
+    let side_mm = 40.0;
+    let mut document = Document::from_project(cube_of(side_mm));
+    let edit = Edit::Cut {
+        object: CUBE,
+        axis: Axis::Z,
+        at_mm: side_mm / 2.0,
+        keep: Keep::Both,
+        joints: Joints {
+            kind: Some(JointKind::Dowels),
+            ..Joints::default()
+        },
+        lay_flat: false,
+    };
+
+    let applied = apply(&mut document, &edit).expect("the plane crosses the cube");
+
+    let meshes = placed(&document, &applied.added);
+    let lower_maxs_x = meshes[0].aabb().expect("the lower half has faces").maxs.x;
+    let dowels: Vec<&Mesh> = (applied.added.iter().zip(&meshes))
+        .filter(|((_, role), _)| matches!(role, Role::Dowel(_)))
+        .map(|(_, mesh)| mesh)
+        .collect();
+    assert!(
+        !dowels.is_empty(),
+        "a 40 mm face takes dowels: {:?}",
+        applied.report
+    );
+    for dowel in dowels {
+        let bounds = dowel.aabb().expect("a dowel has faces");
+        assert!(
+            bounds.mins.x > lower_maxs_x && bounds.mins.z.abs() < 1e-3,
+            "a dowel stands on the plate past the lower half's {lower_maxs_x} mm, got {bounds:?}"
+        );
+    }
 }

@@ -286,22 +286,25 @@ fn restore_objects(
 
     let mut plugs = Vec::new();
     for ((state, meshes), (bvh, center_of_mass)) in objects.into_iter().zip(&models).zip(measured) {
-        let id = scene.insert(Imported {
-            name: state.name,
-            bvh: Arc::clone(&bvh),
-            mesh: Arc::clone(&meshes.source),
-            transform: state.transform,
-            center_of_mass,
-            summary: ImportSummary {
-                vertices_merged: state.summary.vertices_merged,
-                faces_removed: state.summary.faces_removed,
-                orientation: state.summary.orientation,
-                diagnostics: state.summary.diagnostics,
+        let id = scene.insert_as(
+            state.id,
+            Imported {
+                name: state.name,
+                bvh: Arc::clone(&bvh),
+                mesh: Arc::clone(&meshes.source),
+                transform: state.transform,
+                center_of_mass,
+                summary: ImportSummary {
+                    vertices_merged: state.summary.vertices_merged,
+                    faces_removed: state.summary.faces_removed,
+                    orientation: state.summary.orientation,
+                    diagnostics: state.summary.diagnostics,
+                },
+                // A project carries meshes, not the files they came from: a texture that was
+                // not pressed in before saving is not in there to press in now.
+                mapped: None,
             },
-            // A project carries meshes, not the files they came from: a texture that was
-            // not pressed in before saving is not in there to press in now.
-            mapped: None,
-        });
+        );
         plugs.push((id, state.plug_of));
         let Some(object) = scene.get_mut(id) else {
             continue;

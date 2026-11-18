@@ -118,3 +118,67 @@ fn a_plate_asked_for_while_not_following_is_refused() {
         "{reply}"
     );
 }
+
+#[test]
+fn an_edit_that_does_not_land_is_answered_with_why_and_leaves_the_plate() {
+    let file = scratch("missed");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let above = json!({"base_version": version,
+        "apply": [{"edit": "cut", "object": cube.0, "axis": "z", "at_mm": 50.0}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, above));
+
+    assert_eq!(reply["applied"], false, "{reply}");
+    assert!(
+        reply["why_not"].as_str().is_some_and(|why| !why.is_empty()),
+        "{reply}"
+    );
+    assert!(
+        bench.doc.scene.get(cube).is_some(),
+        "the cube is left whole"
+    );
+}
+
+#[test]
+fn edits_handed_over_while_others_still_land_are_refused() {
+    let file = scratch("under-way");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let cut = |at_mm: f32| Line::Apply {
+        edits: vec![core_edit::Edit::Cut {
+            object: cube,
+            axis: core_edit::Axis::Z,
+            at_mm,
+            keep: core_edit::Keep::Both,
+            joints: core_edit::Joints::default(),
+            lay_flat: false,
+        }],
+        base_version: version,
+    };
+    let (first, _first_answer) = std::sync::mpsc::channel();
+    let (second, second_answer) = std::sync::mpsc::channel();
+    let mut window = Window {
+        mode: &mut bench.mode,
+        tool: &mut bench.tool,
+        doc: &mut bench.doc,
+        view: &mut bench.view,
+        tools: &mut bench.tools,
+        machine: &mut bench.machine,
+    };
+
+    bench.link.answer(cut(5.0), first, true, &mut window);
+    bench.link.answer(cut(3.0), second, true, &mut window);
+
+    let refused = second_answer
+        .try_recv()
+        .expect("the second is answered at once");
+    assert!(
+        refused["why_not"]
+            .as_str()
+            .is_some_and(|why| why.contains("still applying")),
+        "{refused}"
+    );
+}

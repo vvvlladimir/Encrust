@@ -19,8 +19,9 @@ use super::request::Reply;
 const MOST_BYTES: u64 = 1 << 20;
 /// How long a connection may take to send its line.
 const READ_WAIT: Duration = Duration::from_secs(5);
-/// How long a line waits for the window's frame to answer it.
-const REPLY_WAIT: Duration = Duration::from_secs(60);
+/// How long a line waits for the window to answer it: edits applied wait for their jobs to
+/// land, and the server waits longer, so it is never told no of edits still landing.
+const REPLY_WAIT: Duration = Duration::from_mins(10);
 
 /// A request from the server, and where its reply goes.
 pub type Asked = (Line, Sender<Value>);

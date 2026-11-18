@@ -18,8 +18,13 @@ pub const SIDE_MM: f32 = 10.0;
 /// A plate of one solid cube named "cube", [`SIDE_MM`] on a side, standing on the plate at
 /// the origin: the project file's manifest round a body of known volume.
 pub fn cube() -> Project {
+    cube_of(SIDE_MM)
+}
+
+/// The same plate round a cube `side_mm` on a side.
+pub fn cube_of(side_mm: f32) -> Project {
     let mut project = load(Path::new(CUBE)).expect("the cube fixture reads");
-    project.models[0].source = Arc::new(cuboid(Vec3::ZERO, Vec3::splat(SIDE_MM)));
+    project.models[0].source = Arc::new(cuboid(Vec3::ZERO, Vec3::splat(side_mm)));
     project.models[0].shell = None;
     let object = &mut project.manifest.objects[0];
     object.transform = Transform::default();

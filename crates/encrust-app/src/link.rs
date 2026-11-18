@@ -39,10 +39,10 @@ pub struct Link {
     applying: Option<plate::Applying>,
 }
 
-/// What the server is told of a revision handed over while the window does not follow.
 /// What a server is told of edits handed over while others are still being applied.
 const EDITS_UNDER_WAY: &str = "the window is still applying the edits handed over before";
 
+/// What the server is told of a revision handed over while the window does not follow.
 const NOT_FOLLOWING: &str = "the window is not following its agents; it lists the revision, \
     which the user can show, or show_in_window shows it";
 
@@ -200,9 +200,6 @@ impl Link {
         Reply::taken()
     }
 
-    /// The job's place in the list, a new entry where it is new or names another model. A
-    /// new job of a model already followed takes that model's entry over, so a model is on
-    /// the plate once however many jobs an agent starts on it.
     /// Where `job`'s model stands on the plate whole, as it was read in for the job.
     fn job_object(&self, job: &str, window: &Window) -> Option<ObjectId> {
         let followed = self.followed.iter().find(|followed| followed.job == job)?;
@@ -210,6 +207,9 @@ impl Link {
         window.doc.scene.get(id).is_some().then_some(id)
     }
 
+    /// The job's place in the list, a new entry where it is new or names another model. A
+    /// new job of a model already followed takes that model's entry over, so a model is on
+    /// the plate once however many jobs an agent starts on it.
     fn followed_index(&mut self, job: &str, model: &PathBuf) -> usize {
         if let Some(index) = self.followed.iter().position(|f| f.model == *model) {
             job.clone_into(&mut self.followed[index].job);

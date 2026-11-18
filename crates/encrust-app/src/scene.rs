@@ -195,8 +195,18 @@ impl Scene {
 
     /// Adds a model, gives it the next identifier, selects it and returns that identifier.
     pub fn insert(&mut self, imported: Imported) -> ObjectId {
-        let id = ObjectId(self.next_id);
-        self.next_id += 1;
+        self.insert_as(ObjectId(self.next_id), imported)
+    }
+
+    /// Adds a model under `id`, as a project file keeps it (ADR 0466), or under the next
+    /// identifier where `id` is unset or taken; selects it and returns the identifier.
+    pub fn insert_as(&mut self, id: ObjectId, imported: Imported) -> ObjectId {
+        let id = if id == ObjectId::UNSET || self.get(id).is_some() {
+            ObjectId(self.next_id)
+        } else {
+            id
+        };
+        self.next_id = self.next_id.max(id.0 + 1);
         self.objects.push(SceneObject {
             id,
             name: imported.name,
