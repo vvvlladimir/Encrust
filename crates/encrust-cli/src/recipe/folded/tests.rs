@@ -26,9 +26,15 @@ fn a_flag_over_the_autopilot_runs_its_step_always_with_the_value_typed() {
         .iter()
         .find(|step| step.kind == StepKind::Hollow)
         .expect("prepare hollows");
-    assert_eq!(hollow.when, None, "--hollow runs the step whatever its when");
+    assert_eq!(
+        hollow.when, None,
+        "--hollow runs the step whatever its when"
+    );
     assert_eq!(hollow.set.get("wall_mm"), Some(&Setting::Number(3.0)));
-    let untouched = recipe.steps.iter().find(|step| step.kind == StepKind::Orient);
+    let untouched = recipe
+        .steps
+        .iter()
+        .find(|step| step.kind == StepKind::Orient);
     assert!(
         untouched.is_some_and(|step| step.when.is_some()),
         "a step no flag shapes keeps its condition"

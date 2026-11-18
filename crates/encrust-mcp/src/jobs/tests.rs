@@ -35,7 +35,7 @@ fn a_job_is_named_after_its_model_and_starts_at_revision_one() {
     let job = Jobs::name_for(&recipe());
     assert!(job.starts_with("my-bust--final-"), "named {job}");
     let first = jobs
-        .commit(&job, recipe(), &Value::Null)
+        .commit(&job, (recipe(), None), &Value::Null)
         .expect("the root is writable");
     assert_eq!(first.number, 1);
 }
@@ -44,7 +44,7 @@ fn a_job_is_named_after_its_model_and_starts_at_revision_one() {
 fn each_commit_is_a_new_revision_and_the_old_one_stays_readable() {
     let jobs = scratch("revisions");
     let job = Jobs::name_for(&recipe());
-    jobs.commit(&job, recipe(), &Value::Null)
+    jobs.commit(&job, (recipe(), None), &Value::Null)
         .expect("the root is writable");
     let mut edited = recipe();
     edited.supports = Some(Supports {
@@ -53,7 +53,7 @@ fn each_commit_is_a_new_revision_and_the_old_one_stays_readable() {
         ..Default::default()
     });
     let second = jobs
-        .commit(&job, edited.clone(), &Value::Null)
+        .commit(&job, (edited.clone(), None), &Value::Null)
         .expect("the job exists");
     assert_eq!(second.number, 2);
     assert_eq!(jobs.open(&job, None).expect("latest").recipe, edited);
@@ -66,7 +66,7 @@ fn each_revision_keeps_the_report_of_its_check_beside_its_recipe() {
     let job = Jobs::name_for(&recipe());
     let report = json!({ "status": "ok" });
     let first = jobs
-        .commit(&job, recipe(), &report)
+        .commit(&job, (recipe(), None), &report)
         .expect("the root is writable");
     let kept = fs::read_to_string(jobs.root.join(&job).join(format!("{}.json", first.number)))
         .expect("the report is written beside the recipe");
@@ -85,7 +85,7 @@ fn a_job_name_cannot_reach_outside_the_root() {
             "{name:?} revision 1 was opened"
         );
         assert!(
-            jobs.commit(name, recipe(), &Value::Null).is_err(),
+            jobs.commit(name, (recipe(), None), &Value::Null).is_err(),
             "{name:?} was written"
         );
     }
@@ -109,7 +109,7 @@ fn a_revision_keeps_the_flags_it_stages_with_and_the_autopilot_s_check_beside_it
     let jobs = scratch("args");
     let job = Jobs::name_for(&recipe());
     let first = jobs
-        .commit(&job, recipe(), &json!({"status": "ok"}))
+        .commit(&job, (recipe(), None), &json!({"status": "ok"}))
         .expect("the root is writable");
     let file = jobs.dir(&job).expect("a plain name").join("1.args.json");
     let args: Vec<String> =

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 mod shape;
 mod slicing;
+mod unshown;
 
 pub use shape::{Mend, Modelling, Relief};
 pub use slicing::Slicing;
