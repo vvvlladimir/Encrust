@@ -258,6 +258,17 @@ fn a_vertex_at_nan_is_malformed() {
 }
 
 #[test]
+fn a_model_part_that_is_not_utf8_is_malformed() {
+    let err = ThreeMfLoader
+        .load(&fixture("name_not_utf8.3mf"))
+        .expect_err("the object's name is Latin-1, not UTF-8");
+    let MeshIoError::Malformed { format, .. } = err else {
+        panic!("bytes that are not UTF-8 are malformed, not something else");
+    };
+    assert_eq!(format, "3MF");
+}
+
+#[test]
 fn an_object_inside_an_unknown_namespace_is_skipped() {
     let mesh = ThreeMfLoader
         .load(&fixture("foreign_namespace_object.3mf"))

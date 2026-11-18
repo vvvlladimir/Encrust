@@ -277,9 +277,10 @@ fn a_hollow_model_keeps_its_blockers_through_a_press_and_is_hollowed_again() {
     }
     let object = &mut scene.objects_mut()[0];
     assert!(object.hollow.is_hollow(), "{status:?}");
-    object
-        .hollow
-        .add_blocker(Vec3::new(5.0, 5.0, 5.0), 2.0, object.transform);
+    let blocker =
+        core_volume::ModelHollow::blocker_at(Vec3::new(5.0, 5.0, 5.0), 2.0, object.transform)
+            .expect("the placement inverts");
+    object.hollow.place_blocker(blocker);
 
     let mut tool = ReliefTool {
         picture: Some(Picture {

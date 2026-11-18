@@ -60,12 +60,16 @@ the risks are read this way: ADR 0164.
   that touches only floating pieces floats too, and is not named again.
 - Each anchored piece carries its **neck**: the narrowest section between it and the
   plate. It is the piece's own contact where that is under 0.9 of the necks it stands on,
-  and otherwise those necks together, their areas summed and their centres weighted.
-- The layer's pull on a piece is its own `F`. On a neck of area `A` and
-  radius `r` the stress is `F / A + F L / (pi r^3 / 4)`: tension, and bending over a round
-  section. The lever `L` is how far off the neck the pull acts: the piece's centre off the
-  neck's, plus half the piece's own radius of gyration `sqrt(I_p / A)`, because the film
-  lets go from one edge and the pull is then carried by the half still stuck. Without that
+  its second moments read off its pixels, and otherwise those necks together, their areas
+  summed, their centres weighted and their second moments moved to the joint centre.
+- The layer's pull on a piece is its own `F`. On a neck of area `A` bending least about
+  `I` the stress is `F / A + 2 F L / sqrt(I A)`: tension, and bending with the farthest
+  fibre read as a disc's, `2 sqrt(I / A)`; on one round neck of radius `r` it is
+  `F / A + F L / (pi r^3 / 4)`. Tips spread under a part bend as the separate discs of
+  "What each tip carries", not as one disc of their area. The lever `L` is how far off the
+  neck the pull acts: the piece's centre off the neck's, plus half the piece's own radius of
+  gyration `sqrt(I_p / A)`, because the film lets go from one edge and the pull is then
+  carried by the half still stuck. Without that
   term a plate centred over a wire broke nothing. Past `NECK_LIMIT_MPA` it is a **lever**,
   kept once per neck at its worst.
 - A layer whose whole pull `F` passes `PEEL_LIMIT_N` is a **peel**; a run of them is
@@ -73,6 +77,47 @@ the risks are read this way: ADR 0164.
 
 The first island is where a print fails, since nothing cured over nothing comes up with
 the plate; failing that, the most stressed neck, then the hardest peel.
+
+## What each tip carries
+
+`TipLoads` reads the model alone up the stack, joining pieces that touch into parts, so
+a part is held only by the tips under it so far. A tip seats on the piece within 0.15 mm of
+it, on its own layer or within a millimetre above. A part on the plate is the plate's.
+
+Each layer's pull on a part goes through its tips read as **one section of separate discs**,
+area `A = Σ a_i`, second moments `I = Σ (a_i d_i d_iᵀ + a_i r_i² / 4)` about their centre. The
+highest stress in tip `i` is
+
+`F / A + κ·d_i + |κ| r_i + |P I⁻¹ d_i| + r_i σ_max(I⁻¹ P)`, with `κ = I⁻¹ M`
+
+`M` the pull's moment about that centre and `P = Σ F_p (J_p / 2)^½` the peel lever of each
+piece `p`, `J_p` its second moments about its own centre over its area: the film's last grip
+lies on that ellipse, far along a strip and near across it, at half the polar gyration on a
+disc or a square, as for a neck. The peel is taken the way worst for that tip. One tip is
+exactly a neck's `F / A + F L / (π r³ / 4)`. Margin is the strength over this stress. It is
+rigid-body sharing: a thin arm is not softer than the body, and the film is not followed as
+it peels. Margins are read against `NECK_LIMIT_MPA` as calibrated below. A long arm held only
+near its root reads as held; placement holds an arm leaning past the angle along its length,
+and only Auto steadies one leaning less, so Light, Medium and Heavy may let it rock.
+
+Placement mends what it reads (ADR 0422): a tip under ×1.5 is built one size heavier where
+its plan has a wider tip; at the widest it gets a neighbour, which helps only if it seats
+before the tip's worst layer. Three rounds at most, read on 0.05 mm pixels.
+
+## Calibration
+
+One print of a `support-lab --coupon` set the numbers: flat 8 × 8 × 1.2 mm plates on 1, 2, 4,
+9 or 16 tips of 0.30 to 0.80 mm, pillars 1.6 mm flaring to 3.2 mm so only tips tear, in
+Anycubic ABS-Like Pro 2 at 0.05 mm and 2.5 s on a tilting vat. Every plate read past the
+old 5 MPa that held stood at 13.0 MPa or under, every one that tore at 17.1 or over; one at
+27.7 held loose. `NECK_LIMIT_MPA` is the most that held, 13 MPa. The pull law is unchanged:
+with one resin only the limit over the pull is measured, so the limit carries it.
+
+The bench's area rule agrees once a tip holds 120 mm² of flat plate per mm² of its section
+(`--flat-ratio`), and only from two tips up: a plate on one tip tears sooner, which the
+lever reads. Plates held up to 1.2 times that and swayed at 1.5, so a tip is overloaded
+past 1.2. A 0.30 mm tip prints but breaks in the wash, so `--min-tip-mm` is 0.4.
+Reopen with a second resin, another layer height or a straight-pulling vat.
 
 ## Removing islands
 
@@ -100,9 +145,9 @@ parts spread over a plate the order-bound fold fell from 672 ms to 35 ms
 over open air in the layer under it, or over a hole that was; the first layer lies on the
 plate, so its holes are sealed. A sealed hole carries its cup up the stack while it stays
 sealed, adding its area times the layer's thickness; the cup is named once, at the layer it
-is widest, when that is at least `MIN_CUP_MM2` (25 mm², some 2.5 N at a full vacuum) and it
-holds at least `MIN_CUP_MM3` (0.02 ml). Anything less is a letter's counter or a pin's socket,
-which pulls too little to matter. A model standing on supports has open air
+is widest, when a full vacuum there pulls at least `CUP_LIMIT_N` (10 N, a third of the peel
+limit: `MIN_CUP_MM2`, some 99 mm²) and it holds at least `MIN_CUP_MM3` (0.02 ml). Anything
+less pulls too little beside the lift to matter (ADR 0417). A model standing on supports has open air
 between them, so its cavities start vented; one lying on the plate or on its own floor does
 not.
 

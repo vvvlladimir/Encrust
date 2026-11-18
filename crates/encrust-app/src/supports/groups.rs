@@ -1,4 +1,4 @@
-use super::{FIRST_GROUP, ISLANDS_GROUP, SHAPES, SupportGroup, SupportTool};
+use super::{FIRST_GROUP, SHAPES, SupportGroup, SupportTool};
 use crate::scene::{OwnSettings, Scene, SceneObject};
 use anyhow::Result;
 use core_engine::project::own_table;
@@ -53,6 +53,15 @@ impl SupportTool {
         with_own(self.table(), &object.own, self.raft)
     }
 
+    /// Hands back to the automatic run every frozen support of `object` that a removal or a
+    /// regrowth left standing on nothing (ADR 0431); answers how many.
+    pub fn thaw_unseated(&self, object: &mut SceneObject) -> usize {
+        let table = self.table_for(object);
+        core_supports::Profiles::new(&table).map_or(0, |profiles| {
+            object.supports.thaw_unseated(object.transform, profiles)
+        })
+    }
+
     /// Makes `raft` the plate's, or the picked models' own while the panel shows one. A
     /// model whose raft is the plate's again keeps none of its own; see ADR 0291.
     pub fn keep_raft(&mut self, raft: Raft, scene: &mut Scene) {
@@ -100,6 +109,7 @@ impl SupportTool {
                         shapes: Box::new(shapes.clone()),
                     },
                     cavity: false,
+                    merges: Vec::new(),
                     by_hand: core_engine::ByHand::default(),
                 },
                 None => SupportPlan::of(self.profile_for(object).clone()),
@@ -121,7 +131,7 @@ impl SupportTool {
             .unwrap_or(&self.profile)
     }
 
-    /// The numbers the panel shows and the viewport marks overhangs by: the first picked
+    /// The numbers the panel shows: the first picked
     /// model's own where it keeps them, the plate's otherwise.
     pub fn shown<'a>(&'a self, scene: &'a Scene) -> &'a SupportProfile {
         scene
@@ -129,6 +139,24 @@ impl SupportTool {
             .first()
             .and_then(|id| scene.get(*id))
             .map_or(&self.profile, |object| self.profile_for(object))
+    }
+
+    /// How far a face of `object` may lean before it is held up, degrees: the automatic
+    /// profile's angle while it is in hand, as its run places by it, else the group's.
+    pub fn overhang_deg_for(&self, object: &SceneObject) -> f32 {
+        self.auto.as_ref().map_or_else(
+            || self.profile_for(object).max_overhang_deg,
+            |auto| auto.max_overhang_deg,
+        )
+    }
+
+    /// The angle the viewport marks overhangs by: [`Self::overhang_deg_for`] the first
+    /// picked model, the plate's group where none is picked.
+    pub fn shown_overhang_deg(&self, scene: &Scene) -> f32 {
+        self.auto.as_ref().map_or_else(
+            || self.shown(scene).max_overhang_deg,
+            |auto| auto.max_overhang_deg,
+        )
     }
 
     /// Puts `edited` on every picked model as its own profile of the active group, or
@@ -196,7 +224,7 @@ impl SupportTool {
         }
 
         let active = self.active as usize;
-        if self.group_holds(self.active, scene) == 0 && self.groups[active].name != ISLANDS_GROUP {
+        if self.group_holds(self.active, scene) == 0 && !self.groups[active].answers_check() {
             // Named for its profile, or still the name it was born with: follow the new one.
             let named_for_it = [self.profile.name.as_str(), FIRST_GROUP]
                 .contains(&self.groups[active].name.as_str());

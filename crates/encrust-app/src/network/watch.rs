@@ -181,10 +181,11 @@ impl Network {
     }
 
     /// Asks the network again when a list of printers is in view and the last time the
-    /// window asked on its own was a while ago; `now_s` is the window's clock.
+    /// window asked on its own was a while ago; `now_s` is the window's clock. With no
+    /// printer in hand it never asks on its own.
     pub fn keep_fresh(&mut self, now_s: f64) {
         let due = self.asked_at.is_none_or(|at| now_s - at >= RESCAN_S);
-        if due && !self.hold && !self.is_scanning() {
+        if due && self.profile.is_some() && !self.hold && !self.is_scanning() {
             self.asked_at = Some(now_s);
             self.scan();
         }

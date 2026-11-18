@@ -1,7 +1,7 @@
 use core_format::{
     ChituPeel, FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, chitu_layer_crypt, decode_rle7, layer_in_range, panel_in_range, stated_pwm,
-    stated_rests, stated_speed_mm_min, stated_wait_s,
+    SlicedFileReader, Thumbnail, chitu_layer_crypt, decode_rle7, layer_in_range, panel_in_range,
+    read_rgb15_preview, stated_pwm, stated_rests, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
@@ -47,11 +47,13 @@ impl SlicedFileReader for CtbEncryptedReader {
             address if version >= 5 => read_resin_name(&mut reads, address)?,
             _ => None,
         };
+        let preview =
+            read_rgb15_preview(&mut reads, u64::from(settings.u32(at::LARGE_PREVIEW))).ok();
         Ok(OpenCtbEncrypted {
             reads,
             key: settings.u32(at::LAYER_KEY),
             ciphered,
-            facts: facts(&settings, version, machine, resin, layers),
+            facts: facts(&settings, version, machine, resin, layers, preview),
         })
     }
 }
@@ -162,6 +164,7 @@ fn facts(
     machine: Option<String>,
     resin: Option<String>,
     layers: Vec<LayerEntry>,
+    preview: Option<Thumbnail>,
 ) -> SlicedFile {
     SlicedFile {
         format: "ctb",
@@ -185,6 +188,7 @@ fn facts(
         grey_steps: GREY_STEPS,
         stated: stated(settings),
         layers,
+        preview,
     }
 }
 

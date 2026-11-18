@@ -8,8 +8,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::cure::Cured;
 use crate::shape::{Kind, Limits, Shape};
+use crate::tips::{self, Tips};
 
-const SCHEMA: u32 = 2;
+const SCHEMA: u32 = 3;
 /// Growth in contacts or resin a run may show over its baseline before it is a regression:
 /// placement moves a little with any change, and a few percent is not a decision.
 const GROWTH: f32 = 1.15;
@@ -38,13 +39,39 @@ pub struct Row {
     pub skipped: Option<String>,
     pub shape: Shape,
     pub cure: CureRow,
+    /// Each support on its own, and the weakest of them.
+    pub tips: Tips,
     /// Densities tried below and above the profile's, as a share of it.
     pub sweep: Vec<SweepRow>,
+    /// What strengthening changed, unless `--no-strengthen` left it out.
+    #[serde(default)]
+    pub strengthened: Option<Strengthened>,
+    /// Contacts on the side painted to be seen.
+    #[serde(default)]
+    pub shown: usize,
     /// Limits the corpus sets for this model that the run broke.
     pub broken: Vec<String>,
     pub seconds: f64,
     /// Placement, growing and curing, seconds.
     pub stages_s: [f64; 3],
+}
+
+/// What strengthening changed under one model.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct Strengthened {
+    pub rounds: usize,
+    pub thickened: usize,
+    pub added: usize,
+}
+
+impl From<core_engine::Strengthened> for Strengthened {
+    fn from(done: core_engine::Strengthened) -> Self {
+        Self {
+            rounds: done.rounds,
+            thickened: done.thickened,
+            added: done.added,
+        }
+    }
 }
 
 /// What the cured stack named.
@@ -272,9 +299,10 @@ pub fn print_row(row: &Row) {
         shape.rim_gap_max_mm,
     );
     println!(
-        "- marks: {:.1} mm² of scar, {} on the visible side, {} on thin details, {} feet on the model, {} crowded, {} slender",
+        "- marks: {:.1} mm² of scar, {} on the visible side, {} on an edge, {} on thin details, {} feet on the model, {} crowded, {} slender",
         shape.scar_mm2,
         shape.visible,
+        shape.on_edge,
         shape.thin_tips,
         shape.on_model,
         shape.crowded,
@@ -284,6 +312,8 @@ pub fn print_row(row: &Row) {
         "- stack: {} layers, hardest pull {:.1} N, peels {}, cups {}, thin runs {}",
         cure.layers, cure.hardest_pull_n, cure.peels, cure.cups, cure.thins,
     );
+    tips::print(&row.tips);
+    print_placement(row);
     print_sweep(row);
     for broken in &row.broken {
         println!("- EXPECTED: {broken}");
@@ -347,6 +377,22 @@ fn print_failures(cure: &CureRow) {
     }
 }
 
+/// What strengthening changed, and how many contacts stand on the side painted to be seen.
+fn print_placement(row: &Row) {
+    if let Some(done) = row.strengthened {
+        println!(
+            "- strengthened: {} rounds, {} tips thickened, {} added",
+            done.rounds, done.thickened, done.added
+        );
+    }
+    if row.shown > 0 {
+        println!(
+            "- shown: {} contacts on the side painted to be seen",
+            row.shown
+        );
+    }
+}
+
 fn print_findings(shape: &Shape) {
     let order = [
         Kind::Hanging,
@@ -355,6 +401,7 @@ fn print_findings(shape: &Shape) {
         Kind::RimGap,
         Kind::ThinTip,
         Kind::Visible,
+        Kind::Edge,
         Kind::OnModel,
         Kind::Slender,
         Kind::Crowded,
@@ -388,6 +435,7 @@ fn value_of(kind: Kind, value: f32) -> String {
         Kind::Overloaded => format!(" uses {value:.1}× what it holds"),
         Kind::RimGap => format!(" {value:.1} mm from a tip"),
         Kind::ThinTip => format!(" on {value:.2} mm"),
+        Kind::Edge => format!(" turns {value:.0}°"),
         Kind::Slender => format!(" {value:.0}:1"),
         _ => String::new(),
     }
@@ -396,13 +444,13 @@ fn value_of(kind: Kind, value: f32) -> String {
 /// The summary table over every row.
 pub fn print_table(report: &Report) {
     println!(
-        "| model | profile | holds | enough | contacts | supports ml | tips/cm² | use p90 | over | rim mm | bare mm² | visible | thin | specks | knee |"
+        "| model | profile | holds | enough | contacts | supports ml | tips/cm² | use p90 | over | margin | <×1.5 | rim mm | bare mm² | visible | edge | thin | specks | knee |"
     );
-    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+    println!("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
     for row in report.rows.iter().filter(|row| row.skipped.is_none()) {
         let shape = &row.shape;
         println!(
-            "| {} | {} | {} | {} | {} | {:.2} | {:.1} | {:.2} | {} | {:.0} | {:.0} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {:.2} | {:.1} | {:.2} | {} | {} | {} | {:.0} | {:.0} | {} | {} | {} | {} | {} |",
             row.model,
             row.profile,
             if row.held() { "yes" } else { "**no**" },
@@ -412,9 +460,14 @@ pub fn print_table(report: &Report) {
             row.per_cm2(),
             shape.use_p90,
             shape.overloaded,
+            row.tips
+                .weakest_margin
+                .map_or("-".to_owned(), |margin| format!("×{margin:.1}")),
+            row.tips.under_wanted,
             shape.rim_bare_mm,
             shape.bare_mm2,
             shape.visible,
+            shape.on_edge,
             shape.thin_tips,
             row.cure.specks,
             row.knee()
@@ -458,10 +511,10 @@ pub fn regressions(kept: &Report, now: &Report) -> Vec<String> {
                 b.supports_ml, n.supports_ml
             ));
         }
-        if n.visible > b.visible || n.thin_tips > b.thin_tips + 1 {
+        if n.visible > b.visible || n.on_edge > b.on_edge || n.thin_tips > b.thin_tips + 1 {
             worse.push(format!(
-                "{name}: marks visible {} → {}, thin {} → {}",
-                b.visible, n.visible, b.thin_tips, n.thin_tips
+                "{name}: marks visible {} → {}, edge {} → {}, thin {} → {}",
+                b.visible, n.visible, b.on_edge, n.on_edge, b.thin_tips, n.thin_tips
             ));
         }
     }

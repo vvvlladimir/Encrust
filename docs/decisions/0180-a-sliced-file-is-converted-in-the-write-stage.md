@@ -1,6 +1,6 @@
 # 0180. A sliced file is converted in the write stage, never resampled
 
-- **Status:** Accepted
+- **Status:** Accepted; blank previews are superseded by 0401
 - **Date:** 2026-10-03
 
 ## Context

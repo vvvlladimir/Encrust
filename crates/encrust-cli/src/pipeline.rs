@@ -30,10 +30,12 @@ mod place;
 mod relief;
 
 use checked::checked;
+pub(crate) use checked::{read_again, repaired_later};
 use inspect::talk_mapping;
 pub use inspect::{Inspect, inspect};
 pub use place::{OrientChoice, OrientSummary, orient_settings, rotate_degrees};
 use place::{centred, place};
+pub(crate) use place::{orientation, turn_in_place};
 use relief::press_relief;
 
 /// How a run talks while it works, and what can stop it.
@@ -44,6 +46,8 @@ pub struct Watch<'a> {
     /// Draw a bar over the layers as they are written.
     pub progress: bool,
     pub stop: &'a Stop,
+    /// Whether a recipe's save steps write their file, which `estimate` turns off.
+    pub writes: bool,
 }
 
 impl<'a> Watch<'a> {
@@ -53,6 +57,7 @@ impl<'a> Watch<'a> {
             talk: false,
             progress: false,
             stop,
+            writes: true,
         }
     }
 }
@@ -147,7 +152,7 @@ pub struct Shelled {
     pub cuts: Option<Mesh>,
     /// A plug for each hole, laid on the plate beside the model (ADR 0313).
     pub plugs: Vec<Mesh>,
-    /// What `--drain-at auto` found and drilled (ADR 0398).
+    /// What `--drain-at auto` found and drilled (ADR 0401).
     pub drains: Option<Drained>,
 }
 
@@ -175,8 +180,7 @@ pub fn hollow_and_cut(
     if args.wanted() {
         let uncut = Placed::default();
         let cut = placed.as_ref().unwrap_or(&uncut);
-        let (shelled, faces, report) =
-            hollowing::run(mesh, cut, args, (precision, ground.lifted_mm), watch.stop)?;
+        let (shelled, faces, report) = hollowing::run(mesh, cut, args, precision, watch.stop)?;
         if talk {
             print!("{report}");
         }

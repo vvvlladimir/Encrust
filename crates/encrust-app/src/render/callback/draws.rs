@@ -70,6 +70,13 @@ impl Draws {
             draws.model(object, &shown, colour, mark, texture, drilled);
             draws.hollowing(object, &shown, colour, drilled);
             draws.supports(object, hidden, resin);
+            if let Some(patch) = object.shown_patch.mesh() {
+                draws.flat(
+                    Arc::clone(patch),
+                    Transform::default(),
+                    theme::scene().shown,
+                );
+            }
         }
         // Last, so that the resin inside one model is still seen when another stands in
         // front of it: nothing hides anything under the x-ray, but what is drawn later
@@ -246,7 +253,8 @@ impl Draws {
     }
 
     /// Patches and columns are already in plate coordinates: they were built against the
-    /// placed model, not alongside it. `resin` draws every group in it rather than its tint.
+    /// placed model; columns still growing for a new placement are carried to it meanwhile.
+    /// `resin` draws every group in it rather than its tint.
     fn supports(&mut self, object: &SceneObject, hidden: &[bool], resin: Option<Color32>) {
         let (painted, blocked) = object.supports.patches();
         for (patch, colour) in [
@@ -258,19 +266,23 @@ impl Draws {
             }
         }
 
-        let groups = object.supports_shown();
+        let groups = object.supports.drawn();
+        let shift = object.supports.drawn_shift(object.transform);
+        // The raft is built to the first group's profile, so it is drawn and hidden with it.
+        let raft = object.raft_shown().map(|raft| (0, raft));
         for (group, shaded) in groups
             .iter()
             .enumerate()
+            .chain(raft)
             .filter(|(group, shaded)| !shaded.mesh.is_empty() && hidden.get(*group) != Some(&true))
         {
             // A column holds nothing up but the model, so marking its own overhangs would
             // only paint the scaffolding red.
             let tint = resin.unwrap_or_else(|| theme::support_tint(group));
-            let instance = ModelInstance::new(Transform::default(), tint, NOT_MARKED)
+            let instance = ModelInstance::new(shift, tint, NOT_MARKED)
                 .pulled(GROUP_PULL * (groups.len() - group) as f32);
             self.models.push(ModelDraw::smooth(shaded, instance));
-            self.solid(Arc::clone(&shaded.mesh), Transform::default());
+            self.solid(Arc::clone(&shaded.mesh), shift);
         }
     }
 

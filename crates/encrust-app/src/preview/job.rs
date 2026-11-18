@@ -10,7 +10,9 @@ use core_raster::RasterSettings;
 use core_engine::{Cutting, bake};
 
 use crate::i18n::tr;
-use crate::job::{MeasureJob, MeasureOutcome, PreviewJob, PreviewOutcome, models_of};
+use crate::job::{
+    MeasureJob, MeasureOutcome, PreviewJob, PreviewOutcome, models_of, worker_threads,
+};
 use crate::scene::Scene;
 use crate::status::Status;
 
@@ -20,6 +22,15 @@ use super::*;
 impl Preview {
     /// Starts cutting everything visible on the plate. Fails when there is nothing there.
     pub fn build(&mut self, scene: &Scene, cutting: Cutting) -> Result<()> {
+        self.start_build(scene, cutting, false)
+    }
+
+    /// The same for the quick check: no notice while it runs, nothing said if it fails.
+    pub fn build_in_background(&mut self, scene: &Scene, cutting: Cutting) -> Result<()> {
+        self.start_build(scene, cutting, true)
+    }
+
+    fn start_build(&mut self, scene: &Scene, cutting: Cutting, quiet: bool) -> Result<()> {
         let baked = bake(
             &models_of(scene, scene.active_plate()),
             &cutting.compensation,
@@ -28,8 +39,16 @@ impl Preview {
         self.job = Some(Build {
             job: PreviewJob::spawn(baked, cutting),
             fingerprint: stack_fingerprint(scene, cutting),
+            quiet,
         });
         Ok(())
+    }
+
+    /// Shows a cut started in the background as the user's own, once they wait on it.
+    pub fn show_build(&mut self) {
+        if let Some(build) = self.job.as_mut() {
+            build.quiet = false;
+        }
     }
 
     /// Drains a running build and measurement. Returns whether one is still going, which
@@ -47,7 +66,7 @@ impl Preview {
             return true;
         };
 
-        let fingerprint = build.fingerprint;
+        let (fingerprint, quiet) = (build.fingerprint, build.quiet);
         self.job = None;
         match outcome {
             PreviewOutcome::Built(solid, windows) => {
@@ -62,7 +81,8 @@ impl Preview {
                     self.show_height(height_mm);
                 }
             }
-            PreviewOutcome::Failed(message) => *status = Status::Error(message),
+            PreviewOutcome::Failed(message) if !quiet => *status = Status::Error(message),
+            PreviewOutcome::Failed(_) => {}
         }
         false
     }
@@ -90,8 +110,8 @@ impl Preview {
             Arc::clone(&stack.solid),
             stack.windows.clone(),
             as_seen(settings),
-            fold.tolerance,
-            fold.start(),
+            (fold.tolerance, fold.start()),
+            worker_threads(),
         );
         self.measuring = Some((key, job));
     }
@@ -139,6 +159,11 @@ impl Preview {
 
     pub fn is_building(&self) -> bool {
         self.job.is_some()
+    }
+
+    /// Whether a cut the user waits on is running, not one for the quick check.
+    pub fn is_cutting_in_view(&self) -> bool {
+        self.job.as_ref().is_some_and(|build| !build.quiet)
     }
 
     /// Cuts the window the layer being shown falls in, unless it is the one already cut.

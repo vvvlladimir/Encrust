@@ -1,6 +1,6 @@
 # 0055. The sign is the pseudonormal, with the winding number behind it
 
-- **Status:** Accepted
+- **Status:** Accepted; what `Auto` takes the pseudonormal on is superseded by 0448
 - **Date:** 2026-09-21
 
 ## Context

@@ -7,14 +7,12 @@ use crate::files::{Arrived, Handed, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
 use crate::prefs::Preferences;
-use crate::preview::stack_fingerprint;
 use crate::project;
 use crate::render;
 use crate::scene::SceneObject;
 use crate::shortcuts;
 use crate::state::{Doc, Machine, Tools, View};
 use crate::status::Status;
-use crate::supports::with_own;
 use crate::tool_settings::ToolSettings;
 use crate::ui::theme;
 use crate::undo::Frame;
@@ -35,9 +33,6 @@ pub struct SlicerApp {
     prefs: Preferences,
     /// The keys this frame asked for, read off the raw input before egui saw it.
     keys: Vec<shortcuts::Action>,
-    /// What `encrust-mcp` hands the open window, while it listens.
-    #[cfg(not(target_arch = "wasm32"))]
-    link: Option<crate::link::Link>,
 }
 
 impl Default for SlicerApp {
@@ -53,8 +48,6 @@ impl Default for SlicerApp {
             machine: Machine::default(),
             prefs: Preferences::default(),
             keys: Vec::new(),
-            #[cfg(not(target_arch = "wasm32"))]
-            link: None,
         }
     }
 }
@@ -69,6 +62,9 @@ impl SlicerApp {
         #[cfg(target_arch = "wasm32")]
         crate::web::hold_context(&cc.egui_ctx);
         theme::apply(&cc.egui_ctx);
+        // Cmd + and Cmd - are the table's, so the size they set is kept with the preferences.
+        cc.egui_ctx
+            .options_mut(|options| options.zoom_with_keyboard = false);
         crate::updates::sweep();
 
         let prefs = crate::prefs::load();
@@ -91,13 +87,13 @@ impl SlicerApp {
             .supports
             .start_automatic_unless_chosen(&app.doc.scene, &app.machine.slicing.catalogue);
         prefs.restore_panels(&cc.egui_ctx);
+        app.machine.report.offer_crash();
+        app.machine.autosave = crate::autosave::Autosave::start();
+        // A copy to restore is offered over the plate, which the start page would hide.
+        app.view.options.started |= app.machine.autosave.offered().is_some();
         project::mark_saved(&mut app.window());
         if let Some(path) = initial_model {
             open_by_what_it_is(&mut app.window(), Handed::Path(path.to_path_buf()));
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            app.link = crate::link::Link::for_window(&cc.egui_ctx);
         }
         app
     }
@@ -193,48 +189,10 @@ impl SlicerApp {
             return;
         };
         if written.to_send {
+            let temporary = crate::network::is_temporary(&written.path);
             self.machine
                 .network
-                .send(written.path, &mut self.machine.status);
-        }
-    }
-
-    /// The preview shows the plate as it is, so entering the mode with a stale stack, or
-    /// none, cuts one; so does opening Check, which reads its figures off the stack. Nothing
-    /// to cut, or nothing to cut it for, and it stays empty: the transport says which.
-    fn refresh_preview(&mut self) {
-        let reads_the_stack = self.mode == Mode::Preview || self.tool == Tool::Check;
-        if !reads_the_stack || self.machine.preview.is_building() {
-            return;
-        }
-        // A stack cut before the supports land would be cut without them.
-        let plate = self.doc.scene.active_plate();
-        if self.doc.scene.supports_pending(plate) {
-            return;
-        }
-        let fingerprint = stack_fingerprint(&self.doc.scene, self.machine.slicing.cutting());
-        let wanted =
-            self.machine.preview.layer_count() == 0 || self.machine.preview.is_stale(fingerprint);
-        let Some(settings) = self.machine.slicing.raster_settings() else {
-            return;
-        };
-        if !wanted {
-            // Preview says what the print takes, so the stack is measured as it is written.
-            self.machine
-                .preview
-                .measure(&settings, self.machine.slicing.fold());
-            return;
-        }
-        if !self.doc.scene.has_printable(self.doc.scene.active_plate()) {
-            return;
-        }
-
-        let started = self
-            .machine
-            .preview
-            .build(&self.doc.scene, self.machine.slicing.cutting());
-        if let Err(error) = started {
-            self.machine.status = Status::failed(&error.context(tr!("app-cannot-build-preview")));
+                .send(written.path, temporary, &mut self.machine.status);
         }
     }
 
@@ -329,9 +287,13 @@ impl SlicerApp {
         self.tools.supports.settle_on_raft(&mut self.doc.scene);
         let drift_mm = self.machine.slicing.material.compensation.fit_drift_mm();
         let asked_by = self.doc.history.next_edit();
-        self.tools
-            .drain
-            .lay_plugs(&mut self.doc.scene, drift_mm, frame.settled, asked_by);
+        self.tools.drain.lay_plugs(
+            &mut self.doc.scene,
+            drift_mm,
+            frame.settled,
+            asked_by,
+            &mut self.doc.drilling.reads,
+        );
         self.doc.drilling.start(&self.doc.scene, frame.settled);
         self.doc.meeting.start(&self.doc.scene, frame.settled);
         self.doc.history.observe(
@@ -349,7 +311,7 @@ impl SlicerApp {
     fn land_plugs(&mut self) -> bool {
         let status = &mut self.machine.status;
         let plate_mm = Vec2::new(self.doc.plate.x_mm, self.doc.plate.y_mm);
-        for ended in self.tools.drain.poll_plugs() {
+        for ended in self.tools.drain.plugs_to_land(&self.doc.drilling) {
             self.doc
                 .history
                 .land(&mut self.doc.scene, ended.asked_by(), |scene| {
@@ -359,33 +321,9 @@ impl SlicerApp {
         self.tools.drain.laying_plugs()
     }
 
-    /// Rebuilds the columns and the painted patches of every object whose placement,
-    /// points, paint or profile moved under them, so that what the viewport draws is what
-    /// would be sliced. A profile still being dragged is grown to once it is let go.
+    /// The supports drawn as they would be sliced: see [`crate::growth::refresh_supports`].
     fn refresh_supports(&mut self, held: bool) {
-        self.tools.supports.settle_on_raft(&mut self.doc.scene);
-        let plate = self.tools.supports.table();
-        let raft = self.tools.supports.raft;
-        self.doc.surfaces.start(&mut self.doc.scene);
-        for object in self.doc.scene.objects_mut() {
-            let untouched = object.supports.is_empty()
-                && object.supports.meshes().is_none()
-                && object.supports.drawn().is_empty()
-                && object.supports.painted().is_empty()
-                && object.supports.blocked().is_empty();
-            if untouched {
-                continue;
-            }
-            let table = with_own(plate.clone(), &object.own, raft);
-            let retuned = held && object.supports.retuned(object.transform, &table);
-            if object.supports.outgrown(object.transform, &table) {
-                if !retuned {
-                    self.doc.growth.start(object, &table);
-                }
-                continue;
-            }
-            object.refresh_supports(&table);
-        }
+        crate::growth::refresh_supports(&mut self.doc, &mut self.tools.supports, held);
     }
 }
 
@@ -453,22 +391,13 @@ impl SlicerApp {
         working |= tools.text.poll(scene, status);
         working |= tools.cut.poll(scene, status);
         working |= tools.drain.poll(scene, status);
+        working |= tools
+            .measure_walk
+            .poll(&mut tools.measure, &mut tools.measure_edges, scene);
         working |= tools.orient.poll(scene, &doc.plate, status);
         working |= self.land_plugs();
         let (doc, settled) = (&mut self.doc, ctx.input(|input| !input.pointer.any_down()));
         working |= crate::prepare::poll(doc, &mut self.tools, &mut self.machine, settled);
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Some(link) = &mut self.link {
-            let mut window = crate::panels::Window {
-                mode: &mut self.mode,
-                tool: &mut self.tool,
-                doc: &mut self.doc,
-                view: &mut self.view,
-                tools: &mut self.tools,
-                machine: &mut self.machine,
-            };
-            working |= link.poll(&mut window);
-        }
         working | crate::panels::animate_preview(ctx, &mut self.machine.preview)
     }
 
@@ -522,10 +451,13 @@ impl eframe::App for SlicerApp {
         let started = web_time::Instant::now();
         crate::i18n::choose(self.machine.general.language);
         crate::ui::theme::motion::reduce(ui.ctx(), self.machine.general.reduce_motion);
+        crate::interface_scale::apply(ui.ctx(), self.machine.general.interface_scale_percent);
         #[cfg(target_os = "macos")]
         if !ui.input(|input| input.viewport().fullscreen.unwrap_or(false)) {
             crate::traffic_lights::centre(frame, crate::ui::theme::TOP_BAR_H);
         }
+        #[cfg(target_os = "macos")]
+        crate::app_menu::follow(ui.ctx(), &mut self.machine);
         #[cfg(not(target_os = "macos"))]
         let _ = frame;
         self.take_files(ui.ctx());
@@ -545,9 +477,13 @@ impl eframe::App for SlicerApp {
         }
         self.hand_written_file_to_the_network();
         self.refresh_preview();
+        if let Some(wait) = self.check_in_background(web_time::Instant::now()) {
+            ui.ctx().request_repaint_after(wait);
+        }
         self.carry_height();
         self.refresh_supports(ui.ctx().input(|input| input.pointer.any_down()));
         self.take_shortcuts();
+        crate::autosave::tick(&mut self.window(), ui.ctx());
 
         project::guard_close(ui, &mut self.window());
         self.window().show(ui);
@@ -557,6 +493,8 @@ impl eframe::App for SlicerApp {
 
     fn on_exit(&mut self) {
         self.machine.updates.on_exit();
+        self.machine.autosave.finish();
+        crate::report::crash::forget();
         // Dropping the window resets its view's class under AppKit's Touch Bar observers,
         // which aborts the process: https://github.com/AccessKit/accesskit/issues/823
         #[cfg(target_os = "macos")]
@@ -567,11 +505,16 @@ impl eframe::App for SlicerApp {
 #[cfg(test)]
 mod plate_card;
 #[cfg(test)]
+mod recipe_page;
+#[cfg(test)]
 mod sheet_keys;
+#[cfg(all(test, feature = "showcase"))]
+mod showcase;
 #[cfg(test)]
 mod small_window;
 #[cfg(all(test, feature = "snapshots"))]
 mod snapshots;
+mod stack;
 #[cfg(test)]
 mod states;
 #[cfg(test)]

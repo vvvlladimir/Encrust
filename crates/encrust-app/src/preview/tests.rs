@@ -10,7 +10,7 @@ use crate::scene::ImportSummary;
 use crate::status::Status;
 
 /// Panel of 64 x 32 pixels at a 0.2 mm pitch: 12.8 x 6.4 mm of build area.
-fn settings() -> RasterSettings {
+pub(crate) fn settings() -> RasterSettings {
     RasterSettings {
         width_px: 64,
         height_px: 32,
@@ -25,7 +25,7 @@ fn settings() -> RasterSettings {
 
 /// A preview of a 4 x 4 mm box `count` half-millimetre layers tall, with its first
 /// window already cut.
-fn preview_with_stack(count: usize) -> Preview {
+pub(crate) fn preview_with_stack(count: usize) -> Preview {
     let mesh = Arc::new(box_mesh(count as Scalar * 0.5));
     let windows = Windows::new(
         &mesh,
@@ -125,7 +125,7 @@ fn tetrahedron() -> Mesh {
     )
 }
 
-fn scene_with_a_model() -> Scene {
+pub(crate) fn scene_with_a_model() -> Scene {
     let mesh = tetrahedron();
     let mut scene = Scene::default();
     scene.insert(crate::scene::Imported::new(

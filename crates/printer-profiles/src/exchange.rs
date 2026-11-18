@@ -19,6 +19,7 @@ impl Catalogue {
             Kind::Resin => self.resin(id)?.profile.to_toml_string(path),
             Kind::Support => self.support(id)?.profile.to_toml_string(path),
             Kind::Hollow | Kind::Drain => self.preset(kind, id)?.to_toml_string(path),
+            Kind::Recipe => Ok(self.recipe(id)?.profile.clone()),
             Kind::Auto => match self.autos().find(|entry| entry.id == id) {
                 Some(entry) => entry.profile.to_toml_string(path),
                 None => Err(ProfileError::Unknown {
@@ -42,8 +43,9 @@ impl Catalogue {
             Kind::Printer => self.import_printer(PrinterProfile::from_toml_str(text, path)?),
             Kind::Resin => self.import_resin(MaterialProfile::from_toml_str(text, path)?, printer),
             Kind::Support => self.import_support(SupportProfile::from_toml_str(text, path)?),
-            // No automatic profile is ever added, so none is taken in either.
-            Kind::Hollow | Kind::Drain | Kind::Auto => Err(ProfileError::Unknown {
+            // No automatic profile is ever added, so none is taken in either; a recipe is
+            // checked by `core-recipe` first and kept through `Catalogue::save_recipe`.
+            Kind::Hollow | Kind::Drain | Kind::Auto | Kind::Recipe => Err(ProfileError::Unknown {
                 kind: kind.label(),
                 id: path.display().to_string(),
             }),

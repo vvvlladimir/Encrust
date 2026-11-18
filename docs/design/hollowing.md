@@ -15,8 +15,8 @@ meshes appended in one buffer and nothing else.
 
 | | Internal | External |
 |---|---|---|
-| outside | the model, byte for byte | the surface grown by `t` |
-| void, wound inward | the surface `d = -t` | the model, wound inward |
+| outside | the model, byte for byte | the surface grown by `t + v/2` |
+| void, wound inward | the surface `d = -(t + v/2)` | the model, wound inward |
 | solid, wound outward | a hive's or grid's walls, or a scaffold's struts, clipped to the cavity | — |
 
 Nothing is welded, so the model's triangles never pass through the cavity and the outside
@@ -26,16 +26,20 @@ node (ADR 0071).
 
 ## The cavity
 
-The isosurface `d = -t`, extracted from a field built around *that* surface rather than
-the mesh (ADR 0058), so the cost is the mesh's own field whatever the wall thickness. What
-comes out is clustered onto the lattice, so a smooth cavity is a few large facets rather
-than a triangle per voxel face (ADR 0084); its triangle count follows its own shape.
+The isosurface `d = -(t + v/2)`, `v` the lattice, extracted from a field built around
+*that* surface rather than the mesh (ADR 0058), so the cost is the mesh's own field whatever
+the wall thickness. What comes out is clustered onto the lattice, so a smooth cavity is a
+few large facets rather than a triangle per voxel face (ADR 0084); its triangle count
+follows its own shape. Clustering pulls a vertex up to half a voxel and interpolation adds
+to it, so the cut stands half a voxel past the wall: `t` is the wall at its thinnest, not on
+average (ADR 0449).
 
 A wall thicker than the model leaves the field empty, `extract` returns nothing and the
 model comes back unchanged with `cavity_mm3` at zero — the honest answer to "hollow this
 3 mm spar with a 2 mm wall", and the CLI reports it as a defect.
 
-`External` is the same build at `iso_mm = +t`: a mould. Infill and blockers do not apply.
+`External` is the same build at `iso_mm = +(t + v/2)`: a mould. Infill and blockers do not apply;
+thin parts kept solid do.
 
 The fields are built from the shells that bound the solid, not from every shell of the
 mesh. A shell most of whose faces have the rest of the mesh standing just outside them — a
@@ -43,7 +47,22 @@ stray part left inside a sculpt — is left out of them. A field over it reads i
 as air and cuts a wall around it. It stays in the model, so under the non-zero rule it
 prints solid wherever it is, in the wall or standing in the cavity. A mould turns the
 bounding shells inside out, not the stray ones, which would print as resin in its void
-(ADR 0186).
+(ADR 0186). A shell with no volume, a stray film, is left out too: it bounds nothing and
+gives the field a seam no side can be read off (ADR 0448).
+
+Where bodies overlap, a face of one inside another bounds nothing, and the field would cut
+a wall along it. A face a closed bounding shell holds just outside its middle and corners
+is left out (`shells/buried.rs`, ADR 0450), so overlapping parts share one cavity. The field
+is then built over an open surface, which only the whole mesh's winding number can sign,
+so a forced pseudonormal keeps every face. One sign serves every field of a run: the
+winding hierarchy `outer_shells` builds over the whole mesh (`Signer::of_shells`).
+
+A shell's cavity is split into pieces once meshed, and only what can hold resin a drain
+reaches is kept (`hollow/kept.rs`, ADR 0448): a piece wound against the rest is solid left
+loose in the cavity and goes unless it touches a blocker; one smaller than a ball of the
+default 3 mm drain stays solid; and where two or more are left, one the model's winding
+number puts outside is a wrong side in the field and goes, unless none reads inside, when
+the largest stays. `cavity_mm3` counts what was kept.
 
 An open floor carries the cavity out through the floor the model stands on (ADR 0313).
 `HollowSettings::open_toward` is the way to the plate in the space the wall is measured in,
@@ -79,8 +98,28 @@ solid, kept in model space so it travels with the model, subtracted from the cav
 anything is meshed: `max(cavity, r + w - d(p, rod))` over the cavity's tiles and the rod's
 own. `core` and `r` scale with the model; `w` is plate millimetres, so a sleeve's wall is the
 shell's thickness at any scale. They keep a cavity out of a thin spar or a spike that would
-print hollow and snap, and out of the sleeve around a channel or a walled hole. A click drops a ball at the inspector's radius — both ends
-the same point — and an alt-click removes the one the click landed in.
+print hollow and snap, and out of the sleeve around a channel or a walled hole.
+
+A click drops a ball on the surface, and `ModelHollow::asking` walls every one a user placed
+by the shell's thickness, so its radius is how far it reaches past the wall into the cavity
+(ADR 0396). `blocker_under` picks the ball for a click and for `--keep-solid`. Fitted, it is
+`fitted_blocker`'s: a ray from the click straight in to the
+far side, the ball centred halfway with half that width; with no far side the inspector's
+radius stands. A shift-click puts down `rod_to`: a rod from the last blocker's end to the new
+ball, as wide as it. An alt-click removes the nearest one the view ray enters before halfway across the part, so one
+deep inside goes and one behind the far wall stays.
+
+## Thin parts kept solid
+
+`HollowSettings::solid_under_mm` keeps the wall solid wherever the model is thinner than
+`s`: the cavity is taken only inside the model opened by a ball of `r = s / 2` (ADR 0404).
+A band reaches two voxels, so neither half moves a field: the model's band is built at
+`iso = -r`, its surface extracted as the eroded solid, and that solid's band built at
+`iso = +r` on the cavity's lattice. A part thinner than `2r` has no eroded solid and so no
+opened one; a shell's cavity field is intersected with the opened one before the floor and
+the blockers, a mould's void is the opened model instead of the model. `cavity_field` does
+it, so a kept field moves its blockers without opening again. The 40 mm ball of the
+`opening` bench hollows in 0.93 s plain and 2.1 s with 6 mm kept solid.
 
 ## The lattice
 
@@ -245,21 +284,23 @@ material along the hole's axis at twelve points around it — so no film is left
 mouth. A ray that meets air first counts nothing, so another part of the model standing over
 the hole is never cut; nor does one rising further than the hole is deep, so a mouth in a fold
 is not lifted through the lobe folded against it.
-And `pierce` deepens a hole standing on a hollowed model until it is through the wall,
-`thickness + 2 voxels`, whatever depth was asked for: a hole shorter than its wall is a
-dimple, not a drain, so the depth a user types is a floor rather than a ceiling. On a solid
-model there is no wall to cross and the depth is what was typed.
+And `pierce` deepens a `HoleKind::Drain` on a hollowed model until it is through the wall,
+`thickness + 2 voxels`: what a search chose, or was drilled into a trapped pocket, has to
+open it. A hole a user sets at a point is `HoleKind::AtDepth` (ADR 0414) and stops at the
+depth typed; short of the wall it is a dimple, which the drainage check reports, and its
+plug is no longer than the hole. On a solid model the depth is what was typed.
 
 A hole drilled into a model that is still solid is `HoleKind::Walled` (ADR 0346): part of
 the shape, not a drain. `sleeves` keeps the cavity a wall off it, from its mouth to its tip,
 as it does a channel; `pierce` leaves its depth, and its plug is as deep as the hole.
 Clearing one from a hollow model rebuilds the shell, as clearing a channel does.
 
-A hole in the supports (ADR 0347) is kept with the model in its space, takes no plug and is
-never deepened or walled. The Drain tool meets what prints: the model's surface drilled and
-hollowed, and its support groups as they print, each with a hierarchy built on a worker
-(`PrintedSupports`). A click adds nothing only where its hole would lie wholly inside one
-drilled at least as wide, so a click on a hole's floor drills on through it.
+A hole in the raft (ADR 0347, 0441) is kept with the model in its space, takes no plug and is
+never deepened or walled. No hole cuts a support tree. The Drain tool meets what prints: the
+model's surface drilled and hollowed, and its raft as it prints, with a hierarchy built on a
+worker (`PrintedSupports`); a ray passes through the trees. A click adds nothing only where
+its hole would lie wholly inside one drilled at least as wide, so a click on a hole's floor
+drills on through it.
 
 A polygon's corners lie on the hole's diameter and its turn is measured from the level line
 `frame` lays the first corner on wherever the axis is not upright, so a user turns a corner
@@ -328,7 +369,7 @@ never kept, and in a browser they make way for a field being built or a plate be
 (ADR 0260).
 
 The window drills each model on a worker a moment after its cuts or mesh change, and its
-support groups on another — only those a body's box reaches are cut and shaded again — and
+raft on another — only the pieces a body's box reaches are cut and shaded again — and
 draws what it gets with the cavity's faces found again on it — those within a micrometre of the
 shell's cavity — and hands it to `bake`, which otherwise drills the model itself. Until it
 lands, and on a model the engine refuses, the cut is drawn as follows. Nothing meshes the
@@ -343,9 +384,12 @@ See ADR 0201 for what the alternatives cost.
 ## Trapped resin
 
 A cavity with no way out prints full of uncured resin. `core-supports` finds those pockets
-on the stack rather than in a field: `TrapScan` takes layers in print order, reads the air
-between the material runs of each one, and joins the runs that touch across a row or across
-a layer. A pocket that reaches the edge of the grid, the first layer or the top of the
+on the stack rather than in a field: `TrapScan` takes layers in print order on a 0.05 mm grid,
+grows each one's material by a cell, reads the air between its runs, and joins the runs that
+touch across a row or across a layer. A cell is material where the layer covers its middle, so
+a wall thinner than two cells reads in steps that meet only at their corners; grown, they
+close, and the air reads a cell short of each wall, a pocket about 1.3 % small on a 2 mm
+shell (ADR 0411). A pocket that reaches the edge of the grid, the first layer or the top of the
 stack has somewhere to drain; one that closes without ever doing so is trapped, and its
 lowest layer is where a hole goes. Each one carries what it holds, where its hole goes and
 the box it fills. See ADR 0072 for why it lives there and what the grid
@@ -364,7 +408,7 @@ bounds the lot, and each pocket's own box is what the shader keeps the red insid
 
 ## Suggested drains
 
-`--drain-at auto` puts the holes in itself (ADR 0398). `core_volume::holes_out` proposes them
+`--drain-at auto` puts the holes in itself (ADR 0401). `core_volume::holes_out` proposes them
 for one pocket from its point `p`, the middle of its floor, in the pose the model prints in.
 A drain's rays start a radius `r` over `p`, so a level hole's lowest point is the floor; a
 vent's start `r` under the ceiling straight over `p`. Seventeen rays go out: the vertical,
@@ -411,7 +455,7 @@ prints at.
 - The shell is kept in model space but measured on the plate, at the scale the model
   stood at (ADR 0185). A model scaled after hollowing has a wall scaled with it; the window
   notices and asks to be run again.
-- A channel narrower than a tenth of a millimetre drains in life and reads as closed to the
+- A channel narrower than three cells, 0.15 mm, drains in life and reads as closed to the
   scan, so the pocket behind it is reported. The error is a hole nobody needed.
 - A torn model's open floor is drawn closed: the engine refuses it, so its floor stays in
   the mesh and only the layers show it gone. A floor on the plate seals the cavity until

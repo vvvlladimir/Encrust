@@ -1,8 +1,9 @@
 use std::ops::Range;
 use std::sync::{Arc, Weak};
 
-use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3, smallest_scale};
+use core_geometry::{Bvh, Mat3, Mesh, Ray, Scalar, Transform, Vec3, cylinder, smallest_scale};
 
+use crate::keep_solid::{first_crossed, rod_on, walled_by};
 use crate::{
     Blocker, Channel, DrainHole, Drilled, HoleKind, HoleSize, HollowSettings, channel_under, drill,
     hole_at, lift_for, pierce, sleeves, turn_in_model,
@@ -34,9 +35,8 @@ pub struct ModelHollow {
     /// The blockers and the points of the channel being laid out as balls, meshed for a
     /// viewport. Kept so that a renderer's cache is not churned when nothing moved.
     markers: Option<Arc<Mesh>>,
-    /// The holes and channels as they are actually cut, and the bodies they cut with:
-    /// deepened through the wall once the model is hollow, and in the model's own space.
-    /// A cut is its own operation and does not wait for a cavity; see ADR 0075.
+    /// The holes and channels as they are cut, in the model's own space, and the bodies they
+    /// cut with: drains deepened through the wall once the model is hollow (ADR 0075, 0414).
     deepened: Vec<DrainHole>,
     cuts: Option<Arc<Mesh>>,
     built: Option<Shell>,
@@ -111,8 +111,8 @@ impl ModelHollow {
         &self.drains
     }
 
-    /// The holes and channels as they are cut: the holes reach further than the depth
-    /// they were asked at wherever they have a wall to go through.
+    /// The holes and channels as they are cut: a drain reaches further than the depth it
+    /// was asked at wherever it has a wall to go through.
     pub fn cut(&self) -> (&[DrainHole], &[Channel]) {
         (&self.deepened, &self.channels)
     }
@@ -211,8 +211,8 @@ impl ModelHollow {
         true
     }
 
-    /// The blockers as balls in the model's own space, for the viewport to draw, or
-    /// `None` when there are none.
+    /// The blockers, and the points of a channel being laid out, as meshes in the model's own
+    /// space for the viewport to draw, or `None` when there are none.
     pub fn markers(&self) -> Option<&Arc<Mesh>> {
         self.markers.as_ref()
     }
@@ -275,11 +275,10 @@ impl ModelHollow {
         (wanted != *built).then_some(wanted)
     }
 
-    /// What the tool is asking for, with what this model carries laid over it: its own
-    /// blockers, and a sleeve of wall around every channel and walled hole so the cavity
-    /// keeps off them. A channel placed on a hollow model therefore makes its shell stale.
+    /// What the tool asks for, with this model's blockers walled by the shell (ADR 0396) and a
+    /// sleeve round every channel and walled hole laid over it.
     pub fn asking(&self, asked: &HollowSettings) -> HollowSettings {
-        let mut blockers = self.blockers.clone();
+        let mut blockers: Vec<Blocker> = walled_by(&self.blockers, asked.thickness_mm).collect();
         blockers.extend(sleeves(&self.channels, &self.drains, asked.thickness_mm));
         HollowSettings {
             blockers,
@@ -287,12 +286,15 @@ impl ModelHollow {
         }
     }
 
-    /// Puts a blocker where the model was clicked. `point` is in plate coordinates.
-    pub fn add_blocker(&mut self, point: Vec3, radius_mm: Scalar, transform: Transform) {
-        if let Some(blocker) = Self::blocker_at(point, radius_mm, transform) {
-            self.blockers.push(blocker);
-            self.remesh_markers();
-        }
+    /// Puts down `blocker`, already in the model's own space.
+    pub fn place_blocker(&mut self, blocker: Blocker) {
+        self.blockers.push(blocker);
+        self.remesh_markers();
+    }
+
+    /// [`rod_on`] from the last blocker to `next`, or `None` before the first.
+    pub fn rod_to(&self, next: &Blocker) -> Option<Blocker> {
+        Some(rod_on(self.blockers.last()?, next))
     }
 
     /// The blocker a click at `point`, in plate coordinates, would put down, in the
@@ -308,18 +310,17 @@ impl ModelHollow {
         ))
     }
 
-    /// Takes away the blocker the click landed in, if any, and says whether it did.
-    pub fn remove_blocker(&mut self, point: Vec3, transform: Transform) -> bool {
+    /// Takes away the blocker nearest along `ray`, in plate coordinates, of those it enters
+    /// within `reach_mm` of its origin, and says whether it did.
+    pub fn remove_blocker(&mut self, ray: &Ray, reach_mm: Scalar, transform: Transform) -> bool {
         let Some(inverse) = transform.inverse_matrix() else {
             return false;
         };
-        let local = inverse.transform_point3(point);
+        let along = inverse.transform_vector3(ray.direction);
+        let local = Ray::new(inverse.transform_point3(ray.origin), along);
+        let local_reach = reach_mm * along.length();
 
-        let hit = self
-            .blockers
-            .iter()
-            .position(|blocker| blocker.depth_at(local) >= 0.0);
-        if let Some(index) = hit {
+        if let Some(index) = first_crossed(&self.blockers, &local, local_reach) {
             self.blockers.remove(index);
             self.remesh_markers();
             return true;
@@ -332,9 +333,8 @@ impl ModelHollow {
         self.remesh_markers();
     }
 
-    /// Drills a hole where the model was clicked, straight into the surface it was
-    /// clicked on, unless one already drilled there takes it in; walled on a solid model
-    /// (ADR 0346). `point` and `normal` are in plate coordinates.
+    /// Drills a hole into the face of `normal` clicked at `point`, plate coordinates, unless one
+    /// drilled takes it in, walled on a solid model (ADR 0346); says whether it drilled one.
     pub fn add_drain(
         &mut self,
         mesh: &Mesh,
@@ -343,30 +343,27 @@ impl ModelHollow {
         normal: Vec3,
         size: HoleSize,
         transform: Transform,
-    ) {
-        if let Some(hole) = Self::drain_at(mesh, bvh, point, normal, size, transform) {
-            self.add_hole(hole);
-        }
+    ) -> bool {
+        Self::drain_at(mesh, bvh, point, normal, size, transform)
+            .is_some_and(|hole| self.add_hole(hole))
     }
 
-    /// Drills `hole`, in the model's own space, as a click would — walled on a solid model —
-    /// unless one already drilled takes it in: what [`Self::drain_at`] or
-    /// [`Self::support_drain_at`] placed.
-    pub fn add_hole(&mut self, hole: DrainHole) {
+    /// Drills `hole` of [`Self::drain_at`], model space, as a click would, unless one drilled
+    /// takes it in; says whether it drilled one.
+    pub fn add_hole(&mut self, hole: DrainHole) -> bool {
         let hole = self.placed(hole);
-        if !self.has_hole_over(&hole) {
+        let new = !self.has_hole_over(&hole);
+        if new {
             self.drains.push(hole);
             self.recut();
         }
+        new
     }
 
     /// Whether `hole`, in the model's own space, would lie wholly inside one already drilled
     /// at least as wide: a click on a hole adds nothing, one reaching past it is drilled.
     pub fn has_hole_over(&self, hole: &DrainHole) -> bool {
-        let tip = hole.at + hole.axis.normalize_or_zero() * hole.depth_mm;
-        self.drains.iter().any(|old| {
-            within(old, hole.at) && within(old, tip) && hole.diameter_mm <= old.diameter_mm
-        })
+        hole.lies_within(&self.drains)
     }
 
     /// The hole a click at `point` on a face of `normal`, both in plate coordinates, would
@@ -381,7 +378,10 @@ impl ModelHollow {
     ) -> Option<DrainHole> {
         let (at, axis, size) = in_model(point, normal, size, transform)?;
         let lift_mm = lift_for(mesh, bvh, at, axis, size.diameter_mm, size.depth_mm);
-        Some(DrainHole::sized(at, axis, size, lift_mm))
+        Some(DrainHole {
+            kind: HoleKind::AtDepth,
+            ..DrainHole::sized(at, axis, size, lift_mm)
+        })
     }
 
     /// The hole a click at `point` on a face of `normal` of the supports `mesh`, all in
@@ -403,7 +403,7 @@ impl ModelHollow {
         })
     }
 
-    /// `hole` as it would be cut here: through the wall, once the model is hollow.
+    /// `hole` as it would be cut here: a drain through the wall, once the model is hollow.
     pub fn as_cut(&self, hole: DrainHole) -> DrainHole {
         let hole = self.placed(hole);
         self.pierced(std::slice::from_ref(&hole))
@@ -411,12 +411,12 @@ impl ModelHollow {
             .unwrap_or(hole)
     }
 
-    /// `hole` as a click drills it here: into a model, walled while it is solid (ADR 0346).
+    /// `hole` as it is drilled here: into a model, walled while it is solid (ADR 0346).
     fn placed(&self, hole: DrainHole) -> DrainHole {
         DrainHole {
             kind: match hole.kind {
                 HoleKind::Support => HoleKind::Support,
-                _ if self.is_hollow() => HoleKind::Drain,
+                kind if self.is_hollow() => kind,
                 _ => HoleKind::Walled,
             },
             ..hole
@@ -430,7 +430,7 @@ impl ModelHollow {
         };
         let local = inverse.transform_point3(point);
 
-        let hit = self.drains.iter().position(|hole| within(hole, local));
+        let hit = self.drains.iter().position(|hole| hole.holds(local));
         if let Some(index) = hit {
             self.drains.remove(index);
             self.recut();
@@ -509,20 +509,15 @@ impl ModelHollow {
     }
 
     fn remesh_markers(&mut self) {
-        let balls = self
-            .blockers
+        let points = self
+            .pending
             .iter()
-            .map(|blocker| (blocker.from, blocker.radius_mm))
-            .chain(
-                self.pending
-                    .iter()
-                    .map(|(point, _)| (*point, PENDING_MARKER_MM)),
-            );
-        self.markers = markers(balls).map(Arc::new);
+            .map(|(point, _)| Blocker::ball(*point, PENDING_MARKER_MM));
+        self.markers = blocker_markers(self.blockers.iter().copied().chain(points)).map(Arc::new);
     }
 
-    /// Re-cuts what is placed. A hole is drilled to the depth it was asked for, and once
-    /// there is a cavity behind it, through the wall the cavity left; see ADR 0075.
+    /// Re-cuts what is placed. A hole is drilled to the depth it was asked for, and a drain,
+    /// once there is a cavity behind it, through the wall the cavity left (ADR 0075, 0414).
     fn recut(&mut self) {
         self.deepened = self.pierced(&self.drains);
         // A hole is placed on a surface and a channel dug between points, so the only body
@@ -610,15 +605,6 @@ impl ModelHollow {
     }
 }
 
-/// Whether `point` is inside the tube `hole` cuts, in the model's own space.
-fn within(hole: &DrainHole, point: Vec3) -> bool {
-    let axis = hole.axis.normalize_or_zero();
-    let along = (point - hole.at).dot(axis);
-    let radius = hole.diameter_mm / 2.0;
-    (-radius..=hole.depth_mm).contains(&along)
-        && (point - hole.at - axis * along).length() <= radius
-}
-
 /// Where a click at `point` on a face of `normal`, in plate coordinates, drills in the model's
 /// own space, along which axis, and `size` brought there.
 fn in_model(
@@ -640,9 +626,24 @@ fn in_model(
 /// Balls of the given radii about the given centres, in one mesh, or `None` for none: how
 /// a marked point is drawn, so that every marker in a viewport looks the same.
 pub fn markers(balls: impl IntoIterator<Item = (Vec3, Scalar)>) -> Option<Mesh> {
+    blocker_markers(
+        balls
+            .into_iter()
+            .map(|(center, radius_mm)| Blocker::ball(center, radius_mm)),
+    )
+}
+
+/// Blockers drawn as what they keep solid, a ball or a rod with round ends, in one mesh, or
+/// `None` for none.
+pub fn blocker_markers(blockers: impl IntoIterator<Item = Blocker>) -> Option<Mesh> {
     let mut mesh = Mesh::default();
-    for (center, radius_mm) in balls {
-        append(&mut mesh, &ball(center, radius_mm));
+    for blocker in blockers {
+        append(&mut mesh, &ball(blocker.from, blocker.radius_mm));
+        if blocker.to != blocker.from {
+            append(&mut mesh, &ball(blocker.to, blocker.radius_mm));
+            let side = cylinder(blocker.from, blocker.to, blocker.radius_mm, MARKER_SEGMENTS);
+            append(&mut mesh, &side);
+        }
     }
     (!mesh.is_empty()).then_some(mesh)
 }

@@ -242,6 +242,14 @@ pub const TWO_LINE_ROW_H: f32 = 48.0;
 /// Inner margin of an inspector block, a floating card and a card's header row.
 pub const PANEL_MARGIN: Margin = Margin::same(12);
 pub const CARD_MARGIN: Margin = Margin::symmetric(10, 8);
+/// Inner margin of a notice over the stage and of a run's card, tight on the side its
+/// buttons stand.
+pub const NOTICE_MARGIN: Margin = Margin {
+    left: 12,
+    right: 6,
+    top: 6,
+    bottom: 6,
+};
 /// Side padding of the top bar and the layer strip.
 pub const STRIP_MARGIN: Margin = Margin::symmetric(8, 0);
 

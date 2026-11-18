@@ -49,6 +49,9 @@ pub(crate) fn carry_for(grid: VoxelGrid, band_mm: Scalar, iso_mm: Scalar) -> i32
 /// What one tile of the sweep carries: the nearest face of each of its voxels.
 pub(crate) type Work = Box<[Nearest]>;
 
+/// What a stored tile is refined to: the nearest point of each voxel, measured once.
+pub(crate) type Refined = Box<[Option<ClosestPoint>]>;
+
 /// One tile out of a ring, or nothing when the sweep had not reached anything around it.
 type Carried = (IVec3, Option<Work>);
 
@@ -76,7 +79,7 @@ pub(crate) fn fill<T: Copy + Send + Sync>(
     rings: Vec<Vec<IVec3>>,
     wanted: &FastMap<IVec3, Scalar>,
     seeds: &FastMap<IVec3, Work>,
-    record: Record<'_, T>,
+    (record, near_reads_default): (Record<'_, T>, bool),
     cancel: Cancel<'_>,
 ) -> HashMap<IVec3, Box<[T]>> {
     let factor = carry_for(grid, band_mm, iso_mm);
@@ -99,10 +102,10 @@ pub(crate) fn fill<T: Copy + Send + Sync>(
                 (grid, factor, shared),
                 &carrier,
                 *tile,
-                (band_mm, iso_mm),
+                (band_mm, iso_mm, near_reads_default),
             );
             let values = tile_values(
-                (mesh, faces, bvh),
+                (mesh, bvh),
                 signer,
                 grid,
                 (*tile, *centre_mm),
@@ -419,13 +422,16 @@ mod tests {
         let (band_mm, iso_mm) = (0.4, 3.0);
         // The tile from 3.2 to 4.6 mm over the plate, every voxel of it handed the
         // underside: near enough in distance, and facing the other way.
-        let underside = vec![0; TILE_VALUES].into_boxed_slice();
+        let tile = IVec3::new(2, 2, 2);
+        let underside: Vec<Option<ClosestPoint>> = tile_voxels()
+            .map(|local| faces.closest(0, grid.position(tile * TILE + local)))
+            .collect();
 
         let values = tile_values(
-            (&mesh, &faces, &bvh),
+            (&mesh, &bvh),
             &signer,
             grid,
-            (IVec3::new(2, 2, 2), 0.0),
+            (tile, 0.0),
             &underside,
             (band_mm, iso_mm),
             (

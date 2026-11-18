@@ -213,6 +213,8 @@ pub fn show(id: &str, kind: Option<Kind>) -> Result<(Kind, String)> {
                     .find(|entry| entry.id == id)?
                     .profile
                     .to_toml_string(named),
+                // `encrust recipes show` prints a recipe.
+                Kind::Recipe => return None,
             };
             Some(toml.map(|toml| (candidate, toml)))
         })
@@ -246,7 +248,7 @@ pub fn import(path: &Path, kind: Kind, printer: Option<&str>) -> Result<String> 
     let imported = match kind {
         Kind::Hollow => catalogue.import_preset::<HollowState>(kind, &text, path),
         Kind::Drain => catalogue.import_preset::<DrainState>(kind, &text, path),
-        Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto => {
+        Kind::Printer | Kind::Resin | Kind::Support | Kind::Auto | Kind::Recipe => {
             catalogue.import(kind, &text, path, printer)
         }
     };

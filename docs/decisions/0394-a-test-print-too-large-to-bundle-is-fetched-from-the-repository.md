@@ -24,8 +24,8 @@ from the repository's `main` branch on a thread, through the counted fetch that 
 an update, into `test-prints/` beside `preferences.json`; while it comes, a bar runs along
 the picture and the tile tells the share; the window polls it every frame, whatever is
 shown. The next click opens it from disk. A failed fetch says why on the status line and
-leaves the tile to be clicked again. A browser, which keeps no files and
-whose `ureq` cannot run, opens the file's address in a tab instead.
+leaves the tile to be clicked again. A browser does not list it: it keeps no files, its
+`ureq` cannot run, and handing it the address only downloads the STL.
 
 ## Consequences
 
@@ -33,9 +33,12 @@ whose `ureq` cannot run, opens the file's address in a tab instead.
 - The first click needs the network; a link in the window depends on the file's path in
   `main`, so `test-prints/` is not renamed without a release.
 - The command line has nothing to add: the file is a plain STL in the repository.
+- The browser build offers four test prints, not five.
 - The File menu's Test prints lists it first, before the four drawn in code, its state as the row's
   keys, and a click there does what a click on the tile does.
-- Reopen if a second large test print is wanted offline, or the repository moves.
+- Reopen if a second large test print is wanted offline, the repository moves, or the
+  browser should put it on the plate: served beside the build, it needs no change to the
+  site's policy.
 
 ## Alternatives considered
 

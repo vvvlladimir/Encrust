@@ -6,6 +6,7 @@ mod cut;
 mod drains;
 mod error;
 mod file_name;
+mod held;
 mod open;
 mod outputs;
 mod plate;
@@ -13,6 +14,7 @@ mod prepare;
 pub mod project;
 mod run;
 mod stand;
+mod strengthen;
 mod trapped;
 mod trial;
 
@@ -24,16 +26,21 @@ pub use drains::{
 };
 pub use error::EngineError;
 pub use file_name::{DEFAULT_TEMPLATE, NameFields, file_stem, unknown_tags};
+pub use held::{
+    CupVent, Hanging, Unvented, cup_vents, held_by_shape, island_floors, island_holds, lever_holds,
+    neck_profile,
+};
 pub use open::{Machine, Opening, open_plate};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
 pub use prepare::{Hollowing, PREPARE_ORIENT, PREPARE_REPAIR, hollowing, needs_repair};
-pub use run::Run;
+pub use run::{QUICK_CHECK_BIN, Run};
 pub use stand::{
-    ByHand, Lift, Stood, SupportPlan, SupportShapes, ToStand, planned_lift, stand_seated,
+    ByHand, Lift, Stood, SupportPlan, SupportShapes, ToStand, planned_lift, stand_at, stand_seated,
     stand_under,
 };
+pub use strengthen::{Strengthened, Underside, WANTED_MARGIN, carried, strengthen};
 pub use trapped::trapped_in;
 pub use trial::{
-    Choice, KeepClear, Printout, Proven, Trial, Tried, orient_for_print, print_out, prove,
+    Choice, KeepClear, Printout, Proven, Shows, Trial, Tried, orient_for_print, print_out, prove,
 };

@@ -419,3 +419,139 @@ fn two_models_standing_into_each_other_are_named_and_fail_strict() {
         "--strict has to notice two models the slicer would fuse: {text}"
     );
 }
+
+#[test]
+fn a_plate_files_keep_solid_under_mm_keeps_a_thinner_model_solid() {
+    let cavity_mm3 = |name: &str, kept: &str| {
+        let body = format!(
+            "layer_height_mm = 0.5\n[[model]]\npath = \"CUBE\"\nposition = [30, 30]\n\
+             hollow = {{ wall_mm = 1.0{kept} }}\n"
+        );
+        let plate = plate_file(name, &body);
+        let output = estimate(&[plate.to_str().unwrap(), "--json"]);
+        assert!(output.status.success(), "{}", stderr(&output));
+        json(&output)["models"][0]["hollow"]["cavity_mm3"]
+            .as_f64()
+            .unwrap_or_else(|| panic!("no cavity_mm3 in {}", stdout(&output)))
+    };
+    // The 10 mm cube's cavity is 8 mm across, 512 mm3; nothing of it is under 4 mm, all under 20.
+    let open = cavity_mm3("kept-thin-open", ", keep_solid_under_mm = 4");
+    assert!(
+        (open - 512.0).abs() < 512.0 * 0.1,
+        "512 mm3 open, got {open}"
+    );
+    let kept = cavity_mm3("kept-thin-solid", ", keep_solid_under_mm = 20");
+    assert_eq!(kept, 0.0, "a 10 mm cube is under 20 mm, so 0 mm3 of cavity");
+}
+
+#[test]
+fn a_plate_files_hollow_with_no_hollow_step_in_the_recipe_is_refused_naming_the_key() {
+    let plate = plate_file(
+        "keyed-unstepped",
+        "[[model]]\npath = \"CUBE\"\nhollow = { wall_mm = 1.0 }\n",
+    );
+    let recipe = plate.with_file_name("keyed-unstepped-recipe.toml");
+    fs::write(&recipe, "name = \"Checks\"\n[[step]]\ndo = \"check\"\n").expect("write the recipe");
+    let output = estimate(&[
+        plate.to_str().unwrap(),
+        "--recipe",
+        recipe.to_str().unwrap(),
+    ]);
+    assert!(!output.status.success(), "{}", stdout(&output));
+    let said = stderr(&output);
+    assert!(
+        said.contains("the plate file's `hollow`") && !said.contains("--hollow"),
+        "{said}"
+    );
+}
+
+#[test]
+fn a_plate_files_keep_solid_under_mm_that_is_no_thickness_is_refused_naming_the_key() {
+    let plate = plate_file(
+        "kept-thin-negative",
+        "[[model]]\npath = \"CUBE\"\nhollow = { wall_mm = 1.0, keep_solid_under_mm = -2 }\n",
+    );
+    let output = estimate(&[plate.to_str().unwrap()]);
+    assert!(!output.status.success(), "{}", stdout(&output));
+    let said = stderr(&output);
+    assert!(said.contains("`keep_solid_under_mm`"), "{said}");
+}
+
+#[test]
+fn the_fix_issues_recipe_parts_a_meeting_as_checks_button_does() {
+    let body = "layer_height_mm = 1\n[[model]]\npath = \"CUBE\"\nposition = [15, 15]\n[[model]]\npath = \"CUBE\"\nposition = [18, 15]\n";
+    let plate = plate_file("fix-issues", body);
+    let panel = test_panel();
+    let output = estimate(&[
+        plate.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--recipe",
+        "fix-issues",
+        "--json",
+    ]);
+    assert!(
+        output.status.success(),
+        "the run failed:\n{}",
+        stderr(&output)
+    );
+    assert!(
+        !json(&output).to_string().contains("\"meets\""),
+        "one cube moved off the other"
+    );
+}
+
+#[test]
+fn an_arrange_step_for_only_what_is_in_the_way_parts_a_meeting() {
+    let body = "layer_height_mm = 1\n[[model]]\npath = \"CUBE\"\nposition = [15, 15]\n[[model]]\npath = \"CUBE\"\nposition = [18, 15]\n";
+    let plate = plate_file("in-the-way", body);
+    let panel = test_panel();
+    let meets_after = |recipe_text: &str, name: &str| {
+        let recipe = plate.with_file_name(format!("{name}.toml"));
+        fs::write(&recipe, recipe_text).expect("write the recipe");
+        let output = estimate(&[
+            plate.to_str().unwrap(),
+            "--profile",
+            panel.to_str().unwrap(),
+            "--recipe",
+            recipe.to_str().unwrap(),
+            "--json",
+        ]);
+        assert!(
+            output.status.success(),
+            "the run failed:\n{}",
+            stderr(&output)
+        );
+        json(&output).to_string().contains("\"meets\"")
+    };
+    assert!(
+        meets_after(
+            "name = \"Still\"\n[[step]]\ndo = \"check\"\n",
+            "in-the-way-still"
+        ),
+        "two 10 mm cubes 3 mm apart meet"
+    );
+    let clearing =
+        "name = \"Clear\"\n[[step]]\ndo = \"arrange\"\nset = { only_in_the_way = true }\n";
+    assert!(
+        !meets_after(clearing, "in-the-way-clear"),
+        "one cube moved off the other"
+    );
+}
+
+#[test]
+fn a_model_longer_than_the_plate_is_turned_onto_it_by_arrange() {
+    // 48 mm long on the 40 mm square test panel: no slide fits it, a slant does.
+    let bar = write_boxes_stl("turned-bar", &[([0.0, 0.0, 0.0], [6.0, 48.0, 5.0])]);
+    let panel = test_panel();
+    let output = estimate(&[
+        bar.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--arrange",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+}

@@ -1,5 +1,6 @@
 use super::{ModelSupports, next_revision};
-use crate::{Part, SupportPoint, SupportTree};
+use crate::edit::{carrying, unseated};
+use crate::{Part, Profiles, SupportPoint, SupportTree, standing_on};
 use core_geometry::Transform;
 
 impl ModelSupports {
@@ -19,32 +20,75 @@ impl ModelSupports {
     /// Takes a grown tree out of the automatic run so a rebuild cannot undo an edit; returns its
     /// index in [`ModelSupports::frozen`] or `None`; its points go with it.
     pub fn freeze(&mut self, tree: usize, transform: Transform) -> Option<usize> {
-        if let Some(frozen) = self.frozen_of(tree) {
-            return Some(frozen);
-        }
-        let inverse = transform.inverse_matrix()?;
-        let built = self.built.as_ref()?;
-        let standing = built.trees.get(tree)?.clone();
-        let grown = built.grown;
+        self.freeze_all(&[tree], transform)
+            .first()
+            .copied()
+            .flatten()
+    }
 
-        let mut taken: Vec<usize> = standing.points().collect();
+    /// [`Self::freeze`] for `tree`, what stands on it (ADR 0431) and what it stands on (ADR 0431);
+    /// answers `tree`'s index in [`ModelSupports::frozen`].
+    pub fn freeze_with_riders(
+        &mut self,
+        tree: usize,
+        transform: Transform,
+        profiles: Profiles,
+    ) -> Option<usize> {
+        let mut trees = vec![tree];
+        trees.extend(standing_on(self.trees(), tree, profiles));
+        trees.extend(carrying(self.trees(), tree, profiles));
+        self.freeze_all(&trees, transform)
+            .first()
+            .copied()
+            .flatten()
+    }
+
+    /// Freezes each of `trees`, indices into [`ModelSupports::trees`], at once: freezing one
+    /// renumbers the rest. Answers each one's frozen index, in the order asked.
+    fn freeze_all(&mut self, trees: &[usize], transform: Transform) -> Vec<Option<usize>> {
+        let (Some(inverse), Some(built)) = (transform.inverse_matrix(), self.built.as_ref()) else {
+            return vec![None; trees.len()];
+        };
+        let grown = built.grown;
+        let mut lifted: Vec<usize> = trees.iter().copied().filter(|tree| *tree < grown).collect();
+        lifted.sort_unstable();
+        lifted.dedup();
+        if lifted.is_empty() {
+            return trees.iter().map(|tree| self.frozen_of(*tree)).collect();
+        }
+
+        let first = self.frozen.len();
+        let standing: Vec<SupportTree> = lifted
+            .iter()
+            .map(|tree| built.trees[*tree].moved(inverse))
+            .collect();
+        let answer = trees
+            .iter()
+            .map(|tree| match lifted.binary_search(tree) {
+                Ok(at) => Some(first + at),
+                Err(_) => self.frozen_of(*tree),
+            })
+            .collect();
+
+        let mut taken: Vec<usize> = standing.iter().flat_map(SupportTree::points).collect();
         taken.sort_unstable();
+        taken.dedup();
         for point in taken.iter().rev() {
             if *point < self.points.len() {
                 self.points.remove(*point);
             }
         }
-        self.lift_out_of_forest(tree, grown, &taken);
+        self.lift_out_of_forest(&lifted, grown, &taken);
+        self.frozen_at = Some(transform);
         self.revision = next_revision();
-
-        self.frozen.push(standing.moved(inverse));
+        self.frozen.extend(standing);
         self.built = None;
-        Some(self.frozen.len() - 1)
+        answer
     }
 
-    /// Takes grown tree `tree` out of the forest and renumbers the points the others hold
-    /// past the `taken` ones, so freezing one support leaves every other where it stood.
-    pub(super) fn lift_out_of_forest(&mut self, tree: usize, grown: usize, taken: &[usize]) {
+    /// Takes grown trees `lifted`, sorted, out of the forest and renumbers the points the others
+    /// hold past the `taken` ones, so freezing some supports leaves every other where it stood.
+    pub(super) fn lift_out_of_forest(&mut self, lifted: &[usize], grown: usize, taken: &[usize]) {
         let Some(forest) = self
             .forest
             .as_mut()
@@ -53,9 +97,14 @@ impl ModelSupports {
             self.forest = None;
             return;
         };
-        forest.trees.remove(tree);
+        for tree in lifted.iter().rev() {
+            forest.trees.remove(*tree);
+        }
         for kept in &mut forest.trees {
             kept.close_up_points(taken);
+        }
+        for lost in &mut forest.lost {
+            lost.point -= taken.partition_point(|taken| *taken < lost.point);
         }
     }
 
@@ -81,12 +130,53 @@ impl ModelSupports {
         self.points_changed();
     }
 
+    /// Hands every frozen support standing on no other frozen one back to the automatic run, so
+    /// none is left in the air (ADR 0431); answers how many.
+    pub fn thaw_unseated(&mut self, transform: Transform, profiles: Profiles) -> usize {
+        if transform.inverse_matrix().is_none() {
+            return 0;
+        }
+        let matrix = transform.to_matrix();
+        let mut thawed = 0;
+        // Each round thaws at least one tree or stops, so it ends within as many as there are.
+        loop {
+            let plate: Vec<SupportTree> =
+                self.frozen.iter().map(|tree| tree.moved(matrix)).collect();
+            let lost = unseated(&plate, profiles);
+            if lost.is_empty() {
+                return thawed;
+            }
+            for frozen in lost.iter().rev() {
+                self.thaw(*frozen, transform);
+            }
+            thawed += lost.len();
+        }
+    }
+
     /// Takes a frozen support away for good.
     pub fn remove_frozen(&mut self, frozen: usize) {
         if frozen < self.frozen.len() {
             self.frozen.remove(frozen);
-            self.built = None;
+            // What grew standing on it grows again (ADR 0439).
+            self.points_changed();
         }
+    }
+
+    /// Puts `tree` (model space), what [`crate::merged`] built, in place of the frozen supports
+    /// `taken`; answers its index in [`ModelSupports::frozen`].
+    pub fn replace_frozen(&mut self, taken: &[usize], tree: SupportTree) -> usize {
+        let mut taken = taken.to_vec();
+        taken.sort_unstable();
+        taken.dedup();
+        for frozen in taken.iter().rev() {
+            if *frozen < self.frozen.len() {
+                self.frozen.remove(*frozen);
+            }
+        }
+        self.frozen.push(tree);
+        // What grew standing on what went grows again (ADR 0439).
+        self.points_changed();
+        self.frozen.len() - 1
     }
 
     /// Takes `parts` of a frozen support away with what they hold up, all of it if nothing is left
@@ -107,7 +197,8 @@ impl ModelSupports {
             .collect();
         let left = if whole { None } else { tree.without(&cut) };
 
-        self.built = None;
+        // What grew standing on what went grows again (ADR 0439).
+        self.points_changed();
         if let Some(left) = left {
             self.frozen[frozen] = left;
             return true;

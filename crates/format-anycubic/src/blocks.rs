@@ -134,8 +134,7 @@ pub(crate) fn panel_in_sixteen_bits(job: &PrintJob, what: &'static str) -> Resul
 /// Writes the second layer table's head and leaves its rows blank; they are filled in once
 /// the layers are written, like the first table's.
 pub(crate) fn write_sub_layer_head(fields: &mut Fields<'_>, layer_count: u32) -> io::Result<()> {
-    // Files of this format state one row's length here, whatever the layer count.
-    write_table_head(fields, "SUBIMGS", SUB_LAYER_ROW_BYTES)?;
+    write_table_head(fields, "SUBIMGS", sub_layer_table_bytes(layer_count))?;
     fields.u32_le(layer_count)?;
     fields.u32_le(1)?;
     fields.zeros((SUB_LAYER_ROW_BYTES * layer_count) as usize)

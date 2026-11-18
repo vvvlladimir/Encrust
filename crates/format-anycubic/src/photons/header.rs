@@ -1,6 +1,6 @@
 use std::io;
 
-use core_format::{Fields, PrintJob, Rgb, Thumbnail, rgb15};
+use core_format::{Fields, PrintJob, RGB15_BITS, Rgb, Thumbnail, rgb15};
 
 pub(crate) use crate::tables::PREVIEW_PX;
 
@@ -45,7 +45,8 @@ pub(crate) fn write_preview(
     thumbnail: Option<&Thumbnail>,
 ) -> io::Result<()> {
     let (width, height) = PREVIEW_PX;
-    let image = Thumbnail::fitted_or_filled(thumbnail, width, height, BACKGROUND);
+    let image =
+        Thumbnail::fitted_or_filled(thumbnail, width, height, BACKGROUND).dithered(RGB15_BITS);
     let mut data = Vec::with_capacity(image.pixels().len() * 2);
     for &pixel in image.pixels() {
         data.extend_from_slice(&rgb15(pixel).to_le_bytes());

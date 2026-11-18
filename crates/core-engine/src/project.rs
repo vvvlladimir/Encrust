@@ -257,11 +257,14 @@ pub struct HollowState {
     pub precision: Scalar,
     pub infill_on: bool,
     pub infill: InfillSettings,
-    pub blocker_mm: Scalar,
     /// Whether a shell opens through the floor it stands on; a file without it reads a
     /// closed one (ADR 0313).
     #[serde(default)]
     pub open_floor: bool,
+    /// The wall stays solid wherever the model is thinner than this, millimetres; off in a
+    /// file from before ADR 0404.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solid_under_mm: Option<Scalar>,
 }
 
 /// What the next drain hole is drilled to. The holes standing carry their own sizes.
@@ -277,6 +280,14 @@ pub struct DrainState {
     pub shape: HoleShape,
     #[serde(default)]
     pub turn_deg: Scalar,
+    #[serde(default = "plug_gap")]
+    pub plug_gap_mm: Scalar,
+}
+
+/// What a model keeps of the Drain tool's settings as its own: its plugs' gap, millimetres a
+/// side. A file's own hole sizes are the window's now, and read past (ADR 0397).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct OwnDrain {
     #[serde(default = "plug_gap")]
     pub plug_gap_mm: Scalar,
 }
@@ -334,7 +345,7 @@ pub struct ObjectState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own_hollow: Option<HollowState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub own_drain: Option<DrainState>,
+    pub own_drain: Option<OwnDrain>,
     /// The support profiles this model is built to instead of its groups', where it has
     /// its own (ADR 0246). A file without them reads as a model with none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -350,6 +361,10 @@ pub struct ObjectState {
     /// any are (ADR 0318). A file without it reads as a model with none.
     #[serde(default, skip_serializing_if = "Region::is_empty")]
     pub relief_painted: Region,
+    /// The faces painted as what shows, which a clean surface keeps supports off instead of
+    /// what it reads off the shape (ADR 0410). A file without it reads as a model with none.
+    #[serde(default, skip_serializing_if = "Region::is_empty")]
+    pub shown_painted: Region,
 }
 
 impl ObjectState {
@@ -488,6 +503,9 @@ pub struct Cavity {
     /// a file from before ADR 0313.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open_toward: Option<Vec3>,
+    /// Where the wall was kept solid under, millimetres; absent before ADR 0404.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solid_under_mm: Option<Scalar>,
 }
 
 impl Cavity {
@@ -499,6 +517,7 @@ impl Cavity {
             precision: asked.precision,
             infill: asked.infill,
             open_toward: asked.open_toward,
+            solid_under_mm: asked.solid_under_mm,
         }
     }
 
@@ -511,6 +530,7 @@ impl Cavity {
             precision: self.precision,
             infill: self.infill,
             open_toward: self.open_toward,
+            solid_under_mm: self.solid_under_mm,
             ..HollowSettings::default()
         }
     }

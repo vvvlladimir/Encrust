@@ -1,7 +1,7 @@
 use core_format::{
     ChituPeel, FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, Reads, SlicedFile,
-    SlicedFileReader, Waits, layer_in_range, panel_in_range, stated_pwm, stated_rests,
-    stated_speed_mm_min, stated_wait_s,
+    SlicedFileReader, Waits, layer_in_range, panel_in_range, read_rgb15_preview, stated_pwm,
+    stated_rests, stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 
@@ -12,6 +12,7 @@ use crate::layer::{LAYER_DEF_BYTES, LAYER_DEF_EX_BYTES};
 
 /// Fields of the header, by their offset; the whole list is in `docs/formats/fdg.md`.
 const RESOLUTION: u64 = 0x18;
+const LARGE_PREVIEW: u64 = 0x2C;
 const LAYER_TABLE: u64 = 0x34;
 const BED: u64 = 0x50;
 const MACHINE_NAME: u64 = 0x74;
@@ -65,6 +66,8 @@ impl SlicedFileReader for FdgReader {
         let exposure_s = reads.f32_le()?;
         let bottom_exposure_s = reads.f32_le()?;
 
+        reads.seek_to(LARGE_PREVIEW)?;
+        let large_preview = u64::from(reads.u32_le()?);
         reads.seek_to(LAYER_TABLE)?;
         let table = u64::from(reads.u32_le()?);
         let print_time_s = reads.u32_le()?;
@@ -97,6 +100,7 @@ impl SlicedFileReader for FdgReader {
             bottom_light_pwm,
             table,
             layer_count,
+            large_preview,
         };
         open_layout(reads, head, MACHINE_NAME, MOTION, rle::crypt)
     }
@@ -123,6 +127,8 @@ pub(crate) struct Head {
     pub bottom_light_pwm: Option<u8>,
     pub table: u64,
     pub layer_count: u32,
+    /// Where the larger preview's record starts.
+    pub large_preview: u64,
 }
 
 /// Reads what the rest of a file of this layout holds behind `head`: the machine name at
@@ -141,6 +147,7 @@ pub(crate) fn open_layout<S: ReadSeek>(
         bottom_light_pwm: head.bottom_light_pwm,
         ..read_motion(&mut reads, layers.first(), motion)?
     };
+    let preview = read_rgb15_preview(&mut reads, head.large_preview).ok();
     let bed = head.bed;
     Ok(OpenFdg {
         reads,
@@ -162,6 +169,7 @@ pub(crate) fn open_layout<S: ReadSeek>(
             grey_steps: 2,
             stated,
             layers,
+            preview,
         },
         key: head.key,
         pixel_count: head.pixel_count,

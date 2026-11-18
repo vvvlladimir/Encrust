@@ -1,6 +1,6 @@
 # 0393. Warn of a cavity with no drain hole and of a solid model worth hollowing
 
-- **Status:** Proposed
+- **Status:** Proposed; a hole set at a depth counts as a way out past the wall by 0414
 - **Date:** 2026-11-02
 
 ## Context

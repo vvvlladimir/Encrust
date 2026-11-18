@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use core_geometry::{Mesh, Quat, Transform, Vec3, cuboid, diagnose};
+use core_geometry::{Mesh, Transform, Vec3, cuboid, diagnose};
 
 use super::*;
 use crate::scene::{ImportSummary, Imported};
@@ -48,13 +48,23 @@ impl Bench {
         let mut working = doc.repairs.poll(scene, status);
         working |= doc.drilling.poll(scene, status);
         working |= doc.surfaces.poll(scene, status);
+        working |= doc.growth.poll(scene, status);
+        working |= machine.slicing.poll(scene, status);
+        working |= machine.preview.poll(status);
         working |= tools.supports.poll(scene, status);
         working |= tools.hollow.poll(scene, status);
         working |= tools.drain.poll(scene, status);
         working |= tools.orient.poll(scene, &doc.plate, status);
+        working |= land_plugs(doc, tools, &mut machine.status);
         working |= poll(doc, tools, machine, self.settled);
-        doc.surfaces.start(&mut doc.scene);
-        tools.supports.settle_on_raft(&mut doc.scene);
+        let drift_mm = machine.slicing.material.compensation.fit_drift_mm();
+        let asked_by = doc.history.next_edit();
+        let (scene, settled) = (&mut doc.scene, self.settled);
+        let reads = &mut doc.drilling.reads;
+        tools
+            .drain
+            .lay_plugs(scene, drift_mm, settled, asked_by, reads);
+        crate::growth::refresh_supports(doc, &mut tools.supports, !self.settled);
         doc.drilling.start(&doc.scene, self.settled);
         let settings = ToolSettings::of(tools, &machine.slicing);
         let settled = Frame {
@@ -68,6 +78,16 @@ impl Bench {
 
     fn start(&mut self) {
         start(&mut self.doc, &mut self.tools, &mut self.machine).expect("a model to prepare");
+    }
+
+    /// Why the run waits, while it does.
+    fn waits(&self) -> Option<&str> {
+        self.tools.prepare.waiting().map(|wait| wait.why.as_str())
+    }
+
+    /// Continue on a waiting run.
+    fn resume(&mut self) {
+        resume(&mut self.doc, &mut self.tools, &mut self.machine).expect("no tool's job runs");
     }
 
     /// Frames until `step`'s job is running.
@@ -104,6 +124,18 @@ impl Bench {
     }
 }
 
+/// Lays the plugs a worker has cut into the edit that asked for them, as the window does;
+/// answers whether any is still being cut.
+fn land_plugs(doc: &mut Doc, tools: &mut Tools, status: &mut Status) -> bool {
+    let plate_mm = core_geometry::Vec2::new(doc.plate.x_mm, doc.plate.y_mm);
+    for ended in tools.drain.plugs_to_land(&doc.drilling) {
+        doc.history.land(&mut doc.scene, ended.asked_by(), |scene| {
+            crate::drain::DrainTool::land_plugs(scene, &ended, plate_mm, status);
+        });
+    }
+    tools.drain.laying_plugs()
+}
+
 /// What a plate edit changes about a model, to tell the plate before from after.
 fn standing(object: &SceneObject) -> (usize, Transform, bool, usize, bool) {
     (
@@ -132,21 +164,6 @@ fn a_large_solid_cube_is_oriented_hollowed_drained_and_supported_in_one_undo() {
     assert!(!object.hollow.drains().is_empty(), "drilled to drain");
     assert!(object.traps.found().is_empty(), "nothing left trapped");
     assert!(!object.supports.is_empty(), "stood on supports");
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert!(!prepared.repaired && prepared.drained);
-    let turned = object.transform.rotation.angle_between(Quat::IDENTITY) > UNTURNED_RAD;
-    assert_eq!(
-        prepared.oriented, turned,
-        "said turned only where the search turned it"
-    );
-    // 40³ less its 6 · 40² surface times the 2 mm wall, as the engine reckons it.
-    let saves_mm3 = prepared.hollowed.map(|wall| wall.saves_mm3);
-    let off_mm3 = saves_mm3.map(|saves| (saves - 44_800.0).abs());
-    assert!(
-        off_mm3.is_some_and(|off| off < 1.0),
-        "saves 44800 mm³, said {saves_mm3:?}"
-    );
-    assert!(prepared.supports.is_some(), "by the automatic profile");
     assert!(!bench.doc.history.is_held());
 
     assert!(bench.undo(), "the run is an entry");
@@ -167,10 +184,8 @@ fn an_open_cube_is_repaired_first_and_then_hollowed() {
 
     let object = bench.object(id);
     assert!(object.summary.is_sound(), "the hole was closed");
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert!(prepared.repaired, "its diagnosis was not sound");
     assert!(
-        prepared.hollowed.is_some(),
+        object.hollow.is_hollow(),
         "diagnosed again once repaired, it is worth hollowing"
     );
 }
@@ -184,9 +199,6 @@ fn a_thin_plate_is_supported_and_never_hollowed() {
     let object = bench.object(id);
     assert!(!object.hollow.is_hollow(), "a 3 mm plate is all wall");
     assert!(object.hollow.drains().is_empty());
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert_eq!(prepared.hollowed, None);
-    assert!(!prepared.drained);
 }
 
 #[test]
@@ -195,6 +207,7 @@ fn a_model_turned_by_hand_keeps_its_turn() {
     let turned = Quat::from_rotation_y(0.3);
     let object = bench.doc.scene.get_mut(id).expect("on the plate");
     object.transform.rotation = turned;
+    object.transform.translation = INSIDE_THE_PLATE;
     bench.frame();
     bench.start();
     bench.run_to_end();
@@ -204,8 +217,6 @@ fn a_model_turned_by_hand_keeps_its_turn() {
         object.transform.rotation, turned,
         "as --rotate keeps a turn"
     );
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert!(!prepared.oriented);
 }
 
 #[test]
@@ -279,8 +290,6 @@ fn the_drain_panels_own_cancel_leaves_prepares_search_running() {
         !object.hollow.drains().is_empty(),
         "Prepare's own search drilled it"
     );
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert!(prepared.drained);
 }
 
 impl Bench {
@@ -299,16 +308,20 @@ impl Bench {
     }
 }
 
+/// Where a turned plate stands well inside the build volume, its tilted corner over the plate.
+const INSIDE_THE_PLATE: Vec3 = Vec3::new(40.0, 10.0, 20.0);
+
 fn hand_turned_plate() -> (Bench, ObjectId) {
     let (mut bench, id) = Bench::with(cuboid(Vec3::ZERO, Vec3::new(60.0, 60.0, 3.0)));
     let object = bench.doc.scene.get_mut(id).expect("on the plate");
     object.transform.rotation = Quat::from_rotation_y(0.3);
+    object.transform.translation = INSIDE_THE_PLATE;
     bench.frame();
     (bench, id)
 }
 
 #[test]
-fn prepared_again_a_drained_cube_is_not_said_drained() {
+fn prepared_again_a_drained_cube_gets_no_more_holes() {
     let (mut bench, id) = Bench::with(large_cube());
     bench.start();
     bench.run_to_end();
@@ -318,11 +331,6 @@ fn prepared_again_a_drained_cube_is_not_said_drained() {
 
     let object = bench.object(id);
     assert_eq!(object.hollow.drains().len(), holes, "nothing left to drain");
-    let prepared = bench.tools.prepare.prepared(object).expect("said of it");
-    assert!(
-        !prepared.drained,
-        "a search that drilled nothing drained nothing"
-    );
 }
 
 #[test]
@@ -435,19 +443,34 @@ fn the_bar_starts_at_nought_where_the_first_steps_are_not_taken() {
 }
 
 #[test]
-fn a_step_that_cannot_start_puts_the_plate_back() {
+fn a_step_that_cannot_start_waits_with_the_plate_free_and_runs_again_on_continue() {
     let (mut bench, id) = Bench::with(large_cube());
-    let before = standing(bench.object(id));
     bench.start();
     bench.run_until(Step::Hollow);
-    bench.machine.slicing.catalogue = printer_profiles::Catalogue::default();
+    let catalogue = std::mem::take(&mut bench.machine.slicing.catalogue);
     bench.run_to_end();
+    let wait = bench
+        .tools
+        .prepare
+        .waiting()
+        .expect("waits at the failed step");
+    assert!(wait.failed);
+    assert!(!wait.why.is_empty(), "why is said");
     assert!(
-        matches!(bench.machine.status, Status::Error(_)),
-        "the step's error is said"
+        bench.object(id).hollow.is_hollow(),
+        "the steps before it kept"
     );
-    assert_eq!(standing(bench.object(id)), before, "as before Prepare");
-    assert!(!bench.doc.history.is_held());
+    assert!(holding(&bench.tools).is_none(), "the tools are the user's");
+    assert!(!bench.doc.history.is_held(), "and the undo");
+
+    bench.machine.slicing.catalogue = catalogue;
+    bench.resume();
+    bench.run_to_end();
+    assert!(!bench.tools.prepare.is_running());
+    assert!(
+        !bench.object(id).supports.is_empty(),
+        "the failed step ran again"
+    );
 }
 
 #[test]
@@ -481,4 +504,6 @@ fn nothing_on_the_plate_or_no_automatic_profile_starts_nothing() {
     assert!(!bench.doc.history.is_held());
 }
 
-mod planned;
+mod picked;
+mod recipes;
+mod steps;

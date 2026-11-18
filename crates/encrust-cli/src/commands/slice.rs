@@ -10,7 +10,10 @@ use crate::commands::GlobalArgs;
 use crate::exit::{Exit, Stop};
 use crate::pipeline::{Outcome, Watch, slice_staged};
 use crate::stage::Staged;
-use crate::{json, project, stage};
+use crate::{json, project, recipe, stage};
+
+/// Where the sliced output goes when `-o` does not say.
+const OUT: &str = "out";
 
 #[derive(clap::Args, Debug)]
 pub struct SliceCommand {
@@ -18,9 +21,9 @@ pub struct SliceCommand {
     pub plate: PlateArgs,
 
     /// Where the sliced output goes. The extension picks the container; a name without
-    /// one is a directory for a PNG stack.
-    #[arg(short, long, default_value = "out")]
-    pub output: PathBuf,
+    /// one is a directory for a PNG stack. `out` unless a --recipe saves the plate itself.
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
 
     /// Slice every plate of a project holding a model, each into a file named after it
     /// beside the output, as the window's Slice all plates does.
@@ -103,7 +106,8 @@ impl SliceCommand {
                 stem: None,
             })
             .collect();
-        for (plate, output) in core_engine::plate_outputs(&self.output, &files) {
+        let output = self.output.clone().unwrap_or_else(|| PathBuf::from(OUT));
+        for (plate, output) in core_engine::plate_outputs(&output, &files) {
             stop.check()?;
             if global.talks() {
                 println!("Plate {} into {}", plate + 1, output.display());
@@ -126,11 +130,51 @@ impl SliceCommand {
         stop: &Stop,
     ) -> Result<(Option<serde_json::Value>, bool)> {
         let started = Instant::now();
+        let output = self.output_asked()?;
         let watch = global.watch(stop);
         let plate = &self.plate;
         let mut staged =
             stage::stage(&plate.inputs, plate.arrange, plate.plate, &self.job, &watch)?;
-        self.finish(&mut staged, &self.output, global, &watch, started)
+        match output {
+            Some(output) => self.finish(&mut staged, &output, global, &watch, started),
+            None => self.saved(&mut staged, global, started),
+        }
+    }
+
+    /// Where the final plate goes: `-o`, else `out`, or nowhere for a recipe that saves it.
+    fn output_asked(&self) -> Result<Option<PathBuf>> {
+        if let Some(output) = &self.output {
+            return Ok(Some(output.clone()));
+        }
+        let Some(asked) = self.job.recipe.as_deref() else {
+            return Ok(Some(PathBuf::from(OUT)));
+        };
+        if !recipe::Asked::of(&self.job)?.is_some_and(|recipe| recipe.saves()) {
+            bail!(
+                "--recipe {asked} has no save step and -o was not given, so nothing would be \
+                 written; give -o, or a save step"
+            );
+        }
+        Ok(None)
+    }
+
+    /// The report of a plate a recipe's save step wrote, which stands for `-o`'s.
+    fn saved(
+        &self,
+        staged: &mut Staged,
+        global: &GlobalArgs,
+        started: Instant,
+    ) -> Result<(Option<serde_json::Value>, bool)> {
+        let Some(saved) = staged.saved.take() else {
+            bail!("the recipe's save step did not run, so nothing was written; give -o");
+        };
+        let outcome = Outcome {
+            parts: std::mem::take(&mut staged.parts),
+            output: saved.output,
+            slice: saved.slice,
+            raster: saved.raster,
+        };
+        self.reported(&outcome, global, started)
     }
 
     fn slice_plate(
@@ -165,16 +209,26 @@ impl SliceCommand {
             slice,
             raster,
         };
+        self.reported(&outcome, global, started)
+    }
+
+    /// The JSON report of `outcome` under `--json`, and whether it came out clean.
+    fn reported(
+        &self,
+        outcome: &Outcome,
+        global: &GlobalArgs,
+        started: Instant,
+    ) -> Result<(Option<serde_json::Value>, bool)> {
         let clean = outcome.is_clean();
         if !global.json {
             return Ok((None, clean));
         }
         let report = if self.plate.is_one_model() {
-            serde_json::to_value(ModelReport::sliced(&outcome, started.elapsed()))
+            serde_json::to_value(ModelReport::sliced(outcome, started.elapsed()))
         } else {
             serde_json::to_value(PlateReport::sliced(
                 &self.plate.inputs,
-                &outcome,
+                outcome,
                 started.elapsed(),
             ))
         };

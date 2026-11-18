@@ -226,6 +226,27 @@ fn slice_items(ui: &mut egui::Ui, window: &mut Window) {
             crate::panels::slice_every_plate(window);
         }
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    send_file_row(ui, window);
+}
+
+/// A file sliced before, sent as it is to the plate's printer; only where the printer in hand
+/// sends over the network, which a browser never does.
+#[cfg(not(target_arch = "wasm32"))]
+fn send_file_row(ui: &mut egui::Ui, window: &mut Window) {
+    let Some((name, refused)) = crate::panels::send_file::offer(window.machine) else {
+        return;
+    };
+    // The name goes in the tooltip: the menu is a fixed width and a row's label is not cut.
+    let label = tr!("menu-send-file");
+    let row = MenuRow::new(Some(icon::NETWORK), &label).unless(refused.as_deref());
+    let pressed = menu_row(ui, &row)
+        .on_hover_text(tr!("menu-send-file-to", name = name))
+        .clicked();
+    if pressed {
+        ui.close();
+        crate::panels::send_file::send_file(window.machine);
+    }
 }
 
 /// Profiles brought in, the window that keeps them, and Settings.

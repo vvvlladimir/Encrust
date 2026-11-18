@@ -160,21 +160,19 @@ fn an_angle_at_a_right_angle_stays_a_number() {
 }
 
 #[test]
-fn every_shipped_preset_lifts_a_part_far_enough_for_its_own_support() {
+fn every_shipped_preset_lifts_a_part_far_enough_for_its_own_foot() {
     for profile in [
         SupportProfile::shipped("light").expect("the light preset ships"),
         SupportProfile::shipped("medium").expect("the medium preset ships"),
         SupportProfile::shipped("heavy").expect("the heavy preset ships"),
     ] {
         let flare_mm = profile.flare_lower_radius_mm() - profile.pillar_radius_mm();
-        let needed_mm = profile.bottom.platform_thickness_mm
-            + flare_mm
-            + profile.top.length_mm
-            + crate::column::MIN_PILLAR_HEIGHT_MM;
+        let needed_mm =
+            profile.bottom.platform_thickness_mm + flare_mm + crate::column::MIN_PILLAR_HEIGHT_MM;
         assert!(
             needed_mm <= profile.z_lift_mm + 1e-4,
-            "{}: a pad, a flare, a top segment and the shortest pillar take {needed_mm} mm \
-                 and the lift leaves {} mm",
+            "{}: a pad, a flare and the shortest pillar take {needed_mm} mm and the lift \
+                 leaves {} mm",
             profile.name,
             profile.z_lift_mm
         );

@@ -4,6 +4,7 @@ mod buckets;
 mod bvh;
 mod clip;
 mod closest;
+mod directions;
 mod faults;
 #[cfg(test)]
 mod fixtures;
@@ -14,12 +15,14 @@ mod mend;
 mod mesh;
 mod orient;
 mod primitives;
+mod prominence;
 mod ray;
 mod region;
 mod repair;
 mod ring;
 mod smooth;
 mod split;
+mod surface_path;
 mod topology;
 mod transform;
 mod triangle;
@@ -33,6 +36,7 @@ pub use buckets::{Buckets, cell_of_point, cells_around};
 pub use bvh::Bvh;
 pub use clip::{Cut, Plane, axes_across, cut};
 pub use closest::{ClosestPoint, closest_point, point_aabb_squared, point_triangle};
+pub use directions::sphere_directions;
 pub use faults::{Faults, faults};
 pub use hash::{FastHasher, FastMap, FastSet};
 pub use hull::{convex_hull, fitting_turn};
@@ -43,6 +47,7 @@ pub use orient::{Orientation, orient_outward};
 pub use primitives::{
     ball, cuboid, cylinder, extrude, oriented_box, prism, revolve, segments_for, turns,
 };
+pub use prominence::Prominence;
 pub use ray::{
     PlacedHit, Ray, RayHit, ray_aabb, ray_triangle, raycast, raycast_placed, raycast_placed_within,
 };
@@ -55,10 +60,11 @@ pub use repair::{
 pub use ring::{ring_area, ring_contains};
 pub use smooth::{SmoothNormals, smooth_normals};
 pub use split::{split, split_at_edges};
+pub use surface_path::{SurfacePath, SurfacePathError, SurfacePoint, WalkWatch, surface_path};
 pub use topology::{Adjacency, Components};
 pub use transform::{
-    Transform, center_over_plate, drop_to_plate, lift_over_plate, placed_aabb, rotation_xyz_deg,
-    smallest_scale, transform_mesh,
+    Transform, center_over_plate, drop_to_plate, lift_over_plate, placed_aabb, smallest_scale,
+    transform_mesh,
 };
 pub use triangle::Triangle;
 pub use triangulate::triangulate;

@@ -3,7 +3,7 @@
 use std::num::NonZeroU8;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use core_engine::{ByHand, SupportPlan};
 use core_format::ExposureRange;
 use core_geometry::{
@@ -22,6 +22,7 @@ use crate::profiles::Selection;
 use crate::raster_report::parse_grey_range;
 use crate::report::{parse_exposure_band, parse_rotation, parse_scale};
 use crate::sliced_file::CtbRevision;
+use crate::supports::{MergePoints, merge_points};
 
 /// Which printer to check against and which resin to expose with.
 #[derive(Debug, Default, clap::Args)]
@@ -166,10 +167,6 @@ pub struct ImportArgs {
     /// the outside of the model never passes through the lattice.
     #[arg(long, value_name = "0..1", default_value_t = 0.5)]
     pub precision: Scalar,
-
-    /// Whether `--prepare` repairs a model with defects and orients one no flag turned.
-    #[arg(skip)]
-    pub prepare: bool,
 }
 
 /// Where the model stands on the plate.
@@ -194,6 +191,11 @@ pub struct TransformArgs {
     /// What --orient searches for.
     #[arg(long, value_enum, default_value_t = Goal::FewestSupports, requires = "orient")]
     pub orient_goal: Goal,
+
+    /// Hold --orient to the poses with the fewest contacts where the model shows, read off
+    /// its shape.
+    #[arg(long, requires = "orient")]
+    pub clean_surface: bool,
 
     /// How far --orient may turn the model from the way its file stands it, degrees.
     #[arg(long, value_name = "DEG", requires = "orient")]
@@ -302,6 +304,10 @@ pub struct SupportArgs {
     #[arg(long)]
     pub support_cavity: bool,
 
+    /// Merge the supports whose contacts are nearest these points into one, as the window's
+    /// Merge into one does: X,Y,Z;X,Y,Z, plate mm as `--json` lists them. Repeatable.
+    #[arg(long = "merge-supports", value_name = "X,Y,Z;X,Y,Z", value_parser = merge_points, allow_hyphen_values = true)]
+    pub merge_supports: Vec<MergePoints>,
     /// Stand a support under the surface nearest this point as well, plate mm as the model
     /// prints, lift included, as a click in the window's Edit mode does. Repeat for more.
     #[arg(long, value_name = "X,Y,Z", value_parser = crate::hollowing::point,
@@ -326,13 +332,21 @@ impl SupportArgs {
                 .map(crate::profiles::plan_of)
                 .transpose()?
         };
-        if !self.support_at.is_empty() && plan.is_none() {
-            anyhow::bail!(
+        if plan.is_none() && !self.merge_supports.is_empty() {
+            bail!("--merge-supports merges the supports --supports stands, and none is asked for");
+        }
+        if plan.is_none() && !self.support_at.is_empty() {
+            bail!(
                 "--support-at stands supports, and neither --supports nor --support-profile was given"
             );
         }
         Ok(plan.map(|plan| SupportPlan {
             cavity: self.support_cavity,
+            merges: self
+                .merge_supports
+                .iter()
+                .map(|merge| merge.0.clone())
+                .collect(),
             by_hand: ByHand {
                 at_mm: self.support_at.clone(),
                 only: self.support_only_at,
@@ -462,11 +476,27 @@ pub struct JobArgs {
 
     /// Prepare each model as the engine's defaults would: repair it if it has defects, orient
     /// it, hollow, drain and hold up its cavity where a wall saves resin, and stand it on
-    /// automatic supports. A flag given wins over the step it sets.
-    #[arg(long)]
+    /// automatic supports. The same as `--recipe prepare`, writing to `out` without -o.
+    #[arg(long, conflicts_with = "recipe")]
     pub prepare: bool,
+
+    /// Prepare each model step by step by a recipe: the id of a built-in one (`prepare`), one
+    /// of yours by file stem, or a recipe file. A flag given wins over what it sets in every
+    /// step of its kind.
+    #[arg(long, value_name = "ID|PATH")]
+    pub recipe: Option<String>,
 
     /// Exit with code 3 when the model has defects or does not fit.
     #[arg(long)]
     pub strict: bool,
+}
+
+impl JobArgs {
+    /// The recipe each model is prepared by, by id or path: `--recipe`, or `prepare` for
+    /// `--prepare`.
+    pub fn recipe_asked(&self) -> Option<&str> {
+        self.recipe
+            .as_deref()
+            .or(self.prepare.then_some(crate::recipe::PREPARE))
+    }
 }

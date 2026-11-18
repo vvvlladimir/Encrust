@@ -13,12 +13,12 @@ const WELL_SHAPED: Scalar = 1e-2;
 
 /// How a field decides which side of the surface a point is on.
 ///
-/// The two answers differ only on a mesh that is not watertight, and that is the whole
-/// point of having both; see
-/// `docs/decisions/0055-the-sign-is-pseudonormal-with-winding-behind-it.md`.
+/// The two answers differ only on a mesh that is not one closed manifold shell, and that is
+/// the whole point of having both; see ADR 0055 and 0448.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SignMode {
-    /// The pseudonormal on a mesh [`diagnose`] calls closed, the winding number otherwise.
+    /// The pseudonormal on one closed shell with no branching edge, the winding number
+    /// on anything else, where the pseudonormal is not defined (ADR 0448).
     #[default]
     Auto,
     /// The angle-weighted pseudonormal of the nearest point. Nearly free, and exact only
@@ -30,15 +30,17 @@ pub enum SignMode {
 }
 
 /// The side-of-the-surface question, answered whichever way the mode asked for.
-pub(crate) enum Signer {
+pub(crate) enum Signer<'a> {
     Pseudonormal(Pseudonormals),
     Winding(Winding),
+    /// The winding number of a whole mesh the signed surface was taken out of.
+    Whole(&'a Winding, &'a Mesh),
 }
 
-impl Signer {
+impl<'a> Signer<'a> {
     pub(crate) fn new(mesh: &Mesh, mode: SignMode) -> Self {
         let resolved = match mode {
-            SignMode::Auto if diagnose(mesh).is_closed() => SignMode::Pseudonormal,
+            SignMode::Auto if is_one_manifold_shell(mesh) => SignMode::Pseudonormal,
             SignMode::Auto => SignMode::Winding,
             picked => picked,
         };
@@ -49,9 +51,22 @@ impl Signer {
         }
     }
 
+    /// [`Self::new`] for a surface of several shells taken out of `whole`, asked through
+    /// `winding`, built over `whole`: the shells left out change no point's side.
+    pub(crate) fn of_shells(
+        mesh: &Mesh,
+        mode: SignMode,
+        (whole, winding): (&'a Mesh, &'a Winding),
+    ) -> Self {
+        match mode {
+            SignMode::Pseudonormal => Self::new(mesh, mode),
+            SignMode::Auto | SignMode::Winding => Self::Whole(winding, whole),
+        }
+    }
+
     /// Whether a question costs a traversal, so a field should ask as few as it can.
     pub(crate) fn is_costly(&self) -> bool {
-        matches!(self, Self::Winding(_))
+        !matches!(self, Self::Pseudonormal(_))
     }
 
     /// Whether `point` is inside the surface. `found` is its nearest point, which the
@@ -62,8 +77,16 @@ impl Signer {
                 (point - found.point).dot(normals.at(mesh, point, found)) < 0.0
             }
             Self::Winding(winding) => winding.is_inside(mesh, point),
+            Self::Whole(winding, whole) => winding.is_inside(whole, point),
         }
     }
+}
+
+/// Whether `mesh` is what the pseudonormal signs exactly: a single shell, closed, every edge
+/// shared by two faces. Shells that cross or a sheet with no inside are not.
+fn is_one_manifold_shell(mesh: &Mesh) -> bool {
+    let found = diagnose(mesh);
+    found.is_closed() && found.shells == 1 && found.non_manifold_edges == 0
 }
 
 /// The angle-weighted normals of Baerentzen and Aanaes: one per face, one per vertex and
@@ -320,127 +343,4 @@ fn seam(one: u32, other: u32) -> (u32, u32) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use core_geometry::{Bvh, closest_point};
-
-    /// A cube from the origin to `(size, size, size)`, wound outward.
-    fn cube(size: Scalar) -> Mesh {
-        core_geometry::cuboid(Vec3::ZERO, Vec3::splat(size))
-    }
-
-    fn inside_by(mesh: &Mesh, mode: SignMode, point: Vec3) -> bool {
-        let signer = Signer::new(mesh, mode);
-        let found = closest_point(mesh, point).expect("the mesh has faces");
-        signer.is_inside(mesh, point, &found)
-    }
-
-    #[test]
-    fn the_pseudonormal_signs_a_closed_cube() {
-        let mesh = cube(10.0);
-        assert!(inside_by(&mesh, SignMode::Pseudonormal, Vec3::splat(5.0)));
-        assert!(!inside_by(
-            &mesh,
-            SignMode::Pseudonormal,
-            Vec3::new(-2.0, 5.0, 5.0)
-        ));
-    }
-
-    /// A point past a corner is nearest to the corner itself, where only the angle
-    /// weighting gives the outward direction the faces disagree about.
-    #[test]
-    fn a_point_past_a_corner_is_outside() {
-        let mesh = cube(10.0);
-        assert!(!inside_by(
-            &mesh,
-            SignMode::Pseudonormal,
-            Vec3::new(-1.0, -1.0, -1.0)
-        ));
-        assert!(!inside_by(
-            &mesh,
-            SignMode::Pseudonormal,
-            Vec3::new(11.0, 11.0, 5.0)
-        ));
-    }
-
-    #[test]
-    fn both_modes_agree_on_a_closed_mesh() {
-        let mesh = cube(10.0);
-        let bvh = Bvh::build(&mesh);
-        for point in [
-            Vec3::splat(5.0),
-            Vec3::new(0.5, 5.0, 5.0),
-            Vec3::new(-0.5, 5.0, 5.0),
-            Vec3::new(9.5, 9.5, 9.5),
-            Vec3::new(10.5, 5.0, 5.0),
-        ] {
-            let found = bvh.closest(point).expect("the cube has faces");
-            let by_normal = Signer::new(&mesh, SignMode::Pseudonormal);
-            let by_winding = Signer::new(&mesh, SignMode::Winding);
-            assert_eq!(
-                by_normal.is_inside(&mesh, point, &found),
-                by_winding.is_inside(&mesh, point, &found),
-                "the two modes disagree at {point}"
-            );
-        }
-    }
-
-    /// A sliver 24 mm long and a tenth wide lying face down, and a face rising from its
-    /// short edge. Its barycentrics lose that edge to cancellation, which signed the point
-    /// off it by the sliver's own normal and called it inside.
-    #[test]
-    fn a_point_off_the_short_edge_of_a_sliver_is_signed_by_the_edge() {
-        let mesh = Mesh::new(
-            vec![
-                Vec3::new(97.21413, 97.78362, 0.0),
-                Vec3::new(97.08101, 122.19565, 0.0),
-                Vec3::new(97.09066, 121.70752, 0.0),
-                Vec3::new(96.0, 122.0, 1.5),
-            ],
-            vec![[0, 1, 2], [2, 1, 3]],
-        );
-        let point = Vec3::new(100.0, 122.2, 1.0);
-        let found = closest_point(&mesh, point).expect("the mesh has faces");
-
-        assert!(
-            !Signer::new(&mesh, SignMode::Pseudonormal).is_inside(&mesh, point, &found),
-            "the point stands off the ridge, outside both faces"
-        );
-    }
-
-    /// A sliver so thin that `f32` puts its determinant below zero, which read as a face
-    /// with no area and signed the point by the sliver's own normal.
-    #[test]
-    fn a_sliver_whose_determinant_cancels_below_zero_is_still_signed_by_its_edge() {
-        let mesh = Mesh::new(
-            vec![
-                Vec3::new(97.21413, 97.78362, 0.0),
-                Vec3::new(97.074_936, 122.76993, 0.0),
-                Vec3::new(97.078_255, 122.29129, 0.0),
-                Vec3::new(96.0, 122.5, 1.5),
-            ],
-            vec![[0, 1, 2], [2, 1, 3]],
-        );
-        let point = Vec3::new(100.0, 122.6, 1.0);
-        let found = closest_point(&mesh, point).expect("the mesh has faces");
-
-        assert!(
-            !Signer::new(&mesh, SignMode::Pseudonormal).is_inside(&mesh, point, &found),
-            "the point stands off the ridge, outside both faces"
-        );
-    }
-
-    #[test]
-    fn a_mesh_with_a_hole_falls_back_to_the_winding_number() {
-        let mut mesh = cube(10.0);
-        mesh.faces.truncate(10);
-        assert!(matches!(
-            Signer::new(&mesh, SignMode::Auto),
-            Signer::Winding(_)
-        ));
-        assert!(matches!(
-            Signer::new(&cube(10.0), SignMode::Auto),
-            Signer::Pseudonormal(_)
-        ));
-    }
-}
+mod tests;

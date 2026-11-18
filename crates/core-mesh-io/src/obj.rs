@@ -6,6 +6,10 @@ use core_geometry::{Mapping, Mesh, UvMap, Vec2, Vec3};
 
 use crate::{Loaded, MeshIoError, MeshLoader, ModelFile, Texture};
 
+mod face_indices;
+
+use face_indices::FaceIndexGuard;
+
 /// Reads Wavefront OBJ; the format carries no units, so values are taken as millimetres. Every
 /// object and group becomes one mesh; only the `map_Kd` image is read from materials (ADR 0115).
 pub struct ObjLoader;
@@ -17,7 +21,7 @@ impl MeshLoader for ObjLoader {
 
     fn read(&self, file: ModelFile<'_>) -> Result<Loaded, MeshIoError> {
         let (path, beside) = (file.path, file.beside);
-        let mut reader = BufReader::new(file.source);
+        let mut reader = FaceIndexGuard::new(BufReader::new(file.source));
 
         let options = tobj::LoadOptions {
             triangulate: true,
@@ -30,7 +34,7 @@ impl MeshLoader for ObjLoader {
                 |source| MeshIoError::Malformed {
                     path: path.to_owned(),
                     format: "OBJ",
-                    reason: source.to_string(),
+                    reason: reader.rejected().unwrap_or_else(|| source.to_string()),
                 },
             )?;
 

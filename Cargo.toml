@@ -6,7 +6,7 @@ members = ["crates/*", "workspace-hack"]
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.9.0"
 edition = "2024"
 rust-version = "1.96"
 license = "AGPL-3.0-only"
@@ -26,6 +26,7 @@ core-text = { path = "crates/core-text" }
 core-plate = { path = "crates/core-plate" }
 core-pipeline = { path = "crates/core-pipeline" }
 core-engine = { path = "crates/core-engine" }
+core-recipe = { path = "crates/core-recipe" }
 encrust-cli = { path = "crates/encrust-cli" }
 encrust-app = { path = "crates/encrust-app" }
 core-format = { path = "crates/core-format" }
@@ -54,7 +55,7 @@ i_overlay = "9.0"
 boolmesh = { git = "https://github.com/vvvlladimir/boolmesh", rev = "27c23f2e3c37a37d5a8fcd5a01412edf1b73274a", default-features = false, features = ["rayon"] }
 # Glyph outlines for a label, and the faces a machine has to offer; see docs/decisions/0305.
 ttf-parser = { version = "0.25", default-features = false, features = ["std", "opentype-layout", "apple-layout", "variable-fonts", "glyph-names"] }
-fontdb = { version = "0.23", default-features = false, features = ["std", "fs", "fontconfig"] }
+fontdb = { version = "0.24", default-features = false, features = ["std", "fs", "fontconfig"] }
 rayon = "1.12"
 thiserror = "2.0"
 anyhow = "1.0"
@@ -86,7 +87,7 @@ indicatif = { version = "0.18", default-features = false }
 ctrlc = "3.5"
 directories = "6.0"
 # The server a language model drives the command line through, over stdio; see
-# docs/decisions/0397.
+# docs/decisions/0455.
 rmcp = { version = "3.8", default-features = false }
 tokio = { version = "1", default-features = false }
 base64 = "0.23"
@@ -108,7 +109,7 @@ tar = { version = "0.4", default-features = false }
 
 stl_io = "0.11"
 tobj = { version = "4.0", default-features = false }
-quick-xml = "0.41"
+quick-xml = "0.42"
 png = "0.18"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "tga"] }
 eframe = "0.36"
@@ -126,11 +127,13 @@ transform-gizmo-egui = "0.11"
 # Lighter copies of heavy models for the viewport, pure Rust so the web build keeps them (ADR 0259).
 meshoptimizer-rs = { version = "0.2", default-features = false, features = ["std"] }
 bytemuck = { version = "1.25", features = ["derive"] }
-rfd = "0.17"
-# The window's own buttons on macOS, moved onto the top bar's centre line (ADR 0217). All
-# three are already in the tree through eframe and winit.
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSButton", "NSControl", "NSResponder", "NSView", "NSWindow"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
+rfd = "0.18"
+# The window's own buttons on macOS, moved onto the top bar's centre line (ADR 0217), and its
+# application menu (ADR 0444), and the files it is asked to open (ADR 0445). All are already in
+# the tree through eframe and winit.
+objc2 = { version = "0.6", default-features = false, features = ["std"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSButton", "NSControl", "NSEvent", "NSMenu", "NSMenuItem", "NSResponder", "NSView", "NSWindow"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSAppleEventDescriptor", "NSAppleEventManager", "NSDictionary", "NSGeometry", "NSNotification", "NSString", "NSURL"] }
 raw-window-handle = "0.6"
 winresource = { version = "0.1", default-features = false }
 windows = { version = "0.62", default-features = false, features = ["std", "ApplicationModel", "Foundation_Collections", "Services_Store", "System"] }

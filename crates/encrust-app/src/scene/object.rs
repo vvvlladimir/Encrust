@@ -1,11 +1,13 @@
 use super::import_summary::{ImportSummary, Mapped};
 use super::support_surface::SupportShell;
-use super::{ObjectId, Scene, Shaped};
+use super::{ObjectId, Scene, Shaped, ShownPatch};
 use crate::drain::{PlugsLaid, Traps};
 use crate::drilling::{PrintedSupports, SupportsUnder};
 use core_engine::project::Axis;
-use core_engine::project::{DrainState, HollowState};
-use core_geometry::{Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3, placed_aabb};
+use core_engine::project::HollowState;
+use core_geometry::{
+    Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3, placed_aabb, signed_volume,
+};
 use core_supports::ModelSupports;
 use core_volume::ModelHollow;
 use printer_profiles::{Raft, SupportProfile};
@@ -45,6 +47,10 @@ pub struct SceneObject {
     pub mapped: Option<Arc<Mapped>>,
     /// The faces the Relief brush painted: while any are, only they take the texture.
     pub relief_painted: Region,
+    /// The faces painted as what shows, which a clean surface keeps supports off (ADR 0410).
+    pub shown_painted: Region,
+    /// The same drawn over the model while the brush that paints it is in reach.
+    pub shown_patch: ShownPatch,
     /// The tool settings this model keeps instead of the plate's.
     pub own: OwnSettings,
     /// How high over its raft the user stood the model, millimetres: what auto-orient
@@ -67,7 +73,8 @@ pub struct SceneObject {
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
 pub struct OwnSettings {
     pub hollow: Option<HollowState>,
-    pub drain: Option<DrainState>,
+    /// The plugs' gap, millimetres a side; the hole sizes are the window's (ADR 0397).
+    pub plug_gap_mm: Option<Scalar>,
     /// By the number of the group each one stands in for.
     pub supports: BTreeMap<u16, SupportProfile>,
     /// The raft under this model, where it is not the plate's; see ADR 0253.
@@ -183,24 +190,44 @@ impl SceneObject {
         self.hollow.shell().unwrap_or(&self.mesh)
     }
 
-    /// What its printed supports are built from: its groups, its cuts and where it stands.
+    /// What its printed raft is built from: its raft, its cuts and where it stood when the
+    /// raft was built, so a raft drawn while trees regrow is drilled where it stands.
     pub fn supports_under(&self) -> SupportsUnder<'_> {
         SupportsUnder {
-            groups: self.supports.drawn(),
+            raft: self.supports.drawn_raft(),
             cuts: self.hollow.cut_bodies(),
-            transform: self.transform,
+            transform: self.drawn_at(),
         }
     }
 
-    /// The support groups as they print: drilled by the model's cuts where that has been
-    /// done, as they stand otherwise.
-    pub fn supports_shown(&self) -> &[core_supports::Shaded] {
+    /// Where the model stood when its drawn columns were built; where it stands without any.
+    fn drawn_at(&self) -> Transform {
+        if self.supports.drawn().is_empty() {
+            self.transform
+        } else {
+            self.supports.drawn_at()
+        }
+    }
+
+    /// The raft as it prints: drilled by the model's cuts where that has been done, as it
+    /// stands otherwise.
+    pub fn raft_shown(&self) -> Option<&core_supports::Shaded> {
         self.printed_supports.shown(self.supports_under())
     }
 
-    /// The support groups as they print and their hierarchies, once built for them.
-    pub fn supports_built(&self) -> Option<(&[core_supports::Shaded], &[Arc<Bvh>])> {
+    /// The raft as it prints and its hierarchy, once built for it where the model stands;
+    /// none while a raft built elsewhere is carried to it.
+    pub fn raft_built(&self) -> Option<(&core_supports::Shaded, &Arc<Bvh>)> {
+        if self.drawn_at() != self.transform {
+            return None;
+        }
         self.printed_supports.built(self.supports_under())
+    }
+
+    /// The resin its supports as last built come to, mm³; none until they are built.
+    pub fn supports_mm3(&self) -> Scalar {
+        let meshes = self.supports.every_mesh();
+        meshes.map(|mesh| signed_volume(mesh).abs()).sum()
     }
 
     /// The mesh the model prints as: its cuts taken out exactly where they have been, its
@@ -258,6 +285,7 @@ impl SceneObject {
         self.traps.clear();
         self.mapped = None;
         self.relief_painted.clear();
+        self.shown_painted.clear();
         self.mesh = mesh;
     }
 

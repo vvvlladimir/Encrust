@@ -10,6 +10,8 @@ mod view;
 
 pub use image::Thumbnail;
 pub use marker::{Marker, MarkerSpot};
-pub use render::{Part, Rendered, render, render_view};
-pub use settings::{Rgb, ThumbnailSettings, rgb565};
+pub use render::{Look, Part, Rendered, render, render_view};
+pub use settings::{
+    RESIN, RGB15_BITS, RGB565_BITS, Rgb, SUPPORT, ThumbnailSettings, rgb_of_565, rgb565, widen,
+};
 pub use view::View;

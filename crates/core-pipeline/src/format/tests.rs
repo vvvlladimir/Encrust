@@ -157,6 +157,21 @@ fn a_machine_whose_name_carries_no_model_code_is_offered_no_cxdlp() {
 }
 
 #[test]
+fn a_format_the_machine_cannot_be_written_into_gives_way_to_the_default() {
+    let printer = PrinterProfile {
+        name: "Mars 4 Ultra".to_owned(),
+        machine_name: None,
+        ..Default::default()
+    };
+    let unwritable = SlicedFormat::Cxdlp(CxdlpVersion::V3);
+    assert_eq!(unwritable.or_default_for(&printer), SlicedFormat::default());
+    assert_eq!(
+        SlicedFormat::Svgx.or_default_for(&printer),
+        SlicedFormat::Svgx
+    );
+}
+
+#[test]
 fn a_format_survives_the_round_trip_through_a_profile() {
     for format in SlicedFormat::CHOICES {
         let family: OutputFormat = format.into();

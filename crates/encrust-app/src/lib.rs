@@ -3,7 +3,10 @@
 //! is here.
 
 mod app;
+#[cfg(target_os = "macos")]
+mod app_menu;
 mod arrange;
+mod autosave;
 mod boolean;
 mod camera;
 mod check;
@@ -11,6 +14,7 @@ mod cut;
 mod drain;
 mod drilling;
 mod exchange;
+mod file_name;
 mod files;
 mod gizmo;
 mod growth;
@@ -18,11 +22,10 @@ mod highlight;
 mod hollow;
 mod i18n;
 mod import;
+mod interface_scale;
 mod job;
 mod landing;
 mod launch;
-#[cfg(not(target_arch = "wasm32"))]
-mod link;
 mod measure;
 mod meeting;
 mod network;
@@ -50,6 +53,8 @@ mod state;
 mod status;
 mod supports;
 mod surfaces;
+#[cfg(target_os = "macos")]
+mod system_open;
 mod text;
 mod tool_settings;
 #[cfg(target_os = "macos")]

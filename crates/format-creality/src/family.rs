@@ -11,8 +11,7 @@ pub(crate) const MAGIC: &[u8] = b"CXSW3DV2\0";
 /// Which revision of the container to write.
 ///
 /// Both carry the same magic and differ in everything behind it: version 3 holds a layer
-/// as vertical lines, version 4 as six-bit runs along each row. See
-/// `docs/formats/creality.md`.
+/// as vertical lines, version 4 as runs in the codec its machine reads.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CxdlpVersion {
     #[default]

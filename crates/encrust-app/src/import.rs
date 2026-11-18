@@ -15,7 +15,7 @@ use crate::job::{ImportJob, ImportOutcome, ImportStage};
 use crate::panels::frame_view;
 use crate::plate::BuildPlate;
 use crate::recent::picture::Parts;
-use crate::scene::{ImportSummary, Imported, Mapped, ObjectId, Scene};
+use crate::scene::{ImportSummary, Imported, Mapped, Scene};
 use crate::status::Status;
 
 /// The imports currently being read, one thread each.
@@ -28,8 +28,6 @@ pub struct Imports {
     /// The files on disk that reached the plate since the window last took them, for the
     /// recent list, each with what its picture is drawn from.
     opened: Vec<(PathBuf, Parts)>,
-    /// The models read from disk that reached the plate since the window last took them.
-    landed: Vec<(PathBuf, ObjectId)>,
 }
 
 impl Imports {
@@ -56,11 +54,6 @@ impl Imports {
         self.jobs.push(ImportJob::spawn_sliced(file, placement));
     }
 
-    /// The files read from disk and the models they became, since the last call.
-    pub fn take_landed(&mut self) -> Vec<(PathBuf, ObjectId)> {
-        std::mem::take(&mut self.landed)
-    }
-
     /// The files that reached the plate since the last call.
     pub fn take_opened(&mut self) -> Vec<(PathBuf, Parts)> {
         std::mem::take(&mut self.opened)
@@ -68,6 +61,25 @@ impl Imports {
 
     pub fn is_busy(&self) -> bool {
         !self.jobs.is_empty()
+    }
+
+    /// Gives up every import under way: a sliced file's rebuild stops, a mesh's read is
+    /// thrown away when it ends.
+    pub fn cancel(&mut self, status: &mut Status) {
+        if self.jobs.is_empty() {
+            return;
+        }
+        self.jobs.clear();
+        *status = Status::Info(tr!("import-cancelled"));
+    }
+
+    /// The share of the one import under way that is done; `None` for several, or for one
+    /// that cannot count its work.
+    pub fn fraction(&self) -> Option<f32> {
+        match self.jobs.as_slice() {
+            [job] => job.fraction(),
+            _ => None,
+        }
     }
 
     /// What the stage notice says while files are being read.
@@ -106,10 +118,7 @@ impl Imports {
                         let parts = vec![(Arc::clone(&imported.mesh), imported.transform)];
                         self.opened.push((path.clone(), parts));
                     }
-                    let id = scene.insert(*imported);
-                    if on_disk {
-                        self.landed.push((path.clone(), id));
-                    }
+                    scene.insert(*imported);
                     *status = Status::Info(tr!("status-opened", path = path.display().to_string()));
                     frame_view(scene, plate, camera);
                 }
@@ -145,7 +154,8 @@ pub fn prepare(
     stage: &mut dyn FnMut(ImportStage),
 ) -> Result<Imported> {
     let path = file.path();
-    let name = file_name(path);
+    // With its extension: one cube from an STL, an OBJ and a 3MF is otherwise one name thrice.
+    let name = files::file_name(path);
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
@@ -194,16 +204,6 @@ pub fn prepare(
             summary,
         )
     })
-}
-
-/// The file's own name, extension and all: three copies of one cube opened from an STL, an
-/// OBJ and a 3MF are otherwise one name three times over. It is also what a failure is
-/// reported under, since a reader's own error already carries the whole path.
-fn file_name(path: &std::path::Path) -> String {
-    path.file_name().map_or_else(
-        || path.display().to_string(),
-        |name| name.to_string_lossy().into_owned(),
-    )
 }
 
 /// The file's textures, over the mesh as the repair left it: welding's dropped faces, then

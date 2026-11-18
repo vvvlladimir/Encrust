@@ -1,6 +1,6 @@
 # The everyday choice, and what a newly imported object starts with.
 #
-# Why the presets look like this: ADR 0323.
+# Why the presets look like this: ADR 0323, and their spacing ADR 0447.
 
 name = "Medium"
 
@@ -10,9 +10,9 @@ facets = 12
 # counted over an area: doubling it puts down twice as many.
 density = 1.0
 
-# How far the lowest point of a part should stand clear of the plate: room for the pad,
-# the flare and a whole top segment under its lowest contact, see ADR 0237.
-z_lift_mm = 5.0
+# How far the lowest point of a part should stand clear of the plate: room for the pad
+# and the flare under its lowest contact, a low tip's neck cut short, see ADR 0432.
+z_lift_mm = 2.0
 
 # How much clear air a support's body keeps between itself and the model.
 clearance_mm = 0.5
@@ -23,8 +23,8 @@ max_overhang_deg = 40.0
 # How far apart automatic placement puts contacts under a face looking straight down,
 # and under one leaning just past the overhang angle, before the density scales them.
 # Between the two the spacing follows the face's angle.
-contact_spacing_mm = 1.8
-steep_contact_spacing_mm = 3.3
+contact_spacing_mm = 3.5
+steep_contact_spacing_mm = 6.4
 
 [tip]
 # sphere or plane.

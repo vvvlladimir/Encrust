@@ -25,7 +25,8 @@ pub(super) fn hollowed_ball() -> &'static (Mesh, Bvh, Arc<Mesh>, std::ops::Range
             &mesh,
             &bvh,
             &HollowSettings {
-                thickness_mm: 2.0,
+                // Comes out near 2 mm with half a voxel added (ADR 0449): thin enough to glow.
+                thickness_mm: 1.7,
                 precision: 0.6,
                 ..HollowSettings::default()
             },

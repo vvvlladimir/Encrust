@@ -132,11 +132,12 @@ cannot tell them apart, which inverted 228 voxels on a ball before it was found.
 
 ## The sign
 
-`SignMode::Auto` runs `diagnose` once. A closed mesh is signed by the angle-weighted
+`SignMode::Auto` runs `diagnose` once. One closed shell with no branching edge is signed by
+the angle-weighted
 pseudonormal of Bærentzen and Aanæs — the nearest point's barycentrics choose the face,
-edge or vertex normal, and the sign is its dot with the offset. A mesh with a hole is
-signed by the generalised winding number, which degrades gracefully where the pseudonormal
-inverts (ADR 0055).
+edge or vertex normal, and the sign is its dot with the offset. Anything else is signed by
+the generalised winding number, which degrades gracefully where the pseudonormal inverts
+(ADR 0055, 0448).
 
 It is asked for only where values are written, once per 4³ block of a stored tile: a block
 the surface crosses no lattice edge of is all one side, and a band sitting a wall off the
@@ -297,8 +298,12 @@ fall linearly with distance, so `(0.5 − cover) · 2v` is the signed distance w
 of the surface and saturates beyond it. Every crossing therefore has an unsaturated point
 beside it, whose tile is stored, and the extraction's growth reaches the rest.
 
-Only two slabs, one tile row of planes and the lit bounding box of each are held; a tile
-row is turned into tiles on every core and dropped. Runs are spread a cell row per core.
+Only two slabs and one tile row of planes are held. Each slab keeps the 8 × 8 blocks of
+cells it lights and each plane only the blocks of points those touch, a tile column's foot
+apiece, so a plate of small parts far apart costs their area, not the panel's. A tile row
+is turned into tiles on every core and dropped; runs are spread a block row per core.
+Six 10 mm parts spread over a 16K plate, 64 layers (`cargo bench -p core-volume --bench
+stack`): 2.27 s over the bounding box, 0.19 s by blocks.
 
 ## What it costs
 

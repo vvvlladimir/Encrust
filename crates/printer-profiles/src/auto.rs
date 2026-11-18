@@ -19,12 +19,13 @@ pub struct AutoProfile {
     pub max_overhang_deg: f32,
     pub contact_spacing_mm: f32,
     pub steep_contact_spacing_mm: f32,
-    /// The least island, mm² on the layer it begins on, held by the second shape and by
-    /// the third, and spaced as [`IslandSpacing`] says from there.
+    /// The least island, mm² on the layer it begins on, spaced at the second share of
+    /// [`IslandSpacing`] and at the third.
     pub island_area_mm2: [f32; AUTO_SIZES - 1],
-    /// The least model standing above an overhang, mm³, held by the second shape and by
-    /// the third.
-    pub overhang_volume_mm3: [f32; AUTO_SIZES - 1],
+    /// The least share of the model above it one island or overhang contact holds, mm³, held
+    /// by the second shape and by the third. See `docs/decisions/0423`.
+    #[serde(default = "default_share_mm3")]
+    pub share_mm3: [f32; AUTO_SIZES - 1],
     /// The least resin a step puts out in its one layer, mm³, to be held as a step at
     /// all, then by the second shape and by the third. See `docs/decisions/0326`.
     pub step_volume_mm3: [f32; AUTO_SIZES],
@@ -51,14 +52,10 @@ impl AutoProfile {
         crate::catalogue::shipped_auto(id)
     }
 
-    /// Which shape holds an island of `area_mm2`, as an index into `shapes`.
-    pub fn island_size(&self, area_mm2: f32) -> usize {
-        size_of(&self.island_area_mm2, area_mm2)
-    }
-
-    /// Which shape holds an overhang with `carried_mm3` of model above it.
-    pub fn overhang_size(&self, carried_mm3: f32) -> usize {
-        size_of(&self.overhang_volume_mm3, carried_mm3)
+    /// Which shape holds a contact holding `share_mm3` of the model above it, as an index into
+    /// `shapes`.
+    pub fn share_size(&self, share_mm3: f32) -> usize {
+        size_of(&self.share_mm3, share_mm3)
     }
 
     /// Which shape holds a step that puts out `new_mm3` in its layer, or `None` for one too
@@ -142,12 +139,20 @@ impl AutoProfile {
         }
         crate::support::overhang_within_right_angle(self.max_overhang_deg)?;
         ascending("island_area_mm2", &self.island_area_mm2)?;
-        ascending("overhang_volume_mm3", &self.overhang_volume_mm3)?;
+        ascending("share_mm3", &self.share_mm3)?;
         ascending("steady_area_mm2", &[self.steady_area_mm2])?;
         ascending("step_volume_mm3", &self.step_volume_mm3)?;
         ascending("step_height_mm", &self.step_height_mm)
     }
 }
+
+/// What a profile saved before contacts were sized by their share reads with.
+fn default_share_mm3() -> [f32; AUTO_SIZES - 1] {
+    [SHARE_MM3[0], SHARE_MM3[1]]
+}
+
+/// Auto's shares as shipped, until a print sets them (ADR 0423).
+const SHARE_MM3: [f32; AUTO_SIZES - 1] = [100.0, 500.0];
 
 /// How many of `least` a measure of `value` reaches, which is the shape it is held by.
 fn size_of(least: &[f32], value: f32) -> usize {
@@ -200,20 +205,25 @@ mod tests {
     }
 
     #[test]
-    fn a_measure_is_held_by_the_last_shape_it_reaches() {
+    fn a_share_is_held_by_the_last_shape_it_reaches() {
         let auto = shipped();
-        let sizes: Vec<usize> = [0.0, 2.39, 2.4, 3.1, 3.2, 50.0]
+        let sizes: Vec<usize> = [0.0, 99.0, 100.0, 499.0, 500.0, 5000.0]
             .into_iter()
-            .map(|area| auto.island_size(area))
+            .map(|share| auto.share_size(share))
             .collect();
         assert_eq!(
             sizes,
             [0, 0, 1, 1, 2, 2],
-            "thresholds 2.4 and 3.2 mm² as shipped"
+            "thresholds 100 and 500 mm³ as shipped"
         );
-        assert_eq!(auto.overhang_size(999.0), 0);
-        assert_eq!(auto.overhang_size(1500.0), 1);
-        assert_eq!(auto.overhang_size(2000.0), 2);
+    }
+
+    #[test]
+    fn a_profile_saved_before_shares_reads_the_shipped_ones() {
+        let source = SHIPPED.replace("share_mm3 = [100.0, 500.0]", "");
+        let auto = AutoProfile::from_toml_str(&source, Path::new("auto/old.toml"))
+            .expect("a field it lacks is read as shipped");
+        assert_eq!(auto.share_mm3, shipped().share_mm3);
     }
 
     #[test]
@@ -221,7 +231,7 @@ mod tests {
         let mut auto = shipped();
         let mut placing =
             auto.placing_with(&SupportProfile::shipped("heavy").expect("the heavy preset ships"));
-        assert_eq!(placing.contact_spacing_mm, 1.8);
+        assert_eq!(placing.contact_spacing_mm, 3.0);
         assert_eq!(
             placing.middle,
             SupportProfile::shipped("heavy")
@@ -266,7 +276,7 @@ mod tests {
 
     #[test]
     fn an_overhang_past_a_right_angle_is_refused() {
-        let source = SHIPPED.replace("max_overhang_deg = 40.0", "max_overhang_deg = 120.0");
+        let source = SHIPPED.replace("max_overhang_deg = 45.0", "max_overhang_deg = 120.0");
         assert!(matches!(
             AutoProfile::from_toml_str(&source, Path::new("auto/odd.toml")),
             Err(ProfileError::OutOfOrder { .. })
@@ -300,7 +310,7 @@ mod tests {
 
     #[test]
     fn a_spacing_of_zero_is_refused() {
-        let source = SHIPPED.replace("contact_spacing_mm = 1.8", "contact_spacing_mm = 0.0");
+        let source = SHIPPED.replace("contact_spacing_mm = 3.0", "contact_spacing_mm = 0.0");
         assert!(matches!(
             AutoProfile::from_toml_str(&source, Path::new("auto/odd.toml")),
             Err(ProfileError::NonPositive { .. })

@@ -38,8 +38,9 @@ fn project(objects: usize) -> Project {
                 precision: 0.5,
                 infill_on: true,
                 infill: InfillSettings::default(),
-                blocker_mm: 2.0,
+
                 open_floor: false,
+                solid_under_mm: Some(6.0),
             },
             drain: DrainState::round(3.0, 3.0, 1.0),
             cut: CutState {
@@ -123,6 +124,7 @@ fn object(index: usize) -> ObjectState {
                     precision: 0.25,
                     infill: None,
                     open_toward: None,
+                    solid_under_mm: Some(6.0),
                 },
                 cavity_faces: 0..1,
                 cavity_mm3: 12.5,
@@ -137,7 +139,7 @@ fn object(index: usize) -> ObjectState {
             }),
         },
         own_hollow: None,
-        own_drain: (index == 1).then_some(DrainState::round(4.0, 3.0, 1.0)),
+        own_drain: (index == 1).then_some(OwnDrain { plug_gap_mm: 0.3 }),
         own_supports: if index == 1 {
             vec![OwnSupportState {
                 group: 1,
@@ -149,6 +151,7 @@ fn object(index: usize) -> ObjectState {
         own_raft: None,
         plug_of: None,
         relief_painted: marked(&[0]),
+        shown_painted: marked(&[1, 2]),
     }
 }
 
@@ -187,6 +190,10 @@ fn a_plate_comes_back_as_it_was_saved() {
     assert_eq!(
         object.relief_painted,
         saved.manifest.objects[0].relief_painted
+    );
+    assert_eq!(
+        object.shown_painted,
+        saved.manifest.objects[0].shown_painted
     );
     assert_eq!(
         object.hollow.channels,
@@ -287,17 +294,30 @@ fn a_models_own_settings_come_back_and_a_file_without_them_reads() {
     let back = round_trip(&project(2));
     assert_eq!(back.manifest.objects[0].own_drain, None);
     assert_eq!(
-        back.manifest.objects[1]
-            .own_drain
-            .as_ref()
-            .map(|own| own.diameter_mm),
-        Some(4.0)
+        back.manifest.objects[1].own_drain,
+        Some(OwnDrain { plug_gap_mm: 0.3 })
     );
     let mut older = serde_json::to_value(&back.manifest.objects[1]).expect("serialises");
     let fields = older.as_object_mut().expect("an object");
     fields.remove("own_drain");
     let read: ObjectState = serde_json::from_value(older).expect("a file from before reads");
     assert_eq!(read.own_drain, None);
+}
+
+#[test]
+fn a_models_own_hole_sizes_from_before_are_read_past_and_its_gap_kept() {
+    let own: OwnDrain = serde_json::from_value(serde_json::json!({
+        "diameter_mm": 5.0, "depth_mm": 4.0, "taper": 1.0, "plug_gap_mm": 0.25
+    }))
+    .expect("a model's own drain written before ADR 0397 reads");
+    assert_eq!(own, OwnDrain { plug_gap_mm: 0.25 });
+
+    let mut hollow = serde_json::to_value(project(1).manifest.hollow).expect("a state writes");
+    let fields = hollow.as_object_mut().expect("a state is an object");
+    fields.insert("blocker_mm".to_owned(), serde_json::json!(2.0));
+    fields.insert("fit_blocker".to_owned(), serde_json::json!(false));
+    let _: HollowState = serde_json::from_value(hollow)
+        .expect("a hollow state with a blocker size from before reads");
 }
 
 #[test]

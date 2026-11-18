@@ -127,6 +127,7 @@ fn a_directory_with_nothing_in_it_is_an_error_rather_than_an_empty_run() {
         talk: false,
         progress: false,
         stop: &Stop::default(),
+        writes: true,
     };
     let error = run(&command.batch(), &chosen, &watch).expect_err("there is nothing to slice");
     assert!(error.to_string().contains("no models"));
@@ -165,6 +166,7 @@ fn a_batch_stopped_by_ctrl_c_starts_no_model_and_reports_none() {
         talk: false,
         progress: false,
         stop: &stop,
+        writes: true,
     };
     let error = run(&command.batch(), &chosen, &watch).expect_err("the batch was stopped");
     assert!(is_cancelled(&error), "got {error:#}");

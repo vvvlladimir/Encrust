@@ -41,7 +41,7 @@ pub fn stands(placed: &Placed, contact: Vec3, group: u16, profiles: Profiles) ->
 
 /// The tree a lone support at `contact` grows into, if it stands.
 fn alone(placed: &Placed, contact: Vec3, group: u16, profiles: Profiles) -> Option<SupportTree> {
-    let column = column(placed, 0, group, contact, profiles.of(group))?;
+    let column = column(placed, 0, group, contact, profiles.of(group)).ok()?;
     grow(&[column], placed, profiles)
         .into_iter()
         .find(|tree| tree.points().next().is_some())

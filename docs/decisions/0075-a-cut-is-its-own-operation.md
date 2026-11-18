@@ -1,6 +1,6 @@
 # 0075. A cut is its own operation, not part of hollowing
 
-- **Status:** Accepted; amended by 0346 for a hole drilled before the cavity
+- **Status:** Accepted; amended by 0346 for a hole drilled before the cavity, by 0414 for one set by hand
 - **Date:** 2026-09-23
 
 ## Context

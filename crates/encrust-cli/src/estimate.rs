@@ -2,10 +2,11 @@
 //! likely to fail — worked out without writing anything.
 
 use std::fmt;
+use std::num::NonZeroU8;
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_engine::{Run, bake, cut};
+use core_engine::{Plate, QUICK_CHECK_BIN, Run, bake, cut};
 use core_format::PrintJob;
 use core_raster::RasterSettings;
 
@@ -45,33 +46,21 @@ impl Print {
     }
 }
 
-/// Cuts `staged`, and with a printer rasterises it too, writing nothing.
+/// Cuts `staged`, and with a printer rasterises it too, writing nothing; `quick` reads the
+/// panel in the squares of `QUICK_CHECK_BIN`.
 pub fn estimate(
     staged: &mut Staged,
     raster: &crate::args::RasterArgs,
+    quick: bool,
     watch: &Watch,
 ) -> Result<Estimate> {
+    let bin = quick.then_some(QUICK_CHECK_BIN);
     let mut estimate = match staged.take_plate(None, raster_window(raster)) {
         Some(plate) => {
-            let run = Run::of(&plate)?;
-            drop(plate);
-            let mut slice = report_of(run.solid(), run.windows(), staged.drainage);
-            let mut watching = Watching {
-                report: &mut slice,
-                bar: watch.progress.then(|| bar("layers")),
-                stop: watch.stop,
-            };
-            let measured = run.measure(&mut watching)?.ok_or(Cancelled)?;
-            drop(watching);
-            let mut job = run.job().clone();
-            job.volume_mm3 = measured.volume_mm3();
+            let (slice, print) = measure_plate(plate, staged.drainage, bin, watch)?;
             Estimate {
                 slice,
-                print: Some(Print {
-                    job,
-                    measured,
-                    panel: *run.panel(),
-                }),
+                print: Some(print),
             }
         }
         None => {
@@ -93,6 +82,39 @@ pub fn estimate(
     };
     estimate.slice.finish_drainage();
     Ok(estimate)
+}
+
+/// The stack `plate` cuts and the print its masks make, read in squares of `bin` pixels where
+/// given, watched for trapped resin where `drainage` asks; the plate is dropped once cut.
+pub(crate) fn measure_plate(
+    plate: Plate,
+    drainage: bool,
+    bin: Option<NonZeroU8>,
+    watch: &Watch,
+) -> Result<(SliceReport, Print)> {
+    let run = Run::of(&plate)?;
+    drop(plate);
+    let mut slice = report_of(run.solid(), run.windows(), drainage);
+    let mut watching = Watching {
+        report: &mut slice,
+        bar: watch.progress.then(|| bar("layers")),
+        stop: watch.stop,
+    };
+    let measured = match bin {
+        Some(bin) => run.measure_binned(bin, &mut watching)?,
+        None => run.measure(&mut watching)?,
+    };
+    let measured = measured.ok_or(Cancelled)?;
+    drop(watching);
+    let mut job = run.job().clone();
+    job.volume_mm3 = measured.volume_mm3();
+    let panel = bin.map_or(*run.panel(), |bin| run.panel().binned(bin));
+    let print = Print {
+        job,
+        measured,
+        panel,
+    };
+    Ok((slice, print))
 }
 
 impl Estimate {

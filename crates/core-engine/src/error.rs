@@ -1,8 +1,12 @@
+use core_geometry::Vec3;
 use core_pipeline::PipelineError;
 use core_plate::PlateError;
 use core_raster::RasterError;
 use core_slicer::SliceError;
+use core_supports::Refused;
 use core_volume::VolumeError;
+
+use crate::stand::merge_refusal;
 
 /// What can stop a plate on its way to a printable file.
 #[derive(Debug, thiserror::Error)]
@@ -36,4 +40,13 @@ pub enum EngineError {
 
     #[error("the project's printer or resin is not among the profiles here")]
     NotHere(#[from] printer_profiles::ProfileError),
+
+    #[error("no support has its contact within half a millimetre of {at}")]
+    NoSupportNear { at: Vec3 },
+
+    #[error("the points of the merge at {at} name one support, and a merge needs two")]
+    OneSupportToMerge { at: Vec3 },
+
+    #[error("the supports of the merge at {at} cannot be merged: {}", merge_refusal(*why))]
+    MergeRefused { at: Vec3, why: Refused },
 }

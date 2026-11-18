@@ -1,4 +1,5 @@
 use super::drafts::{Draft, ResinDraft};
+use super::fixtures::writable;
 use super::library::{
     add_resin, can_delete, delete_resin, duplicate_resin, is_thrown_away_with_the_printer,
     new_printer, new_resin, other_printers, pool_for, remove_resin, rename_resin, resins_of,
@@ -120,13 +121,6 @@ fn moving_a_resins_measured_height_carries_its_exposure_and_can_be_taken_back() 
 
 const MARS: &str = "elegoo-mars-3-pro";
 const SATURN: &str = "elegoo-saturn-4-ultra";
-
-/// The shipped catalogue over a directory of its own, which every write lands in.
-fn writable(name: &str) -> Catalogue {
-    let dir = std::env::temp_dir().join(format!("encrust-settings-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    Catalogue::with_root(&dir).expect("a missing directory reads as empty")
-}
 
 /// The same, with one resin the user measured on both machines: nothing ships an
 /// exposure, so a test that needs a resin makes one (ADR 0196).

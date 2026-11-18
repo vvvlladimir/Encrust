@@ -130,7 +130,7 @@ fn exact(models: &[Mesh], op: Boolean, cancel: Cancel<'_>) -> Result<Mesh, CsgEr
 /// `model` as the engine reads it, mended first where it refuses it as it stands, and refused
 /// still where mending leaves no volume, as a lone sheet closed over itself.
 fn mended(model: &Mesh) -> Result<Solid, CsgError> {
-    let solid = readable(model)?;
+    let solid = readable(model, Cancel::never())?;
     if solid.is_empty() {
         return Err(CsgError::NotSolid(
             "nothing is left once it is mended".to_owned(),

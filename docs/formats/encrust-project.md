@@ -26,6 +26,17 @@ the plate, there for whatever lists the file before opening it (ADR 0261): grey 
 alpha the coverage, tinted when shown (ADR 0385). A file without one reads, and a plate with
 nothing on it has none.
 
+## How a system knows it
+
+| | Name | Declared in |
+|---|---|---|
+| MIME type | `application/x-encrust`, a subclass of `application/zip` | `assets/linux/encrust.xml`, `crates/encrust-app/Cargo.toml` |
+| macOS UTI | `app.encrust.project`, conforming to `public.data` and `public.content` | `assets/macos/Info.plist` |
+| Windows ProgID | `Encrust.Project` | `crates/encrust-app/Cargo.toml` |
+| Store file type | `encrust` | `assets/msix/AppxManifest.xml` |
+
+Each installer registers the window as the file's owner (ADR 0445).
+
 ## `project.json`
 
 `version` is read on its own before anything else. This build writes version 7. Version 6
@@ -40,10 +51,10 @@ hold no built geometry or diagnostics.
 | `printer`, `resin` | the catalogue id, or `null`; never the profile itself (ADR 0261) |
 | `slicing` | island removal and its hanging passes, `OutputFormat`; taken up only with the printer. The print settings are the printer's and resin's (ADR 0380) |
 | `supports` | the group table, the active group, `ProjectSettings` for a fill, the brush |
-| `hollow` | what the Hollow tool is set to, not what it built |
+| `hollow` | what the Hollow tool is set to, not what it built; an older file's `blocker_mm` and `fit_blocker` are read past (ADR 0397) |
 | `hollow.infill` | the lattice's `pattern`, `cell_mm` and `density`, from which its walls and crossing holes follow; an older file's `wall_mm` reads as the density it made (ADR 0320); `null` for an empty cavity |
 | `hollow.open_floor` | whether a shell opens through the floor it stands on (ADR 0313); absent in older files and read as closed |
-| `drain`, `cut`, `array` | what the next hole, the cut plane and the copy grid are set to |
+| `drain`, `cut`, `array` | what the next hole, the cut plane and the copy grid are set to; of `drain`, only `plug_gap_mm` is taken up on opening, the hole being the window's (ADR 0397) |
 | `drain.shape`, `drain.turn_deg`, `drain.plug_gap_mm` | the next hole's outline, its turn from the plate's level in degrees, and a plug's gap a side (ADR 0313); absent in older files and read as round, unturned and 0.15 mm |
 | `cut.parts` | what Split into its parts goes by: the smallest part (ADR 0307); absent in older files and read as the defaults, and the narrow-join fields of files written before it are ignored |
 | `cut.joints` | how a cut's halves are joined and what each kind is set to (ADR 0306); absent in older files and read as a plain cut |
@@ -53,11 +64,13 @@ hold no built geometry or diagnostics.
 | `objects[].supports.grown[].landing.pad_offset` | how far a tree's pad stands off its trunk on the plate, on `frozen` trees too (ADR 0239); absent in older files and read as none |
 | `objects[].supports.grown[].landing.pad_cut` | how far a tree's pad reaches in each of 16 sectors where the model cut it back, `reach_mm`, mm (ADR 0327); absent in older files and read as a whole pad |
 | `objects[].supports.grown[].landing.on_support` | the tree ends on the trunk of a thicker tree of another group, on `frozen` trees too (ADR 0248); absent in older files and read as false |
+| `objects[].supports.grown[].landing.in_plate` | the tree's head runs into the plate with no foot, under a part lower than a pad and the shortest pillar (ADR 0427); absent in older files and read as false |
 | `objects[].supports.raft_lift_mm` | how much of the height in `transform` is the raft's lift (ADR 0238); absent in older files and read as 0 |
 | `supports.raft` | the raft every model without its own stands on (ADR 0253); absent in older files, where it is read from the first group's profile |
 | `supports.sizing` | the automatic profile supports are sized by, numbers as edited, and whether a run uses it (ADR 0334); absent when none was chosen, and in older files |
 | `supports.inline_spacing_mm` | how far apart a line of supports drawn with shift stands, mm (ADR 0330); absent in older files and read as the default |
 | `supports.fill_profiles` | the saved support profiles a fill builds its `rim` and its `inside` to, by id (ADR 0331); absent, or either one, builds to the group in hand |
+| `objects[].own_hollow`, `objects[].own_drain` | the Hollow numbers and plugs' gap this model keeps instead of the plate's (ADR 0227); `own_drain` is `{ plug_gap_mm }`, an older file's hole sizes in it read past (ADR 0397); absent when it keeps none |
 | `objects[].own_raft` | the raft this model stands on instead (ADR 0253); absent when it keeps none, and in older files |
 | `objects[].own_supports` | the profile this model is built to in place of a group's, by group number (ADR 0246); absent when it keeps none, and in older files |
 | `objects[].supports.frozen` | every tree a hand took hold of, in the same space |

@@ -2,13 +2,14 @@ use crate::placed::Placed;
 use core_geometry::{Mesh, Scalar, Vec3};
 use printer_profiles::SupportProfile;
 use rayon::prelude::*;
+use std::borrow::Cow;
 
 use crate::Landing;
 use crate::base::{braces, skate, toe_of};
 use crate::buttress::buttresses;
 use crate::group::Profiles;
 use crate::raft::raft;
-use crate::tree::SupportTree;
+use crate::tree::{SupportTree, TreeNode};
 
 mod tube;
 
@@ -18,11 +19,12 @@ mod foot;
 mod head;
 mod sound;
 pub(crate) use foot::footing_radius_mm;
-pub use foot::{FOOT_BEVEL, FOOT_TAPER};
 use foot::{FOOT_BITE, flare, foot, foot_tip, trunk_base_mm, trunk_bottom};
+pub use foot::{FOOT_TAPER, foot_bevel_mm};
 pub(crate) use head::ground_normal;
 pub(crate) use head::mesh_head;
 use head::{apex_of, head};
+use sound::radius_at;
 pub(crate) use sound::{Fault, bodies, faults, sound};
 
 /// Which set of measurements a support is built from.
@@ -119,9 +121,18 @@ pub fn mesh_trees(trees: &[SupportTree], placed: &Placed, profiles: Profiles) ->
     mesh
 }
 
-/// The same supports as [`mesh_trees`], one mesh per group in group order for drawing apart;
-/// a strut goes with its heaviest head, a trunk and foot with the tree, a brace with its group.
-pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Mesh> {
+/// A model's supports meshed apart: the columns of each group and the raft they stand on.
+#[derive(Debug, Clone, Default)]
+pub struct GroupMeshes {
+    /// One mesh per group, in group order.
+    pub groups: Vec<Mesh>,
+    pub raft: Option<Mesh>,
+}
+
+/// The same supports as [`mesh_trees`], one mesh per group in group order for drawing apart,
+/// and the raft on its own; a strut goes with its heaviest head, a trunk and foot with the
+/// tree, a brace with its group.
+pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> GroupMeshes {
     let trees = &propped(trees, placed, profiles);
     let mut meshes = in_groups(trees, profiles.groups().count(), profiles, placed);
     for (from, to, radius_mm, group) in braces(trees, placed, profiles) {
@@ -132,8 +143,10 @@ pub fn mesh_groups(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -
             &brace(from, to, radius_mm, profiles.of(group)),
         );
     }
-    mesh_raft(&mut meshes[0], trees, placed, profiles);
-    meshes
+    GroupMeshes {
+        groups: meshes,
+        raft: raft(trees, placed, profiles),
+    }
 }
 
 /// `trees` and the buttresses they want, which are meshed, braced and stood on the raft
@@ -145,7 +158,7 @@ fn propped(trees: &[SupportTree], placed: &Placed, profiles: Profiles) -> Vec<Su
 }
 
 /// One support on its own, without the braces and the raft it would share with others.
-pub(crate) fn mesh_alone(tree: &SupportTree, profiles: Profiles, placed: &Placed) -> Mesh {
+pub fn mesh_alone(tree: &SupportTree, profiles: Profiles, placed: &Placed) -> Mesh {
     let mut mesh = Mesh::default();
     mesh_tree(
         &mut Slots(std::slice::from_mut(&mut mesh)),
@@ -203,7 +216,30 @@ fn mesh_tree(slots: &mut Slots, tree: &SupportTree, profiles: Profiles, placed: 
     for body in bodies(tree, profiles, placed) {
         sweep(slots.of(body.group), &body.tube);
     }
-    stand_on(slots.of(tree.group()), tree, profiles.of(tree.group()));
+    let profile = profiles.of(tree.group());
+    stand_on(slots.of(tree.group()), &drawn(tree, profile), profile);
+}
+
+/// `tree` as it is drawn: a lone tip whose pillar is shorter than its head is one tube from the
+/// contact to its foot or the plate, with no joint at its neck to bulge round it (ADR 0427).
+pub(crate) fn drawn<'a>(tree: &'a SupportTree, profile: &SupportProfile) -> Cow<'a, SupportTree> {
+    let landing = tree.landing();
+    let [tip, root] = match tree.nodes() {
+        [a, b] if a.is_leaf() => [a, b],
+        [a, b] if b.is_leaf() => [b, a],
+        _ => return Cow::Borrowed(tree),
+    };
+    let pillar_mm = root.position.z - landing.pillar_bottom_z(profile);
+    if landing.on_model || landing.on_support || pillar_mm >= tip.position.distance(root.position) {
+        return Cow::Borrowed(tree);
+    }
+    let alone = TreeNode {
+        parent: None,
+        ..*tip
+    };
+    let mut drawn = SupportTree::new(vec![alone], 0, landing);
+    drawn.set_group(tree.group());
+    Cow::Owned(drawn)
 }
 
 fn mesh_raft(mesh: &mut Mesh, trees: &[SupportTree], placed: &Placed, profiles: Profiles) {
@@ -227,12 +263,21 @@ fn append(mesh: &mut Mesh, other: &Mesh) {
 /// Whatever the tree stands on: the flare, then a round foot as rings or a skate; nothing on the
 /// model, no foot on a raft, which the flare stands on instead (ADR 0266).
 fn stand_on(mesh: &mut Mesh, tree: &SupportTree, profile: &SupportProfile) {
-    if tree.landing().on_model {
+    if tree.landing().on_model || tree.landing().in_plate {
         return;
     }
     let style = Style::of(tree, profile);
     if let Some(tube) = flare(tree, profile, style) {
+        let first = mesh.vertices.len();
         sweep(mesh, &tube);
+        // Each ring stays level and follows the trunk's axis, so a leaning trunk keeps its
+        // fillet round it rather than beside it.
+        let base = tree.landing().base;
+        for vertex in &mut mesh.vertices[first..] {
+            let axis = trunk_axis_at(tree, profile, vertex.z);
+            vertex.x += axis.x - base.x;
+            vertex.y += axis.y - base.y;
+        }
     }
     if profile.raft.enabled {
         return;
@@ -317,6 +362,31 @@ fn strut(
     }
 }
 
+/// The head of the tip `node` run whole towards `plate`, where it meets the plate, and cut off
+/// flat there: what a part lower than a pad stands on (ADR 0427).
+fn into_plate(node: &TreeNode, plate: Vec3, profile: &SupportProfile, style: Style) -> Tube {
+    let offset = plate - node.position;
+    let length = offset.length();
+    if length < RING_EPSILON_MM {
+        return empty_tube(node.position);
+    }
+    let direction = offset / length;
+    let whole_mm = length.max(profile.top.length_mm);
+    let mut rings = Vec::with_capacity(8);
+    head(&mut rings, node, direction, profile, style, whole_mm);
+    let cut_mm = radius_at(&rings, length);
+    rings.retain(|ring| ring.along_mm < length - RING_EPSILON_MM);
+    push(&mut rings, length, cut_mm);
+    Tube {
+        top: node.position,
+        direction,
+        rings,
+        sides: profile.facets as usize,
+        apex: Some(apex_of(node, direction, profile, style, whole_mm)),
+        tail: None,
+    }
+}
+
 /// Whether a strut of radius `body_mm` ending at node `joint` ends inside the tube leaving it:
 /// that tube starts in a dome no narrower and runs on twice the strut's width (ADR 0341).
 fn buried(
@@ -362,11 +432,19 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
     };
 
     let mut rings = Vec::with_capacity(8);
+    if landing.in_plate {
+        return if root.is_leaf() {
+            into_plate(root, trunk_bottom(tree, profile), profile, style)
+        } else {
+            empty_tube(top)
+        };
+    }
     head(&mut rings, root, direction, profile, style, length);
     let end = TrunkEnd {
         length,
         base_mm,
         into_foot,
+        direction,
     };
     let tail_mm = end.close(&mut rings, landing, profile, style);
     Tube {
@@ -379,12 +457,13 @@ fn trunk(tree: &SupportTree, profile: &SupportProfile, style: Style) -> Tube {
     }
 }
 
-/// Where a trunk ends, millimetres along it: its length, its base's radius, and how far
-/// it runs on into the foot.
+/// Where a trunk ends, millimetres along it: its length, its base's radius, how far it runs
+/// on into the foot, and which way it runs.
 struct TrunkEnd {
     length: Scalar,
     base_mm: Scalar,
     into_foot: Scalar,
+    direction: Vec3,
 }
 
 impl TrunkEnd {
@@ -415,8 +494,27 @@ impl TrunkEnd {
         }
         push(rings, self.length, self.base_mm);
         // A trunk run into another support ends plain, inside the trunk it joins.
-        push(rings, self.length + self.into_foot, self.base_mm);
+        let end_mm = if landing.on_support {
+            self.length
+        } else {
+            self.foot_end_mm()
+        };
+        if end_mm < self.length {
+            let radius_mm = radius_at(rings, end_mm);
+            rings.retain(|ring| ring.along_mm < end_mm - RING_EPSILON_MM);
+            push(rings, end_mm, radius_mm);
+        } else {
+            push(rings, end_mm, self.base_mm);
+        }
         None
+    }
+
+    /// How far along a trunk on a foot ends: where the low rim of its last ring, square to a
+    /// lean and so a radius times its sine under its centre, is as deep as a straight one's.
+    fn foot_end_mm(&self) -> Scalar {
+        let cos = (-self.direction.z).max(Scalar::EPSILON);
+        let sin = self.direction.truncate().length();
+        (self.length + (self.into_foot - self.base_mm * sin) / cos).max(0.0)
     }
 }
 

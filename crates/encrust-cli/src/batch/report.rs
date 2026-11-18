@@ -11,9 +11,10 @@ use serde::Serialize;
 
 use crate::estimate::Estimate;
 use crate::pipeline::Outcome;
+use crate::recipe::{Prepared, RecipeRun};
 use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
-use crate::stage::{Part, Prepared};
+use crate::stage::Part;
 
 mod drains;
 mod import;
@@ -142,6 +143,9 @@ pub struct PartReport {
     /// What `--prepare` decided for it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prepared: Option<Prepared>,
+    /// What each step of `--recipe` decided for it, and read to decide.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recipe: Option<RecipeRun>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -166,11 +170,15 @@ pub struct Supports {
     /// How far the model was stood off the plate to make room for them, millimetres.
     pub lifted_mm: Scalar,
     pub contacts: usize,
+    /// Where each contact touches the model, plate millimetres: what `--merge-supports` names.
+    pub contacts_at_mm: Vec<[Scalar; 3]>,
     pub standing: usize,
     pub trunks: usize,
     pub no_room_for: usize,
     /// Where each of those touches the model, plate millimetres.
     pub no_room_at_mm: Vec<[Scalar; 3]>,
+    /// Why each of those has no support, in the same order.
+    pub no_room_why: Vec<&'static str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -267,10 +275,16 @@ impl PartReport {
             supports: part.supports.as_ref().map(|report| Supports {
                 lifted_mm: report.lifted_mm,
                 contacts: report.contacts.len(),
+                contacts_at_mm: report.contacts.iter().map(|at| at.to_array()).collect(),
                 standing: report.standing,
                 trunks: report.trees,
                 no_room_for: report.unsupported(),
-                no_room_at_mm: report.unheld.iter().map(|at| at.to_array()).collect(),
+                no_room_at_mm: report.unheld.iter().map(|(at, _)| at.to_array()).collect(),
+                no_room_why: report
+                    .unheld
+                    .iter()
+                    .map(|(_, why)| crate::supports::why_named(*why))
+                    .collect(),
             }),
             meets: part
                 .meets
@@ -278,6 +292,7 @@ impl PartReport {
                 .map(|input| input.display().to_string())
                 .collect(),
             prepared: part.prepared.clone(),
+            recipe: part.recipe.clone(),
         }
     }
 
@@ -293,6 +308,7 @@ impl PartReport {
             supports: None,
             meets: Vec::new(),
             prepared: None,
+            recipe: None,
         }
     }
 }

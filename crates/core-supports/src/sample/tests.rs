@@ -238,3 +238,44 @@ fn a_denser_spacing_puts_down_more_supports() {
 fn an_empty_piece_is_sampled_as_nothing() {
     assert!(sampled(&Field::default(), SPACING).is_empty());
 }
+
+#[test]
+fn every_toe_of_a_foot_has_its_end_found() {
+    // A 6 mm foot with four toes 1.2 mm wide reaching 3 mm out of it, 1.6 mm apart.
+    let toes: Vec<Scalar> = (0..4).map(|toe| 10.2 + 1.6 * toe as Scalar).collect();
+    let foot = toes
+        .iter()
+        .fold(rectangle(10.0, 10.0, 6.4, 6.0), |foot, x| {
+            foot.with(&rectangle(*x, 16.0, 1.2, 3.0))
+        });
+    let points = sample_ends(&foot, &foot.shrunk(INSET), INSET, 30);
+
+    for x in toes {
+        let end = grid().cell_of(Vec2::new(x + 0.6, 19.0));
+        let nearest_mm = points
+            .iter()
+            .map(|point| {
+                let (dx, dy) = (point[0] - end[0], point[1] - end[1]);
+                grid().millimetres_of(1) * ((dx * dx + dy * dy) as Scalar).sqrt()
+            })
+            .fold(Scalar::INFINITY, Scalar::min);
+        assert!(
+            nearest_mm <= 1.0,
+            "the toe at x = {x} mm is held within 1 mm of its end, the nearest is {nearest_mm} mm"
+        );
+    }
+}
+
+#[test]
+fn a_square_and_a_disc_have_no_toes() {
+    for piece in [
+        rectangle(10.0, 10.0, 6.0, 6.0),
+        circle(Vec2::new(20.0, 20.0), 3.0),
+    ] {
+        let ends = sample_ends(&piece, &piece.shrunk(INSET), INSET, 30);
+        assert!(
+            ends.is_empty(),
+            "a corner is held as a corner, got {ends:?}"
+        );
+    }
+}

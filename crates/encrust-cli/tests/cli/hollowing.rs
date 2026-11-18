@@ -1,12 +1,13 @@
 //! Hollowing a model from the command line: the cavity, its infill, the drain holes
 //! drilled into it and the resin it would trap without them.
 
+use std::fs;
 use std::path::PathBuf;
 
 use crate::support::*;
 
 /// A 16 mm cube sliced at 1 mm, with whatever hollowing arguments follow.
-fn hollow_cube(name: &str, extra: &[&str]) -> (PathBuf, String) {
+pub(crate) fn hollow_cube(name: &str, extra: &[&str]) -> (PathBuf, String) {
     let path = write_box_stl(&format!("hollow-{name}"), 16.0, 12, 0);
     let out = output_dir(name);
     let mut args = vec![
@@ -34,12 +35,14 @@ fn hollow_cube(name: &str, extra: &[&str]) -> (PathBuf, String) {
 fn a_hollowed_cube_exposes_a_ring_on_the_layers_that_cross_its_cavity() {
     let (out, _) = hollow_cube("ring", &["--hollow", "3"]);
 
-    // Halfway up, a 16 mm cube with a 3 mm wall is a 16 mm square with a 10 mm square out
-    // of the middle: 156 mm2, which is 15 600 pixels at a 0.1 mm pitch.
+    // Halfway up, a 16 mm square with the cavity's square out of the middle, at 100 pixels
+    // a mm2 for a 0.1 mm pitch.
+    let side = cavity_side_mm(16.0, 3.0);
+    let expected = (256.0 - side * side) * 100.0;
     let ring = lit_pixels(&out, 8);
     assert!(
-        (ring as f32 - 15_600.0).abs() / 15_600.0 < 0.02,
-        "a 16 mm ring around a 10 mm cavity is 15 600 pixels, got {ring}"
+        (ring as f32 - expected).abs() / expected < 0.02,
+        "a 16 mm ring around a {side} mm cavity is {expected} pixels, got {ring}"
     );
 
     // The floor of an internal hollow is solid, so the first layer is the whole square.
@@ -59,9 +62,11 @@ fn hollowing_reports_the_resin_it_saves() {
         .trim_end_matches(" mm^3")
         .parse()
         .expect("the saved volume is a number");
+    let side = cavity_side_mm(16.0, 3.0);
+    let cavity = side.powi(3);
     assert!(
-        (saved - 1000.0).abs() / 1000.0 < 0.03,
-        "a 10 mm cube of resin is 1000 mm^3, got {saved}"
+        (saved - cavity).abs() / cavity < 0.03,
+        "a {side} mm cube of resin is {cavity} mm^3, got {saved}"
     );
 }
 
@@ -377,7 +382,7 @@ fn a_solid_model_is_not_checked_for_drainage_unless_it_is_asked_for() {
 }
 
 #[test]
-fn a_hole_shallower_than_the_wall_still_goes_through_it() {
+fn a_hole_at_a_point_shallower_than_the_wall_stops_at_its_depth() {
     let path = write_box_stl("shallow-drain", 20.0, 12, 0);
     let out = output_dir("shallow-drain");
     let panel = test_panel();
@@ -409,8 +414,8 @@ fn a_hole_shallower_than_the_wall_still_goes_through_it() {
     let wall: Vec<u8> = pixels[start..start + 30].to_vec();
 
     assert!(
-        wall.iter().all(|pixel| *pixel == 0),
-        "the hole clears the whole 2 mm wall in front of it, got {wall:?}"
+        wall[..5].iter().all(|pixel| *pixel == 0) && wall[6..19].iter().all(|pixel| *pixel > 0),
+        "the hole takes its 0.5 mm of the 2 mm wall, 5 pixels, and leaves the rest, got {wall:?}"
     );
 }
 
@@ -585,17 +590,33 @@ fn a_square_hole_turned_on_its_corner_takes_a_plug() {
     );
 }
 
+/// The shipped medium support profile with its raft turned on, written where a run reads it.
+fn medium_on_a_raft(name: &str) -> PathBuf {
+    let medium = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/profiles/supports/medium.toml");
+    // A Windows checkout ends the preset's lines in CRLF.
+    let text = fs::read_to_string(medium)
+        .expect("the medium preset ships")
+        .replace("\r\n", "\n");
+    let rafted = text.replacen("[raft]\nenabled = false", "[raft]\nenabled = true", 1);
+    assert_ne!(text, rafted, "the medium preset names its raft off");
+    let path = std::env::temp_dir().join(format!("encrust-cli-{name}-supports.toml"));
+    fs::write(&path, rafted).expect("the temporary folder takes a file");
+    path
+}
+
 /// The first layer of a 12 mm block stood on supports and a raft, with whatever follows.
 fn raft_layer(name: &str, extra: &[&str]) -> Vec<u8> {
     let path = write_boxes_stl(name, &[([0.0, 0.0, 0.0], [12.0, 12.0, 4.0])]);
     let out = output_dir(name);
     let panel = test_panel();
+    let supports = medium_on_a_raft(name);
     let mut args = vec![
         path.to_str().unwrap(),
         "--profile",
         panel.to_str().unwrap(),
-        "--supports",
-        "medium",
+        "--support-profile",
+        supports.to_str().unwrap(),
         "--layer-height",
         "0.5",
         "-o",
@@ -631,6 +652,24 @@ fn a_hole_into_supports_with_none_asked_for_is_refused() {
     assert!(!output.status.success());
     assert!(
         stderr(&output).contains("--drain-support-at"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn a_hole_into_supports_with_no_raft_is_refused() {
+    let path = write_boxes_stl("no-raft-to-drill", &[([0.0, 0.0, 0.0], [12.0, 12.0, 4.0])]);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--supports",
+        "medium",
+        "--drain-support-at",
+        "14,6,-1",
+    ]);
+    assert!(!output.status.success(), "a tree is never drilled");
+    assert!(
+        stderr(&output).contains("drills into the raft"),
         "{}",
         stderr(&output)
     );

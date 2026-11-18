@@ -143,6 +143,16 @@ impl SlicedFormat {
         }
     }
 
+    /// This format, or the default where `printer` cannot be written into it.
+    #[must_use]
+    pub fn or_default_for(self, printer: &PrinterProfile) -> Self {
+        if self.writable_for(printer) {
+            self
+        } else {
+            Self::default()
+        }
+    }
+
     /// The revision a `.ctb` output is written at. Every other choice still has to name
     /// one, because a caller can put a `.ctb` name under it.
     pub fn ctb_version(self) -> CtbVersion {

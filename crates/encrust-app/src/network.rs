@@ -25,7 +25,7 @@ mod target;
 mod watch;
 pub use reach::{Reach, Trouble};
 pub use scan::PrusaDraft;
-pub use send::temporary_path;
+pub use send::{is_temporary, temporary_path};
 use target::resolve;
 pub use target::{Prusa, Sent, Target};
 pub use watch::Reading;

@@ -113,6 +113,13 @@ fn default_steep_contact_spacing_mm() -> f32 {
 /// A ceiling, in the degrees-from-vertical the overhang angle is measured in.
 const RIGHT_ANGLE_DEG: f32 = 90.0;
 
+/// The lowest density that still means anything. Below it the spacing runs away.
+pub const MIN_DENSITY: f32 = 0.1;
+
+/// The closest two contacts are ever put, millimetres: under this they are one contact on any
+/// panel Encrust writes for.
+pub const MIN_CONTACT_SPACING_MM: f32 = 0.5;
+
 /// The angle resin holds up on its own before a surface starts to sag, the default every
 /// slicer ships.
 fn default_max_overhang_deg() -> f32 {
@@ -167,6 +174,25 @@ impl SupportProfile {
 
     pub fn pillar_radius_mm(&self) -> f32 {
         self.middle.diameter_mm / 2.0
+    }
+
+    /// How far apart supports stand on a flat underside, millimetres, density taken in.
+    pub fn spacing_mm(&self) -> f32 {
+        self.contact_spacing_mm.max(MIN_CONTACT_SPACING_MM) / self.density.max(MIN_DENSITY).sqrt()
+    }
+
+    /// The tip's radius where it crosses the model's surface, millimetres: what the peel
+    /// pulls through, wider than the contact where a plane tip bites in (ADR 0243).
+    pub fn surface_radius_mm(&self) -> f32 {
+        let contact = self.contact_radius_mm();
+        match self.tip.shape {
+            ContactShape::Plane => {
+                let top = self.top.length_mm.max(1e-3);
+                let bite = self.tip.contact_depth_mm.min(top);
+                contact + (self.pillar_radius_mm() - contact) * bite / top
+            }
+            ContactShape::Sphere => contact,
+        }
     }
 
     pub fn base_radius_mm(&self) -> f32 {

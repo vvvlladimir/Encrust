@@ -1,5 +1,5 @@
 //! Where each finding of a report is, in plate millimetres from the plate's front left
-//! corner after placement: the frame `--drain-at` takes (ADR 0396).
+//! corner after placement: the frame `--drain-at` takes (ADR 0400).
 
 use core_analysis::{Measured, Risk, RiskKind};
 use core_geometry::{Aabb, Scalar};
@@ -55,6 +55,7 @@ impl From<RiskKind> for Kind {
                 stress_mpa,
                 lever_mm,
                 neck_mm2,
+                ..
             } => Self::Lever {
                 stress_mpa,
                 lever_mm,

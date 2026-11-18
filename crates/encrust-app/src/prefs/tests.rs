@@ -272,6 +272,8 @@ fn how_the_window_behaves_survives_the_round_trip() {
         language: Some(crate::i18n::Language::Russian),
         reduce_motion: true,
         appearance: Appearance::Light,
+        autosave: false,
+        interface_scale_percent: 125,
     };
     let prefs = Preferences::default().with_general(&general);
     let text = serde_json::to_string(&prefs).expect("the preferences serialise");

@@ -22,6 +22,9 @@ pub enum VolumeError {
     #[error("the wall must be a positive thickness, got {0} mm")]
     BadThickness(Scalar),
 
+    #[error("the wall is kept solid under a positive thickness, got {0} mm")]
+    BadSolidUnder(Scalar),
+
     #[error("a model placed by {0} has a direction with no size to hollow")]
     BadScale(Mat3),
 

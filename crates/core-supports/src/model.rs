@@ -3,11 +3,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use core_geometry::{Mesh, Region, Scalar, Transform, Vec3};
 
-use crate::{Clearances, Shaded, SupportPoint, SupportTree};
+use crate::{Clearances, Shaded, ShadedSupports, SupportPoint, SupportTree};
 
 mod build;
+mod follow;
 mod frozen;
 mod growth;
+mod lifted;
 mod paint;
 mod points;
 use build::Built;
@@ -35,6 +37,11 @@ pub struct ModelSupports {
     /// The supports the hand has taken hold of, kept as the trees they are, in the
     /// model's own space. Nothing regrows them; see `docs/decisions/0095`.
     frozen: Vec<SupportTree>,
+    /// The frozen trees a hand is carrying, which the meshes leave out (ADR 0435).
+    lifted: Vec<usize>,
+    /// Where the model stood when the frozen trees last stood under it, for a rebuild at
+    /// another placement to stand them again (ADR 0439); `None` until a first rebuild.
+    frozen_at: Option<Transform>,
     /// The two patches as geometry, apart from the columns so a stroke shows in its own frame;
     /// columns take too long to rebuild per frame.
     patches: Patches,
@@ -44,7 +51,9 @@ pub struct ModelSupports {
     built: Option<Built>,
     /// The column meshes as they were last built. `built` is dropped by every edit and
     /// rebuilt a frame later, and what is drawn in between is this; see [`Self::drawn`].
-    drawn: Vec<Shaded>,
+    drawn: ShadedSupports,
+    /// Where the model stood when `drawn` was built; see [`Self::drawn_shift`].
+    drawn_at: Transform,
     /// How much of the height the model stands at is its raft's doing, millimetres: what
     /// has to be taken back when the raft goes. See `docs/decisions/0238`.
     raft_lift_mm: Scalar,
@@ -120,6 +129,22 @@ impl ModelSupports {
                 .count()
     }
 
+    /// [`Self::contacts`] but for the points of `groups` and the frozen trees standing in one:
+    /// the seeds of a run that grows those groups again and takes them away.
+    pub fn contacts_outside(&self, transform: Transform, groups: &[u16]) -> Vec<Vec3> {
+        let matrix = transform.to_matrix();
+        let frozen = (self.frozen.iter())
+            .filter(|tree| !groups.contains(&tree.group()))
+            .flat_map(SupportTree::contacts);
+        self.points
+            .iter()
+            .filter(|point| !groups.contains(&point.group))
+            .map(|point| point.contact)
+            .chain(frozen)
+            .map(|contact| matrix.transform_point3(contact))
+            .collect()
+    }
+
     /// Where every support touches the model, in plate coordinates: the points and the
     /// tips of the frozen trees alike. What an automatic run is handed as seeds.
     pub fn contacts(&self, transform: Transform) -> Vec<Vec3> {
@@ -150,22 +175,57 @@ impl ModelSupports {
     }
 
     /// The column meshes, one per group and in plate coordinates, or `None` until they
-    /// have been built.
+    /// have been built; the raft is [`Self::raft`].
     pub fn meshes(&self) -> Option<&[Arc<Mesh>]> {
         self.built.as_ref().map(|built| built.meshes.as_slice())
+    }
+
+    /// The raft the columns stand on, in plate coordinates, once built with one.
+    pub fn raft(&self) -> Option<&Arc<Mesh>> {
+        self.built.as_ref().and_then(|built| built.raft.as_ref())
+    }
+
+    /// Every mesh built, the columns and the raft: all that prints of the supports.
+    pub fn every_mesh(&self) -> impl Iterator<Item = &Arc<Mesh>> {
+        self.meshes().unwrap_or_default().iter().chain(self.raft())
     }
 
     /// The column meshes to draw: the ones last built, left standing until the rebuild an edit
     /// follows with; drawing [`Self::meshes`] instead blinks every support out for a frame.
     pub fn drawn(&self) -> &[Shaded] {
-        &self.drawn
+        &self.drawn.groups
     }
 
-    /// Draws `shaded` from now on and answers its meshes, for [`Built`] to keep.
-    fn draw(&mut self, shaded: Vec<Shaded>) -> Vec<Arc<Mesh>> {
-        let meshes = shaded.iter().map(|group| Arc::clone(&group.mesh)).collect();
+    /// The raft drawn under [`Self::drawn`], by the same rule.
+    pub fn drawn_raft(&self) -> Option<&Shaded> {
+        self.drawn.raft.as_ref()
+    }
+
+    /// Every mesh drawn, the columns and the raft.
+    pub fn drawn_every(&self) -> impl Iterator<Item = &Shaded> {
+        self.drawn.groups.iter().chain(self.drawn_raft())
+    }
+
+    /// Where the model stood when [`Self::drawn`] was built.
+    pub fn drawn_at(&self) -> Transform {
+        self.drawn_at
+    }
+
+    /// Draws `shaded`, built with the model at `transform`, from now on and answers its
+    /// column meshes and its raft, for [`Built`] to keep.
+    fn draw(
+        &mut self,
+        shaded: ShadedSupports,
+        transform: Transform,
+    ) -> (Vec<Arc<Mesh>>, Option<Arc<Mesh>>) {
+        let meshes = shaded.groups.iter().map(|group| Arc::clone(&group.mesh));
+        let built = (
+            meshes.collect(),
+            shaded.raft.as_ref().map(|raft| Arc::clone(&raft.mesh)),
+        );
         self.drawn = shaded;
-        meshes
+        self.drawn_at = transform;
+        built
     }
 }
 

@@ -3,6 +3,8 @@ use std::sync::Arc;
 use core_geometry::{Mesh, Scalar, SmoothNormals, smooth_normals};
 use rayon::prelude::*;
 
+use crate::GroupMeshes;
+
 /// How far two faces across an edge may turn from each other and still be shaded as one
 /// surface, degrees: a tube's facets and rings blend, the rim of a pad stays a rim.
 pub const CREASE_DEG: Scalar = 50.0;
@@ -24,4 +26,22 @@ pub fn shaded(meshes: Vec<Mesh>) -> Vec<Shaded> {
             mesh: Arc::new(mesh),
         })
         .collect()
+}
+
+/// A model's columns shaded one mesh per group, and the raft under them shaded apart.
+#[derive(Debug, Clone, Default)]
+pub struct ShadedSupports {
+    pub groups: Vec<Shaded>,
+    pub raft: Option<Shaded>,
+}
+
+impl ShadedSupports {
+    /// `meshes`, every one smoothed within [`CREASE_DEG`].
+    pub fn of(meshes: GroupMeshes) -> Self {
+        let (groups, raft) = rayon::join(
+            || shaded(meshes.groups),
+            || shaded(meshes.raft.into_iter().collect()).pop(),
+        );
+        Self { groups, raft }
+    }
 }

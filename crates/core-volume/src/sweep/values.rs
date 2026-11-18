@@ -1,6 +1,5 @@
 use super::{Record, SIDE};
 use crate::grid::{TILE, VoxelGrid, index_in_tile};
-use crate::scatter::{Faces, Nearest};
 use crate::sdf::TILE_VALUES;
 use crate::sign::Signer;
 use core_geometry::{Bvh, ClosestPoint, Mesh, Scalar, Vec3, glam::IVec3};
@@ -11,11 +10,11 @@ use core_geometry::{Bvh, ClosestPoint, Mesh, Scalar, Vec3, glam::IVec3};
 /// centre than that, so past the tile's own radius it settles the side of every voxel.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn tile_values<T: Copy>(
-    surface: (&Mesh, &Faces, &Bvh),
+    surface: (&Mesh, &Bvh),
     signer: &Signer,
     grid: VoxelGrid,
     (tile, centre_mm): (IVec3, Scalar),
-    work: &[Nearest],
+    work: &[Option<ClosestPoint>],
     (band_mm, iso_mm): (Scalar, Scalar),
     record: Record<'_, T>,
 ) -> Option<Box<[T]>> {
@@ -56,11 +55,11 @@ pub(super) type Written<'a, T> = &'a dyn Fn(Scalar, Vec3, &ClosestPoint) -> T;
 /// Writes one block of a tile and says whether the band crossed it.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn block_values<T>(
-    (mesh, faces, bvh): (&Mesh, &Faces, &Bvh),
+    (mesh, bvh): (&Mesh, &Bvh),
     signer: &Signer,
     grid: VoxelGrid,
     (block, settled): (IVec3, Option<bool>),
-    work: &[Nearest],
+    work: &[Option<ClosestPoint>],
     band: (Scalar, Scalar, Written<'_, T>),
     found: &mut Vec<(usize, Vec3, ClosestPoint)>,
     values: &mut [T],
@@ -69,7 +68,7 @@ pub(super) fn block_values<T>(
     // The surface crossing a lattice edge leaves one of its ends within half a voxel of
     // itself, so nothing nearer than a voxel means nothing crossed and one side for all.
     let reach_mm = grid.voxel_mm;
-    let (nearest, placed) = nearest_in_block(faces, grid, block, work, found);
+    let (nearest, placed) = nearest_in_block(grid, block, work, found);
 
     let Some((_, first, on_first)) = found.first() else {
         return false;
@@ -108,10 +107,9 @@ const UNPLACED: u8 = u8::MAX;
 /// Fills `found` with the block's voxels a carried face reaches, and says the nearest
 /// distance and where in `found` each voxel of the block went.
 fn nearest_in_block(
-    faces: &Faces,
     grid: VoxelGrid,
     block: IVec3,
-    work: &[Nearest],
+    work: &[Option<ClosestPoint>],
     found: &mut Vec<(usize, Vec3, ClosestPoint)>,
 ) -> (Scalar, [u8; BLOCK_VOXELS]) {
     found.clear();
@@ -121,7 +119,7 @@ fn nearest_in_block(
         let voxel = block + local;
         let slot = index_in_tile(voxel);
         let point = grid.position(voxel);
-        let Some(on_face) = faces.closest(work[slot], point) else {
+        let Some(on_face) = work[slot] else {
             continue;
         };
         nearest = nearest.min(on_face.distance);

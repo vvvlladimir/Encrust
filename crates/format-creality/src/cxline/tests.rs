@@ -84,6 +84,14 @@ fn a_written_file_reads_back() {
         Some(1500.0),
         "the header is written again at the end"
     );
+    assert_eq!(
+        facts
+            .preview
+            .as_ref()
+            .map(|p| (p.width_px(), p.height_px())),
+        Some((290, 290)),
+        "the first large preview is read"
+    );
 
     let lit: u32 = open
         .layer(2)

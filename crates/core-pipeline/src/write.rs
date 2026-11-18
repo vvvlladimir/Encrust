@@ -9,7 +9,10 @@ use core_raster::RasterSettings;
 use core_slicer::{Sliced, Source, Windows};
 use format_anycubic::{AnycubicWriter, PhotonsWriter, PwszWriter};
 use format_chitu::{CbddlpWriter, CtbWriter, FdgWriter, PhzWriter};
-use format_creality::{CxdlpV4Writer, CxdlpVersion, CxdlpWriter, CxlineWriter};
+use format_creality::{
+    CxdlpV4Writer, CxdlpVersion, CxdlpWriter, CxlineWriter, LayerCodec, PairedRowRuns,
+    SevenBitRowRuns, SixBitRowRuns, WholeImageRuns,
+};
 use format_ctb_encrypted::CtbEncryptedWriter;
 use format_cws::CwsWriter;
 use format_gcode_zip::GcodeZipWriter;
@@ -19,9 +22,12 @@ use format_svgx::SvgxWriter;
 use rayon::prelude::*;
 
 use crate::error::PipelineError;
-use crate::fold::{Tolerance, fold_group};
+use crate::fold::{Tolerance, fold_group, fold_rasterised, rasterise_group};
 use crate::format::SlicedFormat;
 use crate::panel::file_panel;
+
+/// Layers a thread a measured group holds: enough that one slow layer does not idle the rest.
+const MEASURE_GROUP_PER_THREAD: usize = 4;
 
 /// What a front end wants to hear about a run while it is happening.
 ///
@@ -140,9 +146,7 @@ impl Destination<'_> {
                 self.with(&GcodeZipWriter, sink, feed, observer)
             }
             SlicedFormat::Cxdlp(CxdlpVersion::V3) => self.with(&CxdlpWriter, sink, feed, observer),
-            SlicedFormat::Cxdlp(CxdlpVersion::V4) => {
-                self.with(&CxdlpV4Writer, sink, feed, observer)
-            }
+            SlicedFormat::Cxdlp(CxdlpVersion::V4) => self.cxdlp_v4(sink, feed, observer),
             SlicedFormat::Svgx => self.with(&SvgxWriter, sink, feed, observer),
             SlicedFormat::Cws => self.with(&CwsWriter, sink, feed, observer),
             SlicedFormat::Fdg => self.with(&FdgWriter, sink, feed, observer),
@@ -152,6 +156,41 @@ impl Destination<'_> {
             SlicedFormat::Pwsz(flavour) => {
                 self.with(&PwszWriter::new(flavour), sink, feed, observer)
             }
+        }
+    }
+
+    /// Writes a `.cxdlpv4` in the layer codec its machine reads.
+    fn cxdlp_v4<F: Feed>(
+        &self,
+        sink: &mut dyn ReadWriteSeek,
+        feed: &mut F,
+        observer: &mut dyn Observer,
+    ) -> Result<Option<F::Done>, PipelineError> {
+        match LayerCodec::of_machine(self.job.printer.machine_name()) {
+            LayerCodec::WholeImage => self.with(
+                &CxdlpV4Writer::<WholeImageRuns>::default(),
+                sink,
+                feed,
+                observer,
+            ),
+            LayerCodec::PairedRows => self.with(
+                &CxdlpV4Writer::<PairedRowRuns>::default(),
+                sink,
+                feed,
+                observer,
+            ),
+            LayerCodec::SixBitRows => self.with(
+                &CxdlpV4Writer::<SixBitRowRuns>::default(),
+                sink,
+                feed,
+                observer,
+            ),
+            LayerCodec::SevenBitRows => self.with(
+                &CxdlpV4Writer::<SevenBitRowRuns>::default(),
+                sink,
+                feed,
+                observer,
+            ),
         }
     }
 
@@ -238,8 +277,11 @@ pub fn measure(
     mut fold: Measured,
     observer: &mut dyn Observer,
 ) -> Result<Option<Measured>, PipelineError> {
-    let group = rayon::current_num_threads().max(1);
+    let group = rayon::current_num_threads().max(1) * MEASURE_GROUP_PER_THREAD;
+    let plan = windows.plan();
     let mut cancelled = false;
+    let mut waiting = Vec::new();
+    let mut next = fold.layer_count();
 
     windows.stream(source, |sliced: &Sliced| -> Result<(), PipelineError> {
         observer.window(sliced);
@@ -248,12 +290,22 @@ pub fn measure(
                 cancelled = true;
                 return Ok(());
             }
-            fold_group(layers, settings, windows.plan(), tolerance, &mut fold)?;
+            // The serial fold of one group runs while the next is rasterised.
+            let folding = std::mem::take(&mut waiting);
+            let (rasterised, _) = rayon::join(
+                || rasterise_group(layers, next, settings, tolerance),
+                || fold_rasterised(folding, plan, &mut fold),
+            );
+            waiting = rasterised?;
+            next += layers.len();
         }
         Ok(())
     })?;
-
-    Ok((!cancelled).then(|| fold.finish()))
+    if cancelled {
+        return Ok(None);
+    }
+    fold_rasterised(waiting, plan, &mut fold);
+    Ok(Some(fold.finish()))
 }
 
 /// Cuts, rasterises and pushes the stack a window at a time, in order.

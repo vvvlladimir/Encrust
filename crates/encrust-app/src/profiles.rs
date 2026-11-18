@@ -25,14 +25,7 @@ pub fn printer_menu(ui: &mut egui::Ui, window: &mut Window) {
     for entry in installed_printers(&window.machine.slicing.catalogue) {
         listed = true;
         let profile = &entry.profile;
-        let detail = match SlicedFormat::choices_for(profile).next() {
-            Some(format) => tr!(
-                "picker-machine-detail",
-                maker = profile.manufacturer.clone(),
-                extension = format.extension()
-            ),
-            None => profile.manufacturer.clone(),
-        };
+        let detail = machine_detail(profile);
         let row = ChooserRow {
             lead: Lead::Glyph(icon::PRINTER),
             name: &profile.name,
@@ -58,6 +51,15 @@ pub fn printer_menu(ui: &mut egui::Ui, window: &mut Window) {
         ui.close();
         apply_printer(window, profile, Some(id));
     }
+}
+
+fn machine_detail(profile: &PrinterProfile) -> String {
+    let format = SlicedFormat::from(profile.output).or_default_for(profile);
+    tr!(
+        "picker-machine-detail",
+        maker = profile.manufacturer.clone(),
+        extension = format.extension()
+    )
 }
 
 /// The colour of the dot a machine's row carries: `ok` while a printer it lists answers,
@@ -167,6 +169,20 @@ pub fn apply_printer(window: &mut Window, profile: PrinterProfile, id: Option<St
     stand_on(window, plate);
 }
 
+/// Redraws the plate under the printer in hand and binds the network to it; the models
+/// stay where they stand.
+pub fn plate_follows_printer(window: &mut Window) {
+    let slicing = &window.machine.slicing;
+    let Some(profile) = slicing.printer.as_ref() else {
+        return;
+    };
+    window.doc.plate = BuildPlate::from_profile(profile);
+    window
+        .machine
+        .network
+        .bind_to(slicing.printer_id.clone(), Some(profile));
+}
+
 /// Follows a saved edit of `profile`, the printer in use: an edit that moves the plate stands
 /// everything on it again; any other redraws the plate, the models staying where they stand.
 pub fn printer_edited(window: &mut Window, profile: PrinterProfile, id: String) {
@@ -179,9 +195,8 @@ pub fn printer_edited(window: &mut Window, profile: PrinterProfile, id: String) 
         apply_printer(window, profile, Some(id));
         return;
     }
-    window.doc.plate = BuildPlate::from_profile(&profile);
-    window.machine.network.bind_to(Some(id), Some(&profile));
     window.machine.slicing.printer = Some(profile);
+    plate_follows_printer(window);
 }
 
 /// Takes the machine out from under the plate: the default envelope, nothing bound and
@@ -234,5 +249,34 @@ pub fn import_material(machine: &mut Machine, file: &Handed) {
         let resin = entry.profile.clone();
         slicing.resin_id = Some(id);
         slicing.set_material(resin);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use printer_profiles::Catalogue;
+
+    use super::*;
+
+    #[test]
+    fn a_machine_row_names_the_file_its_firmware_reads() {
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue parses");
+        for (id, maker, extension) in [
+            ("anycubic-photon-mono-4-ultra", "Anycubic", "pm4u"),
+            ("anycubic-photon-mono-m7-pro", "Anycubic", "pwsz"),
+            ("creality-ld-002h", "Creality", "ctb"),
+            ("elegoo-saturn-4-ultra", "Elegoo", "goo"),
+        ] {
+            let printer = catalogue.printer(id).expect("shipped");
+            assert_eq!(
+                machine_detail(&printer.profile),
+                tr!(
+                    "picker-machine-detail",
+                    maker = maker,
+                    extension = extension
+                ),
+                "{id} is sliced into .{extension}"
+            );
+        }
     }
 }

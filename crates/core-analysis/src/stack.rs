@@ -1,14 +1,11 @@
 use std::collections::BTreeMap;
-use std::f64::consts::PI;
 
 use crate::contact::{Contact, MIN_ISLAND_MM2, contacts};
 use crate::cups::Cups;
-use crate::layer::{Cured, LayerMeasure, Piece, Stretch};
+use crate::layer::{Cured, LayerMeasure, Moments, Piece, Stretch};
+use crate::neck::{NECK_LIMIT_MPA, Neck, neck_stress_mpa};
 use crate::pull::PEEL_LIMIT_N;
 
-/// Stress a neck of green resin is taken to fail at, megapascals. Not measured: a warning
-/// level.
-pub const NECK_LIMIT_MPA: f64 = 5.0;
 /// A piece narrower than this across, millimetres, as a disc of its area: thinner than the
 /// finest support tip, so a tip is never named, and too thin to survive the peel.
 pub const THIN_MM: f32 = 0.15;
@@ -49,6 +46,10 @@ pub enum RiskKind {
         /// How far off the neck the pull acts, millimetres.
         lever_mm: f32,
         neck_mm2: f32,
+        /// The pull on the piece, newtons.
+        force_n: f32,
+        /// The radius the piece gyrates at about its own centre, millimetres.
+        gyration_mm: f32,
     },
     /// A layer whose suction on the film is past `PEEL_LIMIT_N`; a run of them is named
     /// once, at its hardest.
@@ -117,13 +118,6 @@ struct ThinRun {
     start: Risk,
     height_mm: f32,
     named: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct Neck {
-    area_mm2: f64,
-    at_mm: [f64; 2],
-    id: u32,
 }
 
 impl Measured {
@@ -321,7 +315,13 @@ impl Measured {
             .iter()
             .map(|piece| Carried {
                 anchored: true,
-                neck: self.neck(f64::from(piece.area_mm2), piece.centre_mm.map(f64::from)),
+                neck: self.neck(
+                    f64::from(piece.area_mm2),
+                    piece.centre_mm.map(f64::from),
+                    piece
+                        .spread_mm2
+                        .map(|spread| f64::from(spread) * f64::from(piece.area_mm2)),
+                ),
                 thin: None,
                 island: false,
                 gone: None,
@@ -336,8 +336,6 @@ impl Measured {
         below: &Cured,
         under: &[Carried],
     ) -> Vec<Carried> {
-        let pixel_mm2 = f64::from(layer.pitch().x) * f64::from(layer.pitch().y);
-        let pitch = [f64::from(layer.pitch().x), f64::from(layer.pitch().y)];
         let found = contacts(layer, below);
         let mut next = 0;
         let mut carried = Vec::with_capacity(layer.pieces().len());
@@ -347,7 +345,7 @@ impl Measured {
                 next += 1;
             }
             let touching = &found[start..next];
-            carried.push(self.settle(index, piece, touching, under, pixel_mm2, pitch));
+            carried.push(self.settle(index, piece, touching, under));
         }
         carried
     }
@@ -359,14 +357,13 @@ impl Measured {
         piece: &Piece,
         touching: &[Contact],
         under: &[Carried],
-        pixel_mm2: f64,
-        pitch: [f64; 2],
     ) -> Carried {
         let floating = Carried {
             anchored: false,
             neck: Neck {
                 area_mm2: 0.0,
                 at_mm: [0.0; 2],
+                moments_mm4: [0.0; 3],
                 id: u32::MAX,
             },
             thin: None,
@@ -418,7 +415,7 @@ impl Measured {
             return floating;
         }
 
-        let neck = self.narrowest(&held, under, pixel_mm2, pitch);
+        let neck = self.narrowest(&held, under);
         if index >= self.held {
             self.weigh(index, piece, neck);
         }
@@ -471,55 +468,32 @@ impl Measured {
     }
 
     /// The narrower of what this piece touches and the necks under what it touches.
-    fn narrowest(
-        &mut self,
-        held: &[&Contact],
-        under: &[Carried],
-        pixel_mm2: f64,
-        pitch: [f64; 2],
-    ) -> Neck {
-        let pixels: u64 = held.iter().map(|contact| contact.pixels).sum();
-        let contact_mm2 = pixels as f64 * pixel_mm2;
-        let necks = held
+    fn narrowest(&mut self, held: &[&Contact], under: &[Carried]) -> Neck {
+        let mut shared = Moments::default();
+        for contact in held {
+            shared.merge(&contact.moments);
+        }
+        let necks: Vec<Neck> = held
             .iter()
-            .map(|contact| under[contact.below as usize].neck);
-        let (mut neck_mm2, mut x, mut y) = (0.0, 0.0, 0.0);
-        let mut widest: Option<Neck> = None;
-        for neck in necks {
-            neck_mm2 += neck.area_mm2;
-            x += neck.at_mm[0] * neck.area_mm2;
-            y += neck.at_mm[1] * neck.area_mm2;
-            if widest.is_none_or(|widest| neck.area_mm2 > widest.area_mm2) {
-                widest = Some(neck);
-            }
+            .map(|contact| under[contact.below as usize].neck)
+            .collect();
+        let neck_mm2: f64 = necks.iter().map(|neck| neck.area_mm2).sum();
+        if shared.area_mm2() < NARROWER * neck_mm2 || neck_mm2 <= 0.0 {
+            return self.neck(shared.area_mm2(), shared.centre_mm(), shared.central());
         }
-
-        if contact_mm2 < NARROWER * neck_mm2 || neck_mm2 <= 0.0 {
-            let (sx, sy): (f64, f64) = held
-                .iter()
-                .fold((0.0, 0.0), |(x, y), c| (x + c.x_px, y + c.y_px));
-            let at = [sx / pixels as f64 * pitch[0], sy / pixels as f64 * pitch[1]];
-            return self.neck(contact_mm2, at);
-        }
-        Neck {
-            area_mm2: neck_mm2,
-            at_mm: [x / neck_mm2, y / neck_mm2],
-            id: widest.map_or(u32::MAX, |neck| neck.id),
-        }
+        Neck::joined(&necks, neck_mm2)
     }
 
     /// The stress this layer's pull puts on the neck under it: tension over its section,
     /// and the bending of the pull held off to one side. See `docs/design/analysis.md`.
     fn weigh(&mut self, index: usize, piece: &Piece, neck: Neck) {
         let force_n = f64::from(piece.pull_n);
-        let radius_mm = (neck.area_mm2 / PI).sqrt();
         let [cx, cy] = piece.centre_mm.map(f64::from);
         let offset_mm = (cx - neck.at_mm[0]).hypot(cy - neck.at_mm[1]);
         // The film lets go from one edge, so at the worst moment the pull is carried by
         // what is still stuck: half the piece, off its own centre by its gyration.
-        let lever_mm = offset_mm + f64::from(piece.gyration_mm) / 2.0;
-        let section_modulus = PI * radius_mm.powi(3) / 4.0;
-        let stress_mpa = force_n / neck.area_mm2 + force_n * lever_mm / section_modulus;
+        let lever_mm = offset_mm + f64::from(piece.gyration_mm()) / 2.0;
+        let stress_mpa = neck_stress_mpa(force_n, lever_mm, neck.area_mm2, neck.least_mm4());
         if stress_mpa < NECK_LIMIT_MPA {
             return;
         }
@@ -530,6 +504,8 @@ impl Measured {
                 stress_mpa: stress_mpa as f32,
                 lever_mm: lever_mm as f32,
                 neck_mm2: neck.area_mm2 as f32,
+                force_n: piece.pull_n,
+                gyration_mm: piece.gyration_mm(),
             },
         };
         let worse = |held: &Risk| severity(&risk) > severity(held);
@@ -538,11 +514,12 @@ impl Measured {
         }
     }
 
-    fn neck(&mut self, area_mm2: f64, at_mm: [f64; 2]) -> Neck {
+    fn neck(&mut self, area_mm2: f64, at_mm: [f64; 2], moments_mm4: [f64; 3]) -> Neck {
         self.necks += 1;
         Neck {
             area_mm2,
             at_mm,
+            moments_mm4,
             id: self.necks,
         }
     }

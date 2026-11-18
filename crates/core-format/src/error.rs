@@ -70,6 +70,16 @@ pub enum FormatError {
     #[error("the header states a {width_px}x{height_px} panel, which no printer has")]
     PanelTooLarge { width_px: u32, height_px: u32 },
 
+    #[error("the file states a {width_px}x{height_px} preview, which no file carries")]
+    PreviewOutOfRange { width_px: u32, height_px: u32 },
+
+    #[error("a {width_px}x{height_px} preview decodes to {pixels} pixels")]
+    PreviewShort {
+        width_px: u32,
+        height_px: u32,
+        pixels: u64,
+    },
+
     #[error("this is not a {format}: the magic reads {found:#010x}")]
     NotThisFormat { format: &'static str, found: u32 },
 

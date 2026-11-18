@@ -1,5 +1,5 @@
 //! The search's best ways to stand a model laid side by side, each with what it prints and
-//! drawn, for a client to choose by what the model is (ADR 0403).
+//! drawn, for a client to choose by what the model is (ADR 0458).
 
 use anyhow::{Context as _, Result, bail};
 use rmcp::model::{CallToolResult, ContentBlock};

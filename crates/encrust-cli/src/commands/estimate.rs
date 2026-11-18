@@ -12,6 +12,7 @@ use crate::batch::EstimateReport;
 use crate::commands::GlobalArgs;
 use crate::commands::slice::PlateArgs;
 use crate::exit::{Exit, Stop};
+use crate::pipeline::Watch;
 use crate::{estimate, json, stage};
 
 #[derive(clap::Args, Debug)]
@@ -22,6 +23,10 @@ pub struct EstimateCommand {
     #[command(flatten)]
     pub job: JobArgs,
 
+    /// Read the panel in squares of two by two pixels, as the window's background check does:
+    /// quicker, but blind to islands near the smallest one named.
+    #[arg(long)]
+    pub quick_check: bool,
     /// Set this run beside a report `estimate --json` kept, under NAME, as `agent-lab` judges
     /// one preparation against another; the report's `compared` says how it stands. Repeat.
     #[arg(long, value_name = "NAME=FILE", value_parser = crate::score::parse_against)]
@@ -32,7 +37,10 @@ impl EstimateCommand {
     pub fn run(&self, global: &GlobalArgs, stop: &Stop) -> Result<Exit> {
         self.plate.check()?;
         let started = Instant::now();
-        let watch = global.watch(stop);
+        let watch = Watch {
+            writes: false,
+            ..global.watch(stop)
+        };
         let mut staged = stage::stage(
             &self.plate.inputs,
             self.plate.arrange,
@@ -40,7 +48,7 @@ impl EstimateCommand {
             &self.job,
             &watch,
         )?;
-        let estimate = estimate::estimate(&mut staged, &self.job.raster, &watch)?;
+        let estimate = estimate::estimate(&mut staged, &self.job.raster, self.quick_check, &watch)?;
         let report = EstimateReport::of(
             &self.plate.inputs,
             &staged.parts,

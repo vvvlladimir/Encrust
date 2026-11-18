@@ -15,7 +15,7 @@ use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use serde_json::json;
 
 use crate::findings::{MOST_MARKED, findings};
-use crate::jobs::{Jobs, Revision};
+use crate::jobs::Jobs;
 use crate::params::{
     ComparePoses, JobRef, ListProfiles, Model, Render, Revert, SendFile, SetDrains, SetHollow,
     SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, View, WriteFile, absolute, plain,
@@ -23,7 +23,6 @@ use crate::params::{
 use crate::recipe::{Recipe, Repair};
 use crate::runner::{Cli, Outcome};
 use crate::trace::Trace;
-use crate::window::Window;
 
 mod poses;
 mod reply;
@@ -35,14 +34,13 @@ const INSTRUCTIONS: &str = include_str!("instructions.md");
 /// How often a client hears that a long run is still going, so it does not time out.
 const BEAT: Duration = Duration::from_secs(5);
 
-/// The server: the command line it drives, where its jobs are kept, where its calls are
-/// traced and the window it shows them in.
+/// The server: the command line it drives, where its jobs are kept and where its calls are
+/// traced.
 #[derive(Debug, Clone)]
 pub struct Server {
     cli: Cli,
     jobs: Jobs,
     trace: Trace,
-    window: Window,
     tool_router: ToolRouter<Self>,
 }
 
@@ -51,12 +49,11 @@ type Context = RequestContext<RoleServer>;
 
 #[tool_router]
 impl Server {
-    pub fn new(cli: Cli, jobs: Jobs, (trace, window): (Trace, Window)) -> Self {
+    pub fn new(cli: Cli, jobs: Jobs, trace: Trace) -> Self {
         Self {
             cli,
             jobs,
             trace,
-            window,
             tool_router: Self::tool_router(),
         }
     }
@@ -251,7 +248,7 @@ impl Server {
             let against = self.jobs.against(&revert.job, Some(latest.number));
             let outcome = self.estimate(&old.recipe, &against, &ctx).await?;
             let revision = self.jobs.commit(&revert.job, old.recipe, &outcome.report)?;
-            Ok(self.kept(&revision, &outcome, None).await)
+            Ok(revised(&revision, &outcome, None))
         };
         Ok(answer(reverted.await))
     }
@@ -341,7 +338,7 @@ impl Server {
         };
         let revision = self.jobs.commit(&job, recipe, &outcome.report)?;
         self.jobs.keep_autopilot(&job, &autopilot)?;
-        Ok(self.kept(&revision, &outcome, None).await)
+        Ok(revised(&revision, &outcome, None))
     }
 
     /// Changes the job's latest recipe, checks it, and keeps it as the next revision only when
@@ -364,7 +361,7 @@ impl Server {
             return Ok(not_applied(Some(&latest), &outcome));
         }
         let revision = self.jobs.commit(job, recipe, &outcome.report)?;
-        Ok(self.kept(&revision, &outcome, note).await)
+        Ok(revised(&revision, &outcome, note))
     }
 
     async fn write(&self, write: WriteFile, ctx: &Context) -> Result<Reply> {
@@ -455,15 +452,6 @@ impl Server {
         }
         let outcome = self.watched(&args, ctx).await?;
         Ok(reported(&outcome, outcome.report.clone()))
-    }
-
-    /// The answer for a revision just kept, which the open window, if any, replays.
-    async fn kept(&self, revision: &Revision, outcome: &Outcome, note: Option<&str>) -> Reply {
-        let mut reply = revised(revision, outcome, note);
-        if let Some(shown) = self.window.show(revision).await {
-            reply.body["window"] = shown;
-        }
-        reply
     }
 
     async fn estimate(

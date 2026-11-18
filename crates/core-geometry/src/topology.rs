@@ -1,3 +1,4 @@
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering::Relaxed};
 
 use rayon::iter::{
@@ -129,6 +130,8 @@ pub(crate) fn agree(a: &EdgeUse, b: &EdgeUse) -> bool {
 pub struct Adjacency {
     starts: Vec<u32>,
     neighbours: Vec<u32>,
+    /// Each face's shell, labelled on the first ask of [`Adjacency::joins`].
+    shells: OnceLock<Vec<u32>>,
 }
 
 impl Adjacency {
@@ -156,7 +159,11 @@ impl Adjacency {
             }
         }
 
-        Self { starts, neighbours }
+        Self {
+            starts,
+            neighbours,
+            shells: OnceLock::new(),
+        }
     }
 
     /// The faces sharing an edge with `face`, empty for a face out of range.
@@ -165,6 +172,24 @@ impl Adjacency {
             return &[];
         };
         &self.neighbours[self.starts[face] as usize..end as usize]
+    }
+
+    /// Whether faces `a` and `b` lie on one shell, joined by shared edges; false for a face
+    /// out of range. The first ask labels every face, on rayon's threads.
+    pub fn joins(&self, a: usize, b: usize) -> bool {
+        let shells = self.shells.get_or_init(|| {
+            let faces = self.starts.len().saturating_sub(1);
+            let pairs = (0..faces).into_par_iter().flat_map_iter(|face| {
+                self.neighbours(face)
+                    .iter()
+                    .map(move |other| [face as u32, *other])
+            });
+            Components::joined(faces, pairs).labels().0
+        });
+        shells
+            .get(a)
+            .zip(shells.get(b))
+            .is_some_and(|(a, b)| a == b)
     }
 }
 
@@ -369,5 +394,16 @@ mod tests {
     fn a_triangle_alone_has_no_neighbours() {
         let mesh = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
         assert!(Adjacency::of(&mesh).neighbours(0).is_empty());
+    }
+
+    #[test]
+    fn faces_of_one_cube_are_joined_and_of_two_cubes_apart_are_not() {
+        let mut mesh = crate::cuboid(Vec3::ZERO, Vec3::ONE);
+        mesh.append(&crate::cuboid(Vec3::splat(2.0), Vec3::splat(3.0)));
+        let adjacency = Adjacency::of(&mesh);
+
+        assert!(adjacency.joins(0, 11), "both faces are on the first cube");
+        assert!(!adjacency.joins(0, 12), "face 12 is on the second cube");
+        assert!(!adjacency.joins(0, 24), "there is no face 24");
     }
 }

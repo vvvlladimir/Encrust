@@ -1,7 +1,7 @@
 use core_format::{
     FormatError, LayerEntry, OpenFile, PrinterTuning, ReadSeek, SlicedFile, SlicedFileReader,
-    layer_in_range, panel_in_range, read_entry, stated_distance_mm, stated_speed_mm_min,
-    stated_wait_s,
+    layer_in_range, panel_in_range, read_entry, read_png_preview, stated_distance_mm,
+    stated_speed_mm_min, stated_wait_s,
 };
 use core_raster::Run;
 use serde_json::Value;
@@ -15,6 +15,8 @@ const SETTINGS: &str = "anycubic_photon_resins.pwsp";
 const LAYERS: &str = "layers_controller.conf";
 const PRINT_INFO: &str = "print_info.json";
 const SOFTWARE: &str = "software_info.conf";
+/// The picture of the plate; the larger second one is a side view in some known files.
+const PREVIEW: &str = "preview_images/preview_0.png";
 
 /// Reads the PWSZ archive under any of its extensions. Layout is in `docs/formats/pwsz.md`.
 #[derive(Debug, Default, Clone, Copy)]
@@ -44,6 +46,7 @@ impl SlicedFileReader for PwszReader {
         let layers = layer_entries(&json(&mut zip, LAYERS)?);
         let print_info = optional_json(&mut zip, PRINT_INFO)?;
         let software = optional_json(&mut zip, SOFTWARE)?;
+        let preview = read_png_preview(&mut zip, PREVIEW).ok();
 
         Ok(OpenPwsz {
             zip,
@@ -67,6 +70,7 @@ impl SlicedFileReader for PwszReader {
                 grey_steps: GREY_STEPS,
                 stated: stated(slice),
                 layers,
+                preview,
             },
         })
     }

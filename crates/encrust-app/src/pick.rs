@@ -201,12 +201,12 @@ fn under(
         .map(|(id, hit)| Under::Face(id, hit))
 }
 
-/// What a printed surface under the cursor belongs to: its model, or one of the support
-/// groups standing under that model, the raft among them.
+/// What a printed surface under the cursor belongs to: its model, or the raft under it; a
+/// support tree is never drilled, so the cursor passes through it (ADR 0441).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Printed {
     Model,
-    Supports(usize),
+    Raft,
 }
 
 /// The printed surface nearest the camera under the cursor, and where the ray met it in plate
@@ -243,7 +243,7 @@ fn drawn_hits(
                 .map(|hit| (Printed::Model, hit));
             model
                 .into_iter()
-                .chain(support_hits(object, from_cut))
+                .chain(raft_hit(object, from_cut))
                 .map(|(printed, hit)| (object.id, printed, hit))
         })
         .map(move |(id, printed, hit)| {
@@ -252,16 +252,10 @@ fn drawn_hits(
         })
 }
 
-/// Where `ray` meets each of `object`'s support groups as they print, once built.
-fn support_hits(object: &SceneObject, ray: Ray) -> impl Iterator<Item = (Printed, PlacedHit)> {
-    let groups = object
-        .supports_built()
-        .into_iter()
-        .flat_map(|(groups, bvhs)| groups.iter().zip(bvhs).enumerate());
-    groups.filter_map(move |(index, (group, bvh))| {
-        raycast_placed(&group.mesh, bvh, Transform::default(), &ray)
-            .map(|hit| (Printed::Supports(index), hit))
-    })
+/// Where `ray` meets `object`'s raft as it prints, once built.
+fn raft_hit(object: &SceneObject, ray: Ray) -> Option<(Printed, PlacedHit)> {
+    let (raft, bvh) = object.raft_built()?;
+    raycast_placed(&raft.mesh, bvh, Transform::default(), &ray).map(|hit| (Printed::Raft, hit))
 }
 
 /// Whether a visible model stands between `eye` and `point`, so that `point` is hidden

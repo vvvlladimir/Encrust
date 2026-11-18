@@ -6,10 +6,7 @@
 
 ### The fast resin slicer that checks every layer.
 
-Encrust is a free, open-source resin slicer that checks every layer of the file it writes for
-islands, suction cups and thin cross-sections before you print. Windows, macOS, Linux and browser.
-Supports, hollowing and 20-odd printer formats included — all of it on your own computer, with no
-account and no cloud.
+Encrust is a free, open-source slicer for MSLA and SLA resin printers. It checks every layer for islands, suction cups and weak necks before you print, and runs on Windows, macOS, Linux or in your browser.
 
 [**Download**](https://encrust.app/download/)
 &nbsp;·&nbsp; [**Try it in a browser**](https://encrust.app/app/)
@@ -21,7 +18,6 @@ account and no cloud.
 &nbsp;·&nbsp; [Report a bug](https://github.com/vvvlladimir/Encrust/issues)
 
 [![Latest release](https://img.shields.io/github/v/release/vvvlladimir/Encrust?display_name=tag&color=brightgreen)](https://github.com/vvvlladimir/Encrust/releases/latest)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](CHANGELOG.md)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Browser-lightgrey.svg)](#get-it)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
@@ -34,10 +30,11 @@ account and no cloud.
 | System | Download |
 |---|---|
 | Browser, nothing to install | [![Open in browser](https://img.shields.io/badge/Open-encrust.app%2Fapp-2ea44f?style=for-the-badge)](https://encrust.app/app/) |
-| Windows 10/11, 64-bit | [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-Get_it-0078D4?style=for-the-badge)](https://apps.microsoft.com/detail/9NB0ZMB3M8H8) [![Installer](https://img.shields.io/badge/Installer-.exe-0078D4?style=for-the-badge)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-windows-x86_64-setup.exe) |
+| Windows 10/11, x86-64 and ARM64 | [![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-Get_it-0078D4?style=for-the-badge)](https://apps.microsoft.com/detail/9NB0ZMB3M8H8) [![Installer x86-64](https://img.shields.io/badge/Installer-x86--64-0078D4?style=for-the-badge)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-windows-x86_64-setup.exe) [![Installer ARM64](https://img.shields.io/badge/Installer-ARM64-0078D4?style=for-the-badge)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-windows-aarch64-setup.exe) |
 | macOS 12+, Apple silicon | [![macOS Apple silicon](https://img.shields.io/badge/Download-.dmg-555555?style=for-the-badge&logo=apple)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-macos-aarch64.dmg) |
 | macOS 12+, Intel | [![macOS Intel](https://img.shields.io/badge/Download-.dmg-555555?style=for-the-badge&logo=apple)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-macos-x86_64.dmg) |
 | Linux, x86-64 | [![AppImage](https://img.shields.io/badge/Download-AppImage-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-linux-x86_64.AppImage) [![deb](https://img.shields.io/badge/Download-.deb-E95420?style=for-the-badge&logo=debian&logoColor=white)](https://github.com/vvvlladimir/Encrust/releases/latest/download/encrust_amd64.deb) |
+| Linux, ARM64 | [![AppImage](https://img.shields.io/badge/Download-AppImage-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/vvvlladimir/Encrust/releases/latest/download/Encrust-linux-aarch64.AppImage) [![deb](https://img.shields.io/badge/Download-.deb-E95420?style=for-the-badge&logo=debian&logoColor=white)](https://github.com/vvvlladimir/Encrust/releases/latest/download/encrust_arm64.deb) |
 
 > [!NOTE]
 > **First launch needs one extra step.** The downloaded builds aren't code-signed yet, so the

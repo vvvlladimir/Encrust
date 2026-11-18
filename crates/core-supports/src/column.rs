@@ -7,11 +7,16 @@ use printer_profiles::SupportProfile;
 use rayon::prelude::*;
 
 use crate::clear::{Beam, MIN_BODY_MM, clear};
-use crate::mesher::FOOT_BEVEL;
+use crate::lost::Unstood;
+use crate::mesher::foot_bevel_mm;
 use crate::pad::{PadCut, pad_clear, pad_cut};
 
+mod refit;
 mod room;
+pub(crate) use refit::refitted_necks;
+pub(crate) use room::moved;
 use room::roomier;
+pub(crate) use room::seat_mm;
 
 /// Plate coordinates put the plate surface at z = 0; see `docs/architecture.md`.
 pub(crate) const PLATE_Z_MM: Scalar = 0.0;
@@ -88,6 +93,10 @@ pub struct Landing {
     /// it and no foot is needed. Absent reads as landing on the model (ADR 0248).
     #[serde(default)]
     pub on_support: bool,
+    /// The head runs straight into the plate at `base`, no foot under it: the part is lower than
+    /// a pad and the shortest pillar. Absent reads as standing on a foot (ADR 0427).
+    #[serde(default)]
+    pub in_plate: bool,
 }
 
 impl Landing {
@@ -99,13 +108,14 @@ impl Landing {
             pad_offset: Vec2::ZERO,
             pad_cut: None,
             on_support: false,
+            in_plate: false,
         }
     }
 
     /// Height at which the pillar body ends: the top of the foot or the raft, or the surface
     /// it sank into.
     pub fn pillar_bottom_z(&self, profile: &SupportProfile) -> Scalar {
-        if self.on_support {
+        if self.on_support || self.in_plate {
             // On the axis of the trunk it joins, which is already inside that trunk.
             self.base.z
         } else if self.on_model {
@@ -196,29 +206,47 @@ pub fn columns(points: &[SupportPoint], placed: &Placed, profiles: Profiles) -> 
                 contact,
                 profiles.of(support.group),
             )
+            .ok()
         })
         .collect()
 }
 
-/// The column of point `point` of `group`, touching the model at `contact` in plate
-/// coordinates, or `None` when its head cannot leave its face clear.
+/// The column of point `point` of `group` touching the model at `contact` (plate), moved along
+/// its face where no head fits even turned, or why its head cannot leave it (ADR 0429).
 pub(crate) fn column(
     placed: &Placed,
     point: usize,
     group: u16,
     contact: Vec3,
     profile: &SupportProfile,
-) -> Option<Column> {
+) -> Result<Column, Unstood> {
     let contact = onto_surface(placed, contact, profile);
     let contact = roomier(placed, contact, profile).unwrap_or(contact);
-    let neck = neck_of(placed, contact, profile)?;
-    Some(Column {
+    let (contact, neck) = match head_of(placed, contact, profile) {
+        Ok(neck) => (contact, neck),
+        Err(Unstood::HeadBlocked) => moved(placed, contact, profile)
+            .next()
+            .ok_or(Unstood::HeadBlocked)?,
+        Err(why) => return Err(why),
+    };
+    Ok(column_at(placed, point, group, (contact, neck), profile))
+}
+
+/// The column of point `point` of `group` leaving `contact` by a head ending at `neck`.
+pub(crate) fn column_at(
+    placed: &Placed,
+    point: usize,
+    group: u16,
+    (contact, neck): (Vec3, Vec3),
+    profile: &SupportProfile,
+) -> Column {
+    Column {
         point,
         group,
         contact,
         neck,
         landing: landing(placed, neck, profile.pillar_radius_mm(), 1, profile),
-    })
+    }
 }
 
 /// The contact a support put down at `contact` holds and the neck of its head off its
@@ -298,6 +326,10 @@ pub(crate) fn landing_within(
     profile: &SupportProfile,
     steepest_deg: Scalar,
 ) -> Option<Landing> {
+    // A head cut at the plate ends on it; anything under it stands nowhere.
+    if (from.z - PLATE_Z_MM).abs() <= SURFACE_EPSILON_MM {
+        return Some(in_plate(from));
+    }
     let contact = from;
     let ray = Ray::new(contact - Vec3::Z * SURFACE_EPSILON_MM, -Vec3::Z);
     let below = placed.raycast(&ray);
@@ -321,6 +353,7 @@ pub(crate) fn landing_within(
                     pad_offset: Vec2::ZERO,
                     pad_cut: None,
                     on_support: false,
+                    in_plate: false,
                 },
                 hit.point.z + touch_mm + SURFACE_EPSILON_MM,
                 radius_mm,
@@ -338,6 +371,7 @@ pub(crate) fn landing_within(
                 pad_offset,
                 pad_cut,
                 on_support: false,
+                in_plate: false,
             };
             let bottom_z = landing.pillar_bottom_z(profile);
             (landing, bottom_z, base_mm)
@@ -345,7 +379,8 @@ pub(crate) fn landing_within(
     };
 
     let height = contact.z - landing.pillar_bottom_z(profile);
-    if height <= MIN_PILLAR_HEIGHT_MM {
+    // A head shortened to the room above the foot leaves exactly the shortest pillar.
+    if height < MIN_PILLAR_HEIGHT_MM - SURFACE_EPSILON_MM {
         return None;
     }
     let body = Beam {
@@ -357,23 +392,63 @@ pub(crate) fn landing_within(
     stands_clear(placed, &body, profile).then_some(landing)
 }
 
+/// A head ending on the plate at `neck`, sunk into it with no foot (ADR 0427).
+fn in_plate(neck: Vec3) -> Landing {
+    Landing {
+        base: Vec3::new(neck.x, neck.y, PLATE_Z_MM),
+        on_model: false,
+        pad_offset: Vec2::ZERO,
+        pad_cut: None,
+        on_support: false,
+        in_plate: true,
+    }
+}
+
 /// Where the body of a support at `contact` begins: one `[top]` out along the leaned normal
 /// (ADR 0125, 0339); with no room for a head, the contact for a small pillar (ADR 0340), or `None`.
 pub fn neck_of(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> Option<Vec3> {
+    head_of(placed, contact, profile).ok()
+}
+
+/// [`neck_of`], or why the support at `contact` has no head: a head turned or cut to fit
+/// only where no small pillar holds it instead (ADR 0429).
+pub(crate) fn head_of(
+    placed: &Placed,
+    contact: Vec3,
+    profile: &SupportProfile,
+) -> Result<Vec3, Unstood> {
+    match straight_neck(placed, contact, profile) {
+        Err(Unstood::HeadBlocked) if profile.small_pillar.enabled => Ok(contact),
+        Err(Unstood::HeadBlocked) => refitted_necks(placed, contact, profile)
+            .next()
+            .ok_or(Unstood::HeadBlocked),
+        found => found,
+    }
+}
+
+/// The neck of a head leaving `contact` the way its face sends it, or why there is none.
+fn straight_neck(
+    placed: &Placed,
+    contact: Vec3,
+    profile: &SupportProfile,
+) -> Result<Vec3, Unstood> {
     let (direction, normal) = tip_direction(placed, contact);
     let neck = neck_along(contact, direction, profile);
     let Some(normal) = normal else {
-        return Some(neck);
+        return Ok(neck);
     };
-    if has_head(contact, neck) && head_clear(placed, contact, neck, normal, profile) {
-        return (!over_its_contact(contact, neck, profile)).then_some(neck);
+    if !has_head(contact, neck) || !head_clear(placed, contact, neck, normal, profile) {
+        return Err(Unstood::HeadBlocked);
     }
-    profile.small_pillar.enabled.then_some(contact)
+    if over_its_contact(contact, neck, profile) {
+        return Err(Unstood::FacesUp);
+    }
+    Ok(neck)
 }
 
-/// Whether a head leaving `contact` off its face has room, as [`neck_of`] reads it.
+/// Whether a head leaving `contact` off its face has room the way its face sends it.
 pub(crate) fn has_room(placed: &Placed, contact: Vec3, profile: &SupportProfile) -> bool {
-    neck_of(placed, contact, profile).is_some_and(|neck| has_head(contact, neck))
+    straight_neck(placed, contact, profile).is_ok_and(|neck| has_head(contact, neck))
 }
 
 /// Whether a head rises so nearly straight up that the trunk dropped from its neck would
@@ -390,13 +465,25 @@ pub(crate) fn has_head(contact: Vec3, neck: Vec3) -> bool {
     contact.distance(neck) >= MIN_BODY_MM
 }
 
-/// Where a head leaving `contact` along `direction` ends: one `[top]` out, shortened
-/// rather than allowed to eat the room the body needs above the plate.
+/// Where a head leaving `contact` along `direction` ends: one `[top]` out, shortened to leave the
+/// body its room over the plate, or straight down into the plate where no foot fits (ADR 0427).
 fn neck_along(contact: Vec3, direction: Vec3, profile: &SupportProfile) -> Vec3 {
-    let length_mm = profile.top.length_mm;
+    neck_along_mm(contact, direction, profile.top.length_mm, profile)
+}
+
+/// [`neck_along`] for a head `length_mm` long rather than the profile's.
+fn neck_along_mm(
+    contact: Vec3,
+    direction: Vec3,
+    length_mm: Scalar,
+    profile: &SupportProfile,
+) -> Vec3 {
     let drop_mm = -direction.z * length_mm;
-    let room_mm =
-        (contact.z - PLATE_Z_MM - profile.footing_height_mm() - MIN_PILLAR_HEIGHT_MM).max(0.0);
+    let room_mm = contact.z - PLATE_Z_MM - profile.footing_height_mm() - MIN_PILLAR_HEIGHT_MM;
+    if room_mm <= 0.0 && contact.z - PLATE_Z_MM > SURFACE_EPSILON_MM {
+        return Vec3::new(contact.x, contact.y, PLATE_Z_MM);
+    }
+    let room_mm = room_mm.max(0.0);
     let length_mm = if drop_mm > room_mm {
         length_mm * room_mm / drop_mm
     } else {
@@ -406,7 +493,7 @@ fn neck_along(contact: Vec3, direction: Vec3, profile: &SupportProfile) -> Vec3 
 }
 
 /// Whether the head from `contact` to `neck`, its pin then widening to the pillar, meets
-/// nothing once it is a hair off the face with outward normal `normal` it leaves.
+/// nothing once it is a hair past its seat on the face with outward normal `normal` it leaves.
 fn head_clear(
     placed: &Placed,
     contact: Vec3,
@@ -416,7 +503,13 @@ fn head_clear(
 ) -> bool {
     let axis = neck - contact;
     let pin_mm = pin_mm(profile.contact_radius_mm(), axis, normal);
-    let off_mm = pin_mm + 10.0 * SURFACE_EPSILON_MM;
+    // The face may rise under the rim of a seated tip; the head starts past that seat.
+    let seat_mm = seat_mm(placed, contact, normal, profile.contact_radius_mm()).unwrap_or(0.0)
+        / axis
+            .normalize_or_zero()
+            .dot(normal)
+            .max(MAX_HEAD_LEAN_DEG.to_radians().cos());
+    let off_mm = pin_mm + seat_mm + 10.0 * SURFACE_EPSILON_MM;
     let head = Beam {
         from: contact + axis.normalize_or_zero() * off_mm.min(axis.length()),
         to: neck,
@@ -536,7 +629,7 @@ fn pad_offset(
     };
     let reach_mm = if shape.is_round() && !shape.tapers() {
         // Inside the rim the pad meets the plate on, which the bevel pulls in.
-        profile.base_radius_mm() - profile.bottom.platform_thickness_mm * FOOT_BEVEL - inside_mm
+        profile.base_radius_mm() - foot_bevel_mm(profile) - inside_mm
     } else {
         0.0
     };

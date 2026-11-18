@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use super::{Built, ModelSupports};
 use crate::{
-    Blocked, Clearances, Placed, Profiles, Shaded, SupportPoint, SupportTree, columns, grow,
-    mesh_groups, shaded,
+    Blocked, Clearances, Lost, Placed, Profiles, ShadedSupports, SupportPoint, SupportTree,
+    columns, grow_beside, lost, mesh_groups,
 };
 use core_geometry::{Bvh, Mesh, Region, Transform};
 use printer_profiles::SupportProfile;
@@ -30,15 +30,23 @@ impl Growth {
         let placed = Placed::new(surface, bvh, self.transform)
             .blocking(keep_out.as_ref())
             .remembering(&self.clearances);
-        let (trees, meshes) =
+        let (trees, lost, meshes) =
             Profiles::new(&self.table).map_or_else(Default::default, |profiles| {
-                let trees = grow(&columns(&self.points, &placed, profiles), &placed, profiles);
+                let standing = with_frozen(&[], &self.frozen, self.transform);
+                let columns = columns(&self.points, &placed, profiles);
+                let trees = grow_beside(&columns, &standing, &placed, profiles);
+                let lost = lost(&self.points, &trees, &placed, profiles);
                 let all = with_frozen(&trees, &self.frozen, self.transform);
-                (trees, shaded(mesh_groups(&all, &placed, profiles)))
+                (
+                    trees,
+                    lost,
+                    ShadedSupports::of(mesh_groups(&all, &placed, profiles)),
+                )
             });
         Grown {
             forest: Forest {
                 trees,
+                lost,
                 transform: self.transform,
                 table: self.table,
                 blocked: self.blocked,
@@ -69,13 +77,15 @@ pub struct Grown {
     pub(super) revision: u64,
     /// The frozen trees `meshes` were built with, which still hold if the model's still match.
     pub(super) frozen: Vec<SupportTree>,
-    pub(super) meshes: Vec<Shaded>,
+    pub(super) meshes: ShadedSupports,
 }
 
 /// The trees grown from the points, in plate coordinates, and what they were grown against.
 #[derive(Debug, Clone)]
 pub(super) struct Forest {
     pub(super) trees: Vec<SupportTree>,
+    /// The points none of `trees` carries.
+    pub(super) lost: Vec<Lost>,
     pub(super) transform: Transform,
     pub(super) table: Vec<SupportProfile>,
     pub(super) blocked: Region,
@@ -120,6 +130,9 @@ impl ModelSupports {
     /// Lets go of what was built when the trees must grow again for `transform` and `table`,
     /// so nothing slices it meanwhile; [`Self::drawn`] still shows it. Answers whether they must.
     pub fn outgrown(&mut self, transform: Transform, table: &[SupportProfile]) -> bool {
+        if let Some(profiles) = Profiles::new(table) {
+            self.follow(transform, profiles);
+        }
         let outgrown = self.needs_growing(transform, table);
         if outgrown {
             self.built = None;
@@ -127,14 +140,18 @@ impl ModelSupports {
         outgrown
     }
 
+    /// The points the trees last grown leave without a support, and why.
+    pub fn lost(&self) -> &[Lost] {
+        self.forest.as_ref().map_or(&[], |forest| &forest.lost)
+    }
+
     /// What the trees grow from as it last changed; a run grown from another is stale.
     pub fn revision(&self) -> u64 {
         self.revision
     }
 
-    /// Takes on trees grown from a [`Growth`], and answers whether they were still wanted:
-    /// nothing they grow from has changed since it was taken. Their meshes hold unless the
-    /// frozen trees have been edited meanwhile.
+    /// Takes on trees grown from a [`Growth`] if nothing they grow from changed since; answers
+    /// whether it took them. Their meshes hold unless the frozen trees were edited meanwhile.
     pub fn take_grown(&mut self, grown: Grown) -> bool {
         if grown.revision != self.revision {
             return false;
@@ -146,11 +163,12 @@ impl ModelSupports {
             ..
         } = grown;
         self.built = (frozen == self.frozen).then(|| {
-            let meshes = self.draw(meshes);
+            let (meshes, raft) = self.draw(meshes, forest.transform);
             Built {
                 trees: with_frozen(&forest.trees, &frozen, forest.transform),
                 grown: forest.trees.len(),
                 meshes,
+                raft,
                 transform: forest.transform,
                 table: forest.table.clone(),
                 painted: self.painted.clone(),

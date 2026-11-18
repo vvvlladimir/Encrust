@@ -2,11 +2,22 @@ use core_csg::{CsgError, Solid};
 use core_geometry::{FastMap, FastSet, Mesh, fill_holes, orient_outward, remove_duplicate_faces};
 
 use crate::boolean::solid_of;
+use crate::cancel::{Cancel, Step};
 
 /// `mesh` as the engine reads it, its shells unioned, mended first where it refuses it as it
-/// stands (ADR 0321).
-pub(crate) fn readable(mesh: &Mesh) -> Result<Solid, CsgError> {
-    solid_of(mesh).or_else(|_| solid_of(&patched(mesh)))
+/// stands (ADR 0321); told to `cancel` in three pieces: as it stands, mended, mended read.
+pub(crate) fn readable(mesh: &Mesh, cancel: Cancel<'_>) -> Result<Solid, CsgError> {
+    cancel.begin(Step::Reading, 3);
+    if let Ok(solid) = solid_of(mesh) {
+        cancel.advance(3);
+        return Ok(solid);
+    }
+    cancel.advance(1);
+    let mended = patched(mesh);
+    cancel.advance(1);
+    let solid = solid_of(&mended);
+    cancel.advance(1);
+    solid
 }
 
 /// `model` mended until the engine can read it: torn and folded faces patched, then every

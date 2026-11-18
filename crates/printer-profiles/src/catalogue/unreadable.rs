@@ -33,6 +33,7 @@ impl Catalogue {
             Kind::Support => self.support(id).is_ok(),
             Kind::Auto => self.autos().any(|entry| entry.id == id),
             Kind::Hollow | Kind::Drain => self.presets(kind).any(|entry| entry.id == id),
+            Kind::Recipe => self.recipes().any(|entry| entry.id == id),
         };
         listed
             || self

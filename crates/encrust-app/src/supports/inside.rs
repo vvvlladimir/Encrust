@@ -1,28 +1,41 @@
-use super::fill::underside;
-use super::{ISLANDS_GROUP, Side, SupportGroup, SupportTool, frozen_inside};
+use super::{ISLANDS_GROUP, NECKS_GROUP, Side, SupportGroup, SupportTool, frozen_inside};
 use crate::job::Placement;
 use crate::scene::{ObjectId, Scene};
-use core_geometry::{Scalar, Vec3};
+use core_engine::neck_profile;
+use core_geometry::Vec3;
 use core_supports::SupportTree;
+use printer_profiles::SupportProfile;
 
 impl SupportTool {
-    /// Stands one support under each island floor of `floors` (plate, `layer_mm` deep), in the
-    /// islands' group, and answers how many; a ring or a crescent is left to the hand.
+    /// Stands a support at each of `found`, a model and the plate point of its underside an
+    /// island hangs from, in the islands' group of the profile `profile_of` names for its model,
+    /// and answers how many; a ring or a crescent is left to the hand.
     pub fn support_islands(
         &mut self,
         scene: &mut Scene,
-        floors: &[Vec3],
-        layer_mm: Scalar,
+        found: &[(ObjectId, Vec3)],
+        profile_of: impl Fn(ObjectId) -> SupportProfile,
     ) -> usize {
-        let found: Vec<(ObjectId, Vec3)> = floors
-            .iter()
-            .filter_map(|floor| underside(scene, *floor, layer_mm))
-            .collect();
-        if found.is_empty() {
-            return 0;
+        for (id, contact) in found {
+            let group = self.answer_group(ISLANDS_GROUP, &profile_of(*id));
+            if let Some(object) = scene.get_mut(*id) {
+                let transform = object.transform;
+                object.supports.add(*contact, transform, group);
+            }
         }
-        let group = self.islands_group();
-        for (id, contact) in &found {
+        found.len()
+    }
+
+    /// Stands a support at each of `found`, under a weak neck, in the necks' group: each to
+    /// `profile_of`'s for its model, made thick enough to carry the pull.
+    pub fn support_necks(
+        &mut self,
+        scene: &mut Scene,
+        found: &[(ObjectId, Vec3)],
+        profile_of: impl Fn(ObjectId) -> SupportProfile,
+    ) -> usize {
+        for (id, contact) in found {
+            let group = self.answer_group(NECKS_GROUP, &neck_profile(&profile_of(*id)));
             if let Some(object) = scene.get_mut(*id) {
                 let transform = object.transform;
                 object.supports.add(*contact, transform, group);
@@ -107,19 +120,15 @@ impl SupportTool {
         gone
     }
 
-    /// The group named for islands, made from the numbers in hand the first time.
-    pub(super) fn islands_group(&mut self) -> u16 {
-        if let Some(group) = self
-            .groups
-            .iter()
-            .position(|group| group.name == ISLANDS_GROUP)
-        {
+    /// The group named `name` built to `profile` for what Check answers, made the first time.
+    pub(super) fn answer_group(&mut self, name: &str, profile: &SupportProfile) -> u16 {
+        let held = |group: &SupportGroup| group.name == name && group.profile == *profile;
+        if let Some(group) = self.groups.iter().position(held) {
             return group as u16;
         }
-        self.groups[self.active as usize].profile = self.profile.clone();
         self.groups.push(SupportGroup {
-            name: ISLANDS_GROUP.to_owned(),
-            profile: self.profile.clone(),
+            name: name.to_owned(),
+            profile: profile.clone(),
             hidden: false,
         });
         (self.groups.len() - 1) as u16

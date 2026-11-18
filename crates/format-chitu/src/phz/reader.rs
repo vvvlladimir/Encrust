@@ -4,6 +4,7 @@ use super::header::MAGIC;
 use crate::fdg::{self, Head, MotionAt, OpenFdg};
 
 /// Fields of the header, by their offset; the whole list is in `docs/formats/phz.md`.
+const LARGE_PREVIEW: u64 = 0x20;
 const LAYER_TABLE: u64 = 0x24;
 const PRINT_TIME: u64 = 0x30;
 const PWM: u64 = 0x3C;
@@ -39,6 +40,8 @@ impl SlicedFileReader for PhzReader {
         let height_px = reads.u32_le()?;
         let pixel_count = panel_in_range(width_px, height_px)?;
 
+        reads.seek_to(LARGE_PREVIEW)?;
+        let large_preview = u64::from(reads.u32_le()?);
         reads.seek_to(LAYER_TABLE)?;
         let table = u64::from(reads.u32_le()?);
         let layer_count = reads.u32_le()?;
@@ -73,6 +76,7 @@ impl SlicedFileReader for PhzReader {
             bottom_light_pwm,
             table,
             layer_count,
+            large_preview,
         };
         fdg::open_layout(reads, head, MACHINE_NAME, MOTION, crypt)
     }

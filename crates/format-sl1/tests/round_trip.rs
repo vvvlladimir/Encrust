@@ -8,9 +8,12 @@
 
 use std::io::Read;
 
-use core_format::{ExposurePlan, LayerPlan, LayerSink, PrintJob, SlicedFileWriter, Thumbnail};
+use core_format::{
+    ExposurePlan, LayerPlan, LayerSink, OpenFile, PrintJob, SlicedFileReader, SlicedFileWriter,
+    Thumbnail,
+};
 use core_raster::{Grey, LayerMask, LayerRuns, PixelPitch, RasterSettings, Shading};
-use format_sl1::{Sl1Flavour, Sl1Sink, Sl1Writer};
+use format_sl1::{Sl1Flavour, Sl1Reader, Sl1Sink, Sl1Writer};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 const WIDTH_PX: u32 = 16;
@@ -245,6 +248,31 @@ fn both_previews_carry_the_job_thumbnail() {
             );
         }
     }
+}
+
+#[test]
+fn a_written_archive_reads_back_its_larger_preview() {
+    let job = PrintJob {
+        thumbnail: Some(Thumbnail::filled(8, 8, [255, 0, 0])),
+        ..job(1)
+    };
+    let file = write(&job, &[LayerRuns::builder(WIDTH_PX, HEIGHT_PX).finish()]);
+
+    let opened = Sl1Reader
+        .open(std::io::Cursor::new(file))
+        .expect("what we wrote opens");
+
+    let preview = opened
+        .facts()
+        .preview
+        .as_ref()
+        .expect("the preview is read");
+    assert_eq!((preview.width_px(), preview.height_px()), (800, 480));
+    assert_eq!(
+        preview.pixels()[240 * 800 + 400],
+        [255, 0, 0],
+        "the middle is the part"
+    );
 }
 
 #[test]

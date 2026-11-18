@@ -59,13 +59,20 @@ general-appearance-hint = System follows the desktop as it changes, the viewport
 settings-page-appearance = Appearance
 settings-group-help = Help
 settings-find = Find a setting
-settings-words-appearance = theme light dark system language motion animation
-settings-words-general = start page viewport zoom sliced files folder file name template profiles
+settings-words-appearance = theme light dark system language interface size scale zoom larger smaller motion animation
+settings-words-general = start page viewport zoom recovery autosave copy crash sliced files folder file name template profiles
 settings-words-updates = update release version
 updates-this-build = This is { $version }
 general-viewport = Viewport
 general-invert-zoom = Scroll down to zoom in
+general-recovery = Recovery
+general-autosave = Keep a copy of an unsaved plate
+general-autosave-hint = Every two minutes, so an unsaved plate is not lost if Encrust stops unexpectedly. The copy is removed when you close the window.
 general-motion = Motion
+general-scale = Interface size
+# Under the size chosen, when the screen is too small for the window at it.
+general-scale-capped = This screen is too small for a larger window, so it is shown at { $percent }.
+general-scale-help = The size of text, panels and buttons, not of the model. { $larger } and { $smaller } change it anywhere in the window. { $actual } goes back to the system's size.
 general-reduce-motion = Reduce motion
 general-sliced-files = Sliced files
 general-sliced-dir-system = The save dialog opens here; forgotten, wherever the system last left it.
@@ -226,6 +233,9 @@ action-remove = Remove from the plate
 action-next-view = Next view
 action-previous-view = Previous view
 action-frame-view = Frame the view
+action-interface-larger = Larger interface
+action-interface-smaller = Smaller interface
+action-interface-actual = Interface at the system's size
 action-settings = Settings
 action-sheet = This sheet
 action-find = Find
@@ -313,6 +323,7 @@ binding-reset = Back to the keys it came with
 settings-page-supports = Supports
 settings-page-hollow = Hollow
 settings-page-drain = Drain
+settings-page-recipes = Recipes
 settings-page-general = General
 settings-page-updates = Updates
 settings-tab-resins = Resins
@@ -321,6 +332,7 @@ settings-tab-network = Network
 settings-new-resin = New resin
 settings-new-printer = New printer
 settings-new-profile = New profile
+settings-new-recipe = New recipe
 settings-copy-name = { $name } copy
 
 ## supports.rs
@@ -330,6 +342,11 @@ supports-placing-fill = Fill
 supports-placing-block = Block
 supports-placing-erase = Erase
 supports-nothing-visible = Nothing visible on the plate to hold up.
+# Beside the cursor while a carried support is refused: what stops it standing there.
+supports-refused-collides = Touches the model
+supports-refused-leans = Leans too far
+supports-refused-no-footing = Nowhere for the foot to stand
+supports-refused-no-hold = No surface for the tip to hold
 supports-nothing-visible-error = nothing visible on the plate to hold up
 supports-placed =
     { $count ->
@@ -345,16 +362,12 @@ supports-placed-sized =
     }
 supports-auto-no-shape = { $name } builds to the support profile { $id }, which is not in the catalogue
 supports-no-automatic = The catalogue has no automatic support profile
+supports-no-profile = The catalogue has no support profile { $id }
 supports-group-name = Group { $index }
 supports-cannot-grow = The supports could not be built: { $reason }
 supports-growth-stopped = Building the supports stopped without an answer
 surfaces-cannot-build = The surface supports stand on could not be prepared: { $reason }
 surfaces-build-stopped = Preparing the surface supports stand on stopped without an answer
-
-## link.rs
-
-# A chat client prepares a model over MCP; each change it keeps is a numbered revision of its job, shown again on the plate.
-link-replaying = Showing revision { $revision } of the chat client's job { $job }
 
 ## measure.rs
 
@@ -378,21 +391,30 @@ supports-removed-inside =
        *[other] Took { $count } supports out of the cavities
     }
 supports-where = Where
+supports-clean-surface-about = Paint the faces meant to be seen. An automatic run sets the contact spacing wider there and uses its lightest tips.
 supports-picked = Picked
-supports-picked-help = Grow again hands the picked supports back to the automatic run, and the next growth builds them afresh. To the group builds them to the profile of the group in hand.
+supports-picked-help = Grow again hands the picked supports back to the automatic run, and the next growth builds them afresh. To the group builds them to the profile of the group in hand. Merge joins supports of one model into a single tree on one trunk.
 supports-stat-parts = Parts
 supports-stat-supports = Supports
 supports-move-to-group = To the group
 supports-grow-these-again = Grow again
+supports-merge-these = Merge into one
+supports-merge-refused-collides = These supports cannot be merged: the model is in the way.
+supports-merge-refused-leans = These supports cannot be merged: a strut would lean too far.
+supports-merge-refused-no-footing = These supports cannot be merged: the trunk has nowhere to stand.
+supports-merge-refused-no-hold = These supports cannot be merged: a tip has no surface to hold.
 supports-remove-these = Remove these supports
 supports-grow-again = Grow them again
 supports-grow = Grow the supports
 supports-grow-tooltip = Cuts { $scope } to find what hangs over nothing.
 supports-placing = Placing supports
 supports-sizes = Sizes
+support-sizes-help = A support is built heavier where it holds more. A support's share is the volume of model above its tip under an island or overhang, divided among it and every support above it; a step is sized by the resin it puts out in one layer. Each value is the least at which a support is built to that shape.
+support-islands-help = Tips under a small island stand closer together than the contact spacing. From the first area below they stand wider apart, and from the second at the full spacing.
+support-island-wider = Wider island spacing from
+support-island-full = Full island spacing from
 supports-place = Place
-support-size-island = Island for { $shape }
-support-size-load = Load for { $shape }
+support-size-share = Share for { $shape }
 support-size-step = Step for { $shape }
 support-group-steps = Steps
 support-group-steadying = Steadying
@@ -411,10 +433,20 @@ supports-mode-pick = Pick supports
 supports-mode-place = Place supports
 supports-mode-area = Paint or block an area
 supports-mode-shape = Shape of the supports
-supports-without-room =
+supports-lost-head-blocked =
     { $count ->
-        [one] { $count } support has no room to stand
-       *[other] { $count } supports have no room to stand
+        [one] { $count } support has no room for its tip
+       *[other] { $count } supports have no room for their tips
+    }
+supports-lost-faces-up =
+    { $count ->
+        [one] { $count } support is on a face that looks up
+       *[other] { $count } supports are on faces that look up
+    }
+supports-lost-no-ground =
+    { $count ->
+        [one] { $count } support has nothing to stand on
+       *[other] { $count } supports have nothing to stand on
     }
 supports-drop-preset =
     { $count ->
@@ -466,14 +498,8 @@ machines-cannot-delete-resin = cannot delete the resin
 
 ## panels/inspector/check.rs
 
-check-filter-all = All
 check-filter-islands = Islands
-check-filter-levers = Levers
-check-filter-peel = Peel
-check-filter-cups = Cups
-check-filter-thin = Thin
 check-support-islands = Support them
-check-issues = Found
 check-previous = Previous issue
 check-next = Next issue
 check-stood =
@@ -489,8 +515,9 @@ check-fact-issues =
         [one] { $count } issue
        *[other] { $count } issues
     }
-check-checking = Checking
 check-reading = Reading every layer of the stack...
+# Shown under the issues a quick background check found, while the full check runs.
+check-quick-found = Found by a quick check. Reading every pixel...
 check-reads-layers = The check reads the layers, which are cut as soon as there is a model on the plate and a machine to cut it for.
 check-measuring = measuring
 check-hardest-pull = Hardest pull
@@ -521,10 +548,66 @@ check-remove-next-note = Takes one layer more off each part left hanging, the on
 check-no-islands-to-take = No islands to take out
 check-erased-note = Erased from the file; anything left hanging is listed below.
 check-more-layers = and { $count } more layers
+check-section-cups = Suction cups
+check-section-levers = Weak necks
+check-drill-cups = Drill them
+check-support-levers = Support them
+check-auto-orient = Auto-orient
+check-least-peel = Reduce peel
+check-lift-settings = Lift settings
+check-place = Move to free space
+check-fit-volume = Scale to fit
+check-combine = Combine
+check-drill-drains = Drill drain holes
+check-cups-vent-help = Drill them makes a vent through the thinnest wall at the bottom of each suction cup, so air gets in and the cup lets go. A cup that stands on the plate or whose walls are too thick is left to you: lift the model onto supports or turn it. Auto-orient looks for a pose with no suction cups.
+check-necks-held-help = Support them stands supports under the part each weak neck carries, as many as it takes for the neck to bear the load. Auto-orient looks for a pose that puts less load on the necks.
+check-stood-levers =
+    { $count ->
+        [0] No weak neck had an underside to stand a support on
+        [one] Stood { $count } support in { $group }
+       *[other] Stood { $count } supports in { $group }
+    }
+check-vented-cups =
+    { $count ->
+        [0] No suction cup had a wall thin enough to drill
+        [one] Drilled { $count } vent into a suction cup
+       *[other] Drilled { $count } vents into suction cups
+    }
+check-cups-on-the-plate =
+    { $count ->
+        [one] { $count } suction cup stands on the plate: lift the model onto supports or turn it
+       *[other] { $count } suction cups stand on the plate: lift the models onto supports or turn them
+    }
+# Set after a fix's result: how many issues it could not fix.
+check-left-to-you = { $count } left to fix by hand
+# A section of Check's panel: what reading the layers of the stack found.
+check-layers = In the layers
+# A card of Check: models past the plate, in its inset, or meeting another.
+check-card-way = Placement
+# A card of Check: models that hold resin they should not.
+check-card-resin = Hollow and drain
+check-card-thin = Thin sections
+# Beside a kind of issue that has no automatic fix.
+check-card-by-hand = by hand
+# Beside a kind of issue found on several layers.
+check-card-layers = layers { $first }–{ $last }
+check-thin-no-fix = No automatic fix: thicken these sections in the model.
+check-fact-fixing = fixing
+check-undo-fix = Undo this fix
+check-fix-all = Fix all
+check-fix-issues-tip = Moves models out of the way, drills drain holes and suction cup vents, then stands supports, in that order. A single undo reverts it all.
+check-place-tip = Moves only the models in the way, each to the nearest free spot, and turns a model that fits no other way. When there is no room left, arranges the whole plate again.
+check-fit-volume-tip = Scales down a model too big for the build volume until it fits.
+check-combine-tip = Opens Relief with the two touching models, to join them into one.
+check-drill-drains-tip = Finds drain holes that let each sealed model empty.
+check-support-islands-tip = Stands a support under every island, in a separate group.
+check-put-islands-back-tip = Puts the removed islands back into the file.
+check-least-peel-tip = Turns the models to the pose with the least peel force on the film.
+check-lift-settings-tip = Opens the lift settings.
 check-plate = On the plate
 check-plate-help = Found as soon as the models stand still, before any layer is read. Click a row to go to it.
 # Beside a model's name, where it, its supports or its raft stand.
-check-row-past = past the build volume
+check-row-past = outside the build volume
 # Beside a model's name, where it, its supports or its raft stand.
 check-row-inset = in the plate inset
 # The other model's name.
@@ -536,19 +619,19 @@ check-row-solid = worth hollowing
 check-row-hanging = hangs over nothing · { $area } mm²
 check-row-islands =
     { $count ->
-        [one] island · { $area } mm²
+        [one] { $area } mm²
        *[other] { $count } islands · { $area } mm²
     }
-check-row-lever = lever · { $lever } mm · { $stress } MPa
+check-row-lever = { $lever } mm · { $stress } MPa
 check-row-levers = { $count } levers · { $stress } MPa
-check-row-cup = suction cup · { $area } mm²
+check-row-cup = { $area } mm²
 check-row-cups = { $count } suction cups · { $area } mm²
 check-row-thin =
     { $count ->
-        [one] thin · { $width } mm
+        [one] { $width } mm
        *[other] { $count } thin · { $width } mm
     }
-check-row-peel = peel · { $force } N
+check-row-peel = { $force } N
 check-issue-island = Island
 check-issue-hanging = Part left hanging
 check-issue-lever = Weak neck
@@ -560,6 +643,21 @@ check-removed =
         [one] { $count } island taken out of the file
        *[other] { $count } islands taken out of the file
     }
+
+## panels/prepare_row.rs
+
+prepare-row-tooltip = Prepares { $scope } for print.
+prepare-row-recipe = The recipe that Prepare for print uses
+# Group names in the list of recipes.
+prepare-row-built-in = Built-in
+prepare-row-yours = Yours
+prepare-row-edit-recipes = Edit recipes
+# Tooltips of the row's buttons while a run waits.
+prepare-row-continue = Continue to the next step
+prepare-row-retry = Retry the failed step and continue
+prepare-row-end = Stop here and keep the plate as it is now
+# What a waiting run's box says: the recipe's step it waits at, and why.
+prepare-row-waits-at = Step { $number }: { $why }
 
 ## panels/plate_summary.rs
 
@@ -614,6 +712,11 @@ ago-weeks =
 field-back-to = Back to { $value } { $unit }
 field-printer-address = Printer address
 
+## ui/widgets/field/condition.rs
+
+# The button beside a condition box that lists the names it can read.
+condition-insert = Insert a value
+
 ## ui/widgets/layout.rs
 
 dialog-close = Close  Esc
@@ -644,6 +747,14 @@ measure-snap-corner-note = The nearest corner where the surface turns catches a 
 measure-snap-edge-note = The nearest edge where the surface turns catches a click.
 measure-snap-free-note = Exactly where the click lands.
 measure-show-axes = Show dX, dY, dZ in the view
+measure-along-surface = Measure along the surface
+# A reading's label: the length of the shortest way between the points over the model.
+measure-on-surface = Along the surface
+measure-walk-finding = Finding the shortest way along the surface…
+measure-walk-apart = The points are not on one model, so no surface joins them.
+measure-walk-unreachable = The points are on separate shells of the model, so no surface joins them.
+measure-walk-stopped = Cancelled before the way along the surface was found.
+measure-walk-failed = No way along the surface was found: { $why }.
 measure-second-point = Click the second point.
 measure-two-points = Click two points on a model.
 measure-distance = Distance
@@ -659,7 +770,10 @@ measure-not-parallel = Not parallel, so there is no one gap between them.
 hollow-shell = Shell
 hollow-infill = Infill
 hollow-keep-solid = Keep solid
-hollow-keep-solid-note = Click the model to keep its wall solid there, alt-click a blocker to take it away.
+hollow-keep-thin = Keep thin parts solid
+hollow-keep-thin-note = Where the model is thinner than this, it stays solid, so thin parts such as fingers and blades are not hollowed.
+hollow-thinner-than = Thinner than
+hollow-keep-solid-clicks = Click the model to keep its wall solid there, shift-click to run a rod on from the last blocker, alt-click a blocker to take it away.
 hollow-drainage = Drainage
 hollow-looking = Looking for trapped resin
 hollow-drains = The resin can get out of every cavity on the plate.
@@ -695,7 +809,11 @@ hollow-infill-struts-are = The struts come out { $mm } mm thick.
 hollow-infill-thin = The lattice comes out { $mm } mm thick, too thin to print: make the cells bigger or the density higher.
 hollow-walled-note = Cells stand on the plate, joined to each other by round holes row above row, so resin runs from cell to cell towards a drain hole.
 hollow-scaffold-note = Struts on the edges of a cube stood on its corner: every one leans, so none starts in mid-air, and the lattice braces sideways as well.
-hollow-blocker-size = Blocker size
+hollow-blocker-fit = Fit to thickness
+hollow-blocker-fixed = Fixed size
+hollow-blocker-fit-note = Each blocker fills the model where you click, as thick as the model is there.
+hollow-blocker-reach = Past the wall
+hollow-blocker-reach-note = How far each blocker reaches through the wall into the cavity.
 hollow-clear-blockers =
     { $count ->
         [one] Clear { $count } blocker
@@ -856,9 +974,22 @@ boolean-done-sampled =
 job-thread-stopped-boolean = the combining thread stopped without finishing
 job-thread-stopped-cut = the cutting thread stopped without finishing
 job-thread-stopped-split = the splitting thread stopped without finishing
+job-thread-stopped-measure-walk = the measuring thread stopped without finishing
 job-thread-stopped-plugs = the thread cutting the plugs stopped without finishing
 job-thread-stopped-drill = the thread cutting the holes stopped without finishing
 job-model-changed = { $name } changed while it was being worked on, so the result was dropped
+
+## app_menu.rs
+# The menu macOS shows under the app's name; its rows use the words macOS gives them.
+
+app-menu-about = About Encrust
+app-menu-settings = Settings…
+app-menu-check-for-updates = Check for Updates…
+app-menu-services = Services
+app-menu-hide = Hide Encrust
+app-menu-hide-others = Hide Others
+app-menu-show-all = Show All
+app-menu-quit = Quit Encrust
 
 ## panels/title_bar.rs
 
@@ -911,8 +1042,8 @@ updates-looking-block = Looking
 updates-every-change = Every change
 updates-and-more = And { $count } more.
 updates-last-looked = Last looked { $when }
-bar-alpha = Alpha
-bar-alpha-tooltip = Encrust is in alpha: say what went wrong
+bar-beta = Beta
+bar-beta-tooltip = Encrust is in beta: say what went wrong
 menu-new-plate = New plate
 menu-new-project = New project
 menu-open-project = Open project...
@@ -940,6 +1071,10 @@ menu-orthographic = Orthographic view
 menu-import = Import
 menu-clear-recent = Clear the list
 menu-slicing-already = A plate is slicing already
+# File menu: a file sliced earlier, by Encrust or another program, sent unchanged to the plate's printer.
+menu-send-file = Send a sliced file...
+# Tooltip of menu-send-file: the plate's printer, named; the file is picked after the click.
+menu-send-file-to = The file goes to { $name } unchanged.
 menu-pick-first = Pick a model first
 menu-plate-empty = The plate is empty
 menu-camera = Camera
@@ -1089,9 +1224,182 @@ diagram-max = max { $value }
 diagram-model = model
 diagram-plate = plate
 
+## settings/recipes.rs
+
+recipes-nothing-open = no recipe is open
+recipes-built-in-why = A built-in recipe cannot be changed or deleted; duplicate it to make one of your own.
+recipes-cannot-save = the recipe cannot be saved
+recipes-unreadable-why = the recipe file has errors
+# The name a copy of a recipe starts with.
+recipes-copy-name = { $name } copy
+# The name a new recipe starts with; numbered when one is already called that.
+recipes-new-name = New recipe
+recipes-new-name-numbered = New recipe { $number }
+
+## panels/settings/recipes.rs
+
+recipes-table-recipe = Recipe
+# Where a recipe is kept: one of the built-in ones, or the user's.
+recipes-table-kept = Type
+recipes-table-steps = Steps
+recipes-kept-built-in = Built-in
+recipes-kept-yours = Yours
+recipes-kept-broken = Has errors
+recipes-fix-first = Fix what is marked in red before saving.
+recipes-saved = Saved the recipe { $recipe }
+
+## panels/settings/recipes/form.rs
+
+recipes-built-in = Built-in recipe
+recipes-built-in-how = Duplicate it to get your own copy that you can change.
+recipes-block-recipe = Recipe
+recipes-block-recipe-help = The name is shown in the Prepare for print list. Variables are your own numbers that step conditions and settings can use, for example how much resin hollowing must save before a model is hollowed.
+recipes-does-not-run = The recipe cannot run until it is fixed
+recipes-var-value = Value
+recipes-var-remove = Remove the variable
+recipes-var-add = Add a variable
+# The tooltip of the + before, between and after the steps, which adds one there.
+recipes-step-add = Add a step
+recipes-no-steps = The recipe has no steps yet.
+
+## panels/settings/recipes/chain.rs
+
+# The tooltip of the grip a step is dragged by to another place in the list.
+recipes-step-drag = Drag to move the step
+# What a folded step says of itself, each its own part of one line.
+recipes-summary-off = Switched off
+recipes-summary-when = When { $condition }
+recipes-summary-skips = Skipped if it fails
+recipes-summary-set = { $count ->
+    [one] { $count } setting changed
+   *[other] { $count } settings changed
+}
+recipes-summary-rules = { $count ->
+    [one] { $count } rule
+   *[other] { $count } rules
+}
+
+## panels/settings/recipes/step.rs
+
+recipes-step-help = Steps run in list order, each on the model as the steps before it left it. When is a condition on the model, such as saves_ml >= 30; leave it empty to always run the step. On failure decides whether a failed step stops the run or is skipped. A setting you leave out uses its default; a number or a switch can also be calculated by an expression. Rules change settings when their condition is true; the first matching rule is used.
+recipes-step-up = Move the step up
+recipes-step-down = Move the step down
+recipes-step-remove = Remove the step
+# A condition: the step runs when it holds.
+recipes-when = When
+recipes-stop-if = Stop if
+recipes-message = Message
+recipes-on-fail = On failure
+recipes-on-fail-stop = Stop
+recipes-on-fail-skip = Skip
+recipes-retry = Add supports to islands found
+# A condition: the islands are supported again while it holds.
+recipes-retry-while = While
+recipes-retry-max = Max attempts
+# Rules that choose other settings for the step.
+recipes-choose = Rules
+recipes-rule-remove = Remove the rule
+recipes-rule-add = Add a rule
+# What an empty condition box says: the step runs always.
+recipes-when-empty = Always
+# What an empty Stop if box says: the gate never stops the run.
+recipes-stop-if-empty = Never
+recipes-retry-while-empty = for example islands > 0
+recipes-rule-when-empty = for example height_mm > 120
+recipes-conditions-help = A condition compares values and numbers with < <= > >= == !=, combines them with && (and), || (or) and ! (not), and can calculate with + - * / and min, max, abs and clamp. The button beside a condition lists every value you can use.
+recipes-step-help-repair = Repair fixes the mesh so that it can be sliced: it closes holes and turns faces outward. Method sets how thorough it is.
+recipes-step-help-orient = Orientation rotates the model on the plate. Goal sets what to keep low: supports, the pull on the film, or print time. Max tilt limits how far the model can lean.
+recipes-step-help-hollow = Hollowing removes the inside of the model and leaves a wall of the given thickness, to save resin.
+recipes-step-help-drain = Drain holes let resin flow out of a hollow model: where a search finds they work, or at the points you give.
+recipes-step-help-supports = Supports adds supports under the model using a support profile.
+recipes-step-help-check = Check slices the plate and looks for islands, trapped resin and a strong pull on the film. Conditions can use islands, peel_n and support_ml only after a check.
+recipes-step-help-arrange = Arrangement lays out the models on the plate with the given spacing.
+recipes-step-help-save = Save slices the plate into a file in the given folder and can send it to the printer.
+recipes-step-help-gate = A stop condition stops the run and shows its message when Stop if is true.
+recipes-step-help-pause = A pause shows its message and waits until you press Continue.
+
+## panels/settings/recipes/setting.rs
+
+recipes-setting-set = Set
+recipes-setting-default = Reset to default
+recipes-setting-expression = Calculate with an expression
+# Said of a setting left out of a step: the engine's default stands.
+recipes-setting-left-out = Default
+recipes-point-remove = Remove the point
+recipes-point-add = Add a point
+recipes-set-method = Method
+recipes-set-goal = Goal
+recipes-set-max-tilt = Max tilt
+recipes-set-clean-surface = Clean surface
+recipes-set-wall = Wall
+recipes-set-mode = Mode
+recipes-set-infill = Infill
+recipes-set-keep-solid = Keep solid if thinner than
+# Where the drain holes go: found by the search, or at the points given.
+recipes-set-at = Placement
+recipes-set-points = Points
+recipes-set-diameter = Diameter
+recipes-set-depth = Depth
+recipes-set-vent = Vent
+recipes-set-plugs = Plugs
+recipes-set-profile = Support profile
+recipes-set-cavity = Supports in the cavity
+recipes-set-spacing = Spacing
+recipes-set-only-in-the-way = Move only what is in the way
+recipes-set-drill-cups = Drill suction cups
+recipes-set-hold-levers = Support weak necks
+recipes-set-folder = Folder
+recipes-set-name = File name
+recipes-set-send = Send to the printer
+# What an empty expression box says.
+recipes-expression-empty = for example height_mm / 50
+recipes-word-repair = Repair
+recipes-word-close-holes = Close holes
+recipes-word-wrap = Wrap
+recipes-word-deep = Deep repair
+recipes-word-auto = Auto
+recipes-word-fewest-supports = Fewest supports
+recipes-word-least-peel = Least pull
+recipes-word-shortest-print = Shortest print
+recipes-word-inside = Inside
+recipes-word-outside = Outside
+recipes-word-open-floor = Open floor
+# Drain holes drilled at the points the recipe gives.
+recipes-word-points = At the points
+
+## panels/settings/recipes/names.rs
+
+# Headings of the names a condition can read.
+recipes-names-model = The model
+recipes-names-measured = After a check
+recipes-names-yours = Your variables
+recipes-names-functions = Functions
+recipes-names-your-value = Your variable, { $value }
+recipes-names-min = The smaller of two
+recipes-names-max = The larger of two
+recipes-names-abs = Absolute value
+recipes-names-clamp = Limited to a range
+recipes-names-height = Height, mm
+recipes-names-width = Width, mm
+recipes-names-depth = Depth, mm
+recipes-names-volume = Volume, ml
+recipes-names-surface = Surface area, cm²
+recipes-names-faces = Number of faces
+recipes-names-sound = The mesh has no defects
+recipes-names-defects = Number of mesh defects
+recipes-names-turned = Turned by hand
+recipes-names-hollow = The model is hollow
+recipes-names-saves-ml = Resin saved by hollowing, ml
+recipes-names-saves-share = Share of resin saved by hollowing
+recipes-names-worth-hollowing = Hollowing is worth it
+recipes-names-fits = Fits the build volume
+recipes-names-trapped = Pockets of trapped resin, counting drain holes
+recipes-names-islands = Islands with no support
+recipes-names-peel = Strongest pull on the film, N
+recipes-names-support-ml = Resin in the supports, ml
+
 ## panels/settings/presets.rs
 
-presets-blocker = Blocker
 presets-depth = Depth
 presets-taper = Taper
 presets-empty =
@@ -1288,7 +1596,7 @@ printer-build-volume = Build volume
 printer-output = Output
 printer-firmware = Firmware
 printer-browser-sends-nothing = A browser cannot reach a printer on your network. What is sliced downloads, and goes over on a stick or through the printer's own app.
-printer-own-copy = Your copy of a machine this build also ships, and the two differ. Yours wins, including where a later release corrected the shipped numbers.
+printer-edited-copy = Your edits to a machine this build also ships. The fields you changed keep your values; every other field follows each release.
 printer-use-shipped = Use the shipped profile
 printer-cannot-put-back = cannot put the shipped profile back
 printer-cannot-save = cannot save the printer
@@ -1303,10 +1611,10 @@ printer-mirror-lcd = LCD mirror
 printer-mirror-dlp = DLP normal
 printer-mirror-note = Most LCD machines take their masks mirrored along X; the maker's settings say which.
 printer-inset = Plate inset
-printer-inset-min-x = Inset at −X
-printer-inset-max-x = Inset at +X
-printer-inset-min-y = Inset at −Y
-printer-inset-max-y = Inset at +Y
+printer-inset-min-x = Inset at the −X edge
+printer-inset-max-x = Inset at the +X edge
+printer-inset-min-y = Inset at the −Y edge
+printer-inset-max-y = Inset at the +Y edge
 printer-inset-note = A model standing in the band is marked, and still slices whole.
 printer-per-layer-on = Exposure and motion are read from each layer; .goo calls this advance mode.
 printer-per-layer-off = Every layer prints at the header's numbers, and the machine ramps the bottom block itself.
@@ -1322,6 +1630,7 @@ network-printing = { $printer } is printing { $file }
 network-busy = { $name } is busy: { $state }
 network-prusa-sl1 = A Prusa machine prints .sl1; set that as this printer's output.
 network-sending = Sending to { $name }
+network-not-answering = { $name } is not answering
 network-starting = Starting { $file } on { $name }
 network-sent = { $file } is on { $printer }
 network-cancelled = Transfer cancelled
@@ -1387,7 +1696,7 @@ slice-all = Slice all { $count } plates to .{ $extension }
 slice-send = Slice and send
 slice-start-tooltip = Start printing the file that landed on { $name }
 slice-start-print = Start print
-slice-saved-instead = { $why }; the file is saved instead.
+slice-saved-instead = { $why }; the file will be saved instead.
 slice-cannot-send = cannot slice the stack to send
 slice-slicing = Slicing
 slice-all-started = Slicing { $count } plates beside { $path }
@@ -1463,34 +1772,50 @@ orient-tall = { $value } mm tall
 ## prepare.rs
 
 prepare-nothing-visible = Nothing visible on the plate to prepare.
-prepare-busy = Wait for the job running on the plate to end.
+prepare-busy = Wait until the current task on the plate finishes.
 prepare-running-why = Wait for Prepare for print to end.
 prepare-step-orient = Orienting
 prepare-step-repair = Repairing
 prepare-step-hollow = Hollowing
-prepare-step-mend = Changing faces by hand
-prepare-step-relief = Pressing the texture
-prepare-step-combine = Combining
-prepare-step-label = Writing the label
-prepare-step-cut = Cutting
-prepare-step-split = Splitting
-prepare-step-arrange = Arranging the plate
-prepare-step-support-holes = Drilling the supports
-prepare-step-drill = Drilling drain holes
 prepare-step-drain = Looking for drain holes
 prepare-step-supports = Placing supports
 prepare-step-cavity = Placing supports in the cavity
-prepare-cancelled = Prepare for print cancelled; the plate is as it was
-prepare-drilled =
-    { $count ->
-        [one] Drilled { $count } drain hole
-       *[other] Drilled { $count } drain holes
-    }
+prepare-step-scan = Checking drainage
+prepare-step-check = Checking the layers
+prepare-step-arrange = Arranging the plate
+prepare-step-save = Saving the file
+prepare-step-pause = Waiting for you
+# What a paused run says when the recipe's pause gives no message of its own.
+prepare-paused = Prepare for print is paused
+prepare-check-unread = The layers could not be checked
+prepare-save-no-printer-to-send = No printer to send the file to
+prepare-cancelled = Prepare for print cancelled; the plate is back as it was
+prepare-ended = Prepare for print stopped; the changes made so far are kept
+prepare-gate-held = The recipe stopped at this step
+prepare-step-cannot-run-yet = The { $step } step does not work here yet
 prepare-done =
     { $count ->
         [one] Prepared { $count } model for print
        *[other] Prepared { $count } models for print
     }
+
+## prepare/recipes.rs
+
+prepare-recipe-missing = there is no recipe { $recipe }
+# The window's line over the recipe's own error, which stays in English.
+prepare-recipe-cannot-run = the recipe { $recipe } cannot run
+# The kind of a recipe's step, a noun naming what the step does.
+recipe-kind-repair = Repair
+recipe-kind-orient = Orientation
+recipe-kind-hollow = Hollowing
+recipe-kind-drain = Drain holes
+recipe-kind-supports = Supports
+recipe-kind-check = Check
+recipe-kind-arrange = Arrangement
+recipe-kind-save = Save
+# A step that ends the run when its condition holds.
+recipe-kind-gate = Stop condition
+recipe-kind-pause = Pause
 
 ## relief.rs
 
@@ -1529,11 +1854,18 @@ position-axis-ratio = { $axis } ratio
 position-place = Place
 position-on-plate = On the plate
 position-centre = Centre
-position-scale-to-fit = Fit the volume
+position-scale-to-fit = Scale to fit
 position-lift = Lift off the plate
 position-click-face = Click a face
 position-lay-on-face = Lay on face
 position-auto-orient = Auto-orient
+position-limit-tilt = Limit tilt
+position-limit-tilt-note = Keeps the turn within this many degrees of the way the model stands now; 0 leaves it as it is.
+position-max-tilt = Max tilt
+position-clean-surface = Clean surface
+position-clean-surface-about = Keeps supports off where the model shows, then searches for the preset among those poses. A pose that shows a few more contacts for far more of the preset is offered beside the choice. Where nothing is painted, what shows is read off the shape: open, detailed faces.
+position-paint-shown = Paint
+position-paint-shown-clear = Clear
 orient-looking = Scoring the ways to stand
 orient-proving = Printing the best ones to compare
 orient-cancelled = Auto-orient cancelled
@@ -1542,34 +1874,12 @@ orient-preset-peel = Peel
 orient-preset-shortest = Time
 orient-preset-auto = Auto
 orient-preset-supports-hint = The least resin in supports, whichever way up.
-orient-preset-peel-hint = The lightest pull on the film, no cups; under 10 N, the fewest supports.
-orient-preset-shortest-hint = The fewest layers that still print.
+orient-preset-peel-only-hint = The lightest pull on the film; cups and islands are not weighed.
+orient-preset-shortest-only-hint = The fewest layers; cups and islands are not weighed.
 orient-preset-auto-hint = Supports, pull and print time balanced: none gives up much for the others.
 position-mirror-across = Mirror across { $axis }
 position-mirror-copy = Mirror a copy
 position-place-about = On the plate stands the model on the plate; Centre moves it over the middle of the plate; Lay on face turns the face you click down onto the plate; Mirror flips the picked models, or copies of them stood beside them.
-
-## panels/inspector/position/prepare.rs
-
-position-prepare = Prepare for print
-# The button of the Prepare for print section.
-position-prepare-run = Prepare for print
-# $wall is the wall Hollow builds by default, with its unit.
-position-prepare-help-wall = Does in one go what the other tools would: turns a model nobody has turned the way it prints best, repairs a broken one, hollows a solid one to a wall of { $wall } where that saves enough resin, drills the holes that drain it and stands it on automatic supports, its cavity too. One undo takes all of it back, and Cancel leaves the plate as it was.
-position-prepare-tooltip = Prepares { $scope } for print.
-# Over what the last Prepare for print did to the model in the card.
-position-prepared = Prepared
-position-prepared-oriented = Oriented
-position-prepared-repaired = Repaired
-position-prepared-hollowed = Hollowed
-position-prepared-wall = Wall
-position-prepared-saved = Resin saved
-position-prepared-drained = Drained
-position-prepared-supports = Supports
-position-prepared-yes = Yes
-position-prepared-no = No
-# No supports were placed.
-position-prepared-none = None
 
 ## panels/inspector/paint.rs
 
@@ -1612,7 +1922,7 @@ paint-dropped =
 drain-hole-size = Hole size
 drain-trapped-resin = Trapped resin
 drain-opening = Opening
-drain-opening-note = Click the model, its supports or its raft to put one down, alt-click a hole to take it away. Each one is cut the moment it is placed, hollow or not, and a click on the floor of a hole drills on through it.
+drain-raft-opening-note = Click the model or its raft to put one down, alt-click a hole to take it away. Each one is cut the moment it is placed, hollow or not, and a click on the floor of a hole drills on through it. Supports are never cut: a click passes through them.
 drain-fact = { $count } trapped
 drain-fact-unchecked = Not checked
 drain-dig = Dig the channel ({ $count } points)
@@ -1629,7 +1939,7 @@ drain-checking = Checking drainage
 drain-cancelled = Drainage check cancelled
 # A word in the tight companion button beside Check drainage: drills the holes found for you.
 drain-auto = Auto
-drain-auto-tooltip = Looks for a drain hole and a vent for each pocket of trapped resin in the picked models, and drills those a new check proves to drain it.
+drain-auto-tooltip = Looks for a drain hole and a vent for each pocket of trapped resin in the selected models, and drills those that a new check confirms let the resin out.
 drain-auto-looking = Looking for drain holes
 drain-hole = Hole
 drain-channel = Channel
@@ -1768,8 +2078,18 @@ notice-delete-profiles = Delete them
 ## panels/stage_notice.rs
 
 notice-cutting-preview = Cutting the layers to preview
+notice-finding-walk = Finding the shortest way along the surface
+notice-drain-reading = Reading the model for its holes and plugs
+notice-drain-drilling = Drilling the holes
+notice-drain-plugs = { $count ->
+    [one] Cutting the plug
+   *[other] Cutting { $count } plugs
+}
+notice-drain-stopped = Stopped: the holes stay, cut approximately, and the new ones get no plug.
 # $step is one of the prepare-step messages: what the run is doing now.
 notice-preparing = Preparing for print: { $step }
+# Moves a paused Prepare for print on to its next step.
+notice-prepare-continue = Continue
 notice-broken-one = { $name } is broken
 notice-broken-several = { $count } models on this plate are broken
 notice-repair = Repair
@@ -1782,6 +2102,14 @@ notice-no-resin-why = Slicing needs exposure times.
 notice-no-printer-why = Slicing needs the screen and the volume of a machine.
 notice-set-up = Set up
 notice-put-away = Put away
+# Over a copy of a plate Encrust kept while it was not saved, from a run that ended without closing.
+notice-recover = The last run ended without saving
+notice-recover-when = Copied { $when }
+# The name of the project file the plate belonged to, and how long ago it was copied.
+notice-recover-of = { $name }, copied { $when }
+notice-recover-restore = Restore
+notice-recover-discard = Discard the copy
+notice-recover-discard-again = Press the cross again to discard
 
 ## project.rs
 
@@ -1789,11 +2117,14 @@ project-save-and-close = Save and close
 project-save-and-new = Save and start a new project
 project-close-without-saving = Close without saving
 project-new-without-saving = Start a new project without saving
+project-save-and-open = Save and open the other project
+project-open-without-saving = Open the other project without saving
 project-cannot-open = cannot open the project { $path }
 project-opened-note = Opened { $path }; { $note }
 project-cannot-draw = cannot draw the project's picture
 project-cannot-write = cannot write the project { $path }
 project-unsaved = This plate has changes that are not in a project file.
+project-recovered = Restored the plate as Encrust last copied it; it is not saved yet.
 project-keep-working = Keep working
 
 ## project/state.rs
@@ -1801,6 +2132,10 @@ project-keep-working = Keep working
 project-missing-printer = the printer { $printer } it names is not among yours, so yours stays
 project-missing-resin = the resin { $resin } it names is not among yours, so yours stays
 project-missing-both = the printer { $printer } and the resin { $resin } it names are not among yours, so yours stay
+
+## autosave.rs
+
+autosave-cannot-write = Could not keep a copy of the unsaved plate: { $reason }
 
 ## panels/section.rs
 
@@ -1841,17 +2176,21 @@ confirm-delete = Delete
 
 ## panels/report.rs
 
-report-nothing-sent = Encrust is in alpha, and a report is how a bug gets fixed. Nothing is sent from here: what you see below stays on this machine until you hand it over yourself.
-report-no-model = Your model is never in the report. Attach it to the issue yourself only if it is yours to share — a small shape that shows the same bug is better for everyone.
 report-what-happened = What happened, and what you expected instead
 report-steps = How to reproduce it
 report-title = Report a problem
+report-stays-here = Nothing is sent from here, and your model is never in the report.
+report-crashed = Encrust closed because of an error last time
+report-crashed-why = Say below what you did just before. The error is already in the report.
+report-include = Add to the report
+report-handed-why = The issue form opened in your browser. If its Report from Encrust field is empty, paste the report there.
+# The tooltip of Open an issue.
+report-open-issue-tooltip = Opens the issue form on GitHub with the report filled in, and copies the report as well
 report-include-profiles = The printer and resin profiles
 report-include-settings = What the tool panels are set to
 report-include-plate = How much stands on the plate
 report-the-report = The report
 report-open-issue = Open an issue
-report-copied-for-issue = The report is on your clipboard: paste it into the issue
 report-copy = Copy the report
 report-copied = The report is on your clipboard
 report-save = Save it as a file
@@ -1972,6 +2311,7 @@ controls-camera = Camera stream
 
 import-opening = Opening { $path }
 import-and-more = { $first }, and { $count } more
+import-cancelled = Opening cancelled
 import-no-extension = { $name } has no file extension
 import-cannot-load = cannot load { $name }
 import-no-vertices = { $name } has no vertices
@@ -2186,6 +2526,7 @@ job-hollow-shaping = Finishing the shell
 job-thread-stopped-import = the import thread stopped without finishing
 import-stage-reading = Reading
 import-stage-repairing = Repairing
+import-stage-surfacing = Surfacing
 import-stage-indexing = Indexing
 import-stage = { $stage } { $name }
 
@@ -2238,6 +2579,16 @@ job-repairing = Repairing { $name }
 arrange-no-footprint = a model on the plate has no footprint to arrange
 arrange-nothing = Nothing visible on the plate to arrange
 arrange-done = Arranged { $count } models
+arrange-cleared =
+    { $count ->
+        [one] Moved { $count } model out of the way
+       *[other] Moved { $count } models out of the way
+    }
+arrange-turned =
+    { $count ->
+        [one] Turned { $count } model to fit the plate
+       *[other] Turned { $count } models to fit the plate
+    }
 arrange-short =
     { $count ->
         [one] Arranged the plate; { $count } model found no room
@@ -2263,15 +2614,15 @@ drain-auto-drilled =
         [one] { $count } hole drilled
        *[other] { $count } holes drilled
     }
-drain-auto-trapped =
+drain-auto-trapped = 
     { $count ->
-        [one] { $count } pocket has no hole that drains it and stays red.
-       *[other] { $count } pockets have no hole that drains them and stay red.
+        [one] { $count } pocket could not be drained and stays red.
+       *[other] { $count } pockets could not be drained and stay red.
     }
-drain-auto-moved =
+drain-auto-moved = 
     { $count ->
-        [one] { $count } model changed while the search ran and got no hole.
-       *[other] { $count } models changed while the search ran and got no hole.
+        [one] { $count } model changed during the search and got no holes.
+       *[other] { $count } models changed during the search and got no holes.
     }
 
 ## exchange.rs
@@ -2384,6 +2735,7 @@ hint-modifier-drag = { $key } drag
 hint-clear = clear
 hint-remove = remove
 hint-paint = paint
+hint-paint-shown = paint what shows
 hint-erase = erase
 hint-measure-two-points = two points
 hint-measure-second-point = the second point
@@ -2396,8 +2748,10 @@ hint-relief-write = a model to write there
 hint-pick-without-writing = pick without writing
 hint-supports-pick = a part of a support to pick it
 hint-supports-carry = carry what is picked
+hint-supports-level = carry across the plate
 hint-supports-add = add to what is picked
 hint-hollow-solid = the model to keep it solid there
+hint-hollow-rod = a rod on from the last blocker
 hint-area-paint = where supports must go
 hint-area-block = where no support may go
 hint-repair-faces = the faces to pick
@@ -2407,3 +2761,7 @@ hint-supports-place = the model to place a support
 hint-supports-line = a line of them
 hint-cut-part = the part to mark
 hint-gizmo-steps = a handle in 1 mm and 15° steps
+
+## panels/send_file.rs
+
+send-file-not-sliced = { $file } is not a sliced file Encrust can send

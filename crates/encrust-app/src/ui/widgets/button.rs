@@ -6,9 +6,11 @@ use egui::{
 use crate::ui::theme;
 use crate::ui::theme::motion;
 
+mod flow;
 mod square;
 mod tile;
 
+pub use flow::{FlowButton, flow_buttons};
 pub(in crate::ui::widgets) use square::paint_square;
 pub use square::{
     RailButton, SquareLook, companion_square, icon_button, icon_toggle, numbered_square,
@@ -55,21 +57,6 @@ pub(super) const DISABLED_GLYPH: f32 = 0.4;
 pub fn secondary_button(ui: &mut Ui, glyph: &str, text: &str) -> Response {
     let size = vec2(ui.available_width(), theme::BUTTON_H);
     filled_button(ui, glyph, text, size, &Skin::raised(), true)
-}
-
-/// The same, off while `why` says why it cannot be used, which its hover then reads.
-pub fn secondary_button_unless(
-    ui: &mut Ui,
-    glyph: &str,
-    text: &str,
-    why: Option<&str>,
-) -> Response {
-    let size = vec2(ui.available_width(), theme::BUTTON_H);
-    let response = filled_button(ui, glyph, text, size, &Skin::raised(), why.is_none());
-    match why {
-        Some(why) => response.on_disabled_hover_text(why),
-        None => response,
-    }
 }
 
 /// A full-width button that stays pressed: washed in the accent while `on`, so a click
@@ -253,16 +240,10 @@ pub fn compact_button(ui: &mut Ui, text: &str, width: f32) -> Response {
 /// The one action a screen is for, in words alone: the tool's glyph already heads the
 /// card. There is never a second one of these in view.
 pub fn primary_button(ui: &mut Ui, text: &str, enabled: bool) -> Response {
-    let colors = theme::colors();
-    let (fill, foreground) = if enabled {
-        (colors.accent, colors.on_accent)
+    let skin = if enabled {
+        Skin::accent()
     } else {
-        (colors.raised, colors.text_low)
-    };
-    let skin = Skin {
-        fill,
-        foreground,
-        ..Skin::accent()
+        Skin::raised_or_off(false)
     };
     let size = vec2(ui.available_width(), theme::PRIMARY_H);
     let face = Face {

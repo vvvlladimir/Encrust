@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use glam::Vec2;
 
 use crate::runs::RunsBuilder;
@@ -40,7 +42,40 @@ impl Edge {
     pub(crate) fn x_at(&self, y: f32) -> f32 {
         (y - self.y_min).mul_add(self.inv_slope, self.x_at_y_min)
     }
+
+    /// The leftmost x the edge reaches between `top` and `bottom`.
+    fn left_in(&self, top: f32, bottom: f32) -> f32 {
+        let (top, bottom) = (top.max(self.y_min), bottom.min(self.y_max));
+        self.x_at(top).min(self.x_at(bottom))
+    }
 }
+
+/// Sorts what is already almost in order: an insertion sort, linear while little moves, that
+/// hands over to a full sort once moves pass `SHIFTS_PER_ITEM` an item.
+pub(crate) fn sort_nearly_sorted<T: Copy, K: PartialOrd>(items: &mut [T], key: impl Fn(&T) -> K) {
+    let mut budget = items.len() * SHIFTS_PER_ITEM;
+    for next in 1..items.len() {
+        let item = items[next];
+        let item_key = key(&item);
+        let mut at = next;
+        while at > 0 && key(&items[at - 1]) > item_key {
+            if budget == 0 {
+                items[at] = item;
+                items.sort_unstable_by(|a, b| {
+                    key(a).partial_cmp(&key(b)).unwrap_or(Ordering::Equal)
+                });
+                return;
+            }
+            budget -= 1;
+            items[at] = items[at - 1];
+            at -= 1;
+        }
+        items[at] = item;
+    }
+}
+
+/// Moves an item may cost `sort_nearly_sorted` on average before a full sort is cheaper.
+const SHIFTS_PER_ITEM: usize = 4;
 
 /// Builds the edge table of a ring of points, closing edge included, sorted by the top
 /// of each edge so the sweep can take them in order.
@@ -111,6 +146,9 @@ impl<'a> Sweep<'a> {
         }
         let edges = self.edges;
         self.active.retain(|&index| edges[index].y_max > top);
+        // Left to right, the deltas they leave come out nearly sorted for `emit_row`.
+        let left = |index: &usize| edges[*index].left_in(top, bottom);
+        sort_nearly_sorted(&mut self.active, left);
 
         self.active.iter().map(move |&index| &edges[index])
     }
@@ -155,7 +193,7 @@ pub(crate) fn emit_row(
     grey: Grey,
     out: &mut RunsBuilder,
 ) {
-    deltas.sort_unstable_by_key(|&(index, _)| index);
+    sort_nearly_sorted(deltas, |&(index, _)| index);
 
     let mut winding = 0.0f32;
     let mut cursor = 0;
@@ -330,5 +368,16 @@ mod tests {
         let mut out = LayerRuns::builder(4, 1);
         emit_row(&mut deltas, 4, 0, Grey::default(), &mut out);
         assert!(deltas.is_empty());
+    }
+
+    #[test]
+    fn far_out_of_order_items_are_sorted_with_none_lost() {
+        let mut items: Vec<u32> = (0..64).rev().collect();
+        sort_nearly_sorted(&mut items, |&item| item);
+        assert_eq!(
+            items,
+            (0..64).collect::<Vec<_>>(),
+            "the full sort takes over intact"
+        );
     }
 }

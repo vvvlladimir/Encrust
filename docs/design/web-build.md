@@ -28,12 +28,16 @@ its origin, so a host that cannot send them still gets an isolated page: on a pa
 not isolated the script waits for the worker to be active and reloads once, and where even
 that fails it says what the host must send. It also keeps every file of the build in a
 cache named for the build, which `cargo xtask web` writes in as the version and a hash of
-the files, with their list, so the window opens offline after the first visit.
+the files, with their list, so the window opens offline after the first visit. The module
+is the exception: the page downloads it once, showing its progress against the size
+`xtask` writes into the page, and puts it into that cache itself (ADR 0399).
 
-A new build installs in the background and takes over once every tab of the old one is
-closed. It cannot take over a running page: that page's threads import the module script
-as they start, and the new script over the old memory would not run. Only the first worker
-takes the page at once, which is what isolates it. `manifest.webmanifest` and the icons
+A new build installs in the background. Before it imports anything, a starting page asks it
+to take over, and it does if that page is the build's only tab, so one reload opens it. It
+never takes over a running page: that page's threads import the module script as they
+start, and the new script over the old memory would not run. With a second tab open, the
+new build waits until the old tabs close. Only the first worker takes the page at once,
+which is what isolates it. `manifest.webmanifest` and the icons
 under `icons/` make the page installable. The top bar carries a Source link to the tag
 the build was made from, which the AGPL asks of a program served over a network.
 
@@ -45,6 +49,10 @@ that prefix and replaces its own Content-Security-Policy there with one allowing
 `'wasm-unsafe-eval'` and the page's inline script, whose hash it takes from each build. A
 build that needs anything more from the page's policy (another origin, `blob:` workers) needs
 that script changed first: `scripts/web-app.mjs` in the site repository.
+
+To fix the site alone, run `release.yml` by hand on the live release's tag with only *web*
+ticked and `web_ref` naming the fixed commit or `main`: it replaces that release's
+`encrust-web.tar.gz`, and the site's sync pins it by its new checksum.
 
 ### How it runs
 
@@ -68,6 +76,25 @@ that script changed first: `scripts/web-app.mjs` in the site repository.
   in memory.
 - **Storage.** Preferences are the `localStorage` entry `encrust.preferences`, and each of
   the user's profiles one entry under `encrust.profiles/`.
+
+### Checking a build
+
+`.github/scripts/web-smoke/smoke.mjs` opens a build in Chromium, drops a cube on it and
+fails unless the window draws it with no shader, GPU or start-up error (ADR 0398). It runs
+before a release attaches the build and on the live site after; locally:
+
+```sh
+cd .github/scripts/web-smoke && npm ci && npx playwright install --no-shell chromium
+node smoke.mjs --dist ../../../target/web/dist    # or --url https://encrust.app/app/run/
+```
+
+A Linux runner has no GPU: the check installs `libvulkan1` and `mesa-vulkan-drivers`, runs
+Chromium with a window under `xvfb-run`, SwiftShader as its adapter and no Vulkan surface.
+Headless, or without either package, the device is lost before the first frame and every
+frame is blank. A failure keeps `chrome://gpu` as `gpu.txt` beside its log.
+
+The desktop's shader compiler accepts WGSL a browser refuses, such as `>>` beside `&`
+without brackets; only this check sees it.
 
 ### What a browser does not have yet
 
