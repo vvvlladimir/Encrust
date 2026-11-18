@@ -922,7 +922,9 @@ the answer carries the window's `window` and what it leaves out as `unshown`;
 (`docs/design/window-link.md`). The server lists itself for the window as an agent, a file in
 `agents/` beside the jobs saying which client drives it, what it runs and the jobs it touched;
 `--agents DIR` moves it, and `--no-window` keeps none (ADR 0465). On starting, the server
-writes its version and these folders to stderr, which a client keeps in its log of it. A revision kept is run on
+writes its version and these folders to stderr, which a client keeps in its log of it. The
+client's name comes from each request's `_meta`, else from its handshake, else is
+`claude-code` where `CLAUDECODE=1` says Claude Code started the server. A revision kept is run on
 the plate only while the window follows its agents; `show_in_window` hands one over marked
 to be shown, starting the window first where none answers — `--app PATH`, else `encrust-gui`
 beside the server, on the `PATH`, or in `/Applications/Encrust.app` — and waiting up to 30 s.
@@ -952,7 +954,8 @@ tool_timeout_sec = 1800
 `list_profiles` reads the catalogue, its printers cut to id, name and volume and filtered by
 `printer_query`; `inspect_model` reads a model. `start_job` takes a model, a printer and a
 resin — ids or TOML paths — and answers with the job and its first revision checked; it
-runs under `--prepare` unless `prepare: false`, so every step no tool sets is the autopilot's.
+runs under `--prepare` when `prepare: true`, so every step no tool sets is the autopilot's,
+and stages the model as its file stands when `prepare: false`; the client must choose.
 A project (`.encrust`) starts as it was saved, with neither `--prepare` nor `--center`, which
 the command line refuses for one; the tools that shape a model are refused for it as those
 flags are, it is set against no autopilot, and the open window is not sent it.
