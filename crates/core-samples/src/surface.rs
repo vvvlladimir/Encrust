@@ -3,8 +3,8 @@
 
 use core_geometry::{Mesh, Vec2, Vec3};
 
-use crate::samples::mark;
-use crate::samples::solid::{EMBED, Solid, rod};
+use crate::mark;
+use crate::solid::{EMBED, Solid, rod};
 
 /// The base, mm.
 const BASE: Vec3 = Vec3::new(46.0, 24.0, 1.5);
@@ -18,7 +18,7 @@ const RAMP_SLOPE: f32 = 5.0;
 const SEGMENTS: u32 = 128;
 const DOME_RINGS: u32 = 32;
 
-pub fn build() -> Mesh {
+pub(crate) fn build() -> Mesh {
     let mut solid = Solid::default();
     solid.cuboid(Vec3::ZERO, BASE);
     let floor = BASE.z - EMBED;

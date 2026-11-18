@@ -4,8 +4,8 @@
 
 use core_geometry::{Mesh, Vec2, Vec3};
 
-use crate::samples::mark;
-use crate::samples::solid::{EMBED, Solid};
+use crate::mark;
+use crate::solid::{EMBED, Solid};
 
 /// The plinth, mm.
 const BASE: Vec3 = Vec3::new(46.0, 24.0, 2.5);
@@ -25,7 +25,7 @@ const PILLAR_X: [f32; 2] = [33.0, 35.0];
 const PILLAR_H: f32 = 11.0;
 const SEGMENTS: u32 = 24;
 
-pub fn build() -> Mesh {
+pub(crate) fn build() -> Mesh {
     let mut solid = Solid::default();
     solid.cuboid(Vec3::ZERO, BASE);
     let floor = BASE.z - EMBED;

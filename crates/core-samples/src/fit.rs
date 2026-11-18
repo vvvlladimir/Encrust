@@ -3,18 +3,18 @@
 
 use core_geometry::{Mesh, Vec2, Vec3};
 
-use crate::samples::mark;
-use crate::samples::solid::{EMBED, Solid, holed_rectangle};
+use crate::mark;
+use crate::solid::{EMBED, Solid, holed_rectangle};
 
 /// The hole's diameter, and how much each pin is under or over it, smallest first, mm.
-pub const HOLE_MM: f32 = 6.0;
-pub const CLEARANCES_MM: [f32; 7] = [-0.30, -0.20, -0.15, -0.10, -0.05, 0.0, 0.10];
+pub(crate) const HOLE_MM: f32 = 6.0;
+pub(crate) const CLEARANCES_MM: [f32; 7] = [-0.30, -0.20, -0.15, -0.10, -0.05, 0.0, 0.10];
 /// The block, mm, and where the hole goes through it.
 const BLOCK: Vec3 = Vec3::new(26.0, 14.0, 5.0);
 const HOLE_AT: Vec2 = Vec2::new(7.0, 7.0);
 /// The shortest pin, mm; each next one stands a millimetre taller so the row can be told apart.
 const PIN_H: f32 = 7.0;
-pub const PIN_PITCH: f32 = 8.0;
+pub(crate) const PIN_PITCH: f32 = 8.0;
 /// The chamfer at a pin's foot, against the first layers spreading, and at its tip, to lead
 /// it into the hole, mm.
 const FOOT_CHAMFER: f32 = 0.4;
@@ -22,7 +22,7 @@ const TIP_CHAMFER: f32 = 0.5;
 /// Fine enough that the facets miss a true circle by under 2 µm.
 const SEGMENTS: u32 = 96;
 
-pub fn build() -> Mesh {
+pub(crate) fn build() -> Mesh {
     let mut solid = Solid::default();
     let (outer, inner) = holed_rectangle(
         Vec2::ZERO,

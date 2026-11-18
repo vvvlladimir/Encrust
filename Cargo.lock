@@ -1217,6 +1217,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-samples"
+version = "0.9.0"
+dependencies = [
+ "core-geometry",
+ "workspace-hack",
+]
+
+[[package]]
 name = "core-slicer"
 version = "0.9.0"
 dependencies = [
@@ -1798,6 +1806,7 @@ dependencies = [
  "core-plate",
  "core-raster",
  "core-recipe",
+ "core-samples",
  "core-slicer",
  "core-supports",
  "core-text",
@@ -1867,6 +1876,7 @@ dependencies = [
  "core-plate",
  "core-raster",
  "core-recipe",
+ "core-samples",
  "core-slicer",
  "core-supports",
  "core-text",
