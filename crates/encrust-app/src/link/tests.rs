@@ -266,3 +266,24 @@ fn a_revision_the_user_asks_for_is_read_from_the_servers_jobs_and_shown() {
         "a revision not kept is said, not shown"
     );
 }
+
+#[test]
+fn a_second_job_of_the_same_model_takes_the_first_ones_place_on_the_plate() {
+    let file = scratch("same-model");
+    let mut bench = Bench::new(file.clone());
+    assert_eq!(
+        bench.hand_over(&file, line(&file, 1, &hollowing(1.5))),
+        json!({"shown": true})
+    );
+    bench.run_to_end();
+    let mut second = line(&file, 1, &hollowing(2.5));
+    second["job"] = json!("cube-2");
+    assert_eq!(bench.hand_over(&file, second), json!({"shown": true}));
+    bench.run_to_end();
+    assert_eq!(
+        bench.wall_mm(),
+        Some(2.5),
+        "one model, run by the second job"
+    );
+    assert_eq!(bench.machine.agents.on_plate, ["cube-2"]);
+}

@@ -43,7 +43,9 @@ recipe step says, which the window leaves out.
 
 ## What the window does with it
 
-What follows is what the window does with a revision it shows (see Following). The first revision of a job reads its model in, as Open does; a model taken off the plate is
+What follows is what the window does with a revision it shows (see Following). The first revision of a job reads its model in, as Open does, unless another job of the
+same model file is followed: the new job takes that one's place, so a model stands on the
+plate once however many jobs an agent starts on it; a model taken off the plate is
 read in again for the job's next revision. Each revision then puts the model back as it came
 in, takes away what the last run left beside it — plugs, say — puts the window on the job's
 printer and resin, and starts Prepare for print by the revision's recipe on that model. The
