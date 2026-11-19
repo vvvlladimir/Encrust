@@ -500,3 +500,19 @@ Done: C13a–c (with a followed window a revision of edits is checked on its pla
 Open: supports sized `auto` as an edit (needs the machine's sizing in the Document), a
 cavity's inside, merges, shown-at strokes; C10b; C2b; C12; C14; `Only.sized` in
 encrust-app/src/supports/start.rs is always false now and can go.
+
+## Round 3 (2026-11-19): items 1–8 of the remaining list
+
+### R8. A hollow at precision 1.0 keeps far too much
+Fact: a 20 mm cube hollowed with a 2 mm internal wall (core-document's `shelled`, the window's
+  path: `cavity_field` + `carve`) keeps 4058 mm³ at precision 0.5, 3981 at 0.75, ~3962 at 0.85
+  and 0.9, but 5575 at 1.0 (closed form 20³ − 16³ = 3904). Something goes wrong at the fine end.
+Read: `crates/core-volume/src/hollow.rs` (`lattice_mm`, `COARSE_LATTICE_MM`, `FINE_LATTICE_MM`,
+  the surface cap of ADR 0083), the field and carve code it calls, `crates/core-document/src/hollow/tests.rs`
+Do: find why (a cap that coarsens instead, a lattice that no longer fits the wall, a cavity
+  dropped piece by piece…), with a failing test first in core-volume: the 20 mm cube at
+  precision 1.0 keeps 3904 within the lattice's error (state it). Fix it in core-volume. If the
+  cause is a deliberate rule (ADR 0083) and 5575 is what the rule means, stop and report with
+  the numbers instead of changing it.
+Done when: that test passes, the existing hollow tests pass, core-document's hollow test can use
+  precision 1.0 with a tighter tolerance (change its comment and numbers).
