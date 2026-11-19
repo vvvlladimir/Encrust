@@ -1,5 +1,6 @@
 //! The tools a client sees, each one or two runs of the command line over a job's revision.
 
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
@@ -30,6 +31,7 @@ use crate::window::Window;
 mod after;
 mod asked;
 mod library;
+mod on_plate;
 mod plate_edits;
 mod poses;
 mod reply;
@@ -352,9 +354,10 @@ impl Server {
             let old = self.jobs.open(&revert.job, Some(revert.revision))?;
             let latest = self.jobs.open(&revert.job, None)?;
             let against = self.jobs.against(&revert.job, Some(latest.number));
-            let (outcome, steps) = self.checked(&old.recipe, &against, &ctx).await?;
+            let (outcome, steps, plate) = self.checked(&old.recipe, &against, &ctx).await?;
             let kept = (old.recipe, steps);
             let revision = self.jobs.commit(&revert.job, kept, &outcome.report)?;
+            self.keep_plate(&revision, plate);
             Ok(self.kept(&revision, &outcome, None).await)
         };
         Ok(answer(reverted.await))
@@ -453,7 +456,7 @@ impl Server {
             }
             recipe.prepare = false;
         }
-        let (outcome, steps) = self.checked(&recipe, &[], ctx).await?;
+        let (outcome, steps, plate) = self.checked(&recipe, &[], ctx).await?;
         if !outcome.reported() {
             return Ok(not_applied(None, &outcome));
         }
@@ -475,6 +478,7 @@ impl Server {
         let job = Jobs::name_for(&recipe);
         let note = recipe.is_project().then_some(PROJECT);
         let revision = self.jobs.commit(&job, (recipe, steps), &outcome.report)?;
+        self.keep_plate(&revision, plate);
         if let Some(autopilot) = &autopilot {
             self.jobs.keep_autopilot(&job, autopilot)?;
         }
@@ -500,31 +504,54 @@ impl Server {
         };
         recipe.check_paths()?;
         let against = self.jobs.against(job, Some(latest.number));
-        let (outcome, steps) = self.checked(&recipe, &against, ctx).await?;
+        let asked = (&latest, recipe, note.as_deref());
+        let recipe = match self.edit_on_plate(asked, &against, ctx).await {
+            Ok(reply) => return reply,
+            Err(recipe) => *recipe,
+        };
+        let (outcome, steps, plate) = self.checked(&recipe, &against, ctx).await?;
         if !outcome.reported() {
             return Ok(not_applied(Some(&latest), &outcome));
         }
         let revision = self.jobs.commit(job, (recipe, steps), &outcome.report)?;
+        self.keep_plate(&revision, plate);
         Ok(self.kept(&revision, &outcome, note.as_deref()).await)
     }
 
-    /// A check of `recipe` and the steps it ran, as the command line wrote them out.
+    /// A check of `recipe` and the steps it ran, as the command line wrote them out, and the
+    /// plate it left where it only places its model (ADR 0466).
     async fn checked(
         &self,
         recipe: &Recipe,
         against: &[String],
         ctx: &Context,
-    ) -> Result<(Outcome, Option<String>)> {
+    ) -> Result<(Outcome, Option<String>, Option<PathBuf>)> {
         let out = self.jobs.scratch_steps()?;
         let mut args = vec!["estimate".to_owned()];
         args.extend(recipe.flags());
         args.extend(against.iter().cloned());
         args.push(format!("--recipe-out={}", out.display()));
+        let plate = if recipe.only_places() {
+            Some(self.jobs.scratch_plate()?)
+        } else {
+            None
+        };
+        if let Some(plate) = &plate {
+            args.push(format!("--project-out={}", plate.display()));
+        }
         let outcome = self.watched(&args, ctx).await?;
         let steps = std::fs::read_to_string(&out).ok();
         // A scratch file left behind is overwritten by no other run: its name is this run's.
         let _ = std::fs::remove_file(&out);
-        Ok((outcome, steps))
+        Ok((outcome, steps, plate.filter(|plate| plate.is_file())))
+    }
+
+    /// Keeps the plate a check wrote as the revision's; a revision without one is built on by
+    /// its recipe.
+    fn keep_plate(&self, revision: &Revision, plate: Option<PathBuf>) {
+        if let Some(plate) = plate {
+            let _ = (self.jobs).keep_plate(&revision.job, revision.number, &plate);
+        }
     }
 
     /// The answer for a revision just kept: what the open window, if any, said of running its
