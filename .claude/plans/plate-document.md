@@ -516,3 +516,32 @@ Do: find why (a cap that coarsens instead, a lattice that no longer fits the wal
   the numbers instead of changing it.
 Done when: that test passes, the existing hollow tests pass, core-document's hollow test can use
   precision 1.0 with a tighter tolerance (change its comment and numbers).
+
+### S5. Supports sized automatically, under a cavity, off what shows (items 1 and 3)
+Read: `crates/core-document/src/supports.rs` (+tests), `crates/core-engine/src/stand.rs`
+  (`SupportPlan::sized`, `SupportShapes::Sized`, `plan.cavity`, `plan.shown_at`, `ShownAt`),
+  `crates/core-engine/src/stand/needs.rs`, `crates/encrust-cli/src/profiles.rs` (`plan_of`,
+  `auto_plan`), `crates/printer-profiles/src/{auto.rs,catalogue.rs}`, `crates/core-engine/src/project.rs`
+  (`SupportState::sizing`, `AutoSizing`), `crates/encrust-app/src/link/plate.rs` (the Supports arm),
+  `crates/encrust-app/src/supports/start.rs`
+Touch: those, `crates/core-edit/src/edit.rs` (+tests), `docs/design/document.md`, `docs/cli.md`
+Edit: `Supports` gains `cavity: bool` (the inside of a hollow wall held up too, as `--support-cavity`)
+  and `shown_at: Vec<ShownAt>` (strokes of the side meant to be seen, as the plan's), both
+  defaulting off/empty; `profile: Some("auto")` is now taken.
+`auto`: the plate's own automatic profile where its `SupportState::sizing` keeps one, else the
+  shipped catalogue's first, as `--supports auto` takes the catalogue's; built by
+  `SupportPlan::sized` against the shipped catalogue (`Catalogue` with no user folder — find
+  how printer-profiles builds it). The window's link arm for `auto` sizes the run as the panel's
+  Auto does (`sized: true` for it alone; a named preset stays `sized: false`).
+cavity: the inside side placed and strengthened as `needs_under` does it (S1's `placed_on` /
+  `strengthened_on`), the inside's needs in the same group; the window arm runs the panel's
+  inside pass for the object.
+shown_at: the plan's `shown_at`, so `needs_on` takes the shown faces from the strokes as the
+  engine does where the object has no painted shown region; the painted one wins where it has.
+Done when: `auto` on the 10 mm cube lifted 5 mm grows trees (tips > 0, contacts on z 5 ± 1e-3);
+  a 20 mm cube hollowed with a 2 mm wall and lifted, with `cavity`, has contacts inside the cavity
+  (some contact's z above 7 ± 1e-3, the cavity's ceiling at 5 + 18); a stroke over the underside's
+  middle leaves fewer contacts within its radius than without it (the counts stated); a window
+  link test of `auto`. Existing tests pass; `NoProfile("auto")`'s test becomes one for an unknown
+  name.
+Not now: merges (no client asks them), MCP (orchestrator).
