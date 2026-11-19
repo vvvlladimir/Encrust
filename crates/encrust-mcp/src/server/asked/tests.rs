@@ -1,5 +1,5 @@
 use super::*;
-use crate::recipe::{Cut, Drains, Hollow};
+use crate::recipe::{Cut, Drains, Hollow, Supports};
 
 const MODEL: ObjectId = ObjectId(3);
 
@@ -141,4 +141,21 @@ fn a_scale_taken_back_is_no_edit_and_leaves_the_revision_to_be_shown() {
         ..Modelling::default()
     });
     assert_eq!(asked_edits(&bare(), &earlier, MODEL), None);
+}
+
+#[test]
+fn supports_by_a_preset_are_an_edit_and_the_automatic_sizing_is_not_yet() {
+    let by = |profile: &str| Recipe {
+        supports: Some(Supports {
+            profile: profile.into(),
+            ..Supports::default()
+        }),
+        ..bare()
+    };
+    let asked = asked_edits(&by("medium"), &bare(), MODEL).expect("a preset is an edit");
+    assert!(
+        matches!(asked.as_slice(), [Edit::Supports { .. }]),
+        "{asked:?}"
+    );
+    assert_eq!(asked_edits(&by("auto"), &bare(), MODEL), None);
 }

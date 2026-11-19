@@ -1116,10 +1116,12 @@ the job's printer and resin, whenever the window was opened. With Follow agents 
 step an agent keeps is run on the plate as it comes; asked to show you the model, the agent
 puts it on the plate itself, opening Encrust if it is closed. Followed, the window owns the
 plate: a repair, faces mended, a picture pressed in, a scale, a turn typed, a label, a split,
-a cut, a hollow or a hole drilled at a point an agent makes lands there as an edit of the model
+a cut, a hollow, a hole drilled at a point or supports by a named preset an agent makes lands
+there as an edit of the model
 on it, one undo each, and the agent's next step is checked on the plate as you left it, so
-what you changed or undid there is part of it. Supports,
-the engine's drain search, plugs and a pose the search picked still reach it by the recipe;
+what you changed or undid there is part of it. Supports
+sized automatically, the engine's drain search, plugs and a pose the search picked still reach
+it by the recipe;
 the answer names what was left out. It asks what the print is for and can prepare it by
 another recipe, such as Miniatures; it can be told which side of the model is looked at, so
 the supports there are sparser and lighter. A way of preparing that worked, or one you
