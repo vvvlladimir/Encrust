@@ -2,24 +2,26 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use core_geometry::{Bvh, Mesh, Region, Scalar, Transform, Vec3, transform_mesh};
-use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
+use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
 use core_supports::{
-    Blocked, Lost, Need, Placed, Profiles, Reason, Shown, SupportPoint, WallSide, columns,
-    generate_supports, grow, lost, low_points, mesh_groups,
+    Lost, Need, Placed, Profiles, Reason, Shown, SupportPoint, WallSide, columns, grow, lost,
+    low_points, mesh_groups,
 };
 use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
 
 use crate::error::EngineError;
-use crate::strengthen::{Underside, strengthen};
 
 mod lift;
 mod merge;
+mod needs;
 
 use lift::lift_of;
 pub use lift::{Lift, planned_lift};
 pub(crate) use merge::merge_refusal;
 use merge::merged_near;
+pub use needs::{NeedsAsked, needs_on, plan_of};
+use needs::{placed_on, strengthened_on};
 
 /// What a run builds supports to: one profile, or the shapes an automatic profile sizes
 /// each support into by what it holds (ADR 0325).
@@ -376,37 +378,48 @@ fn needs_under(
         )
         .map_err(EngineError::Supports)?;
     let shown = shown_on(surface, bvh, &plan.shown_at);
-    let run = Run {
+    let lows = low_points(surface, Transform::default());
+    let inner = inner.filter(|inner| !inner.is_empty());
+    let asked = |inside| NeedsAsked {
         stack: &stack,
         surface,
         bvh,
         layer_height_mm,
         plan,
-        lows: low_points(surface, Transform::default()),
+        lows: &lows,
+        painted: None,
         shown: shown.as_ref(),
-    };
-    let inner = inner.filter(|inner| !inner.is_empty());
-    let side = |inside| {
-        inner.clone().map(|inner| WallSide {
+        seeds: &[],
+        side: inner.clone().map(|inner| WallSide {
             bvh: Arc::clone(bvh),
             inner,
             into_model: core_geometry::Mat4::IDENTITY,
             inside,
-        })
+        }),
+    };
+    let place = |inside| {
+        let mut asked = asked(inside);
+        let blocked = asked.blocked();
+        placed_on(&asked, blocked.as_ref(), &mut |_| true)
+    };
+    let strengthen = |inside, needs: &mut Vec<Need>, held: &[Vec3]| {
+        let mut asked = asked(inside);
+        let blocked = asked.blocked();
+        strengthened_on(&asked, blocked.as_ref(), needs, held, &mut || true)
     };
     let (mut needs, mut inside) = (Vec::new(), Vec::new());
     if !plan.by_hand.only {
-        needs = run.place(side(false));
+        needs = place(false);
         if plan.cavity && inner.is_some() {
-            inside = run.place(side(true));
+            inside = place(true);
         }
     }
     if strengthening {
         // Both sides hold the one shell, so each is read with the other's tips standing.
         let contacts = |needs: &[Need]| needs.iter().map(|need| need.contact).collect::<Vec<_>>();
-        run.strengthen(side(false), &mut needs, &contacts(&inside))?;
+        strengthen(false, &mut needs, &contacts(&inside))?;
         if !inside.is_empty() {
-            run.strengthen(side(true), &mut inside, &contacts(&needs))?;
+            strengthen(true, &mut inside, &contacts(&needs))?;
         }
     }
     needs.extend(inside);
@@ -430,57 +443,6 @@ fn shown_on(surface: &Mesh, bvh: &Bvh, shown_at: &[ShownAt]) -> Option<Shown> {
         region.brush(on, stroke.at_mm, stroke.radius_mm, true);
     }
     Shown::new(surface, &region, Transform::default())
-}
-
-/// One cut stack and what placement on it is asked with.
-struct Run<'a> {
-    stack: &'a Sliced,
-    surface: &'a Mesh,
-    bvh: &'a Bvh,
-    layer_height_mm: Scalar,
-    plan: &'a SupportPlan,
-    lows: Vec<Vec3>,
-    shown: Option<&'a Shown>,
-}
-
-impl Run<'_> {
-    /// What automatic placement touches, kept to `side` of the wall where there is one.
-    fn place(&self, side: Option<WallSide>) -> Vec<Need> {
-        let blocked = Blocked::keeping(None, side.clone());
-        let mut needs = generate_supports(
-            self.stack,
-            self.layer_height_mm,
-            &self.plan.placing(),
-            self.plan.sizing(),
-            &[],
-            &self.lows,
-            blocked.as_ref(),
-            self.shown,
-            &mut |_| true,
-        );
-        if let Some(side) = side {
-            needs.retain(|need| side.keeps(need.contact));
-        }
-        needs
-    }
-
-    /// Strengthens `needs`, placed on `side` of the wall, with `held` standing beside them.
-    fn strengthen(
-        &self,
-        side: Option<WallSide>,
-        needs: &mut Vec<Need>,
-        held: &[Vec3],
-    ) -> Result<(), EngineError> {
-        let blocked = Blocked::keeping(None, side);
-        let underside = Underside {
-            stack: self.stack,
-            layer_mm: self.layer_height_mm,
-            surface: self.surface,
-            bvh: self.bvh,
-            blocked: blocked.as_ref(),
-        };
-        strengthen(underside, needs, held, self.plan, &mut || true).map(|_| ())
-    }
 }
 
 /// Stands `mesh` and what is cut out of it `lift_mm` clear of the plate, and answers how
