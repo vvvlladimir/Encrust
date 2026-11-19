@@ -19,6 +19,17 @@ const DRAIN_DEPTH_MM: f32 = 3.0;
 /// The edits `recipe` asks beyond `earlier` of `object`, in the order they are made; `None`
 /// where something changed that no edit carries yet, so the revision is shown as before.
 pub fn asked_edits(recipe: &Recipe, earlier: &Recipe, object: ObjectId) -> Option<Vec<Edit>> {
+    asked_after_check(recipe, earlier, object, None)
+}
+
+/// [`asked_edits`], a pose the search picked taken as the turn `chosen_deg` its check chose
+/// (the report's `oriented.rotate_deg`); without one such a pose is no edit.
+pub fn asked_after_check(
+    recipe: &Recipe,
+    earlier: &Recipe,
+    object: ObjectId,
+    chosen_deg: Option<[f32; 3]>,
+) -> Option<Vec<Edit>> {
     if !plate_alike(recipe, earlier) {
         return None;
     }
@@ -38,8 +49,10 @@ pub fn asked_edits(recipe: &Recipe, earlier: &Recipe, object: ObjectId) -> Optio
         object,
     )?);
     if recipe.pose != earlier.pose {
-        let Some(Pose::Rotate { degrees }) = recipe.pose else {
-            return None;
+        let degrees = match recipe.pose {
+            Some(Pose::Rotate { degrees }) => degrees,
+            Some(Pose::Search { .. }) => chosen_deg?,
+            None => return None,
         };
         // A turn goes after a scale and before a label, which is laid where the model stands.
         let at = asked.iter().position(|edit| {
