@@ -545,3 +545,49 @@ Done when: `auto` on the 10 mm cube lifted 5 mm grows trees (tips > 0, contacts 
   link test of `auto`. Existing tests pass; `NoProfile("auto")`'s test becomes one for an unknown
   name.
 Not now: merges (no client asks them), MCP (orchestrator).
+
+### D2. The engine's drain search, channels and plugs by edits (item 2)
+Read: `crates/core-engine/src/drains.rs` (`DrainSearch`, `suggest_drains_heard`, `Drained`,
+  `HoleRole`), `crates/encrust-cli/src/hollowing/auto.rs` and `hollowing.rs` (`placed` for
+  `--channel`, `plugs_beside`, `cut_plugs`), `crates/encrust-app/src/job/{drains.rs,plugs.rs}`,
+  `crates/encrust-app/src/drain.rs` (`drill_found`, `finish_channels`) and `drain/plugs.rs`,
+  `crates/core-document/src/{drain.rs,apply.rs}`, `crates/core-volume` (`Channel`, plugs)
+Touch: those you need, `crates/core-edit/src/edit.rs` (+tests), `crates/core-document/src/drain.rs`
+  (split into `drain/` files if it passes ~400 code lines), `crates/core-document/src/{lib.rs,error.rs}`,
+  `crates/encrust-app/src/link/plate.rs` (+ test), `docs/design/document.md`, `docs/cli.md`
+Edits (each one moved computation, no copy):
+- `Drain` gains `auto: bool` and `vent: bool`: with `auto`, the engine's search
+  (`suggest_drains_heard`, cancel through the `Cancel`) on the object as it stands, the holes it
+  proves added to the object's hollow, a vent per pocket where `vent`. The CLI's `--drain-at auto`
+  and the window's search land through the same core-document function.
+- `Channel { object, points_mm: Vec<Vec3>, diameter_mm }`: a drainage channel along the plate
+  points, as `--channel` lays one; added to the object's hollow channels.
+- `Plugs { object, gap_mm }`: a plug for each of the object's drain holes, laid beside it as
+  new objects (`plug_of` naming it), as `--drain-plugs` and the window's Drain tool lay them;
+  `Role::Plug(n)`.
+Window: the link's arms (helpers) run the window's own search job / channel / plugs job for the
+  object, under way until each lands.
+Errors: `Cancelled`; no cavity to drain → `ApplyError::NoCavity(ObjectId)`; others `Failed`.
+Done when: a 20 mm cube hollowed with a 2 mm wall, `Drain { auto }` gets at least one hole whose
+  mouth is on the cube's surface (± 1e-3) and no resin left trapped (`trapped_in` reports none);
+  a solid cube → `NoCavity`; `Channel` adds one channel of the points given; `Plugs` on a cube
+  with two holes adds two plug objects naming it; window link tests of each. Existing tests pass.
+Not now: holes into the supports (`support_at_mm`), MCP (orchestrator).
+
+### A1. Arrange by an edit (item 4)
+Read: `crates/encrust-app/src/arrange.rs` (+ `arrange/turn.rs`), `crates/core-plate/src/arrange.rs`
+  (`arrange`, `Footprint`, `PlateArea`, `ArrangeSettings`), `crates/encrust-cli/src/stage/room.rs`
+  (`spread_pieces`), `crates/core-document/src/{apply.rs,plate_contents.rs}`
+Touch: those you need, `crates/core-edit/src/edit.rs` (+tests), new `crates/core-document/src/arrange.rs`
+  (+ tests), `crates/core-document/src/lib.rs`, `crates/encrust-app/src/link/plate.rs` (+ test),
+  `docs/design/document.md`, `docs/cli.md`
+Edit: `Arrange { plate_mm: [Scalar; 2], clearance_mm: Scalar }` — every printable object of the
+  active plate spread over a plate of that size, each with its supports' footprint, turned the
+  least where no slide fits, as the window's Arrange does; the window's footprint and pack steps
+  move into core-document (`arrange_plate`'s computation, not its `Status`), the window keeps
+  only its message. `Report::Arranged { placed, left_out }`.
+Done when: four 10 mm cubes stacked at the origin, arranged on a 100 × 100 plate with 2 mm
+  clearance, leave no two footprints closer than 2 mm (± 1e-3) and all inside the plate; five
+  50 mm cubes on that plate leave some out (`left_out` named); a window link test. Existing
+  arrange tests pass.
+Not now: MCP (orchestrator).
