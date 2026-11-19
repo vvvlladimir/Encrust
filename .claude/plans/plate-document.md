@@ -433,3 +433,26 @@ Cards, in order, each green on its own:
   `ObjectSupportState`; the window link's arm starts the support tool's job for that object.
 - S4: MCP: `asked.rs` hands supports over; docs and the `support-lab` baseline commit.
 Best started in a fresh session: each card needs the window's support tests read closely.
+
+### S1. One way to find where a model needs holding up (no behaviour change)
+Read: `crates/core-engine/src/stand.rs` (`needs_under`, `Run`, `Run::place`, `Run::strengthen`,
+  `shown_on`), `crates/encrust-app/src/job/place.rs` (`SupportTask`, `needs_of`, `plan_of`),
+  `crates/core-supports` (`generate_supports`, `Blocked`, `Shown`, `WallSide`, `Need`),
+  `crates/core-engine/src/strengthen.rs`
+Touch: those two files, new `crates/core-engine/src/stand/needs.rs` (+ its tests if any), `crates/core-engine/src/lib.rs`
+Move: `Run::place` + `Run::strengthen` and the window's `needs_of` body become one public
+  core-engine function in `stand/needs.rs`, roughly
+  `needs_on(asked: &NeedsAsked<'_>, held: &[Vec3], tick: &mut dyn FnMut(usize) -> bool) -> Result<Vec<Need>, EngineError>`
+  where `NeedsAsked { stack, surface (placed), bvh, layer_height_mm, plan: &SupportPlan,
+  lows: &[Vec3], painted: Option<Blocked>, shown: Option<&Shown>, seeds: &[Vec3],
+  side: Option<WallSide> }`: `generate_supports` with `Blocked::keeping(painted, side)`, the
+  seeds kept by the side, the needs kept by the side, then `strengthen` with `held` standing.
+  `tick(layer)` answers whether to go on (the window's cancel and progress; the engine passes
+  `|_| true`). `plan_of` moves beside it as `SupportPlan::sized(profile, sizing)` (or a free fn).
+  `needs_under` calls `needs_on` for the outside and the inside as it does now; the window's
+  `needs_of` builds the stack, the painted `Blocked`, `Shown` and seeds as now and calls it.
+Done when: nothing changes — every existing test passes unchanged: `cargo test -p core-engine`,
+  `cargo test -p encrust-app --lib job::place` and `--lib supports`, `cargo test -p encrust-cli
+  --test cli support`. No test is edited. `generate_supports` and `strengthen` are each called
+  from one place in core-engine and nowhere in encrust-app (`git grep`).
+Not now: growth (S2), the edit (S3).
