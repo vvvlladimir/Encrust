@@ -104,8 +104,11 @@ it is tested and improved by prints rather than by prompts.
 MCP 2026-07-28 is stateless: no session, any request on any instance. A call therefore
 names its job, a directory in the user's cache of numbered revisions, each a TOML file —
 the model, printer, resin and each step's settings — that becomes `encrust` flags, and
-beside it the `core-recipe` its check ran, which the window runs (ADR 0459). An
-editing tool writes the next revision and checks it; `revert` copies an old one forward;
+beside it the `core-recipe` its check ran. With the window followed, the window owns the plate
+(ADR 0466): a revision whose every change is an edit is checked on the window's plate and kept
+as that plate and its edits (`N.encrust`, `N.edits.json`), and handed to the window as edits,
+so what the user did there is in the next check; any other revision the window runs by its
+recipe (ADR 0459). An editing tool writes the next revision and checks it; `revert` copies an old one forward;
 `report_print` appends what a print did. The cost: each check stages the model again from
 its file (ADR 0455). The connector keeps the same revisions in the page's own state, never
 on the server.
@@ -121,7 +124,7 @@ merge kept main's, renumbered the branch's own after 0454 and left out what no l
 | a job's TOML "recipe" | `core-recipe`'s recipe | each revision keeps the `core-recipe` its check ran (ADR 0459) |
 | `--keep-solid X,Y,Z` | `--keep-solid` with blockers fitted to the model (0396) | main's; the branch's flag dropped |
 | `keep_clear_at_mm` points | painted `Shown` faces (0410, 0425), window only | both stand: kept clear for the search, painted for the supports (ADR 0460) |
-| the window replaying each revision | Prepare for print rebuilt on recipes | step 8 again: the window runs the revision's recipe (ADR 0459) |
+| the window replaying each revision | Prepare for print rebuilt on recipes, then one plate edited by one apply | step 8 again: the window takes a revision as edits of the plate it owns, and runs by its recipe only what no edit carries yet (ADR 0459, 0466) |
 
 Main also brings what the tools gain without new code: Check's issues located and fixed by
 the `fix-issues` recipe, cups vented by their thinnest wall, necks held by their stress, one
@@ -235,7 +238,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 5–7 | The stdio server and its jobs, its tools and `.mcpb`, the bench | `encrust-mcp`, `encrust-cli` (done, ADR 0455, 0456) | — |
 | 11 | Poses offered and chosen, places kept clear, each check compared, a judge; supports by hand | (done, ADR 0457, 0458) | 6, 7 |
 | 12 | Merge main | (done) | — |
-| 8 | The open window runs each revision's recipe as Prepare for print | `encrust-cli`, `encrust-mcp`, `encrust-app` (done, ADR 0459) | 12 |
+| 8 | The open window owns the plate: a revision reaches it as edits, the rest by its recipe | `core-edit`, `core-document`, `encrust-cli`, `encrust-mcp`, `encrust-app` (done, ADR 0459, 0466, 0468) | 12 |
 | 13 | The side meant to be seen painted from the command line, `--shown-at X,Y,Z[:R]` | `core-engine`, `encrust-cli`, `encrust-mcp` (done, ADR 0460) | 12 |
 | 14 | Recipes chosen by purpose: `list_recipes`, `use_recipe`, the instructions ask what the print is for | `encrust-mcp` (done, ADR 0460) | 12 |
 | 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0460); a resin from a label's numbers by `create_resin` (done, ADR 0464) | 12 |
