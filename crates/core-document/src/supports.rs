@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use core_edit::{Edit, ObjectId};
+use core_edit::{AUTO, Edit, ObjectId};
 use core_engine::project::{AutoSizing, Group, ModelMeshes, ObjectState, inner_faces, supports_of};
 use core_engine::{NeedsAsked, ShownAt, SupportPlan, needs_on_both, plan_of, shown_on};
 use core_geometry::{Bvh, Mat4, Mesh, Transform, Vec3, transform_mesh};
@@ -25,9 +25,6 @@ pub(crate) struct SupportsAsked<'a> {
     pub cavity: bool,
     pub shown_at: &'a [ShownAt],
 }
-
-/// The profile name that sizes each support by what it holds, as `--supports auto`.
-pub const AUTO: &str = "auto";
 
 impl<'a> SupportsAsked<'a> {
     /// What `edit` asks, or `None` for an edit that is not `Supports`.
@@ -111,6 +108,42 @@ pub(crate) fn apply_supports(
         added: Vec::new(),
         report,
     })
+}
+
+/// The meshes of the supports under object `id` where it stands, plate mm, columns and raft.
+pub(crate) fn standing_meshes(document: &Document, id: ObjectId) -> Vec<Arc<Mesh>> {
+    let Some((state, meshes)) = document.object(id) else {
+        return Vec::new();
+    };
+    if state.supports.points.is_empty() {
+        return Vec::new();
+    }
+    let plate = document.support_state();
+    let table = table_of(state, &plate.groups, plate.raft);
+    let surface = meshes.printed();
+    let bvh = Bvh::build(surface);
+    let drains = &state.hollow.drains;
+    let (source, transform) = (&meshes.source, state.transform);
+    supports_of(
+        &state.supports,
+        drains,
+        source,
+        surface,
+        &bvh,
+        transform,
+        &table,
+    )
+    .every_mesh()
+    .cloned()
+    .collect()
+}
+
+/// The profile the plate's active group builds `state` to, which an orientation is judged by.
+pub(crate) fn active_profile(document: &Document, state: &ObjectState) -> Option<SupportProfile> {
+    let plate = document.support_state();
+    let table = table_of(state, &plate.groups, plate.raft);
+    let active = table.get(usize::from(plate.active)).or(table.first());
+    active.cloned()
 }
 
 /// The profiles of `groups` as `state` is built to them: its own where it keeps any, on its raft.

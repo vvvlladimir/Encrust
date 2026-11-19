@@ -12,6 +12,7 @@ authors.workspace = true
 doctest = false
 
 [dependencies]
+core-edit.workspace = true
 core-engine.workspace = true
 core-geometry.workspace = true
 core-plate.workspace = true

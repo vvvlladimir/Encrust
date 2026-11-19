@@ -1,8 +1,6 @@
 use std::path::Path;
 
-use core_geometry::Vec2;
-
-use crate::drain::DrainTool;
+use crate::drain::land_ended;
 use crate::files::{Arrived, Handed, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -319,16 +317,11 @@ impl SlicerApp {
     /// Lays the plugs a worker has cut into the edit that asked for them. Returns whether
     /// any is still being cut.
     fn land_plugs(&mut self) -> bool {
-        let status = &mut self.machine.status;
-        let plate_mm = Vec2::new(self.doc.plate.x_mm, self.doc.plate.y_mm);
-        for ended in self.tools.drain.plugs_to_land(&self.doc.drilling) {
-            self.doc
-                .history
-                .land(&mut self.doc.scene, ended.asked_by(), |scene| {
-                    DrainTool::land_plugs(scene, &ended, plate_mm, status);
-                });
-        }
-        self.tools.drain.laying_plugs()
+        land_ended(
+            &mut self.doc,
+            &mut self.tools.drain,
+            &mut self.machine.status,
+        )
     }
 
     /// The supports drawn as they would be sliced: see [`crate::growth::refresh_supports`].

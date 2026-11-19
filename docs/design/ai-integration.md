@@ -58,7 +58,7 @@ a crate of its own when the window's panel or the connector needs it too.
 | `set_pose` | the orientation search, one of its ways or a turn; places kept clear; clears the drains | `--orient`, `--orient-pick`, `--orient-keep-clear`, `--rotate` | edits |
 | `compare_poses` | the search's best ways, each with what it prints and drawn | `estimate --orient-choices`, `render --orient-pick` | read |
 | `set_hollow` | the wall, infill, open floor | `--hollow` and its flags | edits |
-| `set_drains` | holes at plate points, plugs | `--drain`, `--drain-at` | edits |
+| `set_drains` | holes at plate points or by the search, channels, plugs | `--drain`, `--drain-at` | edits |
 | `set_supports` | a profile or auto, the cavity too | `--supports` | edits |
 | `check` | a revision as it would print | `estimate --check-drainage` | read |
 | `revert` | an earlier revision made the latest again | — | edits |

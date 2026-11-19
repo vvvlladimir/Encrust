@@ -3,10 +3,11 @@
 
 use anyhow::Result;
 use clap::ValueEnum;
+use core_document::preset_named;
 use core_engine::{Hollowing, PREPARE_REPAIR, SupportPlan};
 use core_geometry::{Mat3, Scalar, Transform, Vec3};
 use core_plate::{Asked, OrientSettings};
-use core_recipe::{Metric, StepKind, preset_of};
+use core_recipe::{Metric, StepKind};
 use core_volume::HollowSettings;
 
 use super::piece::Piece;
@@ -47,7 +48,7 @@ pub(super) fn run(
 /// already under it are taken off.
 fn orient(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
     let asked = Asked {
-        preset: text(settings, "goal").map_or(OrientSettings::default().preset, preset_of),
+        preset: text(settings, "goal").map_or(OrientSettings::default().preset, preset_named),
         clean_surface: flag(settings, "clean_surface").unwrap_or(false),
     };
     let asked = (

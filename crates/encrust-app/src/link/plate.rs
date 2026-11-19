@@ -6,14 +6,15 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use core_document::{
-    AUTO, ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, boolean_of, hole_near,
-    mirrored, moved, part_settings, sized_to, turned_to,
+    ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, boolean_of, mirrored, moved,
+    part_settings, sized_to, turned_to,
 };
-use core_edit::{Edit, ObjectId, Op};
+use core_edit::{AUTO, Edit, ObjectId, Op};
 use core_engine::ShownAt;
 use core_engine::project::HollowState;
 use core_geometry::{Mesh, Region, Transform, Vec3};
-use core_volume::{HoleKind, HoleSize, PartSettings, RepairMethod};
+use core_volume::PartSettings;
+use core_volume::RepairMethod;
 use printer_profiles::SupportProfile;
 use serde_json::{Value, json};
 
@@ -22,6 +23,14 @@ use crate::panels::Window;
 use crate::repair::RepairState;
 use crate::scene::Scene;
 use crate::supports::{Only, Side};
+
+mod arrange;
+mod drain;
+mod orient;
+
+use arrange::start_arrange;
+use drain::{start_channel, start_drain, start_plugs};
+use orient::{stand_pick, start_orient};
 
 /// Edits being applied one after another, each a job of the tool that carries it out.
 #[derive(Debug)]
@@ -34,6 +43,9 @@ pub struct Applying {
     /// The object whose cavity a supports edit holds up once its outside run has landed, and
     /// whether that run is sized by the automatic profile.
     inside: Option<(ObjectId, bool)>,
+    /// The object whose orient search, once landed, is stepped to the pose asked for, and its
+    /// number from 0.
+    picking: Option<(ObjectId, usize)>,
 }
 
 fn refused(why: String) -> Value {
@@ -97,6 +109,7 @@ pub fn start(
         reply,
         under_way: None,
         inside: None,
+        picking: None,
     })
 }
 
@@ -114,6 +127,11 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
         && !(may_stay && !window.machine.status.is_error())
     {
         let why = window.machine.status.text();
+        return finish(applying, refused(why));
+    }
+    if let Some((object, pick)) = work.picking.take()
+        && let Err(why) = stand_pick(window, object, pick)
+    {
         return finish(applying, refused(why));
     }
     if let Some((object, sized)) = work.inside.take() {
@@ -135,12 +153,18 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
             | Edit::Mend { .. }
             | Edit::Relief { .. }
             | Edit::Hollow { .. }
+            | Edit::Drain { .. }
             | Edit::Supports { .. }
+            | Edit::Orient { .. }
     );
     match start_edit(&edit, window) {
         Ok(id) => {
             work.under_way = id.map(|id| (id, may_stay));
             work.inside = inside_pass_of(&edit);
+            work.picking = match edit {
+                Edit::Orient { object, pick, .. } => Some((object, pick)),
+                _ => None,
+            };
             true
         }
         Err(why) => finish(applying, refused(why)),
@@ -157,6 +181,9 @@ fn tool_is_busy(window: &Window) -> bool {
         || window.tools.relief.is_busy()
         || window.tools.hollow.job.is_some()
         || window.tools.supports.job.is_some()
+        || window.tools.drain.auto.is_some()
+        || window.tools.drain.laying_plugs()
+        || window.tools.orient.is_running()
 }
 
 fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
@@ -166,9 +193,8 @@ fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
     false
 }
 
-/// Carries `edit` out: a cut, combine, label, repair, mend, relief, hollow or supports run
-/// starts a tool job, answering the object it replaces; any other edit is made at once,
-/// answering `None`.
+/// Carries `edit` out: one that runs a tool job answers the object it replaces, any other is
+/// made at once and answers `None`.
 fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, String> {
     match *edit {
         Edit::Cut {
@@ -216,8 +242,18 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             ref at_mm,
             size,
             kind,
-        } => start_drain(window, object, at_mm, (size, kind)),
+            auto,
+            vent,
+        } => start_drain(window, object, at_mm, (size, kind), (auto, vent)),
+        Edit::Channel {
+            object,
+            ref points_mm,
+            diameter_mm,
+        } => start_channel(window, object, points_mm, diameter_mm),
+        Edit::Plugs { object, gap_mm } => start_plugs(window, object, gap_mm),
         Edit::Supports { object, .. } => start_supports(window, edit, object),
+        Edit::Arrange { .. } => start_arrange(window, edit),
+        Edit::Orient { .. } => start_orient(window, edit),
         Edit::Move { object, by_mm } => {
             place(window, object, |transform, _| Ok(moved(transform, by_mm)))
         }
@@ -358,30 +394,6 @@ fn start_hollow(
         return Err("a hollowing is already under way".to_owned());
     }
     Ok(Some(object))
-}
-
-/// Drills a hole into the surface of `object` nearest each of `at_mm` at once, answering
-/// `None`; the window's drilling job cuts them on its next frame.
-fn start_drain(
-    window: &mut Window,
-    object: ObjectId,
-    at_mm: &[Vec3],
-    (size, kind): (HoleSize, HoleKind),
-) -> Result<Option<ObjectId>, String> {
-    let model = (window.doc.scene.get_mut(object)).ok_or_else(|| no_object(object))?;
-    let inverse = (model.transform.inverse_matrix())
-        .ok_or_else(|| ApplyError::BadTransform(object).to_string())?;
-    let mut holes = Vec::with_capacity(at_mm.len());
-    for plate in at_mm {
-        let own = inverse.transform_point3(*plate);
-        let near = (own, Vec3::ZERO);
-        let hole = hole_near(&model.mesh, &model.bvh, near, (size, kind), object);
-        holes.push(hole.map_err(|error| error.to_string())?);
-    }
-    for hole in holes {
-        model.hollow.add_hole(hole);
-    }
-    Ok(None)
 }
 
 /// Stands a support at the surface nearest each of the edit's points at once, in the group of

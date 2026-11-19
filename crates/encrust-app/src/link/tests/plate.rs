@@ -234,6 +234,136 @@ fn a_drain_drills_a_hole_into_the_cube_at_once_and_keeps_its_id() {
 }
 
 #[test]
+fn an_auto_drain_searches_a_hollow_cube_and_keeps_the_id() {
+    let file = scratch("drain-auto");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let state = HollowState {
+        thickness_mm: 1.0,
+        ..bench.tools.hollow.state.clone()
+    };
+    let both = json!({"base_version": version,
+        "apply": [{"edit": "hollow", "object": cube.0, "settings": state},
+                  {"edit": "drain", "object": cube.0, "auto": true, "vent": true}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, both));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("a drain keeps the id");
+    assert!(
+        !object.hollow.drains().is_empty(),
+        "the search drilled holes"
+    );
+}
+
+#[test]
+fn an_auto_drain_on_a_solid_cube_is_refused_for_want_of_a_cavity() {
+    let file = scratch("drain-solid");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let drain = json!({"base_version": version,
+        "apply": [{"edit": "drain", "object": cube.0, "auto": true}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, drain));
+
+    assert_eq!(reply["applied"], false, "{reply}");
+}
+
+#[test]
+fn a_channel_digs_one_channel_of_the_points_given() {
+    let file = scratch("channel");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let channel = json!({"base_version": version,
+        "apply": [{"edit": "channel", "object": cube.0, "diameter_mm": 2.0,
+                   "points_mm": [[2.0, 5.0, 5.0], [8.0, 5.0, 5.0]]}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, channel));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("a channel keeps the id");
+    let [dug] = object.hollow.channels() else {
+        panic!("one channel, got {:?}", object.hollow.channels());
+    };
+    assert_eq!(dug.points.len(), 2);
+}
+
+#[test]
+fn plugs_for_two_holes_stand_as_two_objects_naming_the_cube() {
+    let file = scratch("plugs");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let plugs = json!({"base_version": version,
+        "apply": [{"edit": "drain", "object": cube.0,
+                   "at_mm": [[3.0, 5.0, 10.5], [7.0, 5.0, 10.5]]},
+                  {"edit": "plugs", "object": cube.0, "gap_mm": 0.1}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, plugs));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let laid = (bench.doc.scene.objects().iter())
+        .filter(|object| object.plug_of == Some(cube))
+        .count();
+    assert_eq!(laid, 2, "a plug for each hole");
+}
+
+#[test]
+fn an_arrange_spreads_two_stacked_cubes_apart_on_the_plate_it_names() {
+    let file = scratch("arrange");
+    let mut bench = Bench::new(file.clone());
+    let first = with_cube(&mut bench);
+    let second = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let spread = json!({"base_version": version,
+        "apply": [{"edit": "arrange", "plate_mm": [100.0, 100.0], "clearance_mm": 2.0}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, spread));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let at = |id| {
+        bench
+            .doc
+            .scene
+            .get(id)
+            .and_then(|object| object.world_bounds())
+    };
+    let (one, two) = (at(first).expect("kept"), at(second).expect("kept"));
+    let apart = (one.mins.x - two.maxs.x)
+        .max(two.mins.x - one.maxs.x)
+        .max((one.mins.y - two.maxs.y).max(two.mins.y - one.maxs.y));
+    assert!(
+        apart >= 2.0 - 1e-3,
+        "the cubes keep 2 mm apart, got {apart}"
+    );
+}
+
+#[test]
+fn an_arrange_of_a_model_with_no_surface_is_refused() {
+    let file = scratch("arrange-empty");
+    let mut bench = Bench::new(file.clone());
+    let mesh = core_geometry::Mesh::default();
+    let summary = ImportSummary::made(diagnose(&mesh));
+    let imported = Imported::new("none".into(), Arc::new(mesh), Transform::default(), summary);
+    bench.doc.scene.insert(imported);
+    bench.run_to_end();
+    let version = bench.doc.history.plate_version();
+    let spread = json!({"base_version": version,
+        "apply": [{"edit": "arrange", "plate_mm": [100.0, 100.0], "clearance_mm": 2.0}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, spread));
+
+    assert_eq!(reply["applied"], false, "{reply}");
+}
+
+#[test]
 fn supports_at_a_point_alone_stand_one_contact_on_the_surface_and_keep_the_id() {
     let file = scratch("supports-at");
     let mut bench = Bench::new(file.clone());
@@ -525,4 +655,54 @@ fn a_label_on_the_version_it_was_built_on_raises_text_from_the_cube() {
         volume > 1_001.0,
         "the letter adds to the 1000 mm³ cube; got {volume}"
     );
+}
+
+/// A 10 x 10 x 30 mm bar standing on its end.
+fn with_bar(bench: &mut Bench) -> ObjectId {
+    let mesh = cuboid(Vec3::ZERO, Vec3::new(10.0, 10.0, 30.0));
+    let summary = ImportSummary::made(diagnose(&mesh));
+    let imported = Imported::new("bar".into(), Arc::new(mesh), Transform::default(), summary);
+    let id = bench.doc.scene.insert(imported);
+    bench.run_to_end();
+    id
+}
+
+fn orient_of(object: ObjectId, base_version: u64, pick: usize) -> Value {
+    json!({"base_version": base_version,
+           "apply": [{"edit": "orient", "object": object.0, "goal": "shortest-print",
+                      "pick": pick}]})
+}
+
+#[test]
+fn an_orient_lays_a_bar_standing_on_its_end_for_the_shortest_print_and_keeps_the_id() {
+    let file = scratch("orient");
+    let mut bench = Bench::new(file.clone());
+    let bar = with_bar(&mut bench);
+    let version = bench.doc.history.plate_version();
+
+    let reply = bench.hand_over_running(&file, asking(&file, orient_of(bar, version, 0)));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let bounds = (bench.doc.scene.get(bar))
+        .and_then(|object| object.world_bounds())
+        .expect("the bar keeps its id");
+    let height = bounds.maxs.z - bounds.mins.z;
+    assert!(
+        height <= 10.0 + 1e-3,
+        "the 30 mm lies along the plate: {height}"
+    );
+}
+
+#[test]
+fn an_orient_asking_for_a_pose_the_search_did_not_find_is_answered_with_why() {
+    let file = scratch("orient-past");
+    let mut bench = Bench::new(file.clone());
+    let bar = with_bar(&mut bench);
+    let version = bench.doc.history.plate_version();
+
+    let reply = bench.hand_over_running(&file, asking(&file, orient_of(bar, version, 10_000)));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], false, "{reply}");
 }

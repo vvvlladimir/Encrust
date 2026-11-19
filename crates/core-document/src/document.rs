@@ -20,6 +20,9 @@ pub struct ImportedModel {
     pub summary: Summary,
 }
 
+/// Each object an edit made, with what it is to the one it came from.
+type Added = Vec<(ObjectId, Role)>;
+
 /// The plate as `.encrust` holds it, every object with an id of its own.
 #[derive(Debug)]
 pub struct Document {
@@ -72,6 +75,15 @@ impl Document {
             &self.project.manifest.objects[index],
             &self.project.models[index],
         ))
+    }
+
+    /// Every object of the active plate that is not hidden, in plate order.
+    pub(crate) fn printable(&self) -> Vec<ObjectId> {
+        let active = self.project.manifest.active_plate;
+        (self.project.manifest.objects.iter())
+            .filter(|object| object.visible && object.plate == active)
+            .map(|object| object.id)
+            .collect()
     }
 
     /// Puts `pieces` where object `id` stood, on its plate, each a new object named after
@@ -182,6 +194,34 @@ impl Document {
         let state = &mut self.project.manifest.objects[index].supports;
         state.points = points;
         state.grown = grown;
+    }
+
+    /// Lays `plugs` (plate coordinates) as new objects on `id`'s plate in place of those laid
+    /// before; answers their ids and those taken off, or `None` if `id` is not on the plate.
+    pub(crate) fn lay_plugs(
+        &mut self,
+        id: ObjectId,
+        plugs: Vec<Piece>,
+    ) -> Option<(Vec<ObjectId>, Added)> {
+        self.index_of(id)?;
+        let removed = self.take_plugs_of(id);
+        let index = self.index_of(id)?;
+        let old = self.project.manifest.objects[index].clone();
+        let mut added = Vec::with_capacity(plugs.len());
+        for piece in plugs {
+            let plug = ObjectId(self.next_id);
+            self.next_id += 1;
+            added.push((plug, piece.role));
+            let mut state = new_object(plug, &old, &piece);
+            state.plug_of = u32::try_from(index).ok();
+            let meshes = ModelMeshes {
+                source: Arc::new(piece.mesh),
+                shell: None,
+            };
+            let end = self.project.manifest.objects.len();
+            self.put_at(end, state, meshes);
+        }
+        Some((removed, added))
     }
 
     /// Takes the plugs laid for object `id` off the plate, answering their ids.
@@ -311,6 +351,7 @@ fn name_of(name: &str, role: Role) -> String {
         Role::Upper => format!("{name} (upper)"),
         Role::Dowel(index) => format!("{name} dowel {index}"),
         Role::Part(index) => format!("{name} (part {index})"),
+        Role::Plug(index) => format!("{name} plug {index}"),
     }
 }
 

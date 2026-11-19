@@ -30,6 +30,8 @@ pub enum Role {
     Part(usize),
     /// The one object a combination made, which keeps the first's name.
     Combined,
+    /// A plug for a hole of the object, counted from one by the hole.
+    Plug(usize),
 }
 
 impl Piece {

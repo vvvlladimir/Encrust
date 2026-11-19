@@ -507,6 +507,12 @@ impl ModelHollow {
         true
     }
 
+    /// Digs `channel`, model space, as one laid out by its points would be.
+    pub fn add_channel(&mut self, channel: Channel) {
+        self.channels.push(channel);
+        self.recut();
+    }
+
     pub fn clear_channels(&mut self) {
         self.channels.clear();
         self.pending.clear();

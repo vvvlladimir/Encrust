@@ -367,7 +367,8 @@ plate and offered beside the first, and with a printer what its trial printed: `
 `supports_ml`, `resin_ml`, `layers`, `stack_mm`, `pull_n`, `islands`, `suction_cups`, `peels`
 and `overflows`, on the coarse stack a trial cuts, to compare them by. `--orient-pick N`
 stands the model the Nth way instead of the first, and a pick past the ways found fails the
-run. `--orient-keep-clear X,Y,Z`, repeated, keeps supports off the surface near each point,
+run.
+`--orient-keep-clear X,Y,Z`, repeated, keeps supports off the surface near each point,
 given in plate mm as the model stood turned by `--orient-keep-clear-turn X,Y,Z` (none when
 left out) and centred on z = 0: with a printer, the sound poses whose supports touch fewest
 points within `--orient-keep-clear-radius` (4 mm) are ranked first, and a pose with a cup, a
@@ -631,15 +632,25 @@ into the object as `--relief-image` does, only into its painted faces where any 
 its supports and cavity, and keeps its plugs; `hollow` (`object`, and `settings` as the Hollow
 panel keeps them: `thickness_mm`, `mode` of `internal` or `external`, `precision`, `infill_on`,
 `infill`, and optional `open_floor`, `solid_under_mm`) hollows the object by them, which it keeps as
-its own, and keeps its supports; `drain` (`object`, `at_mm`, a list of `[x, y, z]`, and optional
-`size` and `kind`) drills a hole into the surface nearest each point as `--drain-at` does, a point
-nearest an edge or corner being refused, and leaves the shell to be cut when it is baked;
+its own, and keeps its supports; `drain` (`object`, and optional `at_mm`, a list of `[x, y, z]`,
+`size`, `kind`, `auto` and `vent`, on unless set false) drills a hole into the surface nearest each point as `--drain-at`
+does, a point nearest an edge or corner being refused, and leaves the shell to be cut when it is
+baked; `auto` then adds the holes the engine proves drain every pocket of the cavity, as
+`--drain-at auto`, with a vent on each pocket where `vent`, and an object with no cavity is
+refused; `channel` (`object`, `points_mm`, a list of `[x, y, z]`, and optional `diameter_mm`, 2 mm)
+digs a channel along the points as `--channel` does; `plugs` (`object`, optional `gap_mm`, 0.15 mm) lays a plug for each of the
+object's holes in a row beside it, as `--drain-plugs`, in place of those laid before;
+`orient` (`object`, and optional `goal`, `max_tilt_deg`, `clean_surface` and `pick` from 0) runs
+`--orient`'s search with no trial print and stands the object the `pick`th way;
 `supports` (`object`, and optional `profile`, a shipped support preset, `at_mm`, a list of
 `[x, y, z]`, `only_at`, `cavity` and `shown_at`) stands supports under the object by the preset,
 the plate's active group's where unset, and a contact at the surface nearest each point; with
 `only_at` those contacts alone. `auto` sizes each support by what it holds, as `--supports auto`;
 `cavity` holds up a hollow object's cavity too, as `--support-cavity`; `shown_at`, a list of
-`{"at_mm": [x, y, z], "radius_mm": r}`, marks the side meant to be seen, as `--shown-at`.
+`{"at_mm": [x, y, z], "radius_mm": r}`, marks the side meant to be seen, as `--shown-at`;
+`arrange` (`plate_mm`, `[x, y]`, and `clearance_mm`) spreads every visible object of the active
+plate over a plate that size, each with its supports, turning one no slide fits, as the window's
+Arrange does; objects with no room are left where they are and named in the report.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json

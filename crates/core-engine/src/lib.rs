@@ -33,7 +33,7 @@ pub use held::{
 pub use open::{Machine, Opening, open_plate};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
-pub use prepare::{Hollowing, PREPARE_ORIENT, PREPARE_REPAIR, hollowing, needs_repair};
+pub use prepare::{Hollowing, PREPARE_REPAIR, hollowing, needs_repair};
 pub use run::{QUICK_CHECK_BIN, Run};
 pub use stand::{
     ByHand, Lift, NeedsAsked, ShownAt, Stood, SupportPlan, SupportShapes, ToStand, needs_on,

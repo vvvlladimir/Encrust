@@ -1,15 +1,17 @@
 use core_edit::{Edit, ObjectId};
 use core_engine::project::hollow_of;
-use core_geometry::{Mesh, Scalar, Transform};
+use core_geometry::{Mesh, Scalar, Transform, Vec3};
 use core_volume::Cancel;
 
+use crate::arrange::apply_arrange;
 use crate::combine::apply_combine;
 use crate::cut::{CutAsked, CutModel, cut, pieces};
 use crate::document::Document;
-use crate::drain::apply_drain;
+use crate::drain::apply_drains;
 use crate::error::ApplyError;
 use crate::hollow::apply_hollow;
 use crate::label::{LabelAsked, apply_label};
+use crate::orient::apply_orient;
 use crate::piece::Role;
 use crate::placement::{moved, sized_to, turned_to};
 use crate::plate_contents::{delete, duplicate, mirrored};
@@ -87,6 +89,17 @@ pub enum Report {
     Drained {
         /// Holes put in; one an earlier hole takes in adds none.
         holes: usize,
+        /// Pockets of resin still trapped once the search's holes were in; 0 without a search.
+        trapped: usize,
+    },
+    /// A channel was dug through an object.
+    Channelled,
+    /// Plugs were laid beside an object for its holes.
+    Plugged {
+        /// Plugs laid, one for each hole the gap left open.
+        plugs: usize,
+        /// Holes the gap closed at the mouth, which got none.
+        closed: usize,
     },
     /// Supports were stood under an object.
     Supported {
@@ -97,6 +110,18 @@ pub enum Report {
     },
     /// An object was moved, turned or sized where it stands.
     Placed,
+    /// The plate's objects were spread over it.
+    Arranged {
+        /// Objects standing clear of one another on the plate.
+        placed: usize,
+        /// Objects that found no room, left where they were.
+        left_out: Vec<ObjectId>,
+    },
+    /// An object was stood the way it prints best.
+    Oriented {
+        /// The turn it now stands at, degrees about X, then Y, then Z of the plate.
+        rotate_deg: Vec3,
+    },
     /// An object was deleted or copied.
     Contents,
 }
@@ -153,31 +178,51 @@ pub fn apply(
             object,
             ref settings,
         } => apply_hollow(document, object, settings, cancel),
-        Edit::Drain {
-            object,
-            ref at_mm,
-            size,
-            kind,
-        } => apply_drain(document, object, at_mm, (size, kind)),
+        Edit::Drain { object, .. } | Edit::Channel { object, .. } | Edit::Plugs { object, .. } => {
+            apply_drains(document, edit, object, cancel)
+        }
         Edit::Supports { object, .. } => {
             let asked = SupportsAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
             apply_supports(document, object, &asked, cancel)
         }
-        Edit::Move { object, by_mm } => {
-            place(document, object, |transform, _| Ok(moved(transform, by_mm)))
+        Edit::Arrange {
+            plate_mm,
+            clearance_mm,
+        } => apply_arrange(document, plate_mm, clearance_mm),
+        Edit::Orient {
+            object,
+            goal,
+            max_tilt_deg,
+            clean_surface,
+            pick,
+        } => {
+            let asked = (goal, max_tilt_deg, clean_surface, pick);
+            apply_orient(document, object, asked, cancel)
         }
-        Edit::Rotate { object, degrees } => place(document, object, |transform, mesh| {
-            Ok(turned_to(transform, mesh, degrees))
-        }),
-        Edit::Scale { object, factors } => place(document, object, |transform, mesh| {
-            sized_to(transform, mesh, factors).ok_or(ApplyError::BadScale(object))
-        }),
+        Edit::Move { object, .. }
+        | Edit::Rotate { object, .. }
+        | Edit::Scale { object, .. }
+        | Edit::Mirror { object, .. } => apply_placement(document, object, edit),
         Edit::Delete { object } => delete(document, object),
         Edit::Duplicate { object, offset_mm } => duplicate(document, object, offset_mm),
-        Edit::Mirror { object, axis } => place(document, object, |transform, mesh| {
-            Ok(mirrored(transform, mesh, axis))
-        }),
     }
+}
+
+/// Moves, turns, sizes or mirrors object `id` as `edit` says; any other edit leaves it be.
+fn apply_placement(
+    document: &mut Document,
+    id: ObjectId,
+    edit: &Edit,
+) -> Result<Applied, ApplyError> {
+    place(document, id, |transform, mesh| match *edit {
+        Edit::Move { by_mm, .. } => Ok(moved(transform, by_mm)),
+        Edit::Rotate { degrees, .. } => Ok(turned_to(transform, mesh, degrees)),
+        Edit::Scale { factors, .. } => {
+            sized_to(transform, mesh, factors).ok_or(ApplyError::BadScale(id))
+        }
+        Edit::Mirror { axis, .. } => Ok(mirrored(transform, mesh, axis)),
+        _ => Ok(transform),
+    })
 }
 
 /// Sets the transform of `id` to what `to` makes of it and the object's own mesh.

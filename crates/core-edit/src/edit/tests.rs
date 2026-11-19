@@ -259,6 +259,8 @@ fn a_drain_written_by_hand_defaults_its_size_and_kind() {
         at_mm,
         size,
         kind,
+        auto,
+        vent,
     }) = parsed
     else {
         panic!("a drain with its points is an edit: {parsed:?}");
@@ -267,6 +269,69 @@ fn a_drain_written_by_hand_defaults_its_size_and_kind() {
     assert_eq!(at_mm.len(), 1);
     assert_eq!(size, core_volume::HoleSize::default());
     assert_eq!(kind, core_volume::HoleKind::Drain);
+    assert!(!auto, "the search runs only when asked for");
+    assert!(vent, "a vent is laid unless it is left out on purpose");
+}
+
+#[test]
+fn a_searching_drain_written_by_hand_vents_by_default() {
+    let text = r#"{"edit":"drain","object":2,"auto":true}"#;
+    let parsed: Edit = serde_json::from_str(text).expect("a searching drain needs no points");
+    assert!(matches!(
+        parsed,
+        Edit::Drain {
+            auto: true,
+            vent: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn a_channel_and_plugs_written_by_hand_take_the_usual_sizes() {
+    let channel: Edit = serde_json::from_str(r#"{"edit":"channel","object":2,"points_mm":[]}"#)
+        .expect("a channel needs no diameter");
+    let plugs: Edit =
+        serde_json::from_str(r#"{"edit":"plugs","object":2}"#).expect("plugs need no gap");
+    assert!(
+        matches!(channel, Edit::Channel { diameter_mm, .. } if diameter_mm == core_volume::CHANNEL_DIAMETER_MM)
+    );
+    assert!(matches!(plugs, Edit::Plugs { gap_mm, .. } if gap_mm == core_volume::PLUG_GAP_MM));
+}
+
+#[test]
+fn a_searching_drain_needs_no_points_and_a_channel_and_plugs_read_back() {
+    let drain: Edit = serde_json::from_str(r#"{"edit":"drain","object":2,"auto":true}"#)
+        .expect("a drain that searches needs no points");
+    assert!(matches!(drain, Edit::Drain { auto: true, ref at_mm, .. } if at_mm.is_empty()));
+    for edit in [
+        Edit::Channel {
+            object: ObjectId(2),
+            points_mm: vec![Vec3::ZERO, Vec3::new(5.0, 0.0, 1.0)],
+            diameter_mm: 2.0,
+        },
+        Edit::Plugs {
+            object: ObjectId(2),
+            gap_mm: 0.1,
+        },
+    ] {
+        let text = serde_json::to_string(&edit).expect("an edit serialises");
+        let back: Edit = serde_json::from_str(&text).expect("what was written reads");
+        assert_eq!(back, edit);
+    }
+}
+
+#[test]
+fn an_arrange_reads_back_with_its_plate_and_clearance() {
+    let text = r#"{"edit":"arrange","plate_mm":[100.0,80.0],"clearance_mm":2.0}"#;
+    let parsed: Edit = serde_json::from_str(text).expect("an arrange names its plate");
+    assert_eq!(
+        parsed,
+        Edit::Arrange {
+            plate_mm: [100.0, 80.0],
+            clearance_mm: 2.0,
+        }
+    );
 }
 
 #[test]
@@ -290,4 +355,30 @@ fn supports_written_by_hand_default_to_the_active_group_and_no_points() {
     assert!(!only_at);
     assert!(!cavity, "the cavity is held only when asked");
     assert!(shown_at.is_empty());
+}
+
+#[test]
+fn an_orient_written_by_hand_defaults_to_auto_and_the_first_pose() {
+    let text = r#"{"edit":"orient","object":2}"#;
+    let parsed: Edit = serde_json::from_str(text).expect("an orient names its object");
+    assert_eq!(
+        parsed,
+        Edit::Orient {
+            object: ObjectId(2),
+            goal: OrientAim::Auto,
+            max_tilt_deg: None,
+            clean_surface: false,
+            pick: 0,
+        }
+    );
+}
+
+#[test]
+fn every_aim_is_written_as_the_word_that_names_it() {
+    for (word, aim) in OrientAim::WORDS {
+        let written = serde_json::to_string(&aim).expect("an aim serialises");
+        assert_eq!(written, format!("\"{word}\""));
+        assert_eq!(OrientAim::named(word), aim);
+    }
+    assert_eq!(OrientAim::named("whatever"), OrientAim::Auto);
 }

@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
 use core_edit::Edit;
-use core_engine::project::load;
-use core_geometry::Mesh;
-use core_volume::Cancel;
+use core_engine::project::{HollowState, load};
+use core_engine::{Baked, trapped_in};
+use core_geometry::{Mesh, transform_mesh};
+use core_volume::{Cancel, HollowMode, InfillSettings};
 
 use super::*;
 use crate::apply::apply;
-use crate::fixtures::cube;
+use crate::fixtures::{cube, cube_of};
+use crate::piece::Role;
 
 const CUBE: ObjectId = ObjectId(1);
 
@@ -17,6 +19,8 @@ fn drain_at(at_mm: Vec3) -> Edit {
         at_mm: vec![at_mm],
         size: HoleSize::default(),
         kind: HoleKind::default(),
+        auto: false,
+        vent: false,
     }
 }
 
@@ -31,7 +35,13 @@ fn a_point_over_the_top_face_drills_a_hole_down_into_it() {
     )
     .expect("a point over the top face drains");
 
-    assert_eq!(applied.report, Report::Drained { holes: 1 });
+    assert_eq!(
+        applied.report,
+        Report::Drained {
+            holes: 1,
+            trapped: 0
+        }
+    );
     let (state, _) = document.object(CUBE).expect("the cube stays");
     let [hole] = state.hollow.drains[..] else {
         panic!("one hole was drilled, got {:?}", state.hollow.drains);
@@ -125,4 +135,217 @@ fn a_transform_that_cannot_be_inverted_is_bad_and_leaves_the_cube() {
     .expect_err("a flat object has no inverse");
 
     assert_eq!(error, ApplyError::BadTransform(CUBE));
+}
+
+fn hollowed_cube() -> Document {
+    let mut document = Document::from_project(cube_of(20.0));
+    let walled = Edit::Hollow {
+        object: CUBE,
+        settings: HollowState {
+            thickness_mm: 2.0,
+            mode: HollowMode::Internal,
+            precision: 1.0,
+            infill_on: false,
+            infill: InfillSettings::default(),
+            open_floor: false,
+            solid_under_mm: None,
+        },
+    };
+    apply(&mut document, &walled, Cancel::never()).expect("a 20 mm cube takes a 2 mm wall");
+    document
+}
+
+fn searching() -> Edit {
+    Edit::Drain {
+        object: CUBE,
+        at_mm: Vec::new(),
+        size: HoleSize::default(),
+        kind: HoleKind::default(),
+        auto: true,
+        vent: true,
+    }
+}
+
+#[test]
+fn a_search_drains_a_hollow_cube_through_holes_open_on_its_surface() {
+    let mut document = hollowed_cube();
+
+    let applied = apply(&mut document, &searching(), Cancel::never())
+        .expect("a hollow cube has a cavity to drain");
+
+    assert!(
+        matches!(applied.report, Report::Drained { holes, trapped: 0 } if holes >= 1),
+        "at least one hole and no pocket left trapped, got {:?}",
+        applied.report
+    );
+    let (state, meshes) = document.object(CUBE).expect("the cube stays");
+    for hole in &state.hollow.drains {
+        let on_surface = [hole.at.x, hole.at.y, hole.at.z]
+            .iter()
+            .any(|axis| axis.abs() < 1e-3 || (axis - 20.0).abs() < 1e-3);
+        assert!(
+            on_surface,
+            "a mouth is on a face of the cube within 1e-3, got {}",
+            hole.at
+        );
+    }
+    let mut solid = meshes.printed().as_ref().clone();
+    let cuts = hollow_of(&state.hollow, meshes);
+    solid.append(&transform_mesh(
+        cuts.cut_bodies().expect("the holes are cut"),
+        state.transform,
+    ));
+    let baked = Baked {
+        solid: solid.into(),
+        ceiling_mm: 20.0,
+        floor_mm: 0.0,
+    };
+    let left = trapped_in(&baked, 0.05, |_, _| true).expect("the cube slices");
+    assert_eq!(left, Some(Vec::new()), "no resin is left trapped");
+}
+
+#[test]
+fn a_search_on_a_solid_cube_has_no_cavity_to_drain() {
+    let mut document = Document::from_project(cube());
+
+    let error = apply(&mut document, &searching(), Cancel::never())
+        .expect_err("a solid cube traps nothing");
+
+    assert_eq!(error, ApplyError::NoCavity(CUBE));
+}
+
+#[test]
+fn a_search_given_up_is_cancelled_and_leaves_the_cube_undrilled() {
+    let mut document = hollowed_cube();
+
+    let stopped = || true;
+    let error = apply(&mut document, &searching(), Cancel::when(&stopped))
+        .expect_err("a stopped search lands nothing");
+
+    assert_eq!(error, ApplyError::Cancelled);
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    assert!(state.hollow.drains.is_empty());
+}
+
+#[test]
+fn a_channel_adds_one_channel_of_the_points_given() {
+    let mut document = Document::from_project(cube());
+    let points_mm = vec![Vec3::new(2.0, 5.0, 5.0), Vec3::new(8.0, 5.0, 5.0)];
+    let edit = Edit::Channel {
+        object: CUBE,
+        points_mm: points_mm.clone(),
+        diameter_mm: 2.0,
+    };
+
+    let applied = apply(&mut document, &edit, Cancel::never()).expect("a channel is dug");
+
+    assert_eq!(applied.report, Report::Channelled);
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    let [channel] = &state.hollow.channels[..] else {
+        panic!("one channel, got {:?}", state.hollow.channels);
+    };
+    assert_eq!(channel.points, points_mm);
+    assert!((channel.diameter_mm - 2.0).abs() < 1e-6);
+}
+
+#[test]
+fn plugs_for_two_holes_are_two_objects_naming_the_cube() {
+    let mut document = Document::from_project(cube());
+    let mut holes = drain_at(Vec3::new(3.0, 5.0, 10.5));
+    if let Edit::Drain { at_mm, .. } = &mut holes {
+        at_mm.push(Vec3::new(7.0, 5.0, 10.5));
+    }
+    apply(&mut document, &holes, Cancel::never()).expect("two holes drill");
+
+    let edit = Edit::Plugs {
+        object: CUBE,
+        gap_mm: 0.1,
+    };
+    let applied = apply(&mut document, &edit, Cancel::never()).expect("the plugs are cut");
+
+    assert_eq!(
+        applied.report,
+        Report::Plugged {
+            plugs: 2,
+            closed: 0
+        }
+    );
+    let roles: Vec<Role> = applied.added.iter().map(|(_, role)| *role).collect();
+    assert_eq!(roles, [Role::Plug(1), Role::Plug(2)]);
+    for (plug, _) in &applied.added {
+        let (state, meshes) = document.object(*plug).expect("a plug stands on the plate");
+        assert_eq!(
+            state.plug_of,
+            Some(0),
+            "a plug names the cube, the first object"
+        );
+        assert!(!meshes.source.is_empty());
+    }
+    let again = apply(&mut document, &edit, Cancel::never()).expect("laid again");
+    assert_eq!(
+        again.added.len(),
+        2,
+        "plugs laid again replace those before"
+    );
+    let before: Vec<ObjectId> = applied.added.iter().map(|(id, _)| *id).collect();
+    assert_eq!(
+        again.removed, before,
+        "the plugs laid before are reported gone"
+    );
+    assert!(document.object(before[0]).is_none());
+}
+
+fn plugs_edit() -> Edit {
+    Edit::Plugs {
+        object: CUBE,
+        gap_mm: 0.1,
+    }
+}
+
+fn drained_cube() -> Document {
+    let mut document = Document::from_project(cube());
+    apply(
+        &mut document,
+        &drain_at(Vec3::new(5.0, 5.0, 10.5)),
+        Cancel::never(),
+    )
+    .expect("the cube drains");
+    document
+}
+
+#[test]
+fn plugs_given_up_are_cancelled() {
+    let mut document = drained_cube();
+
+    let stopped = || true;
+    let error = apply(&mut document, &plugs_edit(), Cancel::when(&stopped))
+        .expect_err("a stopped cut lands nothing");
+
+    assert_eq!(error, ApplyError::Cancelled);
+}
+
+#[test]
+fn plugs_of_a_model_with_no_faces_have_no_surface_to_stand_beside() {
+    let mut project = drained_cube().into_project();
+    project.models[0].source = Arc::new(Mesh::default());
+    let mut document = Document::from_project(project);
+
+    let error =
+        apply(&mut document, &plugs_edit(), Cancel::never()).expect_err("nothing to stand beside");
+
+    assert_eq!(error, ApplyError::NoSurface(CUBE));
+}
+
+#[test]
+fn a_channel_of_one_point_cannot_be_drilled() {
+    let mut document = Document::from_project(cube());
+    let edit = Edit::Channel {
+        object: CUBE,
+        points_mm: vec![Vec3::new(2.0, 5.0, 5.0)],
+        diameter_mm: 2.0,
+    };
+
+    let error = apply(&mut document, &edit, Cancel::never()).expect_err("a line needs two points");
+
+    assert!(matches!(error, ApplyError::Failed { object, .. } if object == CUBE));
 }

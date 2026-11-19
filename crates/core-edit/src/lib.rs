@@ -5,4 +5,4 @@ mod edit;
 
 pub use core_engine::project::{Axis, Keep, ObjectId};
 pub use core_joint::{JointKind, Joints};
-pub use edit::{Edit, Op};
+pub use edit::{AUTO, Edit, Op, OrientAim};

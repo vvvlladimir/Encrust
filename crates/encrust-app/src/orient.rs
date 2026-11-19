@@ -157,6 +157,27 @@ impl OrientTool {
         self.adjacency = None;
     }
 
+    /// Stands `id` the `pick`th of every way the last run ranked for it, from 0, offered or
+    /// not; `Err` has how many ways it ranked, none where no run landed for `id`.
+    pub fn stand_ranked(
+        &mut self,
+        scene: &mut Scene,
+        plate: &BuildPlate,
+        id: ObjectId,
+        pick: usize,
+    ) -> Result<(), usize> {
+        let (turn, _) = self
+            .offers
+            .iter()
+            .find(|(turn, _)| turn.id == id)
+            .ok_or(0_usize)?;
+        let pose = *turn.ranked.get(pick).ok_or(turn.ranked.len())?;
+        if let Some(object) = scene.get_mut(id) {
+            stand(object, pose, turn.lift_mm, plate);
+        }
+        Ok(())
+    }
+
     /// Why the button is greyed out, or `None` when it is not.
     pub fn blocker(&self, scene: &Scene) -> Option<String> {
         if scene.target_count() == 0 {

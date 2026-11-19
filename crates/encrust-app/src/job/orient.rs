@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
+use core_document::Body;
 use core_engine::{SupportPlan, Trial, orient_for_print};
-use core_geometry::{Mesh, Quat, Region, Transform, Vec3, transform_mesh};
+use core_geometry::{Mesh, Quat, Region, Transform, Vec3};
 use core_plate::{OrientSettings, Phase, Printed, Watch};
-use core_volume::ModelHollow;
 #[cfg(test)]
 use printer_profiles::SupportProfile;
 use printer_profiles::{MaterialProfile, PrinterProfile};
@@ -79,15 +79,6 @@ impl OrientTask {
             && self.support == other.support
             && self.shown == other.shown
     }
-
-    /// `mesh` as it measures on the plate. A model nobody resized is not copied.
-    fn sized(&self, mesh: &Arc<Mesh>) -> Arc<Mesh> {
-        if self.sizing == Transform::default() {
-            Arc::clone(mesh)
-        } else {
-            Arc::new(transform_mesh(mesh, self.sizing))
-        }
-    }
 }
 
 /// Everything one orientation run needs.
@@ -112,6 +103,8 @@ pub struct Turn {
     pub id: ObjectId,
     /// Never empty: the first is the choice, the rest are offered in turn beside it.
     pub poses: Vec<Pose>,
+    /// Every way the search ranked, best first, offered or not: what an edit's pick counts.
+    pub ranked: Vec<Pose>,
     /// How far it is stood off the plate onto its supports when it is not on it,
     /// millimetres: the lift the user gave the model, or its support profile's.
     pub lift_mm: f32,
@@ -203,7 +196,7 @@ impl OrientTask {
             mesh: Arc::clone(&object.mesh),
             shell: object.hollow.shell().map(Arc::clone),
             cuts: object.hollow.cut_bodies().map(Arc::clone),
-            vents: vents_of(&object.hollow),
+            vents: core_document::vents_of(&object.hollow),
             sizing: object.transform.sizing(),
             down_now: object.transform.rotation.inverse() * Vec3::NEG_Z,
             support: lifted(plan, object.lift_mm),
@@ -230,7 +223,7 @@ fn choose(
     support: &SupportPlan,
     proof: Option<&Proof>,
     watch: Watch<'_>,
-) -> Result<Vec<Pose>, String> {
+) -> Result<Vec<(Pose, bool)>, String> {
     let trial = proof.map(|proof| Trial {
         printer: &proof.printer,
         material: &proof.material,
@@ -240,45 +233,31 @@ fn choose(
     });
     let chosen = orient_for_print(printed, settings, trial.as_ref(), watch)
         .map_err(|error| error.to_string())?;
-    Ok(offered(chosen.iter().map(|choice| {
-        let pose = Pose {
-            rotation: choice.oriented.rotation,
-            on_plate: choice.oriented.on_plate,
-            costs: choice.printout.map(|printout| Costs {
-                supports_ml: printout.supports_ml,
-                pull_n: printout.pull_n,
-                stack_mm: printout.stack_mm,
-            }),
-        };
-        (pose, choice.ruling.is_offered())
-    })))
+    Ok(chosen
+        .iter()
+        .map(|choice| {
+            let pose = Pose {
+                rotation: choice.oriented.rotation,
+                on_plate: choice.oriented.on_plate,
+                costs: choice.printout.map(|printout| Costs {
+                    supports_ml: printout.supports_ml,
+                    pull_n: printout.pull_n,
+                    stack_mm: printout.stack_mm,
+                }),
+            };
+            (pose, choice.ruling.is_offered())
+        })
+        .collect())
 }
 
 /// The first of `ranked` and every other one offered beside it.
-fn offered(ranked: impl Iterator<Item = (Pose, bool)>) -> Vec<Pose> {
+fn offered(ranked: &[(Pose, bool)]) -> Vec<Pose> {
     ranked
+        .iter()
         .enumerate()
         .filter(|(at, (_, offered))| *at == 0 || *offered)
-        .map(|(_, (pose, _))| pose)
+        .map(|(_, (pose, _))| *pose)
         .collect()
-}
-
-/// The way out of every hole and of both ends of every channel cut into a model.
-fn vents_of(hollow: &ModelHollow) -> Vec<Vec3> {
-    let (holes, channels) = hollow.cut();
-    let ends = channels.iter().flat_map(|channel| {
-        let points = &channel.points;
-        let first = points
-            .first()
-            .zip(points.get(1))
-            .map(|(end, next)| *end - *next);
-        let last = points
-            .last()
-            .zip(points.iter().rev().nth(1))
-            .map(|(end, next)| *end - *next);
-        first.into_iter().chain(last)
-    });
-    holes.iter().map(|hole| -hole.axis).chain(ends).collect()
 }
 
 fn run(request: &OrientRequest, (stop, seen): (&AtomicBool, &Seen)) -> OrientOutcome {
@@ -311,32 +290,28 @@ fn turn_of(task: &OrientTask, request: &OrientRequest, watch: Watch<'_>) -> Resu
         lift_mm: placing.lift_mm(),
         ..request.settings
     };
-    let outer = task.sized(&task.mesh);
-    let shell = task.shell.as_ref().map(|shell| task.sized(shell));
-    let cuts = task.cuts.as_ref().map(|cuts| task.sized(cuts));
-    let sizing = task.sizing.linear();
-    let vents: Vec<Vec3> = task.vents.iter().map(|out| sizing * *out).collect();
-    let printed = Printed {
-        outer: &outer,
-        shell: shell.as_deref(),
-        cuts: cuts.as_deref(),
-        vents: &vents,
-        shown: Some(&task.shown),
-        shows: None,
-    };
-    let poses = choose(
+    let body = Body {
+        outer: Arc::clone(&task.mesh),
+        shell: task.shell.clone(),
+        cuts: task.cuts.clone(),
+        vents: task.vents.clone(),
+    }
+    .sized(task.sizing);
+    let printed = body.printed(&task.shown);
+    let ranked = choose(
         &printed,
         &settings,
         &task.support,
         request.proof.as_ref(),
         watch,
     )?;
-    if poses.is_empty() {
+    if ranked.is_empty() {
         return Err(tr!("job-orient-none"));
     }
     Ok(Turn {
         id: task.id,
-        poses,
+        poses: offered(&ranked),
+        ranked: ranked.into_iter().map(|(pose, _)| pose).collect(),
         lift_mm: placing.z_lift_mm,
     })
 }

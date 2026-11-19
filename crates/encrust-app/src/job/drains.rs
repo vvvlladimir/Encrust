@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering::Relaxed};
 
-use core_engine::{DrainSearch, Drained, suggest_drains_heard};
+use core_document::{SearchAsked, drains_proven, plate_under};
+use core_engine::Drained;
 use core_geometry::{Mesh, Scalar, Transform, transform_mesh};
 use core_supports::Trapped;
 use core_volume::{DrainHole, HoleSize};
@@ -10,10 +11,6 @@ use super::trapped::{flattened, into_model};
 use crate::i18n::tr;
 use crate::job::{Highest, Worker, pooled};
 use crate::scene::{ObjectId, SceneObject};
-
-/// Nearer the plate than this a model's lowest point rests on it, millimetres: no hole may
-/// open where the first layers spread (ADR 0401).
-const ON_PLATE_MM: Scalar = 1e-2;
 
 /// One model the drain search looks through, owned so it can cross to the worker.
 pub struct DrainsTask {
@@ -147,23 +144,21 @@ fn look_for_holes(
         .cuts
         .as_ref()
         .map(|cuts| transform_mesh(cuts, task.transform));
-    let plate_z = placed
-        .aabb()
-        .map(|bounds| bounds.mins.z)
-        .filter(|lowest| lowest.abs() <= ON_PLATE_MM);
-    let search = DrainSearch {
-        mesh: &placed,
-        cuts: cuts.as_ref(),
+    let asked = SearchAsked {
         size: task.size,
         wall: task.wall,
         vents: request.vents,
-        plate_z,
         layer_height_mm: request.layer_height_mm,
     };
-    let drained = suggest_drains_heard(&search, |scanning| {
-        heard.share.store(scanning.share().to_bits(), Relaxed);
-        !stop.load(Relaxed)
-    })
+    let drained = drains_proven(
+        (&placed, cuts.as_ref()),
+        plate_under(&placed),
+        &asked,
+        |scanning| {
+            heard.share.store(scanning.share().to_bits(), Relaxed);
+            !stop.load(Relaxed)
+        },
+    )
     .map_err(flattened)?;
     Ok(drained.map(|drained| proposed(task, drained)))
 }

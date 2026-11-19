@@ -412,5 +412,7 @@ fn covered(scene: &Scene, plate: u32) -> Vec<Rect> {
 
 mod ready;
 
+pub use ready::land_ended;
+
 #[cfg(test)]
 mod tests;

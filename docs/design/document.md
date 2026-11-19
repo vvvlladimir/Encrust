@@ -23,12 +23,12 @@ document, so an edit naming a deleted object fails rather than landing on anothe
 
 | Group | Variants |
 |---|---|
-| placement | `Move`, `Rotate`, `Scale`, `Orient` |
+| placement | `Move`, `Rotate`, `Scale`, `Mirror`, `Orient` |
 | plate contents | `Delete`, `Duplicate`, `Arrange` |
 | repair | `Repair`, `Mend`, `Relief` |
 | shaping | `Combine`, `Label`, `Cut`, `Split`, `PartOff` |
-| hollow and drains | `Hollow`, `Drain` |
-| supports | `Supports`, `ShownAt` |
+| hollow and drains | `Hollow`, `Drain`, `Channel`, `Plugs` |
+| supports | `Supports` |
 
 Points and positions are plate millimetres. An edit names the objects it acts on; one that
 adds objects answers their ids and what each is (`Applied`), so a front end can name or select
@@ -56,6 +56,17 @@ scale, each about the object's centre of mass and then standing it on the plate;
 finite or above zero is `ApplyError::BadScale`. None of them adds or removes an object
 (`Report::Placed`). The window sets the transform at once through the same `placement`
 functions.
+
+`Orient { object, goal, max_tilt_deg, clean_surface, pick }` runs `--orient`'s search on the
+object as it stands (outer, shell, cuts, drain vents, what shows), judged on the plate's active
+support group and proven by no print, and sets the `pick`th pose, from 0, as `Rotate` sets a
+turn (`Report::Oriented { rotate_deg }`); past the last pose is `ApplyError::NoChoice`. `goal`
+is `auto`, `fewest-supports`, `least-peel` or `shortest-print` (`OrientAim`, the one table of
+the words, which a recipe's orient step reads too). A recipe's orient step is this edit
+(`core-recipe`'s `edits_of`), its `pick` the first. The window
+runs its Orient tool's search on the object and stands the `pick`th ranked pose, offered or
+not; it lifts a pose on supports by its profile's lift where the document drops it to the
+plate. With no support group the document judges the model on the plate.
 
 `Split { object, smallest_mm3 }` and `PartOff { object, at_mm }` run on the object's printed
 mesh placed on the plate and replace it with `Role::Part(n)` pieces, counted from one: a split
@@ -123,6 +134,23 @@ drills `hole_near` its source mesh (the CLI's `--drain-at` call), adding it to t
 surface near a point is `NoSurface`, a point nearest an edge or corner `OffAFace`. The window
 drills at once on its own `ModelHollow`.
 
+`Drain` with `auto` then runs the engine's search (`drains_proven`, the one call the CLI's
+`--drain-at auto` and the window's search job make) on the object as it stands, adds the holes it
+proves, and a vent per pocket where `vent`; an object with no shell is `NoCavity`, a stop is
+`Cancelled`; `Report::Drained::trapped` counts the pockets left. The window starts its own
+search job on that object and the edit is done when it lands.
+
+`Channel { object, points_mm, diameter_mm }` takes the points into the object's own space and
+adds one channel to its `ModelHollow`, as `--channel` lays it (`Report::Channelled`).
+
+`Plugs { object, gap_mm }` cuts a plug for each of the object's holes as they are cut
+(`plugs_cut`, the CLI's `--drain-plugs` call), lays them in a row past its right-hand side as new
+objects named by `Role::Plug(n)` and marked `plug_of` it, in place of those laid before, which
+`removed` names (`Report::Plugged`). They stand in a row (`laid_beside`) where the window's tool
+moves each to the nearest free spot (`nearest_free`). The window sets the object's plug gap and
+starts its plugs job. The document's search reads the default layer height where the window's
+reads the machine's.
+
 `Supports { object, profile, at_mm, only_at, cavity, shown_at }` stands supports under one
 object. `profile` is a shipped preset (`SupportProfile::shipped`), the plate's active group's
 where unset; an unknown name is `NoProfile`. The preset becomes a group of the plate where none
@@ -139,6 +167,14 @@ need and each `at_mm` point (the surface nearest it) is added, the trees grown b
 kept as `ObjectSupportState::grown` (`Report::Supported`). `only_at` places the points alone. The
 plate keeps no layer height, so the run uses the slicer's default. The window starts its automatic
 run on that object alone, adding to what stands.
+
+`Arrange { plate_mm, clearance_mm }` spreads every visible object of the active plate over a plate
+`plate_mm` across (no inset), each as one footprint with its supports and raft as `supports_of`
+meshes them (`Standing`, `pack`; the window's Arrange packs through the same `pack`). An object no
+slide fits is first turned the least that does (`turn_to_fit`, ADR 0418); the margin is
+`ArrangeSettings`' default. The supports regrow where the object now stands, so the edit moves
+only its transform. `Report::Arranged` names the objects left out; one with no surface is
+`NoFootprint`.
 
 ## Undo
 

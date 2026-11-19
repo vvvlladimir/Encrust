@@ -160,7 +160,7 @@ pub fn support(id: &str) -> Result<SupportProfile> {
     Ok(entry.profile.clone())
 }
 
-pub use core_document::AUTO;
+pub use core_edit::AUTO;
 
 /// Supports built to the profile `id`, or sized by the automatic profile for [`AUTO`].
 pub fn plan_of(id: &str) -> Result<SupportPlan> {

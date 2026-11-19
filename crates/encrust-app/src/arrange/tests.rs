@@ -1,6 +1,6 @@
 use super::*;
 use crate::scene::{ImportSummary, Imported};
-use core_geometry::{Aabb, Mesh, Orientation, Transform, diagnose};
+use core_geometry::{Aabb, Mesh, Orientation, Transform, Vec3, diagnose};
 use std::sync::Arc;
 
 /// Axis-aligned box, twelve triangles, spanning 0..size on every axis.

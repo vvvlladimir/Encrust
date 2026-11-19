@@ -1,6 +1,20 @@
 use super::{DrainTool, Ended};
 use crate::drilling::Drilling;
 use crate::scene::Scene;
+use crate::state::Doc;
+use crate::status::Status;
+
+/// Lays the plugs a worker has cut into the edit that asked for them; answers whether any is
+/// still being cut.
+pub fn land_ended(doc: &mut Doc, drain: &mut DrainTool, status: &mut Status) -> bool {
+    let plate_mm = core_geometry::Vec2::new(doc.plate.x_mm, doc.plate.y_mm);
+    for ended in drain.plugs_to_land(&doc.drilling) {
+        doc.history.land(&mut doc.scene, ended.asked_by(), |scene| {
+            DrainTool::land_plugs(scene, &ended, plate_mm, status);
+        });
+    }
+    drain.laying_plugs()
+}
 
 impl DrainTool {
     /// The plugs cut whose model's holes are no longer being taken out: plugs land with the

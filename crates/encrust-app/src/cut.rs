@@ -280,6 +280,7 @@ fn piece_name(name: &str, role: Role) -> String {
         Role::Upper => tr!("cut-upper-name", name = name),
         Role::Dowel(index) => tr!("cut-dowel-name", name = name, index = index),
         Role::Part(index) => tr!("cut-part-name", name = name, index = index),
+        Role::Plug(index) => tr!("drain-plug-name", name = name, index = index),
     }
 }
 

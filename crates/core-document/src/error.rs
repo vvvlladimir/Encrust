@@ -61,6 +61,12 @@ pub enum ApplyError {
         /// Where the hole's mouth would be, in plate mm.
         mouth_mm: Vec3,
     },
+    /// A drain search on an object with no cavity to drain.
+    #[error("object {0:?} has no cavity to drain")]
+    NoCavity(ObjectId),
+    /// An object with no surface, which stands nowhere on the plate to be arranged.
+    #[error("object {0:?} has no footprint on the plate")]
+    NoFootprint(ObjectId),
     /// An object whose transform cannot be inverted, so no plate point maps onto it.
     #[error("object {0:?} has a transform that cannot be inverted")]
     BadTransform(ObjectId),
@@ -68,6 +74,13 @@ pub enum ApplyError {
     /// window's catalogue's, not the document's.
     #[error("no shipped support profile is named {0:?}")]
     NoProfile(String),
+    /// An orient asked for a pose past the last the search found.
+    #[error("object {object:?} has no pose {pick}: the search found {found}")]
+    NoChoice {
+        object: ObjectId,
+        pick: usize,
+        found: usize,
+    },
     /// The run was stopped before it finished.
     #[error("the edit was cancelled")]
     Cancelled,

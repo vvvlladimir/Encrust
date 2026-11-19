@@ -597,14 +597,66 @@ A recipe's steps: Repair, Orient, Hollow, Drain, Supports, Arrange change the pl
 Save, Gate, Pause steer the run. The executors stay for the latter (conditions, measuring,
 writing); each plate step becomes one edit carried out by `apply` (CLI) or the window's link
 machinery (window).
-- R6a `Edit::Orient { object, goal, max_tilt_deg, pick, keep_clear }`: `apply` runs
-  `orient_for_print` on the object with no machine's trial (the search's answer, as C8 noted
-  the window's without a printer), the `pick`th choice, its turn set as `Rotate` sets one.
-  C8's decision is revised: a recipe's orient step has no check to choose for it.
-- R6b core-recipe gains `edit_of(step, &Resolved, object) -> Option<Edit>` for the six plate
-  steps (edge core-recipe → core-edit); tests that each step's settings land in its edit.
+- R6a `Edit::Orient` (card below; C8 revised, ADR 0470).
+- R6b core-recipe's `edits_of` (card below).
 - R6c the window's Prepare for print (`prepare/{work,step}.rs`) runs each plate step through
-  `edit_of` and the link's `start_edit` path, its own per-step job calls deleted.
+  `edits_of` and the link's `start_edit` path, its own per-step job calls deleted; deferred,
+  it waits on batched edits.
 - R6d the CLI's recipe executor (`recipe/{steps,plate,piece}.rs`) runs on a `Document` of the
   staged models through `apply`; this is the command line's model pipeline moving onto the
   document (the original plan's phase 5) and needs its own design pass first.
+
+### R6a. Orient by an edit
+Read: `crates/core-engine/src/trial.rs` (`orient_for_print`, `Choice`), `crates/encrust-cli/src/pipeline/place.rs`
+  (`orientation`, `orient_settings`, `orient_preset`), `crates/encrust-app/src/job/orient.rs`
+  (`OrientTask::of`, the `Printed` it builds), `crates/core-recipe/src/orient.rs` (`preset_of`),
+  `crates/core-document/src/{apply.rs,placement.rs,supports.rs}`, `crates/core-edit/src/edit.rs`
+Touch: those you need, new `crates/core-document/src/orient.rs` (+ tests), `crates/core-document/src/{lib.rs,error.rs}`,
+  `crates/encrust-app/src/link/plate.rs` or a new `link/plate/orient.rs` (+ test), `docs/design/document.md`, `docs/cli.md`
+Edit: `Orient { object, goal: OrientAim, max_tilt_deg: Option<Scalar>, clean_surface: bool, pick: usize }`,
+  `OrientAim` a core-edit enum `auto | fewest-supports | least-peel | shortest-print` (kebab serde,
+  default auto) mapped to `OrientPreset` in core-document; `preset_of` then maps through it, one
+  table of the words.
+apply: `orient_for_print` with no trial on the object as it stands (outer, shell, cuts, drain vents,
+  what shows — the `Printed` the window builds, built once in core-document and called by the window's
+  `OrientTask` where it can be), settings from the object's support plan as `orient_settings` makes
+  them; the `pick`th choice (past the last → `ApplyError::NoChoice { object, pick, found }`), its
+  rotation set as `Rotate` sets one and the model dropped onto the plate as Rotate does.
+  `Report::Oriented { rotate_deg }`. Cancel through `Cancel` → `Cancelled`.
+Window: the link's arm runs the window's own orient job for the object and picks the `pick`th pose
+  it offers, under way until it lands.
+Done when: a 10 × 10 × 30 mm cuboid lying on its side, `Orient { goal: shortest-print }` stands it
+  with its 30 mm along the plate (height ≤ 10 + 1e-3); `pick` past the choices → `NoChoice`; a
+  cancelled search → `Cancelled`; a window link test; existing tests pass. `docs/design/document.md`
+  lists Orient as an edit again with one line saying a recipe's orient step has no check to choose
+  for it (C8 revised).
+Not now: a machine's trial, keep-clear points, MCP (orchestrator), the recipe (R6b).
+
+### R6b. A recipe's plate step is an edit
+Read: `crates/encrust-app/src/prepare/work.rs` (`Work::of`, `Hollowed::of`, `drain_of`, `method_of`, `cavity`),
+  `crates/encrust-cli/src/recipe/steps.rs` and `recipe/plate.rs` (how the CLI reads the same keys),
+  `crates/core-recipe/src/{lib.rs,resolved.rs,recipe.rs}`, `crates/core-edit/src/edit.rs`
+Touch: new `crates/core-recipe/src/edits.rs` (+ tests), `crates/core-recipe/src/lib.rs`,
+  `crates/core-recipe/Cargo.toml` (+ core-edit), `Cargo.lock`, `docs/architecture.md` (the edge),
+  `crates/encrust-app/src/prepare/work.rs` (its key reading replaced by the new fn where it maps one to one)
+Do: `edits_of(kind: StepKind, settings: &ResolvedSettings, object: ObjectId, placed: Aabb, plate_mm: [Scalar; 2])
+  -> Result<Vec<Edit>, NotAnEdit>` for the six plate steps: Repair → `Repair`; Orient → `Orient`
+  (R6a; goal word through `OrientAim`, `pick` 0); Hollow → `Hollow` (wall, mode, open floor, infill,
+  solid-under as the window's `Hollowed` reads them); Drain → `Drain` (`at = auto` → `auto`, `vent`;
+  `at = points` → the points as fractions of `placed` turned into plate mm) then `Plugs` when `plugs`;
+  Supports → `Supports` (profile word, `cavity`); Arrange → `Arrange { plate_mm, clearance_mm: spacing_mm }`.
+  Defaults as the window's `Work::of` takes them today (`PREPARE_ORIENT`, `PREPARE_REPAIR`, …),
+  moved, not copied. `NotAnEdit(StepKind)` for Check, Save, Gate, Pause and for Arrange with
+  `only_in_the_way` (the window's slide-clear, no edit yet).
+Window: `Work::of` reads its numbers through `edits_of` where a step maps one to one; nothing about
+  how it runs changes yet (R6c).
+Done when: one test per plate step that its settings land in its edit (the numbers given in, the
+  same numbers out), Drain points: a fraction (0.5, 0.5, 1.0) of a box 0..10 lands at (5, 5, 10)
+  ± 1e-6; Check → `NotAnEdit`; existing core-recipe and encrust-app prepare tests pass.
+Not now: running the prepare on edits (R6c), the CLI executor (R6d).
+
+## Status (2026-11-19, round 3 end)
+Done: R8, S5, item 5, D2 (C10b but holes into the supports), A1 (C2b), R6a, R6b (ADR 0469, 0470),
+C14's docs. Deferred by the user: R6c — the window's prepare runs one job over many models
+where the link's edits run one model at a time, so it waits on batched edits (a design
+session); R6d — the CLI's recipe executor on a `Document`, its own design pass.

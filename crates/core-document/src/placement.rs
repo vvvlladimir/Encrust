@@ -1,7 +1,9 @@
 //! Where an object stands on the plate: moved, turned or sized about its centre of mass and
 //! stood on the plate again.
 
-use core_geometry::{Mesh, Quat, Transform, Vec3, center_of_mass, drop_to_plate, transform_mesh};
+use core_geometry::{
+    Mesh, Quat, Transform, Vec3, center_of_mass, drop_to_plate, glam::EulerRot, transform_mesh,
+};
 
 /// The turn of `angles` degrees about X, then Y, then Z of the plate.
 pub fn euler_degrees(angles: Vec3) -> Quat {
@@ -27,6 +29,20 @@ pub fn turned_to(transform: Transform, mesh: &Mesh, degrees: Vec3) -> Transform 
         ..transform
     };
     settled(transform, turned, mesh)
+}
+
+/// `transform` turned to stand at `rotation`, about the centre of mass of `mesh` and the
+/// object stood on the plate.
+pub fn oriented_to(transform: Transform, mesh: &Mesh, rotation: Quat) -> Transform {
+    let by = rotation * transform.rotation.inverse();
+    settled(transform, transform.turned(by), mesh)
+}
+
+/// The angles of `rotation` about X, then Y, then Z of the plate, degrees, as `Rotate` takes
+/// them; zero is added to each, so float dust never reads as a turn of minus nothing.
+pub fn degrees_of(rotation: Quat) -> Vec3 {
+    let (x, y, z) = rotation.to_euler(EulerRot::XYZEx);
+    Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees()).round() + 0.0
 }
 
 /// `transform` with its scale set to `factors`, about the centre of mass of `mesh` and the

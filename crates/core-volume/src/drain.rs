@@ -208,6 +208,9 @@ pub fn drilled_out(holes: &[DrainHole], point: Vec3) -> bool {
         .any(|hole| hole.holds(point))
 }
 
+/// The diameter of a drainage channel when none is asked for, mm.
+pub const CHANNEL_DIAMETER_MM: Scalar = 2.0;
+
 /// A drainage channel: a tube of `diameter_mm` dug along a polyline in model space, round
 /// or a polygon turned `turn_deg` from the level about each leg. A file without the outline
 /// reads a round one (ADR 0313).

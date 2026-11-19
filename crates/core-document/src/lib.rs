@@ -2,6 +2,7 @@
 //! way (ADR 0466, `docs/design/document.md`).
 
 mod apply;
+mod arrange;
 mod combine;
 mod cut;
 mod document;
@@ -11,6 +12,7 @@ mod error;
 mod fixtures;
 mod hollow;
 mod label;
+mod orient;
 mod piece;
 mod placement;
 mod plate_contents;
@@ -20,17 +22,18 @@ mod split;
 mod supports;
 
 pub use apply::{Applied, Report, apply};
+pub use arrange::{NoFootprint, Spread, Standing, spread, standing_rect, turn_to_fit, turned_by};
 pub use combine::{boolean_of, combined};
 pub use cut::{CutAsked, CutModel, axis_normal, cut, pieces};
 pub use document::{Document, ImportedModel};
-pub use drain::hole_near;
+pub use drain::{SearchAsked, channel_in, drains_proven, hole_near, plate_under, plugs_cut};
 pub use error::ApplyError;
 pub use hollow::{NoRoom, settings_of, shell_from, shelled};
 pub use label::{LabelAsked, Lettering, label_prisms, labelled};
+pub use orient::{Body, preset_named, preset_of, supported_settings, vents_of};
 pub use piece::{Piece, Role};
-pub use placement::{euler_degrees, moved, sized_to, turned_to};
+pub use placement::{degrees_of, euler_degrees, moved, oriented_to, sized_to, turned_to};
 pub use plate_contents::mirrored;
 pub use relief::{ReliefAsked, Relieved, press_picture, read_picture, relieved};
 pub use repair::{MendAsked, Mended, mended, repaired};
 pub use split::{part_off_at, part_settings, split};
-pub use supports::AUTO;

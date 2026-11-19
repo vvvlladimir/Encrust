@@ -4,13 +4,13 @@ use crate::pipeline::Watch;
 use crate::profiles::Chosen;
 use crate::progress::bar;
 use anyhow::{Context, Result};
-use core_document::euler_degrees;
+use core_document::{degrees_of, euler_degrees, supported_settings};
 use core_engine::{
     ByHand, Choice, EngineError, KeepClear, Printout, SupportPlan, Trial, orient_for_print,
 };
 use core_geometry::{
     Aabb, Mesh, Quat, Scalar, Transform, Vec2, Vec3, center_over_plate, drop_to_plate,
-    glam::EulerRot, transform_mesh,
+    transform_mesh,
 };
 use core_plate::{
     Asked, OrientPreset, OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch,
@@ -52,8 +52,7 @@ impl OrientChoice {
 /// The angles `--rotate X,Y,Z` repeats `rotation` with, degrees. Zero is added to each, so
 /// float dust never reads as a turn of minus nothing.
 pub fn rotate_degrees(rotation: Quat) -> Vec3 {
-    let (x, y, z) = rotation.to_euler(EulerRot::XYZEx);
-    Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees()).round() + 0.0
+    degrees_of(rotation)
 }
 
 impl OrientSummary {
@@ -292,15 +291,7 @@ pub(super) fn dropped(mesh: Mesh) -> Result<Mesh> {
 
 /// How the search judges a model that will stand on `supports`, or on the plate.
 pub fn orient_settings(supports: Option<&SupportProfile>) -> OrientSettings {
-    let plain = OrientSettings::default();
-    supports.map_or(plain, |profile| OrientSettings {
-        max_overhang_deg: profile.max_overhang_deg,
-        contact_spacing_mm: profile.contact_spacing_mm,
-        on_supports: true,
-        lift_mm: profile.lift_mm(),
-        rest_on_plate: true,
-        ..plain
-    })
+    supports.map_or_else(OrientSettings::default, supported_settings)
 }
 
 /// The model stood in the middle of the plate and on z = 0.

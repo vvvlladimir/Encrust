@@ -1,5 +1,6 @@
-use core_geometry::{Mesh, Scalar, Transform, Vec3};
-use core_plate::{ArrangeSettings, Footprint, Rect, arrange, move_clear};
+use core_document::spread;
+use core_geometry::Scalar;
+use core_plate::{ArrangeSettings, Rect, move_clear};
 
 use crate::i18n::tr;
 use crate::plate::{BuildPlate, astray_now};
@@ -8,7 +9,7 @@ use crate::status::Status;
 
 mod turn;
 
-use turn::{Turned, moved_of, standing_rect, turn_onto_plate};
+use turn::{Turned, moved_of, standing_of, standing_rect_of, turn_onto_plate};
 
 /// Spreads everything visible over the plate, a model no slide fits turned the least that
 /// does, and says what would not fit.
@@ -16,57 +17,43 @@ use turn::{Turned, moved_of, standing_rect, turn_onto_plate};
 /// The footprint is the model with its supports and raft as they were last built: they
 /// stand on the plate beside it and move with it, so they are packed as one.
 pub fn arrange_plate(scene: &mut Scene, plate: &BuildPlate, clearance_mm: Scalar) -> Status {
-    let settings = settings(clearance_mm);
-    let visible: Vec<ObjectId> = scene
-        .printable(scene.active_plate())
-        .map(|object| object.id)
-        .collect();
-    let mut turned = Turned::default();
-    turn_onto_plate(scene, plate, &visible, &settings, &mut turned);
-    noting_turns(pack(scene, plate, &settings, &turned), turned.len())
+    let (status, turned) = pack(scene, plate, &settings(clearance_mm), &Turned::default());
+    noting_turns(status, turned)
 }
 
-/// Packs every visible model over the plate, those in `turned` with their supports moved.
+/// Packs every visible model over the plate, those in `turned` with their supports moved, and
+/// says how many more it turned.
 fn pack(
     scene: &mut Scene,
     plate: &BuildPlate,
     settings: &ArrangeSettings,
     turned: &Turned,
-) -> Status {
-    let visible: Vec<_> = scene.printable(scene.active_plate()).collect();
-    let footprints: Vec<Footprint> = visible
-        .iter()
-        .filter_map(|object| {
-            let moved = moved_of(turned, object.id);
-            let supports = object.supports.drawn_every();
-            let parts: Vec<(&Mesh, Transform)> = std::iter::once((&*object.mesh, object.transform))
-                .chain(supports.map(|group| (&*group.mesh, moved)))
-                .collect();
-            Footprint::of_parts(&parts, settings.cell_mm)
-        })
+) -> (Status, usize) {
+    let ids: Vec<ObjectId> = scene
+        .printable(scene.active_plate())
+        .map(|object| object.id)
         .collect();
-    let visible: Vec<ObjectId> = visible.iter().map(|object| object.id).collect();
-    if footprints.len() != visible.len() {
-        return Status::Error(tr!("arrange-no-footprint"));
+    if ids.is_empty() {
+        return (Status::Info(tr!("arrange-nothing")), 0);
     }
-    if footprints.is_empty() {
-        return Status::Info(tr!("arrange-nothing"));
-    }
-
-    let arranged = arrange(&footprints, plate.plate_area(), settings);
-    for placed in &arranged.placed {
-        let Some(id) = visible.get(placed.index) else {
-            continue;
-        };
+    let mut standing: Vec<_> = (ids.iter())
+        .filter_map(|id| scene.get(*id))
+        .map(|object| standing_of(object, moved_of(turned, object.id)))
+        .collect();
+    let Ok(spread) = spread(&mut standing, plate.plate_area(), settings) else {
+        return (Status::Error(tr!("arrange-no-footprint")), 0);
+    };
+    drop(standing);
+    for (id, transform) in ids.iter().zip(&spread.transforms) {
         if let Some(object) = scene.get_mut(*id) {
-            object.transform.translation += Vec3::new(placed.offset_mm.x, placed.offset_mm.y, 0.0);
+            object.transform = *transform;
         }
     }
-
-    match arranged.left_out.len() {
-        0 => Status::Info(tr!("arrange-done", count = arranged.placed.len())),
+    let status = match spread.arranged.left_out.len() {
+        0 => Status::Info(tr!("arrange-done", count = spread.arranged.placed.len())),
         short => Status::Info(tr!("arrange-short", count = short)),
-    }
+    };
+    (status, spread.turned)
 }
 
 /// Moves only the models past the usable area and one of each pair of `meeting`, the least it
@@ -89,7 +76,7 @@ pub fn clear_the_way(
         .filter_map(|object| {
             Some((
                 object.id,
-                standing_rect(object, moved_of(&turned, object.id))?,
+                standing_rect_of(object, moved_of(&turned, object.id))?,
             ))
         })
         .collect();
@@ -102,9 +89,8 @@ pub fn clear_the_way(
     let parts: Vec<Rect> = standing.iter().map(|(_, rect)| *rect).collect();
     let cleared = move_clear(&parts, &astray, &meeting, plate.plate_area(), &settings);
     if !cleared.left_out.is_empty() {
-        let visible: Vec<ObjectId> = standing.iter().map(|(id, _)| *id).collect();
-        turn_onto_plate(scene, plate, &visible, &settings, &mut turned);
-        return noting_turns(pack(scene, plate, &settings, &turned), turned.len());
+        let (status, more) = pack(scene, plate, &settings, &turned);
+        return noting_turns(status, turned.len() + more);
     }
     for moved in &cleared.moved {
         if let Some(object) = scene.get_mut(standing[moved.index].0) {

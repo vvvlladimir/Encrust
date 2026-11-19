@@ -128,9 +128,11 @@ impl Bench {
     fn frame(&mut self) -> bool {
         let mut camera = OrbitCamera::default();
         let (doc, tools, machine) = (&mut self.doc, &mut self.tools, &mut self.machine);
+        let landing = crate::drain::land_ended(doc, &mut tools.drain, &mut machine.status);
         let (scene, status) = (&mut doc.scene, &mut machine.status);
         let mut working = doc.imports.poll(scene, &doc.plate, &mut camera, status);
         working |= doc.repairs.poll(scene, status);
+        working |= landing;
         working |= doc.drilling.poll(scene, status);
         working |= doc.surfaces.poll(scene, status);
         working |= tools.hollow.poll(scene, status);

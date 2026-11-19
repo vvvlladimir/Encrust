@@ -122,8 +122,45 @@ fn a_second_drain_point_drills_that_hole_alone() {
 }
 
 #[test]
-fn drains_the_engine_searches_for_are_no_edit_yet() {
+fn a_drain_search_with_channels_and_plugs_is_a_drain_a_channel_each_and_plugs() {
     let recipe = Recipe {
+        drains: Some(Drains {
+            diameter_mm: 3.0,
+            auto: true,
+            vent: true,
+            plugs: true,
+            channels: vec![vec![[0.0, 0.0, 1.0], [5.0, 0.0, 1.0]]],
+            ..Drains::default()
+        }),
+        ..bare()
+    };
+    let asked =
+        asked_edits(&recipe, &bare(), MODEL).expect("a search, a channel and plugs are edits");
+    assert!(
+        matches!(
+            asked.as_slice(),
+            [
+                Edit::Drain { auto: true, vent: true, at_mm, .. },
+                Edit::Channel { points_mm, .. },
+                Edit::Plugs { .. },
+            ] if at_mm.is_empty() && points_mm.len() == 2
+        ),
+        "{asked:?}"
+    );
+}
+
+#[test]
+fn drains_into_the_supports_or_a_search_taken_back_are_no_edit_yet() {
+    let into_supports = Recipe {
+        drains: Some(Drains {
+            diameter_mm: 3.0,
+            support_at_mm: vec![[1.0, 1.0, 0.0]],
+            ..Drains::default()
+        }),
+        ..bare()
+    };
+    assert_eq!(asked_edits(&into_supports, &bare(), MODEL), None);
+    let searched = Recipe {
         drains: Some(Drains {
             diameter_mm: 3.0,
             auto: true,
@@ -131,7 +168,14 @@ fn drains_the_engine_searches_for_are_no_edit_yet() {
         }),
         ..bare()
     };
-    assert_eq!(asked_edits(&recipe, &bare(), MODEL), None);
+    let not_searched = Recipe {
+        drains: Some(Drains {
+            diameter_mm: 3.0,
+            ..Drains::default()
+        }),
+        ..bare()
+    };
+    assert_eq!(asked_edits(&not_searched, &searched, MODEL), None);
 }
 
 #[test]

@@ -15,7 +15,7 @@ mod auto;
 mod plugs;
 mod points;
 
-pub use plugs::PlugsLaid;
+pub use plugs::{PlugsLaid, land_ended};
 pub use points::drill_at_fractions;
 
 /// What a click in the viewport puts down.

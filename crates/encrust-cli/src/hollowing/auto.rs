@@ -3,7 +3,8 @@
 use std::fmt;
 
 use anyhow::{Context, Result};
-use core_engine::{DrainSearch, Drained, HoleRole, suggest_drains};
+use core_document::{SearchAsked, drains_proven};
+use core_engine::{Drained, HoleRole};
 use core_geometry::{Mesh, Scalar, Vec3};
 use core_volume::{Channel, DrainHole, drill};
 
@@ -38,16 +39,15 @@ pub fn auto_drains(
         .on_plate
         .then(|| shell.aabb().map(|bounds| bounds.mins.z))
         .flatten();
-    suggest_drains(&DrainSearch {
-        mesh: shell,
-        cuts: cuts.as_ref(),
+    let asked = SearchAsked {
         size: args.hole_size(),
         wall,
         vents: !args.no_vent,
-        plate_z,
         layer_height_mm: ground.layer_height_mm,
-    })
-    .context("looking for drain holes")
+    };
+    let found = drains_proven((shell, cuts.as_ref()), plate_z, &asked, |_| true)
+        .context("looking for drain holes")?;
+    Ok(found.unwrap_or_default())
 }
 
 /// What `--drain-at auto` chose, for a terminal, each mouth where it prints: lifted by the

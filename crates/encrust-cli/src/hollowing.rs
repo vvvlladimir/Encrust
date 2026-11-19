@@ -1,16 +1,15 @@
 use std::fmt;
 use std::ops::Range;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
-use core_document::ApplyError;
+use core_document::{ApplyError, plugs_cut};
 use core_edit::ObjectId;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
-    Blocker, Cancel, Channel, DrainHole, HoleKind, HoleShape, HoleSize, HollowMode, HollowSettings,
-    InfillPattern, InfillSettings, ModelRead, PLUG_GAP_MM, VolumeError, drill, hole_at, hollow,
-    laid_beside, pierce, plug_wall_mm, plugs, sleeves, walled_by,
+    Blocker, CHANNEL_DIAMETER_MM, Cancel, Channel, DrainHole, HoleKind, HoleShape, HoleSize,
+    HollowMode, HollowSettings, InfillPattern, InfillSettings, PLUG_GAP_MM, VolumeError, drill,
+    hole_at, hollow, laid_beside, pierce, plug_wall_mm, sleeves, walled_by,
 };
 
 use crate::exit::{Cancelled, Stop};
@@ -147,7 +146,7 @@ pub struct HollowArgs {
     pub channels: Vec<Vec<Vec3>>,
 
     /// Diameter of the drainage channels, millimetres.
-    #[arg(long = "channel-size", value_name = "MM", default_value_t = 2.0)]
+    #[arg(long = "channel-size", value_name = "MM", default_value_t = CHANNEL_DIAMETER_MM)]
     pub channel_mm: Scalar,
 
     #[command(flatten)]
@@ -426,9 +425,7 @@ pub(crate) fn cut_plugs(
     wall_mm: Option<Scalar>,
     gap_mm: Scalar,
 ) -> Result<Vec<Mesh>> {
-    let read = ModelRead::new(Arc::new(mesh.clone()));
-    let (bvh, cancel) = (Bvh::build(mesh), Cancel::never());
-    let made = plugs(&mut None, &read, &bvh, holes, wall_mm, gap_mm, cancel)
+    let made = plugs_cut(mesh, holes, (wall_mm, gap_mm), Cancel::never())
         .context("cutting the plugs for the drain holes")?;
     if made.sampled > 0 {
         tracing::warn!(

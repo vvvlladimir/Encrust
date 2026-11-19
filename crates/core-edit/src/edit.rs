@@ -2,9 +2,14 @@ use core_engine::ShownAt;
 use core_engine::project::{Axis, HollowState, Keep, ObjectId};
 use core_geometry::{Scalar, Vec3};
 use core_joint::Joints;
-use core_volume::{HoleKind, HoleSize, ReliefSettings, RepairMethod, Tiling};
+use core_volume::{
+    CHANNEL_DIAMETER_MM, HoleKind, HoleSize, PLUG_GAP_MM, ReliefSettings, RepairMethod, Tiling,
+};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+/// The supports profile that sizes each support by what it holds, as `--supports auto`.
+pub const AUTO: &str = "auto";
 
 /// One action on a plate, naming the object it acts on; points and positions are plate
 /// millimetres.
@@ -131,15 +136,54 @@ pub enum Edit {
         object: ObjectId,
         settings: HollowState,
     },
-    /// Drills a hole of `size` and `kind` into the surface of `object` nearest each of `at_mm`,
-    /// as `--drain-at` does; the shell is not rebuilt, the holes are cut when it is baked.
+    /// Drills holes of `size` and `kind` nearest each of `at_mm`, as `--drain-at` does; with
+    /// `auto` a search adds the holes that drain every pocket, and `vent` a vent on each.
     Drain {
         object: ObjectId,
+        #[serde(default)]
         at_mm: Vec<Vec3>,
         #[serde(default)]
         size: HoleSize,
         #[serde(default)]
         kind: HoleKind,
+        #[serde(default)]
+        auto: bool,
+        #[serde(default = "yes")]
+        vent: bool,
+    },
+    /// Digs a drainage channel of `diameter_mm` along `points_mm` through `object`, as
+    /// `--channel` does.
+    Channel {
+        object: ObjectId,
+        points_mm: Vec<Vec3>,
+        #[serde(default = "channel_diameter_mm")]
+        diameter_mm: Scalar,
+    },
+    /// Lays a plug for each of the drain holes of `object` as new objects beside it, each
+    /// `gap_mm` narrower a side than its hole, as `--drain-plugs` does.
+    Plugs {
+        object: ObjectId,
+        #[serde(default = "plug_gap_mm")]
+        gap_mm: Scalar,
+    },
+    /// Spreads every printable object of the active plate, with its supports, over a plate
+    /// `plate_mm` across, `clearance_mm` apart, turning one no slide fits as the window does.
+    Arrange {
+        plate_mm: [Scalar; 2],
+        clearance_mm: Scalar,
+    },
+    /// Stands `object` the way it prints best for `goal`, the `pick`th best from 0, tilted at
+    /// most `max_tilt_deg` if set; `clean_surface` keeps to the fewest supports where it shows.
+    Orient {
+        object: ObjectId,
+        #[serde(default)]
+        goal: OrientAim,
+        #[serde(default)]
+        max_tilt_deg: Option<Scalar>,
+        #[serde(default)]
+        clean_surface: bool,
+        #[serde(default)]
+        pick: usize,
     },
     /// Stands supports under `object` by the shipped support preset `profile`, the plate's
     /// active group's where unset, and by a contact at the surface nearest each of `at_mm`;
@@ -173,6 +217,18 @@ fn raised_by_default() -> bool {
     true
 }
 
+fn yes() -> bool {
+    true
+}
+
+fn channel_diameter_mm() -> Scalar {
+    CHANNEL_DIAMETER_MM
+}
+
+fn plug_gap_mm() -> Scalar {
+    PLUG_GAP_MM
+}
+
 /// How `Edit::Combine` joins its objects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -181,6 +237,44 @@ pub enum Op {
     /// The first object less every other.
     Difference,
     Intersection,
+}
+
+/// What an `Edit::Orient` stands a model for.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OrientAim {
+    /// Every goal weighed against the others.
+    #[default]
+    Auto,
+    FewestSupports,
+    LeastPeel,
+    ShortestPrint,
+}
+
+impl OrientAim {
+    /// Every aim, with the word that names it in a file, a flag and a recipe.
+    pub const WORDS: [(&'static str, Self); 4] = [
+        ("auto", Self::Auto),
+        ("fewest-supports", Self::FewestSupports),
+        ("least-peel", Self::LeastPeel),
+        ("shortest-print", Self::ShortestPrint),
+    ];
+
+    /// The words of `WORDS` alone, in the same order.
+    pub const NAMES: [&'static str; Self::WORDS.len()] = [
+        Self::WORDS[0].0,
+        Self::WORDS[1].0,
+        Self::WORDS[2].0,
+        Self::WORDS[3].0,
+    ];
+
+    /// The aim `word` names; any other word is `auto`.
+    pub fn named(word: &str) -> Self {
+        Self::WORDS
+            .iter()
+            .find(|(name, _)| *name == word)
+            .map_or(Self::Auto, |(_, aim)| *aim)
+    }
 }
 
 #[cfg(test)]

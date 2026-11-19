@@ -7,7 +7,7 @@ use anyhow::Result;
 use core_recipe::{Decision, Metric, OnFail, Plan, StepKind, decide};
 
 use super::step::Going;
-use super::work::{self, Batch, CheckFixes, NotYet, Settings, Work};
+use super::work::{Batch, CheckFixes, NotYet, Settings, Work};
 use super::{IDLE_POLLS, Run, Step};
 use crate::arrange::{arrange_plate, clear_the_way};
 use crate::check::IssueKind;
@@ -386,8 +386,8 @@ fn batches(kind: StepKind, runs: Vec<(ObjectId, Settings)>) -> Result<Vec<Batch>
 fn gathered(kind: StepKind, runs: Vec<(ObjectId, Settings)>) -> Result<Vec<Batch>, NotYet> {
     let mut batches: Vec<Batch> = Vec::new();
     for (id, settings) in runs {
-        let work = Work::of(kind, &settings)?;
-        let inside = work::cavity(&settings).then_some(id);
+        let (work, cavity) = Work::of(kind, &settings)?;
+        let inside = cavity.then_some(id);
         match batches.iter_mut().find(|batch| batch.work == work) {
             Some(batch) => {
                 batch.ids.push(id);

@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use core_edit::OrientAim;
 use core_geometry::Scalar;
 
 use crate::condition::Condition;
@@ -89,10 +90,7 @@ impl StepKind {
         match self {
             Self::Repair => &[("method", Word(&["repair", "close-holes", "wrap", "deep"]))],
             Self::Orient => &[
-                (
-                    "goal",
-                    Word(&["auto", "fewest-supports", "least-peel", "shortest-print"]),
-                ),
+                ("goal", Word(&OrientAim::NAMES)),
                 ("max_tilt_deg", Number),
                 ("clean_surface", Bool),
             ],

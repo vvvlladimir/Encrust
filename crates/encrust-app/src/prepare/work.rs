@@ -1,11 +1,12 @@
 //! What a recipe step's resolved settings ask of a tool's job; a key left out takes the
 //! engine's default, never what a panel holds (`docs/design/recipes.md`).
 
-use core_engine::{PREPARE_ORIENT, PREPARE_REPAIR};
-use core_geometry::{MendMethod, Scalar, Transform};
-use core_plate::{ArrangeSettings, Asked};
-use core_recipe::resolved::{flag, number, points, text};
-use core_recipe::{StepKind, preset_of};
+use core_document::preset_of;
+use core_edit::{AUTO, Edit, ObjectId as EditId};
+use core_geometry::{Aabb, Scalar, Transform, Vec3};
+use core_plate::Asked;
+use core_recipe::resolved::{flag, text};
+use core_recipe::{StepKind, arrange_of, edits_of};
 use core_volume::{HoleSize, HollowMode, HollowSettings, InfillSettings, RepairMethod, plate_down};
 
 use super::Step;
@@ -106,24 +107,13 @@ impl Batch {
 }
 
 impl Work {
-    /// What step `kind` asks with `settings`.
-    pub(super) fn of(kind: StepKind, settings: &Settings) -> Result<Self, NotYet> {
-        Ok(match kind {
-            StepKind::Orient => Self::Orient {
-                wanted: Asked {
-                    preset: text(settings, "goal").map_or(PREPARE_ORIENT, preset_of),
-                    clean_surface: flag(settings, "clean_surface").unwrap_or(false),
-                },
-                max_tilt_deg: number(settings, "max_tilt_deg"),
-            },
-            StepKind::Repair => {
-                Self::Repair(text(settings, "method").map_or(PREPARE_REPAIR, method_of))
-            }
-            StepKind::Hollow => Self::Hollow(Hollowed::of(settings)),
-            StepKind::Drain => drain_of(settings),
-            StepKind::Supports => Self::Supports {
-                profile: text(settings, "profile").unwrap_or("auto").to_owned(),
-                side: Side::Outside,
+    /// What step `kind` asks with `settings`, and whether its supports also hold the cavity.
+    pub(super) fn of(kind: StepKind, settings: &Settings) -> Result<(Self, bool), NotYet> {
+        let (spacing_mm, only_in_the_way) = arrange_of(settings);
+        let work = match kind {
+            StepKind::Arrange if only_in_the_way => Self::Arrange {
+                spacing_mm,
+                only_in_the_way,
             },
             StepKind::Check => Self::Check {
                 attempt: 0,
@@ -132,11 +122,6 @@ impl Work {
                     levers: flag(settings, "hold_levers").unwrap_or(false),
                 },
             },
-            StepKind::Arrange => Self::Arrange {
-                spacing_mm: number(settings, "spacing_mm")
-                    .unwrap_or(ArrangeSettings::default().clearance_mm),
-                only_in_the_way: flag(settings, "only_in_the_way").unwrap_or(false),
-            },
             StepKind::Save => Self::Save(Saved {
                 folder: text(settings, "folder").map(str::to_owned),
                 name: text(settings, "name").map(str::to_owned),
@@ -144,7 +129,74 @@ impl Work {
             }),
             // A gate and a pause are decided, never run.
             StepKind::Gate | StepKind::Pause => return Err(NotYet(kind)),
-        })
+            _ => {
+                let edits = stand_in_edits(kind, settings).ok_or(NotYet(kind))?;
+                return Self::of_edits(&edits).ok_or(NotYet(kind));
+            }
+        };
+        Ok((work, false))
+    }
+
+    /// The job a step's `edits` ask of a model, and whether its supports hold the cavity.
+    fn of_edits(edits: &[Edit]) -> Option<(Self, bool)> {
+        let work = match edits.first()? {
+            Edit::Orient {
+                goal,
+                max_tilt_deg,
+                clean_surface,
+                ..
+            } => Self::Orient {
+                wanted: Asked {
+                    preset: preset_of(*goal),
+                    clean_surface: *clean_surface,
+                },
+                max_tilt_deg: *max_tilt_deg,
+            },
+            Edit::Repair { method, .. } => Self::Repair(*method),
+            Edit::Hollow { settings, .. } => Self::Hollow(Hollowed {
+                wall_mm: settings.thickness_mm,
+                mode: settings.mode,
+                open_floor: settings.open_floor,
+                infill: settings.infill_on,
+                solid_under_mm: settings.solid_under_mm,
+            }),
+            Edit::Drain {
+                at_mm,
+                size,
+                auto,
+                vent,
+                ..
+            } => {
+                let plugs = edits.len() > 1;
+                if *auto {
+                    Self::DrainAuto {
+                        size: *size,
+                        vent: *vent,
+                        plugs,
+                    }
+                } else {
+                    // Against the unit box, a point comes back as its fractions.
+                    Self::DrainPoints {
+                        size: *size,
+                        points: at_mm.iter().map(|at| at.to_array()).collect(),
+                        plugs,
+                    }
+                }
+            }
+            Edit::Supports {
+                profile, cavity, ..
+            } => {
+                let profile = profile.clone().unwrap_or_else(|| AUTO.to_owned());
+                let side = Side::Outside;
+                return Some((Self::Supports { profile, side }, *cavity));
+            }
+            Edit::Arrange { clearance_mm, .. } => Self::Arrange {
+                spacing_mm: *clearance_mm,
+                only_in_the_way: false,
+            },
+            _ => return None,
+        };
+        Some((work, false))
     }
 
     /// The job the bar names it by.
@@ -185,28 +237,7 @@ impl Work {
     }
 }
 
-/// Whether a supports step holds the model up inside its cavity as well.
-pub(super) fn cavity(settings: &Settings) -> bool {
-    flag(settings, "cavity").unwrap_or(false)
-}
-
 impl Hollowed {
-    fn of(settings: &Settings) -> Self {
-        let default = HollowSettings::default();
-        let (mode, open_floor) = match text(settings, "mode") {
-            Some("outside") => (HollowMode::External, false),
-            Some("open-floor") => (HollowMode::Internal, true),
-            _ => (default.mode, false),
-        };
-        Self {
-            wall_mm: number(settings, "wall_mm").unwrap_or(default.thickness_mm),
-            mode,
-            open_floor,
-            infill: flag(settings, "infill").unwrap_or(false),
-            solid_under_mm: number(settings, "keep_solid_under_mm"),
-        }
-    }
-
     /// Hollow's settings for a model placed by `transform`, its floor opened toward the plate.
     pub(super) fn settings_for(self, transform: Transform) -> HollowSettings {
         HollowSettings {
@@ -220,34 +251,9 @@ impl Hollowed {
     }
 }
 
-fn drain_of(settings: &Settings) -> Work {
-    // Left out, a recipe lays no plug, as the command line lays none without the flag.
-    let plugs = flag(settings, "plugs").unwrap_or(false);
-    let default = HoleSize::default();
-    let size = HoleSize {
-        diameter_mm: number(settings, "diameter_mm").unwrap_or(default.diameter_mm),
-        depth_mm: number(settings, "depth_mm").unwrap_or(default.depth_mm),
-        ..default
-    };
-    match text(settings, "at") {
-        Some("points") => Work::DrainPoints {
-            size,
-            points: points(settings, "points").to_vec(),
-            plugs,
-        },
-        _ => Work::DrainAuto {
-            size,
-            vent: flag(settings, "vent").unwrap_or(true),
-            plugs,
-        },
-    }
-}
-
-fn method_of(method: &str) -> RepairMethod {
-    match method {
-        "close-holes" => RepairMethod::Mend(MendMethod::CloseHoles),
-        "wrap" => RepairMethod::Wrap,
-        "deep" => RepairMethod::Deep,
-        _ => RepairMethod::Mend(MendMethod::Repair),
-    }
+/// The edits a step of `kind` makes of a stand-in model: no object, a unit box and no plate,
+/// which `Work` reads back as fractions and ignores.
+fn stand_in_edits(kind: StepKind, settings: &Settings) -> Option<Vec<Edit>> {
+    let unit = Aabb::new(Vec3::ZERO, Vec3::ONE);
+    edits_of(kind, settings, EditId::UNSET, unit, [0.0; 2]).ok()
 }

@@ -1,5 +1,5 @@
 //! What a revision asks of the plate beyond the one before it, as edits of the job's model
-//! (ADR 0466): repaired, mended, pressed, sized, turned, labelled, split, cut, hollowed, drained.
+//! (ADR 0466): repaired, mended, pressed, sized, turned, labelled, split, cut, hollowed, drained, channelled, plugged.
 
 use core_edit::{Edit, ObjectId};
 use serde_json::{Value, json};
@@ -73,7 +73,7 @@ pub fn asked_after_check(
         asked.push(hollow(recipe.hollow.as_ref()?, object)?);
     }
     if recipe.drains != earlier.drains {
-        asked.push(drained(
+        asked.extend(drained(
             recipe.drains.as_ref()?,
             earlier.drains.as_ref(),
             object,
@@ -203,38 +203,67 @@ fn hollow(hollow: &Hollow, object: ObjectId) -> Option<Edit> {
     }))
 }
 
-/// The holes `now` drills at points beyond those `then` did, all else alike; the engine's
-/// search, plugs, channels and holes into the supports are no edit yet (`None`).
-fn drained(now: &Drains, then: Option<&Drains>, object: ObjectId) -> Option<Edit> {
-    let drilled_before = then.map_or(&[][..], |then| then.at_mm.as_slice());
-    let rest_alike = then.is_none_or(|then| {
-        Drains {
-            at_mm: Vec::new(),
-            ..then.clone()
-        } == Drains {
-            at_mm: Vec::new(),
-            ..now.clone()
-        }
-    });
-    let at_points_only = !now.auto
-        && !now.plugs
-        && now.channels.is_empty()
-        && now.support_at_mm.is_empty()
-        && matches!(now.kind, None | Some(HoleKind::Drain));
-    if !(rest_alike && at_points_only && now.at_mm.starts_with(drilled_before)) {
+/// The holes, search, channels and plugs `now` asks beyond `then`; holes into the supports,
+/// walled holes, a size changed or anything taken back are no edit yet (`None`).
+fn drained(now: &Drains, then: Option<&Drains>, object: ObjectId) -> Option<Vec<Edit>> {
+    let blank = Drains::default();
+    let first = then.is_none();
+    let then = then.unwrap_or(&blank);
+    // What a later revision may only add to; the rest must stay as it was.
+    let fixed = |drains: &Drains| Drains {
+        at_mm: Vec::new(),
+        auto: false,
+        vent: true,
+        plugs: false,
+        channels: Vec::new(),
+        ..drains.clone()
+    };
+    let alike = first || fixed(now) == fixed(then) && (!then.auto || now.vent == then.vent);
+    let nothing_taken_back = now.at_mm.starts_with(&then.at_mm)
+        && now.channels.starts_with(&then.channels)
+        && now.auto >= then.auto
+        && now.plugs >= then.plugs;
+    let drain_kind = matches!(now.kind, None | Some(HoleKind::Drain));
+    if !(alike && nothing_taken_back && drain_kind && now.support_at_mm.is_empty()) {
         return None;
     }
-    let shape = now
+    let mut asked = Vec::new();
+    let points = &now.at_mm[then.at_mm.len()..];
+    let search = now.auto && !then.auto;
+    if !points.is_empty() || search {
+        asked.push(holes(now, points, search, object)?);
+    }
+    for points_mm in &now.channels[then.channels.len()..] {
+        let mut channel = json!({"edit": "channel", "object": object, "points_mm": points_mm});
+        if let Some(diameter_mm) = now.channel_mm {
+            channel["diameter_mm"] = json!(diameter_mm);
+        }
+        asked.push(edit_of(channel)?);
+    }
+    if now.plugs && (!then.plugs || !asked.is_empty()) {
+        let mut plugs = json!({"edit": "plugs", "object": object});
+        if let Some(gap_mm) = now.plug_gap_mm {
+            plugs["gap_mm"] = json!(gap_mm);
+        }
+        asked.push(edit_of(plugs)?);
+    }
+    Some(asked)
+}
+
+/// A `Drain` edit drilling `points` of `drains`' size, the engine's search too where `search`.
+fn holes(drains: &Drains, points: &[[f32; 3]], search: bool, object: ObjectId) -> Option<Edit> {
+    let shape = drains
         .sides
         .map_or(json!("round"), |sides| json!({"polygon": {"sides": sides}}));
     edit_of(json!({
-        "edit": "drain", "object": object, "at_mm": &now.at_mm[drilled_before.len()..],
+        "edit": "drain", "object": object, "at_mm": points,
+        "auto": search, "vent": search && drains.vent,
         "size": {
-            "diameter_mm": now.diameter_mm,
-            "depth_mm": now.depth_mm.unwrap_or(DRAIN_DEPTH_MM),
-            "taper": now.taper.unwrap_or(1.0),
+            "diameter_mm": drains.diameter_mm,
+            "depth_mm": drains.depth_mm.unwrap_or(DRAIN_DEPTH_MM),
+            "taper": drains.taper.unwrap_or(1.0),
             "shape": shape,
-            "turn_deg": now.turn_deg.unwrap_or(0.0),
+            "turn_deg": drains.turn_deg.unwrap_or(0.0),
         },
     }))
 }
