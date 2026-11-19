@@ -249,3 +249,22 @@ proptest! {
         prop_assert_eq!(back, edit);
     }
 }
+
+#[test]
+fn a_drain_written_by_hand_defaults_its_size_and_kind() {
+    let text = r#"{"edit":"drain","object":2,"at_mm":[[5.0,5.0,10.5]]}"#;
+    let parsed = serde_json::from_str::<Edit>(text);
+    let Ok(Edit::Drain {
+        object,
+        at_mm,
+        size,
+        kind,
+    }) = parsed
+    else {
+        panic!("a drain with its points is an edit: {parsed:?}");
+    };
+    assert_eq!(object, ObjectId(2));
+    assert_eq!(at_mm.len(), 1);
+    assert_eq!(size, core_volume::HoleSize::default());
+    assert_eq!(kind, core_volume::HoleKind::Drain);
+}

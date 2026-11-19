@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
 use core_edit::ObjectId;
+use core_geometry::Vec3;
 use thiserror::Error;
 
 /// Why an edit was not carried out; the document is left as it was.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Error)]
 pub enum ApplyError {
     #[error("no object {0:?} on the plate")]
     NoObject(ObjectId),
@@ -52,6 +53,17 @@ pub enum ApplyError {
     /// A wall as thick as the model, leaving no room for a cavity.
     #[error("object {0:?} has no room for a cavity at that wall")]
     NoRoom(ObjectId),
+    /// A drain point nearest an edge or corner, where its hole would sit half off the model.
+    #[error("the point {at_mm} on object {object:?} is nearest an edge or corner, at {mouth_mm}")]
+    OffAFace {
+        object: ObjectId,
+        at_mm: Vec3,
+        /// Where the hole's mouth would be, in plate mm.
+        mouth_mm: Vec3,
+    },
+    /// An object whose transform cannot be inverted, so no plate point maps onto it.
+    #[error("object {0:?} has a transform that cannot be inverted")]
+    BadTransform(ObjectId),
     /// The run was stopped before it finished.
     #[error("the edit was cancelled")]
     Cancelled,

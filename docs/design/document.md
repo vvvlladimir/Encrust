@@ -117,6 +117,12 @@ settings (an open floor faces the plate), the object's blockers and channels lai
 `NoRoom`, else `Cancelled` or `Failed`. The window runs it as the Hollow tool's job on that object
 alone; its field cache stays the window's.
 
+`Drain { object, at_mm, size, kind }` takes each plate point into the object's own space and
+drills `hole_near` its source mesh (the CLI's `--drain-at` call), adding it to the object's
+`ModelHollow`; the shell is not rebuilt, the holes are cut at bake (`Report::Drained`). No
+surface near a point is `NoSurface`, a point nearest an edge or corner `OffAFace`. The window
+drills at once on its own `ModelHollow`.
+
 ## Undo
 
 The window keeps snapshots of its scene (ADR 0086); a document applied is one entry. The

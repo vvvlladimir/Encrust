@@ -1085,7 +1085,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 |---|---|
 | `slice` | One model, several models on one plate, a plate file (TOML) or a project, to a printer file or PNGs. A project slices one plate of your choosing or all of them, a file each. Orient, support, hollow, drain, relief, exposure bands, adaptive layers and island removal are all flags. |
 | `batch` | A whole folder of models, several at once, with a JSON report for each. A model that fails does not stop the rest. |
-| `estimate` | Time, resin, weight, cost and risky layers, without writing a file; the recipe the run took, your flags written into its steps, with `--recipe-out`. A project's plate edited first by a list of edits — a cut, a split, a part-off, a combine, a label, a repair, a mend by hand, a picture pressed in as relief, a hollowing, a move, a turn, a scale, a delete, a duplicate and a mirror — and the plate they leave written as a project. |
+| `estimate` | Time, resin, weight, cost and risky layers, without writing a file; the recipe the run took, your flags written into its steps, with `--recipe-out`. A project's plate edited first by a list of edits — a cut, a split, a part-off, a combine, a label, a repair, a mend by hand, a picture pressed in as relief, a hollowing, drain holes at points, a move, a turn, a scale, a delete, a duplicate and a mirror — and the plate they leave written as a project. |
 | `inspect` | What is wrong with a model and whether it fits. |
 | `render` | The plate as `slice` would build it — hollowed, drilled, supported — drawn as PNG pictures from the sides you name, the bottom included, with points of your choosing marked even where the model hides them. For a person at a terminal, or a model that reads images. |
 | `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
@@ -1114,9 +1114,11 @@ waiting or ended, with its latest models and what the check found; a click
 shows one on the plate as Prepare for print by the same recipe the check ran, one undo, on
 the job's printer and resin, whenever the window was opened. With Follow agents on, each
 step an agent keeps is run on the plate as it comes; asked to show you the model, the agent
-puts it on the plate itself, opening Encrust if it is closed. A point, a pose
-picked from the list or turned by hand, the modelling and the slicing are not run there yet;
-the answer names what was left out. It asks what the print is for and can prepare it by
+puts it on the plate itself, opening Encrust if it is closed. Followed, the window owns the
+plate: a repair, faces mended, a picture pressed in, a scale, a turn typed, a label, a split
+or a cut an agent makes lands there as an edit of the model on it, one undo each, and a cut
+you undo there is gone from the agent's next step too. A hollow, drains, supports and a pose
+the search picked still reach it by the recipe; the answer names what was left out. It asks what the print is for and can prepare it by
 another recipe, such as Miniatures; it can be told which side of the model is looked at, so
 the supports there are sparser and lighter. A way of preparing that worked, or one you
 describe in words, it keeps as a recipe of your own, which the window's Prepare for print then

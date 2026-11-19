@@ -217,6 +217,23 @@ fn a_wall_as_thick_as_the_cube_is_answered_not_applied() {
 }
 
 #[test]
+fn a_drain_drills_a_hole_into_the_cube_at_once_and_keeps_its_id() {
+    let file = scratch("drain");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let drain = json!({"base_version": version,
+        "apply": [{"edit": "drain", "object": cube.0, "at_mm": [[5.0, 5.0, 10.5]]}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, drain));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("a drain keeps the id");
+    assert_eq!(object.hollow.drains().len(), 1, "one hole in the cube");
+}
+
+#[test]
 fn edits_built_on_a_plate_since_changed_are_answered_stale_and_not_applied() {
     let file = scratch("stale");
     let mut bench = Bench::new(file.clone());

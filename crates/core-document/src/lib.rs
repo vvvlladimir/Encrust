@@ -5,6 +5,7 @@ mod apply;
 mod combine;
 mod cut;
 mod document;
+mod drain;
 mod error;
 #[cfg(test)]
 mod fixtures;
@@ -21,6 +22,7 @@ pub use apply::{Applied, Report, apply};
 pub use combine::{boolean_of, combined};
 pub use cut::{CutAsked, CutModel, axis_normal, cut, pieces};
 pub use document::Document;
+pub use drain::hole_near;
 pub use error::ApplyError;
 pub use hollow::{NoRoom, settings_of, shell_from, shelled};
 pub use label::{LabelAsked, Lettering, label_prisms, labelled};

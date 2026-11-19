@@ -1,7 +1,7 @@
 use core_engine::project::{Axis, HollowState, Keep, ObjectId};
 use core_geometry::{Scalar, Vec3};
 use core_joint::Joints;
-use core_volume::{ReliefSettings, RepairMethod, Tiling};
+use core_volume::{HoleKind, HoleSize, ReliefSettings, RepairMethod, Tiling};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -129,6 +129,16 @@ pub enum Edit {
     Hollow {
         object: ObjectId,
         settings: HollowState,
+    },
+    /// Drills a hole of `size` and `kind` into the surface of `object` nearest each of `at_mm`,
+    /// as `--drain-at` does; the shell is not rebuilt, the holes are cut when it is baked.
+    Drain {
+        object: ObjectId,
+        at_mm: Vec<Vec3>,
+        #[serde(default)]
+        size: HoleSize,
+        #[serde(default)]
+        kind: HoleKind,
     },
 }
 
