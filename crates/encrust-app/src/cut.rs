@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use core_document::{CutAsked, CutModel, Role, axis_normal};
 use core_geometry::{Plane, Scalar, Vec3, transform_mesh};
-use core_joint::{JointKind, Joints};
+use core_joint::JointKind;
 use core_volume::{PartSettings, PartedOff};
 
 pub use core_engine::project::Keep;
@@ -20,7 +20,7 @@ use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
 
 /// Where the Cut tool's plane is, and what it does with the halves.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CutTool {
     /// What the panel is set to, in the shape a project writes it down in (ADR 0191),
     /// joints included (ADR 0306). Its `height_mm` is where the plane crosses the axis:
@@ -49,26 +49,6 @@ struct Running {
     job: CutJob,
     taken: Taken,
     asked: CutAsked,
-}
-
-impl Default for CutTool {
-    fn default() -> Self {
-        Self {
-            state: CutState {
-                axis: Axis::Z,
-                height_mm: 10.0,
-                keep: Keep::Both,
-                joints: Joints::default(),
-                parts: core_volume::PartSettings::default(),
-            },
-            lay_flat: false,
-            centred_on: None,
-            running: None,
-            splitting: None,
-            picking_part: false,
-            part_mark: None,
-        }
-    }
 }
 
 impl CutTool {

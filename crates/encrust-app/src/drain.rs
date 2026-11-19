@@ -32,7 +32,7 @@ pub enum Placing {
 ///
 /// The sizes are baked into each hole as it is placed, the way a blocker takes the size it
 /// was dropped at, so moving a slider changes the next hole and not the ones standing.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DrainTool {
     /// What the panel is set to, in the shape a project writes it down in (ADR 0191).
     pub state: DrainState,
@@ -50,28 +50,6 @@ pub struct DrainTool {
     /// Plugs cut that wait for their model's holes to be taken out, to land with them.
     held: Vec<plugs::Ended>,
     read: Option<plugs::ReadModel>,
-}
-
-/// The panel's numbers before the user sets any: the engine's own hole.
-fn default_state() -> DrainState {
-    let hole = HoleSize::default();
-    DrainState::round(hole.diameter_mm, hole.depth_mm, hole.taper)
-}
-
-impl Default for DrainTool {
-    fn default() -> Self {
-        Self {
-            state: default_state(),
-            placing: Placing::default(),
-            job: None,
-            auto: None,
-            checked: false,
-            laying: Vec::new(),
-            waiting: Vec::new(),
-            held: Vec::new(),
-            read: None,
-        }
-    }
 }
 
 impl DrainTool {

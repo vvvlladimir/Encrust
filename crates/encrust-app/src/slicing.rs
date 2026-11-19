@@ -1,3 +1,4 @@
+use core_engine::project::SlicingState;
 use std::num::NonZeroU8;
 use std::path::{Path, PathBuf};
 
@@ -94,6 +95,7 @@ pub struct Written {
 impl Default for Slicing {
     fn default() -> Self {
         let material = MaterialProfile::default();
+        let state = SlicingState::default();
         Self {
             printer: None,
             printer_id: None,
@@ -108,9 +110,9 @@ impl Default for Slicing {
             exposure: Vec::new(),
             samples: ONE_SAMPLE,
             edges: EdgeSmoothing::default(),
-            remove_islands: false,
-            hanging_passes: 0,
-            format: SlicedFormat::default(),
+            remove_islands: state.remove_islands,
+            hanging_passes: state.hanging_passes,
+            format: state.format.into(),
             rescaled: None,
             job: None,
             written: None,

@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use core_document::settings_of;
 use core_engine::project::HollowState;
 use core_geometry::PlacedHit;
-use core_volume::{Blocker, BlockerSize, HollowSettings, InfillSettings, blocker_under};
+use core_volume::{Blocker, BlockerSize, HollowSettings, blocker_under};
 
 use crate::i18n::tr;
 use crate::job::{
@@ -19,7 +19,7 @@ use crate::status::Status;
 /// The numbers live here rather than in a profile because a wall thickness is a property
 /// of the model being printed, not of the machine printing it; see
 /// `docs/decisions/0059-a-hollow-is-the-model-with-its-cavity-appended.md`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct HollowTool {
     /// What the panel is set to, in the shape a project writes it down in (ADR 0191).
     pub state: HollowState,
@@ -32,27 +32,6 @@ pub struct HollowTool {
     /// The cavity fields of the models hollowed lately, so a blocker or a channel moved on
     /// one cuts its cavity again without building the field.
     fields: SharedFields,
-}
-
-impl Default for HollowTool {
-    fn default() -> Self {
-        let asked = HollowSettings::default();
-        Self {
-            state: HollowState {
-                thickness_mm: asked.thickness_mm,
-                mode: asked.mode,
-                precision: asked.precision,
-                infill_on: false,
-                infill: InfillSettings::default(),
-                open_floor: false,
-                solid_under_mm: asked.solid_under_mm,
-            },
-            blocker: BlockerSize::default(),
-            job: None,
-            hollowed: false,
-            fields: SharedFields::default(),
-        }
-    }
 }
 
 impl HollowTool {
