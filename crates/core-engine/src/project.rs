@@ -2,9 +2,11 @@
 //! pure functions are redone in `restore`; see `docs/formats/encrust-project.md`, ADR 0191.
 
 mod blob;
+mod defaults;
 mod ids;
 mod restore;
 
+pub use defaults::{FIRST_GROUP, FIRST_PLATE};
 pub use ids::{ObjectId, assign as assign_ids};
 pub use restore::{hollow_of, supports_of};
 
@@ -191,7 +193,7 @@ pub struct Manifest {
 
 /// What the plate's slices do beyond the print settings, which are taken from the printer
 /// and resin each time a project opens (ADR 0380).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SlicingState {
     pub remove_islands: bool,
     /// Layers more of what stood on an island taken out that go too; absent, and so

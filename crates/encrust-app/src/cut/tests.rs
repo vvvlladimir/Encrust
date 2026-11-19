@@ -1,6 +1,7 @@
 use super::*;
 use crate::scene::{ImportSummary, Imported};
 use core_geometry::{Mesh, Transform, diagnose, signed_volume};
+use core_joint::Joints;
 use std::sync::Arc;
 
 /// The tool set to one plane: where it crosses `axis`, and which halves to keep.

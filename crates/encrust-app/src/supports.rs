@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use core_engine::project::{AutoSizing, FillProfiles};
+use core_engine::project::{AutoSizing, FIRST_GROUP, FillProfiles, SupportState};
 use core_geometry::{Mesh, Scalar, Vec2, Vec3};
 use core_supports::{Part, ProjectSettings, Refused, SupportTree};
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, Raft, SupportProfile};
@@ -27,9 +27,6 @@ const LINE_START_MM: Scalar = 1e-3;
 use crate::i18n::tr;
 use crate::job::SupportJob;
 use crate::scene::{ObjectId, Scene, SceneObject};
-
-/// What the one group a plate starts with is called until a profile is chosen for it.
-const FIRST_GROUP: &str = "Default";
 
 /// The group the Check tool stands island supports in, apart from the ones built by hand.
 pub const ISLANDS_GROUP: &str = "Islands";
@@ -195,23 +192,28 @@ pub struct SupportTool {
 
 impl Default for SupportTool {
     fn default() -> Self {
+        let state = SupportState::default();
         Self {
             profile: SupportProfile::default(),
-            groups: vec![SupportGroup {
-                name: FIRST_GROUP.to_owned(),
-                profile: SupportProfile::default(),
-                hidden: false,
-            }],
-            active: 0,
+            groups: state
+                .groups
+                .into_iter()
+                .map(|group| SupportGroup {
+                    name: group.name,
+                    profile: group.profile,
+                    hidden: false,
+                })
+                .collect(),
+            active: state.active,
             picked: Vec::new(),
             carry: None,
             placing: Placing::default(),
-            brush_radius_mm: 2.0,
-            flood_angle_deg: 30.0,
-            fill: ProjectSettings::default(),
-            fill_profiles: FillProfiles::default(),
+            brush_radius_mm: state.brush_radius_mm,
+            flood_angle_deg: state.flood_angle_deg,
+            fill: state.fill,
+            fill_profiles: state.fill_profiles,
             side: Side::Outside,
-            inline_spacing_mm: core_supports::INLINE_SPACING_MM,
+            inline_spacing_mm: state.inline_spacing_mm,
             last_placed: None,
             stroke: false,
             last_daub: None,
