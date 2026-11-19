@@ -493,3 +493,10 @@ Done when: a 10 mm cube lifted 5 mm (translation z 5) supported with `medium` ge
   one point at (5,5,5) ± 1e-3; `profile: "auto"` → `NoProfile`; the plate written and read back
   keeps the trees. Window link test of `Supports` with `only_at`. Existing tests pass.
 Not now: `auto` sizing, the cavity's inside, merges, shown-at strokes, MCP (S4).
+
+## Status (2026-11-19, later)
+Done: C13a–c (with a followed window a revision of edits is checked on its plate and kept as
+`N.encrust` + `N.edits.json`); S1, S3, S4 (supports the window's way, by a named preset).
+Open: supports sized `auto` as an edit (needs the machine's sizing in the Document), a
+cavity's inside, merges, shown-at strokes; C10b; C2b; C12; C14; `Only.sized` in
+encrust-app/src/supports/start.rs is always false now and can go.
