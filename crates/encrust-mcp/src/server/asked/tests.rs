@@ -1,5 +1,5 @@
 use super::*;
-use crate::recipe::{Cut, Hollow};
+use crate::recipe::{Cut, Drains, Hollow};
 
 const MODEL: ObjectId = ObjectId(3);
 
@@ -70,11 +70,64 @@ fn a_full_repair_reads_as_the_windows_repair() {
 }
 
 #[test]
-fn a_hollow_asked_is_no_edit_yet_and_the_revision_is_shown_as_before() {
+fn a_hollow_asked_is_the_windows_hollow_by_its_numbers() {
     let recipe = Recipe {
         hollow: Some(Hollow {
             wall_mm: 2.0,
             ..Hollow::default()
+        }),
+        ..bare()
+    };
+    let asked = asked_edits(&recipe, &bare(), MODEL).expect("a hollow is an edit");
+    assert!(
+        matches!(asked.as_slice(), [Edit::Hollow { settings, .. }] if (settings.thickness_mm - 2.0).abs() < 1e-6),
+        "{asked:?}"
+    );
+}
+
+#[test]
+fn walls_kept_solid_at_points_are_no_edit_yet_and_the_revision_is_shown_as_before() {
+    let recipe = Recipe {
+        hollow: Some(Hollow {
+            wall_mm: 2.0,
+            keep_solid_at_mm: vec![[1.0, 1.0, 1.0]],
+            ..Hollow::default()
+        }),
+        ..bare()
+    };
+    assert_eq!(asked_edits(&recipe, &bare(), MODEL), None);
+}
+
+#[test]
+fn a_second_drain_point_drills_that_hole_alone() {
+    let drains = |at_mm: Vec<[f32; 3]>| Drains {
+        diameter_mm: 3.0,
+        vent: true,
+        at_mm,
+        ..Drains::default()
+    };
+    let earlier = Recipe {
+        drains: Some(drains(vec![[1.0, 1.0, 1.0]])),
+        ..bare()
+    };
+    let recipe = Recipe {
+        drains: Some(drains(vec![[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])),
+        ..bare()
+    };
+    let asked = asked_edits(&recipe, &earlier, MODEL).expect("a point added is an edit");
+    assert!(
+        matches!(asked.as_slice(), [Edit::Drain { at_mm, .. }] if at_mm.len() == 1 && (at_mm[0].x - 2.0).abs() < 1e-6),
+        "{asked:?}"
+    );
+}
+
+#[test]
+fn drains_the_engine_searches_for_are_no_edit_yet() {
+    let recipe = Recipe {
+        drains: Some(Drains {
+            diameter_mm: 3.0,
+            auto: true,
+            ..Drains::default()
         }),
         ..bare()
     };

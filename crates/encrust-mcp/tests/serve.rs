@@ -646,7 +646,8 @@ async fn each_revision_keeps_the_steps_its_check_ran_and_hands_them_to_the_open_
     let edited = call(
         &client,
         "set_hollow",
-        json!({"job": job, "hollow": {"wall_mm": 2.5}}),
+        // Walls kept solid at points are no edit yet, so the revision goes by its recipe.
+        json!({"job": job, "hollow": {"wall_mm": 2.5, "keep_solid_at_mm": [[10.0, 10.0, 10.0]]}}),
     )
     .await;
     assert_eq!(answer(&edited)["window"], json!({"shown": true}));

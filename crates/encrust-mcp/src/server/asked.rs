@@ -1,10 +1,18 @@
 //! What a revision asks of the plate beyond the one before it, as edits of the job's model
-//! (ADR 0466): repaired, mended, pressed, sized, turned, labelled, split, then cut.
+//! (ADR 0466): repaired, mended, pressed, sized, turned, labelled, split, cut, hollowed, drained.
 
 use core_edit::{Edit, ObjectId};
 use serde_json::{Value, json};
 
-use crate::recipe::{Mend, Modelling, Pose, Recipe, Relief, Repair};
+use crate::recipe::{Drains, HoleKind, Hollow, Mend, Modelling, Pose, Recipe, Relief, Repair};
+
+/// What `--precision` is when not typed.
+const PRECISION: f32 = 0.5;
+/// What `--infill-cell` and `--infill-density` are when not typed.
+const INFILL_CELL_MM: f32 = 8.0;
+const INFILL_DENSITY: f32 = 0.25;
+/// How far past the surface `--drain` reaches when not typed, mm.
+const DRAIN_DEPTH_MM: f32 = 3.0;
 
 /// The edits `recipe` asks beyond `earlier` of `object`, in the order they are made; `None`
 /// where something changed that no edit carries yet, so the revision is shown as before.
@@ -44,18 +52,26 @@ pub fn asked_edits(recipe: &Recipe, earlier: &Recipe, object: ObjectId) -> Optio
         };
         asked.insert(at.unwrap_or(asked.len()), turned);
     }
+    if recipe.hollow != earlier.hollow {
+        asked.push(hollow(recipe.hollow.as_ref()?, object)?);
+    }
+    if recipe.drains != earlier.drains {
+        asked.push(drained(
+            recipe.drains.as_ref()?,
+            earlier.drains.as_ref(),
+            object,
+        )?);
+    }
     Some(asked)
 }
 
-/// Whether nothing changed between the two that no edit carries: the hollow, the drains,
-/// the supports, the way steps are decided or a combination.
+/// Whether nothing changed between the two that no edit carries: the supports, the way steps
+/// are decided or a combination.
 fn plate_alike(recipe: &Recipe, earlier: &Recipe) -> bool {
     // `arrange` comes with every cut and split the command line lays apart; the window lays
     // the pieces out itself, so only a combination is asked of the plate.
     let joined = |modelling: Option<&Modelling>| modelling.and_then(|m| m.combine.clone());
-    recipe.hollow == earlier.hollow
-        && recipe.drains == earlier.drains
-        && recipe.supports == earlier.supports
+    recipe.supports == earlier.supports
         && recipe.prepare == earlier.prepare
         && recipe.steps_by == earlier.steps_by
         && recipe.model == earlier.model
@@ -143,6 +159,64 @@ fn relief(relief: &Relief, object: ObjectId) -> Option<Edit> {
         }
     }
     edit_of(asked)
+}
+
+/// The window's numbers for a hollow; walls kept solid at points are no edit yet (`None`).
+fn hollow(hollow: &Hollow, object: ObjectId) -> Option<Edit> {
+    if !hollow.keep_solid_at_mm.is_empty() {
+        return None;
+    }
+    let pattern = hollow.infill.map(|infill| json!(infill));
+    edit_of(json!({
+        "edit": "hollow", "object": object, "settings": {
+            "thickness_mm": hollow.wall_mm,
+            "mode": hollow.mode.map_or(json!("internal"), |mode| json!(mode)),
+            "precision": hollow.precision.unwrap_or(PRECISION),
+            "infill_on": pattern.is_some(),
+            "infill": {
+                "pattern": pattern.unwrap_or(json!("hive")),
+                "cell_mm": hollow.infill_cell_mm.unwrap_or(INFILL_CELL_MM),
+                "density": hollow.infill_density.unwrap_or(INFILL_DENSITY),
+            },
+            "open_floor": hollow.open_floor,
+        },
+    }))
+}
+
+/// The holes `now` drills at points beyond those `then` did, all else alike; the engine's
+/// search, plugs, channels and holes into the supports are no edit yet (`None`).
+fn drained(now: &Drains, then: Option<&Drains>, object: ObjectId) -> Option<Edit> {
+    let drilled_before = then.map_or(&[][..], |then| then.at_mm.as_slice());
+    let rest_alike = then.is_none_or(|then| {
+        Drains {
+            at_mm: Vec::new(),
+            ..then.clone()
+        } == Drains {
+            at_mm: Vec::new(),
+            ..now.clone()
+        }
+    });
+    let at_points_only = !now.auto
+        && !now.plugs
+        && now.channels.is_empty()
+        && now.support_at_mm.is_empty()
+        && matches!(now.kind, None | Some(HoleKind::Drain));
+    if !(rest_alike && at_points_only && now.at_mm.starts_with(drilled_before)) {
+        return None;
+    }
+    let shape = now
+        .sides
+        .map_or(json!("round"), |sides| json!({"polygon": {"sides": sides}}));
+    edit_of(json!({
+        "edit": "drain", "object": object, "at_mm": &now.at_mm[drilled_before.len()..],
+        "size": {
+            "diameter_mm": now.diameter_mm,
+            "depth_mm": now.depth_mm.unwrap_or(DRAIN_DEPTH_MM),
+            "taper": now.taper.unwrap_or(1.0),
+            "shape": shape,
+            "turn_deg": now.turn_deg.unwrap_or(0.0),
+        },
+    }))
 }
 
 /// An edit written as the window reads it; `None` for one this build's `Edit` does not take.
