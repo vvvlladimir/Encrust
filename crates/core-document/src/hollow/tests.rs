@@ -9,8 +9,8 @@ use crate::fixtures::cube_of;
 
 const CUBE: ObjectId = ObjectId(1);
 /// What the cavity lattice's rounded corners move the material of a hollowed cube by, mm³:
-/// 58 at precision 0.85, which is where the lattice stops getting closer.
-const LATTICE_MM3: Scalar = 80.0;
+/// 39 at precision 1.0, the finest lattice.
+const LATTICE_MM3: Scalar = 50.0;
 
 fn walled(thickness_mm: Scalar) -> Edit {
     Edit::Hollow {
@@ -18,7 +18,7 @@ fn walled(thickness_mm: Scalar) -> Edit {
         settings: HollowState {
             thickness_mm,
             mode: HollowMode::Internal,
-            precision: 0.85,
+            precision: 1.0,
             infill_on: false,
             infill: InfillSettings::default(),
             open_floor: false,
