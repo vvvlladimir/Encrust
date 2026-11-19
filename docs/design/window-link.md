@@ -81,10 +81,10 @@ wrote as well; without a window, revisions are checked by their recipe as before
 
 A revision after the first hands over, as edits of the job's model, what it asks beyond the
 revision before: a repair, the faces mended, a picture pressed in, a scale, a turn typed, a
-label, a split or part cut off, a cut, a hollow, holes drilled at points, supports by a named
-preset and points placed by hand, in that order. One that asks anything no edit carries yet —
-walls kept solid at points, the engine's drain search, plugs, channels, supports sized
-automatically or under a cavity, a combination — or takes back what an earlier one asked is
+label, a split or part cut off, a cut, a hollow, holes drilled at points, supports — by a
+preset or sized automatically, under a cavity, off what shows — and points placed by hand, in
+that order. One that asks anything no edit carries yet — walls kept solid at points, the
+engine's drain search, plugs, channels, a combination — or takes back what an earlier one asked is
 shown by its recipe instead, as below. A pose the search picks is checked by the recipe and
 then handed over as the turn the check chose (`oriented.rotate_deg`). While the window holds a cut it was
 handed, the job's model is no longer on its plate whole, and a revision keeping that cut is not

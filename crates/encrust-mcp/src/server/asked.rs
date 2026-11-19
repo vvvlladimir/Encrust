@@ -13,6 +13,8 @@ const PRECISION: f32 = 0.5;
 /// What `--infill-cell` and `--infill-density` are when not typed.
 const INFILL_CELL_MM: f32 = 8.0;
 const INFILL_DENSITY: f32 = 0.25;
+/// The radius `--shown-radius` brushes what shows at when not typed, mm.
+const SHOWN_RADIUS_MM: f32 = 4.0;
 /// How far past the surface `--drain` reaches when not typed, mm.
 const DRAIN_DEPTH_MM: f32 = 3.0;
 
@@ -237,12 +239,11 @@ fn drained(now: &Drains, then: Option<&Drains>, object: ObjectId) -> Option<Edit
     }))
 }
 
-/// Supports by a named preset, and points placed by hand beyond those `then` placed; the
-/// automatic sizing, a cavity's inside, what shows and a change of preset are no edit yet.
+/// Supports by a preset or sized automatically, a cavity's inside and what shows with them, and
+/// points placed by hand beyond those `then` placed; a change of any of those is no edit yet.
 fn supported(now: &Supports, then: Option<&Supports>, object: ObjectId) -> Option<Edit> {
-    let plain = now.profile != "auto" && !now.cavity && now.shown_at_mm.is_empty();
-    let (at_mm, only_at) = match then {
-        None => (now.at_mm.as_slice(), now.only_at),
+    let (at_mm, only_at, whole_run) = match then {
+        None => (now.at_mm.as_slice(), now.only_at, true),
         Some(then) => {
             let only_points_added = Supports {
                 at_mm: then.at_mm.clone(),
@@ -251,15 +252,19 @@ fn supported(now: &Supports, then: Option<&Supports>, object: ObjectId) -> Optio
             if !only_points_added || !now.at_mm.starts_with(&then.at_mm) {
                 return None;
             }
-            (&now.at_mm[then.at_mm.len()..], true)
+            (&now.at_mm[then.at_mm.len()..], true, false)
         }
     };
-    if !plain {
-        return None;
-    }
+    // What shows is brushed round each point at the radius asked, 4 mm when not named.
+    let radius_mm = now.shown_radius_mm.unwrap_or(SHOWN_RADIUS_MM);
+    let shown_at: Vec<Value> = (now.shown_at_mm.iter())
+        .filter(|_| whole_run)
+        .map(|at| json!({"at_mm": at, "radius_mm": radius_mm}))
+        .collect();
     edit_of(json!({
         "edit": "supports", "object": object, "profile": now.profile,
-        "at_mm": at_mm, "only_at": only_at,
+        "at_mm": at_mm, "only_at": only_at, "cavity": now.cavity && whole_run,
+        "shown_at": shown_at,
     }))
 }
 

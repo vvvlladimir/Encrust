@@ -144,7 +144,7 @@ fn a_scale_taken_back_is_no_edit_and_leaves_the_revision_to_be_shown() {
 }
 
 #[test]
-fn supports_by_a_preset_are_an_edit_and_the_automatic_sizing_is_not_yet() {
+fn supports_by_a_preset_or_sized_automatically_are_an_edit() {
     let by = |profile: &str| Recipe {
         supports: Some(Supports {
             profile: profile.into(),
@@ -152,12 +152,13 @@ fn supports_by_a_preset_are_an_edit_and_the_automatic_sizing_is_not_yet() {
         }),
         ..bare()
     };
-    let asked = asked_edits(&by("medium"), &bare(), MODEL).expect("a preset is an edit");
-    assert!(
-        matches!(asked.as_slice(), [Edit::Supports { .. }]),
-        "{asked:?}"
-    );
-    assert_eq!(asked_edits(&by("auto"), &bare(), MODEL), None);
+    for profile in ["medium", "auto"] {
+        let asked = asked_edits(&by(profile), &bare(), MODEL).expect("supports are an edit");
+        assert!(
+            matches!(asked.as_slice(), [Edit::Supports { .. }]),
+            "{asked:?}"
+        );
+    }
 }
 
 #[test]
