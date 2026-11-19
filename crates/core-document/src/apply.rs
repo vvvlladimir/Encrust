@@ -16,6 +16,7 @@ use crate::plate_contents::{delete, duplicate, mirrored};
 use crate::relief::{ReliefAsked, apply_relief};
 use crate::repair::{MendAsked, Mended, apply_mend, apply_repair};
 use crate::split::{apply_part_off, apply_split};
+use crate::supports::{SupportsAsked, apply_supports};
 
 /// What an edit did, for a front end to name, select and report it.
 #[derive(Debug, Clone, PartialEq)]
@@ -87,6 +88,13 @@ pub enum Report {
         /// Holes put in; one an earlier hole takes in adds none.
         holes: usize,
     },
+    /// Supports were stood under an object.
+    Supported {
+        /// Contacts put in, by hand or found.
+        placed: usize,
+        /// Trees grown from the object's contacts, those it already had among them.
+        trees: usize,
+    },
     /// An object was moved, turned or sized where it stands.
     Placed,
     /// An object was deleted or copied.
@@ -151,6 +159,10 @@ pub fn apply(
             size,
             kind,
         } => apply_drain(document, object, at_mm, (size, kind)),
+        Edit::Supports { object, .. } => {
+            let asked = SupportsAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
+            apply_supports(document, object, &asked, cancel)
+        }
         Edit::Move { object, by_mm } => {
             place(document, object, |transform, _| Ok(moved(transform, by_mm)))
         }

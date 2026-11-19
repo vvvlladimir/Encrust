@@ -10,9 +10,11 @@ mod fill;
 mod groups;
 mod inside;
 mod run;
+mod start;
 pub use fill::{hanging_models, island_holds};
 pub use groups::{own_raft_shown, with_own};
 pub use run::BuiltTo;
+pub use start::Only;
 
 /// How many shapes an automatic run builds to: its sizes, and the one that steadies a part.
 const SHAPES: usize = AUTO_SIZES + 1;

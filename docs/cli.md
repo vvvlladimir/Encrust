@@ -633,7 +633,11 @@ panel keeps them: `thickness_mm`, `mode` of `internal` or `external`, `precision
 `infill`, and optional `open_floor`, `solid_under_mm`) hollows the object by them, which it keeps as
 its own, and keeps its supports; `drain` (`object`, `at_mm`, a list of `[x, y, z]`, and optional
 `size` and `kind`) drills a hole into the surface nearest each point as `--drain-at` does, a point
-nearest an edge or corner being refused, and leaves the shell to be cut when it is baked.
+nearest an edge or corner being refused, and leaves the shell to be cut when it is baked;
+`supports` (`object`, and optional `profile`, a shipped support preset, `at_mm`, a list of
+`[x, y, z]`, and `only_at`) stands supports under the object by the preset, the plate's active
+group's where unset, and a contact at the surface nearest each point; with `only_at` those
+contacts alone. `auto` is refused.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json

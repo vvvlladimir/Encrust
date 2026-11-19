@@ -123,6 +123,17 @@ drills `hole_near` its source mesh (the CLI's `--drain-at` call), adding it to t
 surface near a point is `NoSurface`, a point nearest an edge or corner `OffAFace`. The window
 drills at once on its own `ModelHollow`.
 
+`Supports { object, profile, at_mm, only_at }` stands supports under one object. `profile` is a
+shipped preset (`SupportProfile::shipped`), the plate's active group's where unset; `auto` is
+`NoProfile`, its sizing being the window's catalogue's. The preset becomes a group of the plate
+where none carries its name, and the contacts go into it. The object's `ModelSupports` is restored
+by `supports_of`; `needs_on` (core-engine's one needs step) reads its printed surface as placed, its
+blocked and shown regions, its contacts as seeds and, on a hollow one, the outside of the wall; each
+need and each `at_mm` point (the surface nearest it) is added, the trees grown by `Growth::grow` and
+kept as `ObjectSupportState::grown` (`Report::Supported`). `only_at` places the points alone. The
+plate keeps no layer height, so the run uses the slicer's default. The window starts its automatic
+run on that object alone, adding to what stands.
+
 ## Undo
 
 The window keeps snapshots of its scene (ADR 0086); a document applied is one entry. The

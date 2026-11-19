@@ -64,6 +64,10 @@ pub enum ApplyError {
     /// An object whose transform cannot be inverted, so no plate point maps onto it.
     #[error("object {0:?} has a transform that cannot be inverted")]
     BadTransform(ObjectId),
+    /// A support profile that is not one this build ships, `auto` among them: its sizing is the
+    /// window's catalogue's, not the document's.
+    #[error("no shipped support profile is named {0:?}")]
+    NoProfile(String),
     /// The run was stopped before it finished.
     #[error("the edit was cancelled")]
     Cancelled,

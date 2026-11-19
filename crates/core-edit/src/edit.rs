@@ -140,6 +140,18 @@ pub enum Edit {
         #[serde(default)]
         kind: HoleKind,
     },
+    /// Stands supports under `object` by the shipped support preset `profile`, the plate's
+    /// active group's where unset, and by a contact at the surface nearest each of `at_mm`;
+    /// with `only_at` those contacts alone.
+    Supports {
+        object: ObjectId,
+        #[serde(default)]
+        profile: Option<String>,
+        #[serde(default)]
+        at_mm: Vec<Vec3>,
+        #[serde(default)]
+        only_at: bool,
+    },
 }
 
 fn tile_mm_by_default() -> Scalar {

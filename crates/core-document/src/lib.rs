@@ -17,6 +17,7 @@ mod plate_contents;
 mod relief;
 mod repair;
 mod split;
+mod supports;
 
 pub use apply::{Applied, Report, apply};
 pub use combine::{boolean_of, combined};

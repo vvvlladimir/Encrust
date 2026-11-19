@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use core_edit::ObjectId;
 use core_engine::project::{
-    BuiltCavity, HollowState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
-    ObjectSupportState, Project, Summary, assign_ids,
+    BuiltCavity, Group, HollowState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
+    ObjectSupportState, Project, Summary, SupportState, assign_ids,
 };
 use core_geometry::{Mesh, Orientation, Region, Transform, diagnose};
 
+use core_supports::{SupportPoint, SupportTree};
 use core_volume::{Channel, DrainHole};
 
 use crate::piece::{Piece, Role};
@@ -159,6 +160,28 @@ impl Document {
             state.drains = drains;
             state.channels = channels;
         }
+    }
+
+    /// The support tool's groups and what the plate's supports stand on, as the file keeps them.
+    pub(crate) fn support_state(&self) -> &SupportState {
+        &self.project.manifest.supports
+    }
+
+    /// Gives object `id` the support `points` and `grown` trees (its own space), and the plate
+    /// the `groups` they are built to. Nothing changes when `id` is not on the plate.
+    pub(crate) fn set_supports(
+        &mut self,
+        id: ObjectId,
+        groups: Vec<Group>,
+        (points, grown): (Vec<SupportPoint>, Vec<SupportTree>),
+    ) {
+        let Some(index) = self.index_of(id) else {
+            return;
+        };
+        self.project.manifest.supports.groups = groups;
+        let state = &mut self.project.manifest.objects[index].supports;
+        state.points = points;
+        state.grown = grown;
     }
 
     /// Takes the plugs laid for object `id` off the plate, answering their ids.

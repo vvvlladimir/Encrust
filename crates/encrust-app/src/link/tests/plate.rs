@@ -234,6 +234,31 @@ fn a_drain_drills_a_hole_into_the_cube_at_once_and_keeps_its_id() {
 }
 
 #[test]
+fn supports_at_a_point_alone_stand_one_contact_on_the_surface_and_keep_the_id() {
+    let file = scratch("supports-at");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let supports = json!({"base_version": version,
+        "apply": [{"edit": "supports", "object": cube.0, "profile": "medium",
+                   "at_mm": [[5.0, 5.0, -1.0]], "only_at": true}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, supports));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("supports keep the id");
+    let contacts = object.supports.contacts(object.transform);
+    let [contact] = contacts[..] else {
+        panic!("one contact placed, got {contacts:?}");
+    };
+    assert!(
+        contact.abs_diff_eq(Vec3::new(5.0, 5.0, 0.0), 1e-3),
+        "the contact is at (5, 5, 0) within 1e-3, got {contact}"
+    );
+}
+
+#[test]
 fn edits_built_on_a_plate_since_changed_are_answered_stale_and_not_applied() {
     let file = scratch("stale");
     let mut bench = Bench::new(file.clone());
