@@ -2,14 +2,22 @@ use std::sync::Arc;
 
 use core_edit::ObjectId;
 use core_engine::project::{
-    BuiltCavity, HollowState, ModelMeshes, ObjectHollowState, ObjectState, ObjectSupportState,
-    Project, Summary, assign_ids,
+    BuiltCavity, HollowState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
+    ObjectSupportState, Project, Summary, assign_ids,
 };
 use core_geometry::{Mesh, Orientation, Region, Transform, diagnose};
 
 use core_volume::{Channel, DrainHole};
 
 use crate::piece::{Piece, Role};
+
+/// A model as imported and placed: its name, its mesh and what import found in it.
+#[derive(Debug)]
+pub struct ImportedModel {
+    pub name: String,
+    pub mesh: Mesh,
+    pub summary: Summary,
+}
 
 /// The plate as `.encrust` holds it, every object with an id of its own.
 #[derive(Debug)]
@@ -28,6 +36,27 @@ impl Document {
             .max()
             .unwrap_or(1);
         Self { project, next_id }
+    }
+
+    /// The plate of `models` as imported and placed, on `manifest`'s first plate, ids from 1.
+    pub fn of_models(mut manifest: Manifest, models: Vec<ImportedModel>) -> Self {
+        let mut meshes = Vec::with_capacity(models.len());
+        manifest.objects.clear();
+        for (index, model) in models.into_iter().enumerate() {
+            let id = ObjectId(index as u64 + 1);
+            let state = bare_object(id, model.name, 0, Transform::default(), model.summary);
+            manifest.objects.push(state);
+            meshes.push(ModelMeshes {
+                source: Arc::new(model.mesh),
+                shell: None,
+            });
+        }
+        let project = Project {
+            manifest,
+            models: meshes,
+            preview: None,
+        };
+        Self::from_project(project)
     }
 
     /// The plate as a project file holds it, ids and all.
@@ -210,22 +239,35 @@ impl Document {
 /// A piece made from `old` as an object of its own: on its plate, named after it, with no
 /// supports, cavity or settings of its own.
 fn new_object(id: ObjectId, old: &ObjectState, piece: &Piece) -> ObjectState {
+    let summary = Summary {
+        vertices_merged: 0,
+        faces_removed: 0,
+        orientation: Orientation {
+            flipped_faces: 0,
+            inverted_shells: 0,
+            orientable: true,
+        },
+        diagnostics: piece.diagnostics.clone(),
+    };
+    let name = name_of(&old.name, piece.role);
+    bare_object(id, name, old.plate, piece.transform, summary)
+}
+
+/// An object on `plate` with no supports, cavity or settings of its own.
+fn bare_object(
+    id: ObjectId,
+    name: String,
+    plate: u32,
+    transform: Transform,
+    summary: Summary,
+) -> ObjectState {
     ObjectState {
         id,
-        name: name_of(&old.name, piece.role),
-        plate: old.plate,
-        transform: piece.transform,
+        name,
+        plate,
+        transform,
         visible: true,
-        summary: Summary {
-            vertices_merged: 0,
-            faces_removed: 0,
-            orientation: Orientation {
-                flipped_faces: 0,
-                inverted_shells: 0,
-                orientable: true,
-            },
-            diagnostics: piece.diagnostics.clone(),
-        },
+        summary,
         supports: ObjectSupportState::default(),
         hollow: ObjectHollowState::default(),
         own_hollow: None,

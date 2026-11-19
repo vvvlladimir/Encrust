@@ -606,8 +606,11 @@ A flag wins over the plate file or project, which wins over the profiles' own nu
 A project's plate is edited as the window's tools edit it by `--edits FILE`, a JSON list of
 edits carried out in order before the run, each naming its object by the id the project
 keeps (`docs/design/document.md`, ADR 0466); `--project-out FILE` writes the plate they leave
-as a project. An edit that cannot be carried out stops the run and writes nothing. Only a
-project takes them yet; a model is shaped by its flags. Besides `cut`, `move` (`by_mm`),
+as a project. An edit that cannot be carried out stops the run and writes nothing. Models
+given with `--project-out` are written as imported and placed (`--center`, `--check-drainage`
+and the import flags are kept), one object each, and `--edits` then applies to that project; a
+flag that shapes, hollows, drains or supports them, or `--arrange`, is refused. A plate file takes
+neither yet. Besides `cut`, `move` (`by_mm`),
 `rotate` (`degrees`) and `scale` (`factors`), each `[x, y, z]`, place an object; `delete`
 takes it and its plugs off, `duplicate` (`offset_mm`, `[x, y, z]`) puts a copy beside it and
 `mirror` (`axis`, `x`, `y` or `z`) flips it in place; `split` (`smallest_mm3`, optional)

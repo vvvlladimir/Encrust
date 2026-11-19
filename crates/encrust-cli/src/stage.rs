@@ -23,7 +23,7 @@ use crate::recipe::{self, Prepared, RecipeRun, Saved};
 use crate::report::{FitCheck, ImportReport, describe_fit};
 use crate::sliced_file::now_unix_s;
 use crate::supports::{Printed, SupportReport, stand_under};
-use crate::{meeting, plate_file, project};
+use crate::{meeting, plate_edits, plate_file, project};
 
 mod ground;
 mod room;
@@ -203,8 +203,10 @@ pub fn stage(
     }
     match given {
         Given::Models(paths) => {
-            job.edits.refuse_for_models()?;
             let chosen = profiles::resolve(&job.profile.selection())?;
+            if job.edits.wanted() {
+                return plate_edits::stage_models(paths, arrange, job, &chosen, watch);
+            }
             models(paths, arrange, job, &chosen, watch)
         }
         Given::PlateFile(path) => {
@@ -214,22 +216,13 @@ pub fn stage(
         Given::Project(path) => {
             refuse_for_a_project(arrange, job)?;
             let project = job.edits.applied(project::open(path)?)?;
-            let plate = plate
-                .map(|number| project::chosen_plate(&project.manifest, number))
-                .transpose()?;
-            let mut staged = project::stage(path, &project, plate, job)?;
-            if watch.talk {
-                print_off_the_plate(&staged.parts);
-            }
-            let owners: Vec<usize> = (0..staged.models.len()).collect();
-            meeting::mark(&mut staged.parts, &staged.models, &owners, watch.talk);
-            Ok(staged)
+            project::stage_checked(path, &project, plate, job, watch)
         }
     }
 }
 
 /// Names each model of a saved plate that does not stand inside the build volume.
-fn print_off_the_plate(parts: &[Part]) {
+pub(crate) fn print_off_the_plate(parts: &[Part]) {
     let off = parts.iter().filter_map(|part| {
         let check = part.standing.as_ref().filter(|check| !check.fit.fits())?;
         Some((part, check))
@@ -245,6 +238,7 @@ fn print_off_the_plate(parts: &[Part]) {
 
 /// The flags of a plate made here, which a project saved by the window answers for itself.
 pub fn refuse_for_a_project(arrange: bool, job: &JobArgs) -> Result<()> {
+    project::refuse_shaping_flags(job)?;
     if job.model.wanted() {
         bail!("a project's models are combined, cut and split in the window");
     }
