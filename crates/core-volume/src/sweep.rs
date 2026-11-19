@@ -152,7 +152,8 @@ fn coarsened(rings: Vec<Vec<IVec3>>, carry: i32) -> Vec<Vec<IVec3>> {
 /// The coarse field of nearest faces over the whole shell, ring by ring, so that a tile is
 /// only swept once the tiles between it and the surface are.
 ///
-/// Only the two rings a ring can read from are kept as halo, so the shell is only ever
+/// A tile reads every neighbour already swept, not only the last two rings: a coarse tile
+/// spans several rings, so a neighbour can be older than that. The shell is only ever
 /// resident as the carrier itself, which is the carry factor cubed smaller than it looks.
 fn carry(
     faces: &Faces,
@@ -163,8 +164,6 @@ fn carry(
     cancel: Cancel<'_>,
 ) -> FastMap<IVec3, Work> {
     let mut carrier: FastMap<IVec3, Work> = FastMap::default();
-    let mut previous: FastMap<IVec3, Work> = FastMap::default();
-    let mut current: FastMap<IVec3, Work> = FastMap::default();
     let mut deferred: Vec<IVec3> = Vec::new();
 
     // Each settling pass goes over every tile the rings swept, so it counts as much again.
@@ -181,9 +180,8 @@ fn carry(
             .par_iter()
             .map(|tile| {
                 let look = |at: IVec3| {
-                    current
+                    carrier
                         .get(&at)
-                        .or_else(|| previous.get(&at))
                         .or_else(|| seeds.get(&at))
                         .map(|work| &work[..])
                 };
@@ -193,14 +191,13 @@ fn carry(
             })
             .collect();
 
-        previous = std::mem::take(&mut current);
         for (tile, work) in swept {
-            let Some(work) = work else {
-                deferred.push(tile);
-                continue;
-            };
-            carrier.insert(tile, work.clone());
-            current.insert(tile, work);
+            match work {
+                Some(work) => {
+                    carrier.insert(tile, work);
+                }
+                None => deferred.push(tile),
+            }
         }
     }
 

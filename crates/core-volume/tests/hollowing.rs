@@ -1109,3 +1109,26 @@ fn the_plate_lies_the_way_a_turned_model_stands_on_it() {
     );
     assert!(plate_down(Transform::default()).abs_diff_eq(Vec3::NEG_Z, 1e-6));
 }
+
+/// The cavity's rounded corners keep about 39 mm3 more than the closed form on the 0.05 mm
+/// lattice; the bug it guards kept 1667 more.
+#[test]
+fn a_cube_at_precision_one_keeps_the_material_its_wall_leaves() {
+    let mesh = cube(20.0, 0.0);
+    let bvh = Bvh::build(&mesh);
+    let settings = HollowSettings {
+        precision: 1.0,
+        ..settings(2.0, HollowMode::Internal)
+    };
+
+    let hollowed = hollow(&mesh, &bvh, &settings, Cancel::never()).expect("a cube hollows");
+
+    let material = enclosed(&hollowed.mesh);
+    let wanted = 20.0_f32.powi(3) - 16.0_f32.powi(3);
+    assert!(
+        (material - wanted).abs() < 50.0,
+        "20 mm cube, 2 mm wall, precision 1.0: expected {wanted} mm3 within 50, got {material} (lattice {} mm, coarsened {})",
+        hollowed.voxel_mm,
+        hollowed.coarsened
+    );
+}
