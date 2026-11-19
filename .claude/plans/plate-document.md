@@ -456,3 +456,40 @@ Done when: nothing changes — every existing test passes unchanged: `cargo test
   --test cli support`. No test is edited. `generate_supports` and `strengthen` are each called
   from one place in core-engine and nowhere in encrust-app (`git grep`).
 Not now: growth (S2), the edit (S3).
+
+### S2 — folded into S3
+The two growth paths are one at the bottom (points → `columns` → `grow_beside`/`grow`); the
+window's adds its painted region kept clear and its frozen trees. S3 grows through the window's
+`ModelSupports::growth(..).grow(..)`, which is that.
+
+### S3. Supports by an edit
+Read: `crates/core-engine/src/stand/needs.rs` (S1's `needs_on`, `plan_of`), `crates/core-engine/src/project/restore.rs`
+  (`supports_of`), `crates/core-supports/src/model/{points.rs,growth.rs,build.rs}` (`add`, `growth`,
+  `Growth::grow`, `take_grown`, `grown`), `crates/encrust-app/src/job/place.rs` (how the window
+  builds a task: stack from the placed printed surface, `Blocked`, `Shown`, seeds),
+  `crates/encrust-app/src/supports/run.rs` (`land_placed`, `add_needs`), `crates/core-document/src/{apply.rs,hollow.rs,drain.rs}`
+Touch: those you need, `crates/core-edit/src/edit.rs` (+tests), new `crates/core-document/src/supports.rs`
+  (+ `supports/tests.rs`), `crates/core-document/src/{lib.rs,error.rs}`, `crates/encrust-app/src/link/plate.rs`
+  (+ test), `docs/design/document.md`, `docs/cli.md` and `docs/features.md` (name the edit)
+Edit: `Supports { object, profile: Option<String>, at_mm: Vec<Vec3>, only_at: bool }`.
+  `profile` is a shipped preset's name (`SupportProfile::shipped`), the plate's active group's
+  profile when `None`; `auto` is not taken yet (`ApplyError::NoProfile` names it; the machine's
+  sizing is the window's catalogue, not the document's). `at_mm` are contacts placed by hand
+  (the closest surface point of each); `only_at` places those alone.
+apply: the object's `ModelSupports` restored by `supports_of`; needs by `needs_on` on its
+  printed surface placed on the plate, its blocked and shown regions and its present contacts as
+  seeds, the outside of a hollow wall (`WallSide` as the window's job builds it), with
+  `plan_of(profile, None)`; each need and each `at_mm` point `ModelSupports::add`ed to the active
+  group; grown by `growth(..).grow(..)` and `take_grown`; the points and `grown(transform)`
+  written back to `ObjectSupportState`. The plate's group table gains the profile as a group
+  where it names one not in it.
+Window: the link's Supports arm (a helper) adds the `at_mm` points and, unless `only_at`, starts
+  the support tool's automatic run for that object alone (as the panel's Auto does), under way
+  until it lands; the window's growth job grows the trees as for a click.
+Errors: an unknown profile → `NoProfile(String)`; `Cancelled`; others `Failed`.
+Done when: a 10 mm cube lifted 5 mm (translation z 5) supported with `medium` gets supports
+  (grown trees non-empty, every tip's contact on the cube's underside z 5 ± 1e-3 in plate mm);
+  the same cube standing on the plate gets none; `only_at` with one point at (5,5,4) gets exactly
+  one point at (5,5,5) ± 1e-3; `profile: "auto"` → `NoProfile`; the plate written and read back
+  keeps the trees. Window link test of `Supports` with `only_at`. Existing tests pass.
+Not now: `auto` sizing, the cavity's inside, merges, shown-at strokes, MCP (S4).
