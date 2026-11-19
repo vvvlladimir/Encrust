@@ -17,12 +17,13 @@ other opens alike.
 
 ## Decision
 
-The window's way is the one way. Its job's steps — the needs from the slices, the strengthened
-plan and the trees grown from it — move into `core-document` as the function `Edit::Supports`
-runs, taking what the window gives it (painted, blocked and shown faces, seeds) and nothing
-where a front end has none. The window's job calls it on its worker; `stand_under`,
-`stand_seated` and `stand_at` become calls of it, so `--supports`, the autopilot and the
-recipes grow the trees the window grows and a plate file keeps them as the window writes them.
+The window's way is the one way. Its job's steps — the needs from the slices, fed what the
+window gives (painted, blocked and shown faces, seeds) and nothing where a front end has none,
+then strengthened — move into `core-engine` beside `stand_under`, which `core-document` already
+reaches and the autopilot lives in. The window's job calls them on its worker; `stand_under`,
+`stand_seated` and `stand_at` become calls of them, and `Edit::Supports` in `core-document`
+runs them with the trees grown as the window grows them, so `--supports`, the autopilot, the
+recipes and a client grow the trees the window grows and a plate file keeps them alike.
 
 ## Consequences
 
