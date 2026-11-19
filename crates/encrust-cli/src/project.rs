@@ -11,11 +11,12 @@ use core_format::ExposurePlan;
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::JobArgs;
-use crate::pipeline::{cutting_of, overrides_of, raster_window, warn_if_grey_ignored};
+use crate::meeting;
+use crate::pipeline::{Watch, cutting_of, overrides_of, raster_window, warn_if_grey_ignored};
 use crate::profiles::catalogue;
 use crate::report::FitCheck;
 use crate::sliced_file::now_unix_s;
-use crate::stage::{Part, Staged, bounds};
+use crate::stage::{Part, Staged, bounds, print_off_the_plate};
 
 /// Opens a project to stage its plates from.
 pub fn open(path: &Path) -> Result<Project> {
@@ -73,9 +74,28 @@ fn saved_plate(path: &Path, manifest: &Manifest) -> u32 {
     active
 }
 
+/// `plate` of `project`, counted from one, staged, with what stands off the plate said.
+pub fn stage_checked(
+    path: &Path,
+    project: &Project,
+    plate: Option<u32>,
+    job: &JobArgs,
+    watch: &Watch,
+) -> Result<Staged> {
+    let plate = plate
+        .map(|number| chosen_plate(&project.manifest, number))
+        .transpose()?;
+    let mut staged = stage(path, project, plate, job)?;
+    if watch.talk {
+        print_off_the_plate(&staged.parts);
+    }
+    let owners: Vec<usize> = (0..staged.models.len()).collect();
+    meeting::mark(&mut staged.parts, &staged.models, &owners, watch.talk);
+    Ok(staged)
+}
+
 /// Stages `plate` of the project, or the plate it was left on.
 pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) -> Result<Staged> {
-    refuse_shaping_flags(job)?;
     let manifest = &project.manifest;
     let plate = plate.unwrap_or_else(|| saved_plate(path, manifest));
     let machine = machine(manifest, job)?;
@@ -197,8 +217,16 @@ fn resin_of(id: &str, why: &str) -> Result<MaterialProfile> {
 }
 
 /// The flags a project already answers for itself.
-fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
+pub fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
     job.hollow.check_flags()?;
+    if let Some(flag) = shaping_flags(job).first() {
+        bail!("{flag} does not apply to a project, which carries its own; change it in the window");
+    }
+    Ok(())
+}
+
+/// The flags given that shape, hollow, drain or support a model, in the order they are listed.
+pub fn shaping_flags(job: &JobArgs) -> Vec<&'static str> {
     let import = &job.import;
     let transform = &import.transform;
     let given = [
@@ -219,10 +247,9 @@ fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
         ("--remove-islands", job.raster.remove_islands),
         ("--hanging-passes", job.raster.hanging_passes != 0),
     ];
-    if let Some((flag, _)) = given.iter().find(|(_, given)| *given) {
-        bail!("{flag} does not apply to a project, which carries its own; change it in the window");
-    }
-    Ok(())
+    (given.into_iter())
+        .filter_map(|(flag, given)| given.then_some(flag))
+        .collect()
 }
 
 #[cfg(test)]

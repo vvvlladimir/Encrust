@@ -79,8 +79,78 @@ fn an_edit_naming_an_object_not_on_the_plate_is_refused() {
     );
 }
 
+fn estimate_model(model: &Path, out: &Path, extra: &[&str]) -> std::process::Output {
+    let panel = test_panel();
+    let resin = test_resin();
+    let mut args = vec![
+        model.to_str().expect("a UTF-8 path"),
+        "--profile",
+        panel.to_str().expect("a UTF-8 path"),
+        "--material",
+        resin.to_str().expect("a UTF-8 path"),
+        "--project-out",
+        out.to_str().expect("a UTF-8 path"),
+    ];
+    args.extend_from_slice(extra);
+    estimate(&args)
+}
+
 #[test]
-fn edits_on_a_model_rather_than_a_project_are_refused() {
+fn a_model_is_written_as_a_project_of_one_object_as_imported() {
+    let model = write_box_stl("model-to-project", 20.0, 12, 0);
+    let out = output_file("model-to-project.encrust");
+
+    let output = estimate_model(&model, &out, &["--center"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let project = load(&out).expect("the project written reads back");
+    assert_eq!(project.manifest.objects.len(), 1);
+    assert_eq!(project.manifest.objects[0].id, ObjectId(1));
+    let volume = core_geometry::signed_volume(&project.models[0].source);
+    assert!(
+        (volume - 8000.0).abs() < 0.01,
+        "the 20 mm cube is {volume} mm3, expected 8000"
+    );
+}
+
+#[test]
+fn a_cut_edit_on_a_model_writes_its_two_halves() {
+    let model = write_box_stl("model-cut", 20.0, 12, 0);
+    let edits = edits_file(
+        "model-cut.json",
+        r#"[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 10.0}]"#,
+    );
+    let out = output_file("model-cut.encrust");
+
+    let output = estimate_model(
+        &model,
+        &out,
+        &["--edits", edits.to_str().expect("a UTF-8 path")],
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let project = load(&out).expect("the project written reads back");
+    assert_eq!(project.manifest.objects.len(), 2, "the cube's two halves");
+}
+
+#[test]
+fn hollowing_a_model_written_as_a_project_is_refused() {
+    let model = write_box_stl("model-hollow", 20.0, 12, 0);
+    let out = output_file("model-hollow.encrust");
+
+    let output = estimate_model(&model, &out, &["--hollow", "2"]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("--project-out writes models as imported"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!out.exists(), "nothing is written for a refused run");
+}
+
+#[test]
+fn edits_on_a_model_without_project_out_are_refused() {
     let model = write_box_stl("edits-on-a-model", 10.0, 12, 0);
     let edits = edits_file("edits-on-a-model.json", "[]");
 
@@ -96,7 +166,7 @@ fn edits_on_a_model_rather_than_a_project_are_refused() {
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
-        stderr(&output).contains("take a project"),
+        stderr(&output).contains("needs --project-out"),
         "{}",
         stderr(&output)
     );

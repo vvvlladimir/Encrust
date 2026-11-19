@@ -21,7 +21,7 @@ mod split;
 pub use apply::{Applied, Report, apply};
 pub use combine::{boolean_of, combined};
 pub use cut::{CutAsked, CutModel, axis_normal, cut, pieces};
-pub use document::Document;
+pub use document::{Document, ImportedModel};
 pub use drain::hole_near;
 pub use error::ApplyError;
 pub use hollow::{NoRoom, settings_of, shell_from, shelled};

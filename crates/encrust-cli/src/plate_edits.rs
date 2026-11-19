@@ -4,10 +4,18 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use core_document::{Document, apply};
+use core_document::{Document, ImportedModel, apply};
 use core_edit::Edit;
-use core_engine::project::{Project, save};
+use core_engine::project::{Manifest, Project, Summary, save};
+use core_geometry::{Mesh, Orientation, diagnose};
 use core_volume::Cancel;
+
+use crate::args::JobArgs;
+use crate::pipeline::{Watch, import};
+use crate::profiles::Chosen;
+use crate::project;
+use crate::report::ImportReport;
+use crate::stage::Staged;
 
 /// The edits a run makes to a project's plate, and where the plate they leave is written.
 #[derive(Debug, Clone, Default, clap::Args)]
@@ -47,7 +55,7 @@ impl EditArgs {
         Ok(project)
     }
 
-    /// Refuses the flags for models, which their own flags shape.
+    /// Refuses the flags for a plate file, which its own keys shape.
     pub fn refuse_for_models(&self) -> Result<()> {
         if self.wanted() {
             // TODO(step-C1): models staged into a Document, so --edits and --project-out take them.
@@ -56,6 +64,73 @@ impl EditArgs {
             );
         }
         Ok(())
+    }
+}
+
+/// The models as imported and placed written as a project by `--project-out`, `--edits` carried
+/// out on it first, and staged as that project.
+pub fn stage_models(
+    paths: &[PathBuf],
+    arrange: bool,
+    job: &JobArgs,
+    chosen: &Chosen,
+    watch: &Watch,
+) -> Result<Staged> {
+    let Some(out) = &job.edits.project_out else {
+        bail!("--edits on models needs --project-out, which writes them as a project first");
+    };
+    let shaped = !project::shaping_flags(job)
+        .iter()
+        .all(|flag| *flag == "--center");
+    if arrange || shaped || job.model.wanted() {
+        bail!(
+            "--project-out writes models as imported; shape them by --edits on the project it writes"
+        );
+    }
+    chosen.measured()?;
+    let mut models = Vec::with_capacity(paths.len());
+    for path in paths {
+        let (mesh, import, _) = import(path, &job.import, None, chosen, watch)?;
+        models.push(imported_model(path, mesh, &import));
+        watch.stop.check()?;
+    }
+    let selection = &job.profile;
+    let printer = selection
+        .profile
+        .is_none()
+        .then(|| selection.printer.clone());
+    let resin = selection
+        .material
+        .is_none()
+        .then(|| selection.resin.clone());
+    let manifest = Manifest::new(printer.flatten(), resin.flatten());
+    let project = Document::of_models(manifest, models).into_project();
+    let project = job.edits.applied(project)?;
+    project::stage_checked(out, &project, None, job, watch)
+}
+
+fn imported_model(path: &Path, mesh: Mesh, import: &ImportReport) -> ImportedModel {
+    let summary = Summary {
+        vertices_merged: import.welded.vertices_merged,
+        faces_removed: import.welded.faces_removed(),
+        orientation: import.orientation.unwrap_or(Orientation {
+            flipped_faces: 0,
+            inverted_shells: 0,
+            orientable: true,
+        }),
+        diagnostics: import
+            .diagnostics
+            .clone()
+            .unwrap_or_else(|| diagnose(&mesh)),
+    };
+    let name = path.file_stem().map_or_else(
+        || path.display().to_string(),
+        |stem| stem.to_string_lossy().into_owned(),
+    );
+    ImportedModel {
+        name,
+        mesh,
+        summary,
     }
 }
 
