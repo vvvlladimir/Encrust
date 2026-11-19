@@ -371,3 +371,43 @@ Open, each needing a decision or a design session before it is a card:
   Document staged from models); then `unshown.rs` and the flags path go, and an undo of any
   edit (not only a cut) reaches the client.
 - C14: 0459's status, `ai-integration.md`, snapshots if a panel changes.
+
+## Decided 2026-11-19: supports the window's way (ADR 0468); a revision is a file and its edits (ADR 0466)
+
+### C13a. The window's first numbers move into the core
+Read: `crates/encrust-app/src/{hollow.rs,drain.rs,supports.rs,slicing.rs,tool_settings.rs}` (each
+  tool's `Default`, `support_state`, `slicing_state`), `crates/encrust-app/src/cut.rs` (`CutTool`
+  default), `crates/core-engine/src/project.rs` (`Manifest` and its `*State` types)
+Touch: those, `crates/core-engine/src/project.rs` (or a new `project/defaults.rs` if it passes
+  ~400 code lines), `docs/formats/encrust-project.md` if it names defaults
+Move: the numbers a fresh window's tools start at become `Default` impls of core-engine's
+  `HollowState` (from `HollowSettings::default()`, infill off, floor closed), `DrainState` (the
+  engine's `HoleSize::default()`), `CutState` (Z, 10 mm, both, no joint, default parts),
+  `SlicingState` (islands kept, no hanging passes, the default format), `SupportState` (one
+  group named as the window's `FIRST_GROUP` on `SupportProfile::default()`, the window's brush,
+  flood angle, inline spacing and fill numbers), and `Manifest::new(printer: Option<String>,
+  resin: Option<String>)` — version 7, those states, one plate named as the window names its
+  first, no objects. The window's tool defaults then read their state from these (`state:
+  HollowState::default()` and so on), so a number lives once.
+Done when: a test in core-engine that `Manifest::new(..)` written and read back is equal in
+  every field; the window's `Tools::default()` captured (`ToolSettings::of`) equals the
+  defaults field by field (one test in encrust-app); all existing tests pass unchanged.
+Not now: the command line writing a project (C13b).
+
+### C13b. `--project-out` takes models
+Read: `crates/encrust-cli/src/{plate_edits.rs,stage.rs (stage, models, plate_of)}`,
+  `crates/core-document/src/{document.rs,piece.rs}`, C13a's `Manifest::new`
+Touch: those, `crates/encrust-cli/tests/cli/plate_edits.rs`, `docs/cli.md`, `docs/features.md`
+Decision: a model input with `--project-out` and none of the flags that shape, hollow, drain or
+  support it (the ones `project.rs::refuse_shaping_flags` lists, plus `--cut`, `--split`,
+  `--part-off`, `--combine`, `--label`, `--prepare`, `--recipe`) writes a project of the models
+  as imported and placed: `Manifest::new(printer id, resin id)` and one object each
+  (`Document::of_models`, new: name from the file stem, source mesh, identity transform —
+  the mesh is placed already —, the import's diagnostics as its summary, ids from 1). With such
+  a flag it is refused ("--project-out writes models as imported; shape them by --edits on the
+  project it writes"). `--edits` with models is then allowed only together with
+  `--project-out`, applied to that document before it is written and staged as a project.
+Done when: `estimate cube.stl --project-out a.encrust` writes one object, id 1, its source the
+  cube's 8000 mm³ ± 0.01; `--edits` with a cut on it writes two halves; `--hollow` with
+  `--project-out` on a model is refused; existing tests pass.
+Not now: MCP using it (C13c, orchestrator).

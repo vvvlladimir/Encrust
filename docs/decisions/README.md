@@ -566,3 +566,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0465](0465-the-window-lists-agents-and-shows-their-work-when-asked.md) | The window lists its agents and shows their work when asked | Proposed |
 | [0466](0466-one-plate-document-is-edited-by-one-apply-and-the-open-window-owns-it.md) | One plate document is edited by one apply, and the open window owns it | Proposed |
 | [0467](0467-the-document-reaches-the-cores-its-edits-run-on.md) | The document reaches the cores its edits run on | Proposed |
+| [0468](0468-supports-are-grown-the-windows-way-for-every-front-end.md) | Supports are grown the window's way for every front end | Proposed |
