@@ -72,6 +72,13 @@ the rest and is answered with why. A plate that moved on is answered `stale` wit
 and nothing is applied: the server asks for the plate again. A window not following its
 agents refuses both lines, and edits while others are still being applied are refused.
 
+With the window followed, a revision whose every change is an edit is built on the window's
+plate: the server asks for it, checks it with the edits (`estimate PLATE --edits --project-out`)
+and keeps the plate they leave as `N.encrust` and the edits as `N.edits.json`, then hands the
+edits over on that plate's version. What the user changed or undid there is in the next check,
+whatever the change. A first revision that only places its model keeps the plate its check
+wrote as well; without a window, revisions are checked by their recipe as before.
+
 A revision after the first hands over, as edits of the job's model, what it asks beyond the
 revision before: a repair, the faces mended, a picture pressed in, a scale, a turn typed, a
 label, a split or part cut off, a cut, a hollow, holes drilled at points, in that order. One

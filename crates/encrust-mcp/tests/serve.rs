@@ -665,7 +665,8 @@ async fn each_revision_keeps_the_steps_its_check_ran_and_hands_them_to_the_open_
 }
 
 /// A window that answers each line by its kind for `lines` connections: a revision shown, the
-/// plate with the job's model as object 1 on it at version 5, edits applied; the lines read.
+/// plate — the job's latest one under `dir/jobs`, its model object 1 — at version 5, edits
+/// applied; the lines read.
 async fn plate_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
     use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 
@@ -675,6 +676,7 @@ async fn plate_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHa
     let port = listener.local_addr().expect("bound").port();
     let file = dir.join("window.json");
     fs::write(&file, json!({"port": port, "token": "t"}).to_string()).expect("writable");
+    let jobs = dir.join("jobs");
     let window = tokio::spawn(async move {
         let mut read = Vec::new();
         for _ in 0..lines {
@@ -684,7 +686,8 @@ async fn plate_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHa
             reader.read_line(&mut line).await.expect("a line");
             let line: Value = serde_json::from_str(&line).expect("JSON");
             let reply = if line["want"] == "plate" {
-                json!({"plate": "/w/base-5.encrust", "version": 5, "objects": [1], "job_object": 1})
+                let job = jobs.join(line["job"].as_str().expect("a job"));
+                json!({"plate": latest_plate(&job), "version": 5, "objects": [1], "job_object": 1})
             } else if line.get("apply").is_some() {
                 json!({"applied": true})
             } else {
@@ -701,6 +704,17 @@ async fn plate_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHa
         read
     });
     (file, window)
+}
+
+/// The plate a job's latest revision left, `N.encrust` with the highest N.
+fn latest_plate(job: &Path) -> PathBuf {
+    let plates = fs::read_dir(job).expect("the job's folder reads").flatten();
+    let numbered = plates.filter_map(|entry| {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let number: u32 = name.strip_suffix(".encrust")?.parse().ok()?;
+        Some((number, entry.path()))
+    });
+    numbered.max().expect("the job left a plate").1
 }
 
 #[tokio::test]

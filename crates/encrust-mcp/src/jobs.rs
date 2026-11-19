@@ -209,6 +209,17 @@ impl Jobs {
         Ok(dir.join(format!("{}-{taken}.recipe.toml", std::process::id())))
     }
 
+    /// A scratch path for a plate one check writes, kept as a revision's once it is kept.
+    pub fn scratch_plate(&self) -> Result<PathBuf> {
+        Ok(self.scratch_steps()?.with_extension("encrust"))
+    }
+
+    /// Keeps the plate a check wrote at `from` as revision `number`'s `N.encrust`.
+    pub fn keep_plate(&self, job: &str, number: u32, from: &Path) -> Result<()> {
+        let path = self.dir(job)?.join(format!("{number}.encrust"));
+        fs::rename(from, &path).with_context(|| format!("keeping {}", path.display()))
+    }
+
     /// An empty directory of the job's for the pictures of one revision.
     pub fn pictures_dir(&self, revision: &Revision) -> Result<PathBuf> {
         self.empty_dir(&revision.job, &format!("pictures-{}", revision.number))

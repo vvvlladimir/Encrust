@@ -266,6 +266,35 @@ impl Recipe {
             .is_some_and(|extension| extension.eq_ignore_ascii_case("encrust"))
     }
 
+    /// Whether the recipe only places its model, so its check can write the plate it leaves
+    /// (`--project-out` takes no flag that shapes a model).
+    pub fn only_places(&self) -> bool {
+        !self.is_project()
+            && !self.prepare
+            && self.steps_by.is_none()
+            && self.repair.is_none()
+            && self.mend.is_none()
+            && self.modelling.is_none()
+            && self.relief.is_none()
+            && self.pose.is_none()
+            && self.hollow.is_none()
+            && self.drains.is_none()
+            && self.supports.is_none()
+    }
+
+    /// The flags a check of a plate takes from this recipe: the machine and the slicing.
+    pub fn machine_flags(&self) -> Vec<String> {
+        let mut flags = vec![
+            profile_flag(&self.printer, "--printer", "--profile"),
+            profile_flag(&self.resin, "--resin", "--material"),
+            "--check-drainage".into(),
+        ];
+        if let Some(slicing) = &self.slicing {
+            slicing.push_flags(&mut flags);
+        }
+        flags
+    }
+
     /// The flags after the subcommand that stage the model as this recipe says. Every value
     /// rides on its flag as `--flag=value`, so a negative number is never read as a flag.
     pub fn flags(&self) -> Vec<String> {
