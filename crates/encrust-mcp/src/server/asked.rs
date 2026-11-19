@@ -4,7 +4,9 @@
 use core_edit::{Edit, ObjectId};
 use serde_json::{Value, json};
 
-use crate::recipe::{Drains, HoleKind, Hollow, Mend, Modelling, Pose, Recipe, Relief, Repair};
+use crate::recipe::{
+    Drains, HoleKind, Hollow, Mend, Modelling, Pose, Recipe, Relief, Repair, Supports,
+};
 
 /// What `--precision` is when not typed.
 const PRECISION: f32 = 0.5;
@@ -62,17 +64,20 @@ pub fn asked_edits(recipe: &Recipe, earlier: &Recipe, object: ObjectId) -> Optio
             object,
         )?);
     }
+    if recipe.supports != earlier.supports {
+        let then = earlier.supports.as_ref();
+        asked.push(supported(recipe.supports.as_ref()?, then, object)?);
+    }
     Some(asked)
 }
 
-/// Whether nothing changed between the two that no edit carries: the supports, the way steps
-/// are decided or a combination.
+/// Whether nothing changed between the two that no edit carries: the way steps are decided or
+/// a combination.
 fn plate_alike(recipe: &Recipe, earlier: &Recipe) -> bool {
     // `arrange` comes with every cut and split the command line lays apart; the window lays
     // the pieces out itself, so only a combination is asked of the plate.
     let joined = |modelling: Option<&Modelling>| modelling.and_then(|m| m.combine.clone());
-    recipe.supports == earlier.supports
-        && recipe.prepare == earlier.prepare
+    recipe.prepare == earlier.prepare
         && recipe.steps_by == earlier.steps_by
         && recipe.model == earlier.model
         && joined(recipe.modelling.as_ref()) == joined(earlier.modelling.as_ref())
@@ -216,6 +221,32 @@ fn drained(now: &Drains, then: Option<&Drains>, object: ObjectId) -> Option<Edit
             "shape": shape,
             "turn_deg": now.turn_deg.unwrap_or(0.0),
         },
+    }))
+}
+
+/// Supports by a named preset, and points placed by hand beyond those `then` placed; the
+/// automatic sizing, a cavity's inside, what shows and a change of preset are no edit yet.
+fn supported(now: &Supports, then: Option<&Supports>, object: ObjectId) -> Option<Edit> {
+    let plain = now.profile != "auto" && !now.cavity && now.shown_at_mm.is_empty();
+    let (at_mm, only_at) = match then {
+        None => (now.at_mm.as_slice(), now.only_at),
+        Some(then) => {
+            let only_points_added = Supports {
+                at_mm: then.at_mm.clone(),
+                ..now.clone()
+            } == *then;
+            if !only_points_added || !now.at_mm.starts_with(&then.at_mm) {
+                return None;
+            }
+            (&now.at_mm[then.at_mm.len()..], true)
+        }
+    };
+    if !plain {
+        return None;
+    }
+    edit_of(json!({
+        "edit": "supports", "object": object, "profile": now.profile,
+        "at_mm": at_mm, "only_at": only_at,
     }))
 }
 
