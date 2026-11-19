@@ -591,3 +591,20 @@ Done when: four 10 mm cubes stacked at the origin, arranged on a 100 × 100 plat
   50 mm cubes on that plate leave some out (`left_out` named); a window link test. Existing
   arrange tests pass.
 Not now: MCP (orchestrator).
+
+### R6. Recipes yield edits (item 6) — four cards
+A recipe's steps: Repair, Orient, Hollow, Drain, Supports, Arrange change the plate; Check,
+Save, Gate, Pause steer the run. The executors stay for the latter (conditions, measuring,
+writing); each plate step becomes one edit carried out by `apply` (CLI) or the window's link
+machinery (window).
+- R6a `Edit::Orient { object, goal, max_tilt_deg, pick, keep_clear }`: `apply` runs
+  `orient_for_print` on the object with no machine's trial (the search's answer, as C8 noted
+  the window's without a printer), the `pick`th choice, its turn set as `Rotate` sets one.
+  C8's decision is revised: a recipe's orient step has no check to choose for it.
+- R6b core-recipe gains `edit_of(step, &Resolved, object) -> Option<Edit>` for the six plate
+  steps (edge core-recipe → core-edit); tests that each step's settings land in its edit.
+- R6c the window's Prepare for print (`prepare/{work,step}.rs`) runs each plate step through
+  `edit_of` and the link's `start_edit` path, its own per-step job calls deleted.
+- R6d the CLI's recipe executor (`recipe/{steps,plate,piece}.rs`) runs on a `Document` of the
+  staged models through `apply`; this is the command line's model pipeline moving onto the
+  document (the original plan's phase 5) and needs its own design pass first.
