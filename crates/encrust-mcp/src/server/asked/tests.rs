@@ -159,3 +159,25 @@ fn supports_by_a_preset_are_an_edit_and_the_automatic_sizing_is_not_yet() {
     );
     assert_eq!(asked_edits(&by("auto"), &bare(), MODEL), None);
 }
+
+#[test]
+fn a_pose_the_search_picked_is_the_turn_its_check_chose_and_nothing_before_the_check() {
+    let recipe = Recipe {
+        pose: Some(Pose::Search {
+            goal: crate::recipe::Goal::Auto,
+            max_tilt_deg: None,
+            pick: None,
+            keep_clear_at_mm: Vec::new(),
+            keep_clear_radius_mm: None,
+            keep_clear_seen_deg: None,
+        }),
+        ..bare()
+    };
+    assert_eq!(asked_edits(&recipe, &bare(), MODEL), None);
+    let asked = asked_after_check(&recipe, &bare(), MODEL, Some([90.0, 0.0, 0.0]))
+        .expect("the turn chosen is an edit");
+    assert!(
+        matches!(asked.as_slice(), [Edit::Rotate { degrees, .. }] if (degrees.x - 90.0).abs() < 1e-6),
+        "{asked:?}"
+    );
+}

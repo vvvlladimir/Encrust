@@ -5,7 +5,7 @@ use core_edit::{Edit, ObjectId};
 use serde_json::{Value, json};
 
 use super::Server;
-use super::asked::asked_edits;
+use super::asked::asked_after_check;
 use crate::jobs::Revision;
 use crate::recipe::{Cut, Recipe};
 
@@ -48,7 +48,11 @@ impl Server {
     /// as edits of the job's model there; `None` leaves the revision to be shown as ADR 0459
     /// runs it: the first, one the window has not read the model for, or one asking what no
     /// edit carries yet.
-    pub(super) async fn edits_in_window(&self, revision: &Revision) -> Option<Value> {
+    pub(super) async fn edits_in_window(
+        &self,
+        revision: &Revision,
+        report: &Value,
+    ) -> Option<Value> {
         let earlier = (revision.number.checked_sub(1))
             .filter(|number| *number > 0)
             .and_then(|number| self.jobs.open(&revision.job, Some(number)).ok())?;
@@ -57,14 +61,15 @@ impl Server {
             let _ = (self.jobs).keep_window_cut(&revision.job, revision.number, held);
             return Some(json!({"shown": false, "why_not": CUT_HELD}));
         }
-        let asked = asked_edits(&revision.recipe, &earlier.recipe, ObjectId::UNSET)?;
+        let chosen = chosen_turn(report);
+        let asked = asked_after_check(&revision.recipe, &earlier.recipe, ObjectId::UNSET, chosen)?;
         if asked.is_empty() {
             return Some(json!({"shown": false, "why_not": NOTHING_ASKED}));
         }
         for _ in 0..=REBUILDS {
             let plate = self.window.plate(&revision.job).await?;
             let object = plate.job_object?;
-            let edits = asked_edits(&revision.recipe, &earlier.recipe, object)?;
+            let edits = asked_after_check(&revision.recipe, &earlier.recipe, object, chosen)?;
             let _ = self.jobs.keep_edits(&revision.job, revision.number, &edits);
             let answer = (self.window)
                 .apply(&revision.job, &edits, plate.version)
@@ -83,4 +88,11 @@ impl Server {
         Some(json!({"applied": false,
                     "why_not": "the window's plate changed each time the edits were built on it"}))
     }
+}
+
+/// The turn the check's search chose for the job's model, `--rotate` angles.
+fn chosen_turn(report: &Value) -> Option<[f32; 3]> {
+    let turn = report["models"][0]["oriented"]["rotate_deg"].as_array()?;
+    let angle = |at: usize| turn.get(at)?.as_f64().map(|angle| angle as f32);
+    Some([angle(0)?, angle(1)?, angle(2)?])
 }

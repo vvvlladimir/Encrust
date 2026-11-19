@@ -84,8 +84,9 @@ revision before: a repair, the faces mended, a picture pressed in, a scale, a tu
 label, a split or part cut off, a cut, a hollow, holes drilled at points, supports by a named
 preset and points placed by hand, in that order. One that asks anything no edit carries yet —
 walls kept solid at points, the engine's drain search, plugs, channels, supports sized
-automatically or under a cavity, a combination, the orientation search — or takes back what an
-earlier one asked is shown by its recipe instead, as below. While the window holds a cut it was
+automatically or under a cavity, a combination — or takes back what an earlier one asked is
+shown by its recipe instead, as below. A pose the search picks is checked by the recipe and
+then handed over as the turn the check chose (`oriented.rotate_deg`). While the window holds a cut it was
 handed, the job's model is no longer on its plate whole, and a revision keeping that cut is not
 shown; a cut the user undid there is taken out of the job's next revision.
 

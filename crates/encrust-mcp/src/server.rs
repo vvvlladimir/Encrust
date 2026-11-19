@@ -562,7 +562,7 @@ impl Server {
         if revision.recipe.is_project() {
             return reply;
         }
-        if let Some(applied) = self.edits_in_window(revision).await {
+        if let Some(applied) = self.edits_in_window(revision, &outcome.report).await {
             reply.body["window"] = applied;
             return reply;
         }
