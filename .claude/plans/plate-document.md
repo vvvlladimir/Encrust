@@ -411,3 +411,25 @@ Done when: `estimate cube.stl --project-out a.encrust` writes one object, id 1, 
   cube's 8000 mm³ ± 0.01; `--edits` with a cut on it writes two halves; `--hollow` with
   `--project-out` on a model is refused; existing tests pass.
 Not now: MCP using it (C13c, orchestrator).
+
+### Supports the window's way (ADR 0468) — mapped, not started
+Two needs paths and two growth paths today:
+- needs — the window: `encrust-app/src/job/place.rs::needs_of` (+`plan_of`): sliced where it
+  stands, `generate_supports` fed painted/blocked/shown faces, seeds and `low_points`, then
+  `strengthen`; the engine: `core-engine/src/stand.rs::needs_under` (no paint, no seeds, its
+  own lift in `touched`).
+- growth — the window: the placements land as `ModelSupports` points
+  (`encrust-app/src/supports/run.rs::land_placed`, with groups, frozen trees, a cavity's inside
+  and regrowing kept), then `ModelSupports::growth(..).grow(model, surface, bvh)`
+  (`core-supports/src/model/growth.rs`) on the window's growth job; the engine:
+  `core-engine/src/stand.rs::grown` → `core_supports::branch::grow(columns, placed, profiles)`.
+Cards, in order, each green on its own:
+- S1: `needs_of` + `plan_of` move into core-engine (`stand/needs.rs`), taking the window's
+  inputs as options; the window's job calls it; `needs_under` becomes it with none given. CLI and
+  support-lab numbers may move: run `support-lab` before and after, keep the new baseline.
+- S2: the engine grows its trees the window's way: from needs to `ModelSupports` points to
+  `growth().grow`, replacing `branch::grow` in `grown`; the same bench before and after.
+- S3: `Edit::Supports { object, profile, at_mm, only_at }` in core-document, its trees into
+  `ObjectSupportState`; the window link's arm starts the support tool's job for that object.
+- S4: MCP: `asked.rs` hands supports over; docs and the `support-lab` baseline commit.
+Best started in a fresh session: each card needs the window's support tests read closely.
