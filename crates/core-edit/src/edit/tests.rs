@@ -278,6 +278,8 @@ fn supports_written_by_hand_default_to_the_active_group_and_no_points() {
         profile,
         at_mm,
         only_at,
+        cavity,
+        shown_at,
     }) = parsed
     else {
         panic!("supports with only an object are an edit: {parsed:?}");
@@ -286,4 +288,6 @@ fn supports_written_by_hand_default_to_the_active_group_and_no_points() {
     assert_eq!(profile, None);
     assert!(at_mm.is_empty());
     assert!(!only_at);
+    assert!(!cavity, "the cavity is held only when asked");
+    assert!(shown_at.is_empty());
 }

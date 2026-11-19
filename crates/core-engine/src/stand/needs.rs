@@ -44,6 +44,53 @@ pub fn needs_on(
     Ok(needs)
 }
 
+/// Where the model needs holding up on its outside and, with `inside`, on its cavity, as
+/// `sides(false)` and `sides(true)` ask each: both sides placed, the outside strengthened
+/// with the cavity's tips held, then the cavity with the outside's strengthened ones.
+pub fn needs_on_both<'a>(
+    sides: &dyn Fn(bool) -> NeedsAsked<'a>,
+    inside: bool,
+    held: &[Vec3],
+    tick: &mut dyn FnMut(usize) -> bool,
+) -> Result<Vec<Need>, EngineError> {
+    both_sides(sides, (inside, true), held, tick)
+}
+
+/// [`needs_on_both`], the strengthening optional.
+pub(super) fn both_sides<'a>(
+    sides: &dyn Fn(bool) -> NeedsAsked<'a>,
+    (inside, strengthening): (bool, bool),
+    held: &[Vec3],
+    tick: &mut dyn FnMut(usize) -> bool,
+) -> Result<Vec<Need>, EngineError> {
+    let place = |side: bool, tick: &mut dyn FnMut(usize) -> bool| {
+        let mut asked = sides(side);
+        let blocked = asked.blocked();
+        placed_on(&asked, blocked.as_ref(), tick)
+    };
+    let mut needs = place(false, tick);
+    let mut cavity = if inside {
+        place(true, tick)
+    } else {
+        Vec::new()
+    };
+    if strengthening {
+        let contacts = |needs: &[Need]| needs.iter().map(|need| need.contact).collect::<Vec<_>>();
+        let mut strengthen = |side: bool, needs: &mut Vec<Need>, others: &[Vec3]| {
+            let mut asked = sides(side);
+            let blocked = asked.blocked();
+            let held: Vec<Vec3> = held.iter().chain(others).copied().collect();
+            strengthened_on(&asked, blocked.as_ref(), needs, &held, &mut || tick(0))
+        };
+        strengthen(false, &mut needs, &contacts(&cavity))?;
+        if !cavity.is_empty() {
+            strengthen(true, &mut cavity, &contacts(&needs))?;
+        }
+    }
+    needs.extend(cavity);
+    Ok(needs)
+}
+
 /// What automatic placement touches, kept to the asked side of the wall.
 pub(super) fn placed_on(
     asked: &NeedsAsked<'_>,

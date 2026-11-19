@@ -1,11 +1,13 @@
 use core_edit::Edit;
+use core_engine::project::HollowState;
 use core_engine::project::{ObjectSupportState, Project, load};
 use core_geometry::Vec3;
 use core_supports::SupportTree;
+use core_volume::{HollowMode, InfillSettings};
 
 use super::*;
 use crate::apply::apply;
-use crate::fixtures::cube;
+use crate::fixtures::{cube, cube_of};
 
 const CUBE: ObjectId = ObjectId(1);
 
@@ -15,6 +17,8 @@ fn supports(profile: Option<&str>, at_mm: Vec<Vec3>, only_at: bool) -> Edit {
         profile: profile.map(str::to_owned),
         at_mm,
         only_at,
+        cavity: false,
+        shown_at: Vec::new(),
     }
 }
 
@@ -100,17 +104,126 @@ fn a_point_alone_gets_one_contact_on_the_nearest_surface() {
 }
 
 #[test]
-fn the_automatic_profile_is_not_a_preset_here() {
+fn auto_sizes_the_trees_of_a_lifted_cube_by_what_each_holds() {
     let mut document = lifted_cube(5.0);
 
-    let error = apply(
+    let applied = apply(
         &mut document,
         &supports(Some("auto"), Vec::new(), false),
         Cancel::never(),
     )
-    .expect_err("auto is sized by the window's catalogue");
+    .expect("the shipped automatic profile sizes the run");
 
-    assert_eq!(error, ApplyError::NoProfile("auto".to_owned()));
+    let tips = tip_contacts(&document);
+    assert!(!tips.is_empty(), "grown trees stand: {applied:?}");
+    for tip in &tips {
+        assert!(
+            (tip.z - 5.0).abs() < 1e-3,
+            "every tip's contact is on the underside at z 5, got {tip}"
+        );
+    }
+}
+
+#[test]
+fn a_profile_that_is_neither_shipped_nor_auto_names_itself() {
+    let mut document = lifted_cube(5.0);
+
+    let error = apply(
+        &mut document,
+        &supports(Some("no-such-preset"), Vec::new(), false),
+        Cancel::never(),
+    )
+    .expect_err("an unknown preset is refused");
+
+    assert_eq!(error, ApplyError::NoProfile("no-such-preset".to_owned()));
+}
+
+fn hollow_lifted_cube() -> Document {
+    let mut project = cube_of(20.0);
+    project.manifest.objects[0].supports = ObjectSupportState::default();
+    project.manifest.objects[0].transform.translation = Vec3::new(0.0, 0.0, 5.0);
+    let mut document = Document::from_project(project);
+    let hollow = Edit::Hollow {
+        object: CUBE,
+        settings: HollowState {
+            thickness_mm: 2.0,
+            mode: HollowMode::Internal,
+            precision: 1.0,
+            infill_on: false,
+            infill: InfillSettings::default(),
+            open_floor: false,
+            solid_under_mm: None,
+        },
+    };
+    apply(&mut document, &hollow, Cancel::never()).expect("a 20 mm cube has room for a 2 mm wall");
+    document
+}
+
+fn auto(cavity: bool, shown_at: Vec<ShownAt>) -> Edit {
+    Edit::Supports {
+        object: CUBE,
+        profile: Some("auto".to_owned()),
+        at_mm: Vec::new(),
+        only_at: false,
+        cavity,
+        shown_at,
+    }
+}
+
+#[test]
+fn a_hollow_cube_gets_contacts_in_its_cavity_only_when_asked() {
+    let inside = |document: &Document| {
+        tip_contacts(document)
+            .iter()
+            .filter(|tip| tip.z > 7.0 + 1e-3)
+            .count()
+    };
+    let mut outside_only = hollow_lifted_cube();
+    let mut with_inside = hollow_lifted_cube();
+
+    apply(&mut outside_only, &auto(false, Vec::new()), Cancel::never())
+        .expect("the outside is held");
+    apply(&mut with_inside, &auto(true, Vec::new()), Cancel::never()).expect("the cavity is held");
+
+    assert_eq!(
+        inside(&outside_only),
+        0,
+        "without `cavity` nothing stands above the wall's floor at z 7"
+    );
+    assert!(
+        inside(&with_inside) > 0,
+        "the cavity's ceiling at z 5 + 18 = 23 is held up"
+    );
+}
+
+#[test]
+fn a_stroke_over_the_underside_leaves_fewer_contacts_within_its_radius() {
+    let (centre, radius_mm) = (Vec3::new(5.0, 5.0, 5.0), 3.0);
+    let within = |document: &Document| {
+        tip_contacts(document)
+            .iter()
+            .filter(|tip| tip.distance(centre) <= radius_mm)
+            .count()
+    };
+    let mut plain = lifted_cube(5.0);
+    let mut shown = lifted_cube(5.0);
+    let stroke = auto(
+        false,
+        vec![ShownAt {
+            at_mm: centre,
+            radius_mm,
+        }],
+    );
+
+    apply(&mut plain, &auto(false, Vec::new()), Cancel::never()).expect("the cube is supported");
+    apply(&mut shown, &stroke, Cancel::never()).expect("the cube is supported");
+
+    let (before, after) = (within(&plain), within(&shown));
+    assert_eq!(
+        (before, after),
+        (3, 2),
+        "a stroke at {centre} of radius {radius_mm} takes the contacts within it from 3 to 2"
+    );
 }
 
 #[test]
@@ -164,6 +277,8 @@ fn supports_for_an_object_not_on_the_plate_name_it() {
         profile: None,
         at_mm: Vec::new(),
         only_at: false,
+        cavity: false,
+        shown_at: Vec::new(),
     };
 
     let error = apply(&mut document, &edit, Cancel::never()).expect_err("no such object");

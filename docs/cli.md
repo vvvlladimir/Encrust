@@ -635,9 +635,11 @@ its own, and keeps its supports; `drain` (`object`, `at_mm`, a list of `[x, y, z
 `size` and `kind`) drills a hole into the surface nearest each point as `--drain-at` does, a point
 nearest an edge or corner being refused, and leaves the shell to be cut when it is baked;
 `supports` (`object`, and optional `profile`, a shipped support preset, `at_mm`, a list of
-`[x, y, z]`, and `only_at`) stands supports under the object by the preset, the plate's active
-group's where unset, and a contact at the surface nearest each point; with `only_at` those
-contacts alone. `auto` is refused.
+`[x, y, z]`, `only_at`, `cavity` and `shown_at`) stands supports under the object by the preset,
+the plate's active group's where unset, and a contact at the surface nearest each point; with
+`only_at` those contacts alone. `auto` sizes each support by what it holds, as `--supports auto`;
+`cavity` holds up a hollow object's cavity too, as `--support-cavity`; `shown_at`, a list of
+`{"at_mm": [x, y, z], "radius_mm": r}`, marks the side meant to be seen, as `--shown-at`.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json

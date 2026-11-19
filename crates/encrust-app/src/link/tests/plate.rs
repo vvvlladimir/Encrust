@@ -259,6 +259,31 @@ fn supports_at_a_point_alone_stand_one_contact_on_the_surface_and_keep_the_id() 
 }
 
 #[test]
+fn auto_supports_stand_contacts_under_a_lifted_cube() {
+    let file = scratch("supports-auto");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let lifted = json!({"base_version": version,
+        "apply": [{"edit": "move", "object": cube.0, "by_mm": [0.0, 0.0, 5.0]},
+                  {"edit": "supports", "object": cube.0, "profile": "auto"}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, lifted));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("supports keep the id");
+    let contacts = object.supports.contacts(object.transform);
+    assert!(!contacts.is_empty(), "the lifted cube is held up");
+    for contact in &contacts {
+        assert!(
+            (4.5..=5.0).contains(&contact.z),
+            "every contact is at the underside, z 5 less the tip's 0.25 sink, got {contact}"
+        );
+    }
+}
+
+#[test]
 fn edits_built_on_a_plate_since_changed_are_answered_stale_and_not_applied() {
     let file = scratch("stale");
     let mut bench = Bench::new(file.clone());

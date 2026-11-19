@@ -160,8 +160,7 @@ pub fn support(id: &str) -> Result<SupportProfile> {
     Ok(entry.profile.clone())
 }
 
-/// What a support profile is asked for by, for supports sized by what they hold.
-pub const AUTO: &str = "auto";
+pub use core_document::AUTO;
 
 /// Supports built to the profile `id`, or sized by the automatic profile for [`AUTO`].
 pub fn plan_of(id: &str) -> Result<SupportPlan> {
