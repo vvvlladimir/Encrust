@@ -3,7 +3,9 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
+use core_document::ApplyError;
+use core_edit::ObjectId;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
     Blocker, Cancel, Channel, DrainHole, HoleKind, HoleShape, HoleSize, HollowMode, HollowSettings,
@@ -338,7 +340,7 @@ impl HollowArgs {
 }
 
 /// A hole of `size` on the surface nearest `near`, which stands `up` over the model as it is
-/// here, drilled straight into it, refused off an edge or a corner as `--drain-at` is.
+/// here, with `--drain-at`'s own words for a point it refuses.
 pub(crate) fn hole_near(
     mesh: &Mesh,
     bvh: &Bvh,
@@ -346,43 +348,15 @@ pub(crate) fn hole_near(
     size: HoleSize,
     kind: HoleKind,
 ) -> Result<DrainHole> {
-    hole_at(mesh, bvh, near - up, size)
-        .map(|hole| refuse_off_a_face(near, hole, up))
-        .transpose()?
-        .map(|hole| DrainHole { kind, ..hole })
-        .with_context(|| format!("no surface near {near} to drill a drain hole into"))
-}
-
-/// Past this, the point is off an edge or corner rather than over the face the hole is
-/// drilled into: a cube's edge is 45 degrees off, a 12-sided pillar's facets 15.
-const OFF_A_FACE_DEG: Scalar = 20.0;
-
-/// Nearer than this a point is on the surface: the f32 closest point lands a few ulps off it
-/// in any direction, so the offset says nothing of which way the point lies.
-const ON_THE_SURFACE_MM: Scalar = 1e-3;
-
-/// Refuses a hole a point off an edge or a corner put there, centred on it and half off the
-/// model, where the window's click always lands on a face. A point over or under a face is
-/// off it along its normal, either way. `near` stands `up` over the model as it is here.
-fn refuse_off_a_face(near: Vec3, hole: DrainHole, up: Vec3) -> Result<DrainHole> {
-    let off = near - up - hole.at;
-    let Some(inward) = hole
-        .axis
-        .try_normalize()
-        .filter(|_| off.length() > ON_THE_SURFACE_MM)
-    else {
-        return Ok(hole);
-    };
-    let off = off.normalize();
-    let off_normal_deg = off.dot(inward).abs().min(1.0).acos().to_degrees();
-    if off_normal_deg > OFF_A_FACE_DEG {
-        bail!(
-            "--drain-at {near} is nearest an edge or corner of the model, at {}, where a hole \
-             would sit half off it; give a point over a face",
-            hole.at + up
-        );
-    }
-    Ok(hole)
+    core_document::hole_near(mesh, bvh, (near, up), (size, kind), ObjectId::UNSET).map_err(
+        |error| match error {
+            ApplyError::OffAFace { mouth_mm, .. } => anyhow!(
+                "--drain-at {near} is nearest an edge or corner of the model, at {mouth_mm}, \
+                 where a hole would sit half off it; give a point over a face"
+            ),
+            _ => anyhow!("no surface near {near} to drill a drain hole into"),
+        },
+    )
 }
 
 /// Hollows the mesh, keeping the cavity off the channels and walled holes `placed` cuts, and says

@@ -6,6 +6,7 @@ use core_volume::Cancel;
 use crate::combine::apply_combine;
 use crate::cut::{CutAsked, CutModel, cut, pieces};
 use crate::document::Document;
+use crate::drain::apply_drain;
 use crate::error::ApplyError;
 use crate::hollow::apply_hollow;
 use crate::label::{LabelAsked, apply_label};
@@ -81,6 +82,11 @@ pub enum Report {
         /// Whether the memory budget made the lattice coarser than precision asked for.
         coarsened: bool,
     },
+    /// Holes were drilled into an object.
+    Drained {
+        /// Holes put in; one an earlier hole takes in adds none.
+        holes: usize,
+    },
     /// An object was moved, turned or sized where it stands.
     Placed,
     /// An object was deleted or copied.
@@ -139,6 +145,12 @@ pub fn apply(
             object,
             ref settings,
         } => apply_hollow(document, object, settings, cancel),
+        Edit::Drain {
+            object,
+            ref at_mm,
+            size,
+            kind,
+        } => apply_drain(document, object, at_mm, (size, kind)),
         Edit::Move { object, by_mm } => {
             place(document, object, |transform, _| Ok(moved(transform, by_mm)))
         }

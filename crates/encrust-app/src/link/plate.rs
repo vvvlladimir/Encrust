@@ -6,13 +6,13 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use core_document::{
-    ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, boolean_of, mirrored, moved,
-    part_settings, sized_to, turned_to,
+    ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, boolean_of, hole_near, mirrored,
+    moved, part_settings, sized_to, turned_to,
 };
 use core_edit::{Edit, ObjectId};
 use core_engine::project::HollowState;
 use core_geometry::{Mesh, Transform, Vec3};
-use core_volume::{PartSettings, RepairMethod};
+use core_volume::{HoleKind, HoleSize, PartSettings, RepairMethod};
 use serde_json::{Value, json};
 
 use crate::job::Method;
@@ -196,6 +196,12 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             object,
             ref settings,
         } => start_hollow(window, object, settings),
+        Edit::Drain {
+            object,
+            ref at_mm,
+            size,
+            kind,
+        } => start_drain(window, object, at_mm, (size, kind)),
         Edit::Move { object, by_mm } => {
             place(window, object, |transform, _| Ok(moved(transform, by_mm)))
         }
@@ -318,6 +324,30 @@ fn start_hollow(
         return Err("a hollowing is already under way".to_owned());
     }
     Ok(Some(object))
+}
+
+/// Drills a hole into the surface of `object` nearest each of `at_mm` at once, answering
+/// `None`; the window's drilling job cuts them on its next frame.
+fn start_drain(
+    window: &mut Window,
+    object: ObjectId,
+    at_mm: &[Vec3],
+    (size, kind): (HoleSize, HoleKind),
+) -> Result<Option<ObjectId>, String> {
+    let model = (window.doc.scene.get_mut(object)).ok_or_else(|| no_object(object))?;
+    let inverse = (model.transform.inverse_matrix())
+        .ok_or_else(|| ApplyError::BadTransform(object).to_string())?;
+    let mut holes = Vec::with_capacity(at_mm.len());
+    for plate in at_mm {
+        let own = inverse.transform_point3(*plate);
+        let near = (own, Vec3::ZERO);
+        let hole = hole_near(&model.mesh, &model.bvh, near, (size, kind), object);
+        holes.push(hole.map_err(|error| error.to_string())?);
+    }
+    for hole in holes {
+        model.hollow.add_hole(hole);
+    }
+    Ok(None)
 }
 
 fn no_object(id: ObjectId) -> String {

@@ -7,6 +7,8 @@ use core_engine::project::{
 };
 use core_geometry::{Mesh, Orientation, Region, Transform, diagnose};
 
+use core_volume::{Channel, DrainHole};
+
 use crate::piece::{Piece, Role};
 
 /// The plate as `.encrust` holds it, every object with an id of its own.
@@ -113,6 +115,21 @@ impl Document {
         state.hollow.built = Some(built);
         state.own_hollow = Some(settings);
         self.project.models[index].shell = Some(shell);
+    }
+
+    /// Gives object `id` the drain holes and channels it is cut with; the shell stays as built.
+    /// Nothing changes when `id` is not on the plate.
+    pub(crate) fn set_cuts(
+        &mut self,
+        id: ObjectId,
+        drains: Vec<DrainHole>,
+        channels: Vec<Channel>,
+    ) {
+        if let Some(index) = self.index_of(id) {
+            let state = &mut self.project.manifest.objects[index].hollow;
+            state.drains = drains;
+            state.channels = channels;
+        }
     }
 
     /// Takes the plugs laid for object `id` off the plate, answering their ids.

@@ -67,7 +67,7 @@ impl HoleShape {
 
 /// The hole a click drills: its mouth and depth in millimetres of the plate, its far end
 /// as a fraction of its mouth, 1 being a cylinder, and its outline and turn.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct HoleSize {
     pub diameter_mm: Scalar,
     pub depth_mm: Scalar,

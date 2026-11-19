@@ -628,7 +628,9 @@ into the object as `--relief-image` does, only into its painted faces where any 
 its supports and cavity, and keeps its plugs; `hollow` (`object`, and `settings` as the Hollow
 panel keeps them: `thickness_mm`, `mode` of `internal` or `external`, `precision`, `infill_on`,
 `infill`, and optional `open_floor`, `solid_under_mm`) hollows the object by them, which it keeps as
-its own, and keeps its supports.
+its own, and keeps its supports; `drain` (`object`, `at_mm`, a list of `[x, y, z]`, and optional
+`size` and `kind`) drills a hole into the surface nearest each point as `--drain-at` does, a point
+nearest an edge or corner being refused, and leaves the shell to be cut when it is baked.
 
 ```sh
 echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json
