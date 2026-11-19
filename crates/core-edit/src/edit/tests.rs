@@ -268,3 +268,22 @@ fn a_drain_written_by_hand_defaults_its_size_and_kind() {
     assert_eq!(size, core_volume::HoleSize::default());
     assert_eq!(kind, core_volume::HoleKind::Drain);
 }
+
+#[test]
+fn supports_written_by_hand_default_to_the_active_group_and_no_points() {
+    let text = r#"{"edit":"supports","object":3}"#;
+    let parsed = serde_json::from_str::<Edit>(text);
+    let Ok(Edit::Supports {
+        object,
+        profile,
+        at_mm,
+        only_at,
+    }) = parsed
+    else {
+        panic!("supports with only an object are an edit: {parsed:?}");
+    };
+    assert_eq!(object, ObjectId(3));
+    assert_eq!(profile, None);
+    assert!(at_mm.is_empty());
+    assert!(!only_at);
+}

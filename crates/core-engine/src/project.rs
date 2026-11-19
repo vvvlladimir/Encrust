@@ -513,6 +513,12 @@ impl BuiltCavity {
     }
 }
 
+/// The faces of a printed surface of `faces` faces that lie inside the model: its cavity,
+/// and the lattice standing in it, which the surface counts after it.
+pub fn inner_faces(cavity: &Range<usize>, faces: usize) -> Range<usize> {
+    cavity.start..faces.max(cavity.end)
+}
+
 /// The wall a model was hollowed to, as the Hollow panel shows it.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Cavity {

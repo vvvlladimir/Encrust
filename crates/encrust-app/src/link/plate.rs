@@ -9,15 +9,17 @@ use core_document::{
     ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, boolean_of, hole_near, mirrored,
     moved, part_settings, sized_to, turned_to,
 };
-use core_edit::{Edit, ObjectId};
+use core_edit::{Edit, ObjectId, Op};
 use core_engine::project::HollowState;
 use core_geometry::{Mesh, Transform, Vec3};
 use core_volume::{HoleKind, HoleSize, PartSettings, RepairMethod};
+use printer_profiles::SupportProfile;
 use serde_json::{Value, json};
 
 use crate::job::Method;
 use crate::panels::Window;
 use crate::repair::RepairState;
+use crate::supports::{Only, Side};
 
 /// Edits being applied one after another, each a job of the tool that carries it out.
 #[derive(Debug)]
@@ -118,6 +120,7 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
             | Edit::Mend { .. }
             | Edit::Relief { .. }
             | Edit::Hollow { .. }
+            | Edit::Supports { .. }
     );
     match start_edit(&edit, window) {
         Ok(id) => {
@@ -137,6 +140,7 @@ fn tool_is_busy(window: &Window) -> bool {
         || repairs.hand.is_busy()
         || window.tools.relief.is_busy()
         || window.tools.hollow.job.is_some()
+        || window.tools.supports.job.is_some()
 }
 
 fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
@@ -146,7 +150,7 @@ fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
     false
 }
 
-/// Carries `edit` out: a cut, combine, label, repair, mend, relief or hollow starts a tool job, answering the object it replaces; any
+/// Carries `edit` out: a cut, combine, label, repair, mend, relief, hollow or supports run starts a tool job, answering the object it replaces; any
 /// other edit is made at once, answering `None`.
 fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, String> {
     match *edit {
@@ -181,13 +185,7 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             ref objects,
             op,
             toward,
-        } => {
-            let method = toward.map_or(Method::Sampled, Method::ExactToward);
-            (window.tools.boolean)
-                .start_asked(&window.doc.scene, objects, (boolean_of(op), method))
-                .map_err(|error| format!("{error:#}"))?;
-            Ok(objects.first().copied())
-        }
+        } => start_combine(window, objects, op, toward),
         Edit::Label { object, .. } => start_label(window, edit, object),
         Edit::Repair { object, method } => start_repair(window, object, method),
         Edit::Mend { object, .. } => start_mend(window, edit, object),
@@ -202,6 +200,12 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             size,
             kind,
         } => start_drain(window, object, at_mm, (size, kind)),
+        Edit::Supports {
+            object,
+            ref profile,
+            ref at_mm,
+            only_at,
+        } => start_supports(window, object, profile.as_deref(), (at_mm, only_at)),
         Edit::Move { object, by_mm } => {
             place(window, object, |transform, _| Ok(moved(transform, by_mm)))
         }
@@ -212,13 +216,7 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             sized_to(transform, mesh, factors)
                 .ok_or_else(|| ApplyError::BadScale(object).to_string())
         }),
-        Edit::Delete { object } => {
-            let scene = &mut window.doc.scene;
-            scene.get(object).ok_or_else(|| no_object(object))?;
-            scene.remove_plugs_of(object);
-            scene.remove(object);
-            Ok(None)
-        }
+        Edit::Delete { object } => take_off(window, object),
         Edit::Duplicate { object, offset_mm } => {
             (window.doc.scene.duplicate(object, offset_mm)).ok_or_else(|| no_object(object))?;
             Ok(None)
@@ -227,6 +225,30 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             Ok(mirrored(transform, mesh, axis))
         }),
     }
+}
+
+/// Starts combining `objects` as the Combine tool's job, answering the first, which a
+/// difference keeps.
+fn start_combine(
+    window: &mut Window,
+    objects: &[ObjectId],
+    op: Op,
+    toward: Option<Vec3>,
+) -> Result<Option<ObjectId>, String> {
+    let method = toward.map_or(Method::Sampled, Method::ExactToward);
+    (window.tools.boolean)
+        .start_asked(&window.doc.scene, objects, (boolean_of(op), method))
+        .map_err(|error| format!("{error:#}"))?;
+    Ok(objects.first().copied())
+}
+
+/// Takes `object` and the plugs laid for it off the plate at once.
+fn take_off(window: &mut Window, object: ObjectId) -> Result<Option<ObjectId>, String> {
+    let scene = &mut window.doc.scene;
+    scene.get(object).ok_or_else(|| no_object(object))?;
+    scene.remove_plugs_of(object);
+    scene.remove(object);
+    Ok(None)
 }
 
 /// Starts a split or a part-off as a tool job, answering the object it replaces.
@@ -348,6 +370,58 @@ fn start_drain(
         model.hollow.add_hole(hole);
     }
     Ok(None)
+}
+
+/// Stands a support at the surface nearest each of `at`'s points at once, in the group of the
+/// preset `profile` names, the active one where unset; unless `only_at` is set, starts the
+/// Supports tool's automatic run on `object` alone, answering it. The growth job grows the trees.
+fn start_supports(
+    window: &mut Window,
+    object: ObjectId,
+    profile: Option<&str>,
+    (at_mm, only_at): (&[Vec3], bool),
+) -> Result<Option<ObjectId>, String> {
+    let scene = &mut window.doc.scene;
+    scene.get(object).ok_or_else(|| no_object(object))?;
+    let tool = &mut window.tools.supports;
+    if let Some(name) = profile {
+        let shipped = SupportProfile::shipped(name)
+            .map_err(|_| ApplyError::NoProfile(name.to_owned()).to_string())?;
+        tool.chosen = Some(shipped);
+        tool.take_up_chosen(scene);
+    }
+    let model = scene.get_mut(object).ok_or_else(|| no_object(object))?;
+    let inverse = (model.transform.inverse_matrix())
+        .ok_or_else(|| ApplyError::BadTransform(object).to_string())?;
+    for plate in at_mm {
+        let near = inverse.transform_point3(*plate);
+        let closest = (model.support_surface().1.closest(near))
+            .ok_or_else(|| ApplyError::NoSurface(object).to_string())?;
+        let contact = model.transform.to_matrix().transform_point3(closest.point);
+        model.supports.add(contact, model.transform, tool.active);
+    }
+    if only_at {
+        return Ok(None);
+    }
+    let (layer_mm, catalogue) = (
+        window.machine.slicing.layer_height_mm(),
+        &window.machine.slicing.catalogue,
+    );
+    let only = Only {
+        ids: &[object],
+        sized: false,
+    };
+    let clean = window.tools.orient.settings.clean_surface;
+    (window.tools.supports)
+        .start_for(
+            scene,
+            layer_mm,
+            catalogue,
+            (Side::Outside, clean),
+            Some(only),
+        )
+        .map_err(|error| format!("{error:#}"))?;
+    Ok(Some(object))
 }
 
 fn no_object(id: ObjectId) -> String {

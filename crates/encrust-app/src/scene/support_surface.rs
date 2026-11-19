@@ -105,7 +105,7 @@ impl SceneObject {
             None => (self.hollow.shell()?, self.hollow.cavity_faces()),
         };
         let inner = cavity.map_or(0..0, |cavity| {
-            cavity.start..mesh.faces.len().max(cavity.end)
+            core_engine::project::inner_faces(&cavity, mesh.faces.len())
         });
         Some((mesh, inner))
     }
