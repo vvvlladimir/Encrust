@@ -9,6 +9,7 @@ use core_supports::{
 };
 use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
+use serde::{Deserialize, Serialize};
 
 use crate::error::EngineError;
 
@@ -20,8 +21,8 @@ use lift::lift_of;
 pub use lift::{Lift, planned_lift};
 pub(crate) use merge::merge_refusal;
 use merge::merged_near;
-pub use needs::{NeedsAsked, needs_on, plan_of};
-use needs::{placed_on, strengthened_on};
+use needs::both_sides;
+pub use needs::{NeedsAsked, needs_on, needs_on_both, plan_of};
 
 /// What a run builds supports to: one profile, or the shapes an automatic profile sizes
 /// each support into by what it holds (ADR 0325).
@@ -53,7 +54,7 @@ pub struct SupportPlan {
 
 /// One stroke of the Clean surface brush: the faces within `radius_mm` of `at_mm`, plate
 /// millimetres as the model prints, lift included.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ShownAt {
     pub at_mm: Vec3,
     pub radius_mm: Scalar,
@@ -380,7 +381,7 @@ fn needs_under(
     let shown = shown_on(surface, bvh, &plan.shown_at);
     let lows = low_points(surface, Transform::default());
     let inner = inner.filter(|inner| !inner.is_empty());
-    let asked = |inside| NeedsAsked {
+    let asked = |inside: bool| NeedsAsked {
         stack: &stack,
         surface,
         bvh,
@@ -397,32 +398,12 @@ fn needs_under(
             inside,
         }),
     };
-    let place = |inside| {
-        let mut asked = asked(inside);
-        let blocked = asked.blocked();
-        placed_on(&asked, blocked.as_ref(), &mut |_| true)
+    let mut needs = if plan.by_hand.only {
+        Vec::new()
+    } else {
+        let cavity = (plan.cavity && inner.is_some(), strengthening);
+        both_sides(&asked, cavity, &[], &mut |_| true)?
     };
-    let strengthen = |inside, needs: &mut Vec<Need>, held: &[Vec3]| {
-        let mut asked = asked(inside);
-        let blocked = asked.blocked();
-        strengthened_on(&asked, blocked.as_ref(), needs, held, &mut || true)
-    };
-    let (mut needs, mut inside) = (Vec::new(), Vec::new());
-    if !plan.by_hand.only {
-        needs = place(false);
-        if plan.cavity && inner.is_some() {
-            inside = place(true);
-        }
-    }
-    if strengthening {
-        // Both sides hold the one shell, so each is read with the other's tips standing.
-        let contacts = |needs: &[Need]| needs.iter().map(|need| need.contact).collect::<Vec<_>>();
-        strengthen(false, &mut needs, &contacts(&inside))?;
-        if !inside.is_empty() {
-            strengthen(true, &mut inside, &contacts(&needs))?;
-        }
-    }
-    needs.extend(inside);
     // A support placed by hand is built as sturdy as one steadying a part: it holds what the
     // user says, not a measured load.
     let by_hand = plan
@@ -436,7 +417,7 @@ fn needs_under(
 }
 
 /// The faces of `surface` the brush strokes `shown_at` paint, or `None` where none is painted.
-fn shown_on(surface: &Mesh, bvh: &Bvh, shown_at: &[ShownAt]) -> Option<Shown> {
+pub fn shown_on(surface: &Mesh, bvh: &Bvh, shown_at: &[ShownAt]) -> Option<Shown> {
     let mut region = Region::default();
     for stroke in shown_at {
         let on = (surface, bvh, Transform::default());

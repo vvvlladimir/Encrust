@@ -37,7 +37,7 @@ pub use prepare::{Hollowing, PREPARE_ORIENT, PREPARE_REPAIR, hollowing, needs_re
 pub use run::{QUICK_CHECK_BIN, Run};
 pub use stand::{
     ByHand, Lift, NeedsAsked, ShownAt, Stood, SupportPlan, SupportShapes, ToStand, needs_on,
-    plan_of, planned_lift, stand_at, stand_seated, stand_under,
+    needs_on_both, plan_of, planned_lift, shown_on, stand_at, stand_seated, stand_under,
 };
 pub use strengthen::{Strengthened, Underside, WANTED_MARGIN, carried, strengthen};
 pub use trapped::trapped_in;

@@ -33,3 +33,4 @@ pub use plate_contents::mirrored;
 pub use relief::{ReliefAsked, Relieved, press_picture, read_picture, relieved};
 pub use repair::{MendAsked, Mended, mended, repaired};
 pub use split::{part_off_at, part_settings, split};
+pub use supports::AUTO;

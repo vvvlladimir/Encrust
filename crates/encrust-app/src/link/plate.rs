@@ -6,12 +6,13 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use core_document::{
-    ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, boolean_of, hole_near, mirrored,
-    moved, part_settings, sized_to, turned_to,
+    AUTO, ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, boolean_of, hole_near,
+    mirrored, moved, part_settings, sized_to, turned_to,
 };
 use core_edit::{Edit, ObjectId, Op};
+use core_engine::ShownAt;
 use core_engine::project::HollowState;
-use core_geometry::{Mesh, Transform, Vec3};
+use core_geometry::{Mesh, Region, Transform, Vec3};
 use core_volume::{HoleKind, HoleSize, PartSettings, RepairMethod};
 use printer_profiles::SupportProfile;
 use serde_json::{Value, json};
@@ -19,6 +20,7 @@ use serde_json::{Value, json};
 use crate::job::Method;
 use crate::panels::Window;
 use crate::repair::RepairState;
+use crate::scene::Scene;
 use crate::supports::{Only, Side};
 
 /// Edits being applied one after another, each a job of the tool that carries it out.
@@ -29,6 +31,9 @@ pub struct Applying {
     /// The object the edit under way replaces, there still if the edit did not land, and
     /// whether the edit may leave it in place and be done (a split of one body).
     under_way: Option<(ObjectId, bool)>,
+    /// The object whose cavity a supports edit holds up once its outside run has landed, and
+    /// whether that run is sized by the automatic profile.
+    inside: Option<(ObjectId, bool)>,
 }
 
 fn refused(why: String) -> Value {
@@ -91,6 +96,7 @@ pub fn start(
         edits: edits.into(),
         reply,
         under_way: None,
+        inside: None,
     })
 }
 
@@ -110,6 +116,15 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
         let why = window.machine.status.text();
         return finish(applying, refused(why));
     }
+    if let Some((object, sized)) = work.inside.take() {
+        return match start_inside(window, object, sized) {
+            Ok(()) => {
+                work.under_way = Some((object, true));
+                true
+            }
+            Err(why) => finish(applying, refused(why)),
+        };
+    }
     let Some(edit) = work.edits.pop_front() else {
         return finish(applying, json!({"applied": true}));
     };
@@ -125,6 +140,7 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     match start_edit(&edit, window) {
         Ok(id) => {
             work.under_way = id.map(|id| (id, may_stay));
+            work.inside = inside_pass_of(&edit);
             true
         }
         Err(why) => finish(applying, refused(why)),
@@ -150,8 +166,9 @@ fn finish(applying: &mut Option<Applying>, answer: Value) -> bool {
     false
 }
 
-/// Carries `edit` out: a cut, combine, label, repair, mend, relief, hollow or supports run starts a tool job, answering the object it replaces; any
-/// other edit is made at once, answering `None`.
+/// Carries `edit` out: a cut, combine, label, repair, mend, relief, hollow or supports run
+/// starts a tool job, answering the object it replaces; any other edit is made at once,
+/// answering `None`.
 fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, String> {
     match *edit {
         Edit::Cut {
@@ -200,12 +217,7 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             size,
             kind,
         } => start_drain(window, object, at_mm, (size, kind)),
-        Edit::Supports {
-            object,
-            ref profile,
-            ref at_mm,
-            only_at,
-        } => start_supports(window, object, profile.as_deref(), (at_mm, only_at)),
+        Edit::Supports { object, .. } => start_supports(window, edit, object),
         Edit::Move { object, by_mm } => {
             place(window, object, |transform, _| Ok(moved(transform, by_mm)))
         }
@@ -372,24 +384,58 @@ fn start_drain(
     Ok(None)
 }
 
-/// Stands a support at the surface nearest each of `at`'s points at once, in the group of the
-/// preset `profile` names, the active one where unset; unless `only_at` is set, starts the
-/// Supports tool's automatic run on `object` alone, answering it. The growth job grows the trees.
+/// Stands a support at the surface nearest each of the edit's points at once, in the group of
+/// the preset it names, the active one where unset; unless `only_at` is set, starts the
+/// Supports tool's automatic run on `object` alone, answering it. `auto` sizes that run as the
+/// panel's Auto does; strokes of `shown_at` count as the side meant to be seen for it alone.
+/// The growth job grows the trees.
 fn start_supports(
     window: &mut Window,
+    edit: &Edit,
     object: ObjectId,
-    profile: Option<&str>,
-    (at_mm, only_at): (&[Vec3], bool),
 ) -> Result<Option<ObjectId>, String> {
+    let Edit::Supports {
+        profile,
+        at_mm,
+        only_at,
+        shown_at,
+        ..
+    } = edit
+    else {
+        return Err(no_object(object));
+    };
     let scene = &mut window.doc.scene;
     scene.get(object).ok_or_else(|| no_object(object))?;
     let tool = &mut window.tools.supports;
-    if let Some(name) = profile {
+    let named = profile.as_deref().filter(|name| *name != AUTO);
+    if let Some(name) = named {
         let shipped = SupportProfile::shipped(name)
             .map_err(|_| ApplyError::NoProfile(name.to_owned()).to_string())?;
         tool.chosen = Some(shipped);
         tool.take_up_chosen(scene);
     }
+    stand_points(scene, object, at_mm, tool.active)?;
+    if *only_at {
+        return Ok(None);
+    }
+    let clean = window.tools.orient.settings.clean_surface || !shown_at.is_empty();
+    let before = brush_shown(&mut window.doc.scene, object, shown_at);
+    let sized = profile.as_deref() == Some(AUTO);
+    let started = run_on(window, object, (Side::Outside, sized), clean);
+    if let (Some(before), Some(model)) = (before, window.doc.scene.get_mut(object)) {
+        model.shown_painted = before;
+    }
+    started?;
+    Ok(Some(object))
+}
+
+/// Stands a support in `group` at the surface of `object` nearest each of `at_mm`.
+fn stand_points(
+    scene: &mut Scene,
+    object: ObjectId,
+    at_mm: &[Vec3],
+    group: u16,
+) -> Result<(), String> {
     let model = scene.get_mut(object).ok_or_else(|| no_object(object))?;
     let inverse = (model.transform.inverse_matrix())
         .ok_or_else(|| ApplyError::BadTransform(object).to_string())?;
@@ -398,30 +444,84 @@ fn start_supports(
         let closest = (model.support_surface().1.closest(near))
             .ok_or_else(|| ApplyError::NoSurface(object).to_string())?;
         let contact = model.transform.to_matrix().transform_point3(closest.point);
-        model.supports.add(contact, model.transform, tool.active);
+        model.supports.add(contact, model.transform, group);
     }
-    if only_at {
-        return Ok(None);
+    Ok(())
+}
+
+/// Paints the strokes `shown_at` on `object` where it has no painted side of its own, as the
+/// engine does, and answers what it was before, to put back once the run has started.
+fn brush_shown(scene: &mut Scene, object: ObjectId, shown_at: &[ShownAt]) -> Option<Region> {
+    let model = scene.get_mut(object)?;
+    if shown_at.is_empty() || !model.shown_painted.is_empty() {
+        return None;
     }
+    let before = model.shown_painted.clone();
+    for stroke in shown_at {
+        let on = (&*model.mesh, &*model.bvh, model.transform);
+        model
+            .shown_painted
+            .brush(on, stroke.at_mm, stroke.radius_mm, true);
+    }
+    Some(before)
+}
+
+/// Starts the Supports tool's automatic run on `object` alone, adding to what stands. A sized
+/// run takes the plate's automatic profile, else the catalogue's first, without keeping it.
+fn run_on(
+    window: &mut Window,
+    object: ObjectId,
+    (side, sized): (Side, bool),
+    clean: bool,
+) -> Result<(), String> {
     let (layer_mm, catalogue) = (
         window.machine.slicing.layer_height_mm(),
         &window.machine.slicing.catalogue,
     );
+    let tool = &mut window.tools.supports;
+    let kept = tool.auto.clone();
+    if sized && kept.is_none() {
+        let held = tool.sizing().map(|sizing| sizing.profile);
+        let first = || catalogue.autos().next().map(|entry| entry.profile.clone());
+        tool.auto = Some(
+            held.or_else(first)
+                .ok_or_else(|| "the catalogue has no automatic profile".to_owned())?,
+        );
+    }
     let only = Only {
         ids: &[object],
-        sized: false,
+        sized,
     };
+    let started = tool.start_for(
+        &mut window.doc.scene,
+        layer_mm,
+        catalogue,
+        (side, clean),
+        Some(only),
+    );
+    tool.auto = kept;
+    started.map_err(|error| format!("{error:#}"))
+}
+
+/// The run holding up the cavity that a supports edit asking for it follows its outside run
+/// with: the object and whether `auto` sizes it.
+fn inside_pass_of(edit: &Edit) -> Option<(ObjectId, bool)> {
+    match edit {
+        Edit::Supports {
+            object,
+            profile,
+            only_at: false,
+            cavity: true,
+            ..
+        } => Some((*object, profile.as_deref() == Some(AUTO))),
+        _ => None,
+    }
+}
+
+/// Starts the panel's inside pass on `object`, which holds up its cavity.
+fn start_inside(window: &mut Window, object: ObjectId, sized: bool) -> Result<(), String> {
     let clean = window.tools.orient.settings.clean_surface;
-    (window.tools.supports)
-        .start_for(
-            scene,
-            layer_mm,
-            catalogue,
-            (Side::Outside, clean),
-            Some(only),
-        )
-        .map_err(|error| format!("{error:#}"))?;
-    Ok(Some(object))
+    run_on(window, object, (Side::Inside, sized), clean)
 }
 
 fn no_object(id: ObjectId) -> String {

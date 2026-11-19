@@ -123,10 +123,16 @@ drills `hole_near` its source mesh (the CLI's `--drain-at` call), adding it to t
 surface near a point is `NoSurface`, a point nearest an edge or corner `OffAFace`. The window
 drills at once on its own `ModelHollow`.
 
-`Supports { object, profile, at_mm, only_at }` stands supports under one object. `profile` is a
-shipped preset (`SupportProfile::shipped`), the plate's active group's where unset; `auto` is
-`NoProfile`, its sizing being the window's catalogue's. The preset becomes a group of the plate
-where none carries its name, and the contacts go into it. The object's `ModelSupports` is restored
+`Supports { object, profile, at_mm, only_at, cavity, shown_at }` stands supports under one
+object. `profile` is a shipped preset (`SupportProfile::shipped`), the plate's active group's
+where unset; an unknown name is `NoProfile`. The preset becomes a group of the plate where none
+carries its name, and the contacts go into it. `auto` sizes each need by what it holds, as
+`SupportPlan::sized` does against the shipped catalogue (no user folder), by the plate's own
+`SupportState::sizing` where it keeps one, else the catalogue's first; each shape that holds a
+need is the plate's group of its name or a new one, and the `at_mm` points are built as steadying
+ones. `cavity` runs `needs_on` again on the inside of the wall, with the outside's contacts held
+(the window's inside pass); `shown_at` strokes are the plan's, read by `shown_on` where the object
+has no painted shown region. The object's `ModelSupports` is restored
 by `supports_of`; `needs_on` (core-engine's one needs step) reads its printed surface as placed, its
 blocked and shown regions, its contacts as seeds and, on a hollow one, the outside of the wall; each
 need and each `at_mm` point (the surface nearest it) is added, the trees grown by `Growth::grow` and

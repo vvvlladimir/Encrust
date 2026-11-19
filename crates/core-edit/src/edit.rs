@@ -1,3 +1,4 @@
+use core_engine::ShownAt;
 use core_engine::project::{Axis, HollowState, Keep, ObjectId};
 use core_geometry::{Scalar, Vec3};
 use core_joint::Joints;
@@ -142,7 +143,9 @@ pub enum Edit {
     },
     /// Stands supports under `object` by the shipped support preset `profile`, the plate's
     /// active group's where unset, and by a contact at the surface nearest each of `at_mm`;
-    /// with `only_at` those contacts alone.
+    /// with `only_at` those contacts alone. `auto` sizes each support by what it holds; with
+    /// `cavity` a hollow object's cavity is held up too, and `shown_at` strokes mark the side
+    /// meant to be seen.
     Supports {
         object: ObjectId,
         #[serde(default)]
@@ -151,6 +154,10 @@ pub enum Edit {
         at_mm: Vec<Vec3>,
         #[serde(default)]
         only_at: bool,
+        #[serde(default)]
+        cavity: bool,
+        #[serde(default)]
+        shown_at: Vec<ShownAt>,
     },
 }
 
