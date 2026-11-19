@@ -357,3 +357,17 @@ never decides again. So `Edit::Supports` cannot be one `apply` until the two way
 ADR choosing which grows the trees for both (window wins by ADR 0466, but `stand_under` is
 the engine's, ADR 0402), then the job moved down. Until then a client's supports reach the
 window by the old recipe path. Same for the drains' auto search and plugs (C10b).
+
+## Status (2026-11-19)
+Done and pushed: M0, M1, C1–C7, C8 (decided: a pose is a Rotate), C9, C10, and the MCP side of
+every edit (`server/asked.rs`: a revision's changes beyond the one before go to a followed
+window as edits; what no edit carries keeps the recipe's path).
+Open, each needing a decision or a design session before it is a card:
+- C11 Supports: one way of growing them for the window and the engine (see C11).
+- C10b: the engine's drain search, plugs, channels, holes into the supports.
+- C2b Arrange: the plate's area and the supports' footprints in the Document.
+- C12: recipes yield edits, both recipe executors deleted.
+- C13: a revision as a base `.encrust` and its edits (`--project-out` for a model input, a
+  Document staged from models); then `unshown.rs` and the flags path go, and an undo of any
+  edit (not only a cut) reaches the client.
+- C14: 0459's status, `ai-integration.md`, snapshots if a panel changes.
