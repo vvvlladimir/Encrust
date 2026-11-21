@@ -1,9 +1,11 @@
 use core_edit::Edit;
 use core_engine::project::HollowState;
 use core_engine::project::{ObjectSupportState, Project, load};
-use core_geometry::Vec3;
+use core_geometry::{Region, Vec3};
 use core_supports::SupportTree;
 use core_volume::{HollowMode, InfillSettings};
+
+use printer_profiles::Catalogue;
 
 use super::*;
 use crate::apply::apply;
@@ -19,6 +21,7 @@ fn supports(profile: Option<&str>, at_mm: Vec<Vec3>, only_at: bool) -> Edit {
         only_at,
         cavity: false,
         shown_at: Vec::new(),
+        clean_surface: false,
     }
 }
 
@@ -103,6 +106,80 @@ fn a_point_alone_gets_one_contact_on_the_nearest_surface() {
     );
 }
 
+fn points_within(document: &Document, at: Vec3, radius_mm: f32) -> usize {
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    let lift = Vec3::new(0.0, 0.0, 5.0);
+    let near =
+        |point: &&core_supports::SupportPoint| (point.contact + lift).distance(at) <= radius_mm;
+    state.supports.points.iter().filter(near).count()
+}
+
+#[test]
+fn a_point_asked_stands_before_the_run_as_a_seed() {
+    let mut document = lifted_cube(5.0);
+    let at = Vec3::new(5.0, 5.0, 5.0);
+
+    apply(
+        &mut document,
+        &supports(Some("medium"), vec![at], false),
+        Cancel::never(),
+    )
+    .expect("a point under the cube is supported");
+
+    assert_eq!(
+        points_within(&document, at, 2.0),
+        1,
+        "one contact within 2 mm of (5, 5, 5): the run keeps off the point asked, not a second beside it"
+    );
+}
+
+fn underside_painted_shown(lift_mm: f32) -> Document {
+    let mut project = bare_cube();
+    project.manifest.objects[0].transform.translation = Vec3::new(0.0, 0.0, lift_mm);
+    let source = &project.models[0].source;
+    let mut shown = Region::default();
+    for (at, face) in source.faces.iter().enumerate() {
+        if face
+            .iter()
+            .all(|vertex| source.vertices[*vertex as usize].z == 0.0)
+        {
+            shown.set(at, true);
+        }
+    }
+    project.manifest.objects[0].shown_painted = shown;
+    Document::from_project(project)
+}
+
+fn contacts_with(mut document: Document, clean_surface: bool) -> usize {
+    let mut edit = supports(Some("medium"), Vec::new(), false);
+    if let Edit::Supports {
+        clean_surface: flag,
+        ..
+    } = &mut edit
+    {
+        *flag = clean_surface;
+    }
+    apply(&mut document, &edit, Cancel::never()).expect("a lifted cube is supported");
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    state.supports.points.len()
+}
+
+#[test]
+fn a_painted_shown_side_is_read_only_for_a_clean_surface() {
+    let unpainted = contacts_with(lifted_cube(5.0), false);
+    let ignored = contacts_with(underside_painted_shown(5.0), false);
+    let read = contacts_with(underside_painted_shown(5.0), true);
+
+    assert_eq!(
+        ignored, unpainted,
+        "painted side unread: {unpainted} contacts"
+    );
+    assert!(
+        read < unpainted,
+        "painted side read: {read} contacts, fewer than {unpainted}"
+    );
+}
+
 #[test]
 fn auto_sizes_the_trees_of_a_lifted_cube_by_what_each_holds() {
     let mut document = lifted_cube(5.0);
@@ -167,6 +244,7 @@ fn auto(cavity: bool, shown_at: Vec<ShownAt>) -> Edit {
         only_at: false,
         cavity,
         shown_at,
+        clean_surface: false,
     }
 }
 
@@ -279,6 +357,7 @@ fn supports_for_an_object_not_on_the_plate_name_it() {
         only_at: false,
         cavity: false,
         shown_at: Vec::new(),
+        clean_surface: false,
     };
 
     let error = apply(&mut document, &edit, Cancel::never()).expect_err("no such object");
@@ -302,4 +381,92 @@ fn an_active_group_missing_from_the_table_falls_back_to_the_first() {
 
     let (state, _) = document.object(CUBE).expect("the cube stays");
     assert_eq!(state.supports.points[0].group, 0);
+}
+
+fn mine() -> Group {
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    "mine".clone_into(&mut profile.name);
+    profile.middle.diameter_mm = 0.6;
+    Group {
+        name: "mine".to_owned(),
+        profile,
+    }
+}
+
+#[test]
+fn a_name_the_plate_has_a_group_for_builds_to_it_and_leaves_it_active() {
+    let mut project = bare_cube();
+    project.manifest.supports.groups.push(mine());
+    project.manifest.objects[0].transform.translation = Vec3::new(0.0, 0.0, 5.0);
+    let mut document = Document::from_project(project);
+
+    apply(
+        &mut document,
+        &supports(Some("mine"), Vec::new(), false),
+        Cancel::never(),
+    )
+    .expect("the plate's own group builds the run");
+
+    let plate = document.support_state();
+    assert_eq!(plate.groups[usize::from(plate.active)].name, "mine");
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    let tips: Vec<f32> = state
+        .supports
+        .grown
+        .iter()
+        .flat_map(|tree| tree.nodes().iter().filter(|node| node.point.is_some()))
+        .map(|node| node.radius_mm)
+        .collect();
+    assert!(!tips.is_empty(), "the lifted cube is held up");
+    for radius in tips {
+        assert!(
+            (radius - 0.3).abs() < 1e-6,
+            "every tip's neck is the group's 0.6 mm pillar, radius 0.3, got {radius}"
+        );
+    }
+}
+
+#[test]
+fn auto_sizes_into_the_plates_group_of_a_shape_name_where_it_has_one() {
+    let catalogue = Catalogue::bundled().expect("the shipped catalogue reads");
+    let auto = catalogue
+        .autos()
+        .next()
+        .expect("one automatic profile ships");
+    let [lightest, medium, ..] = auto.profile.shapes_in(&catalogue).expect("its shapes ship");
+    let mut own = lightest.clone();
+    own.middle.diameter_mm = 0.6;
+    let groups = [Group {
+        name: own.name.clone(),
+        profile: own,
+    }];
+
+    let plan = sized_plan((None, &groups), &lightest).expect("the plan sizes");
+
+    let table = plan.table();
+    assert!(
+        (table[0].pillar_radius_mm() - 0.3).abs() < 1e-6,
+        "the lightest shape is the plate's group, pillar radius 0.3, got {}",
+        table[0].pillar_radius_mm()
+    );
+    assert_eq!(
+        table[1], medium,
+        "a shape the plate has no group for stays the shipped one"
+    );
+}
+
+#[test]
+fn a_name_neither_on_the_plate_nor_shipped_is_refused_with_groups_present() {
+    let mut project = bare_cube();
+    project.manifest.supports.groups.push(mine());
+    let mut document = Document::from_project(project);
+
+    let error = apply(
+        &mut document,
+        &supports(Some("yours"), Vec::new(), false),
+        Cancel::never(),
+    )
+    .expect_err("no group and no preset by that name");
+
+    assert_eq!(error, ApplyError::NoProfile("yours".to_owned()));
 }

@@ -199,20 +199,10 @@ impl OrientTask {
             vents: core_document::vents_of(&object.hollow),
             sizing: object.transform.sizing(),
             down_now: object.transform.rotation.inverse() * Vec3::NEG_Z,
-            support: lifted(plan, object.lift_mm),
+            support: core_document::lifted(plan, object.lift_mm),
             shown: object.shown_painted.clone(),
         }
     }
-}
-
-/// `plan` standing a model `lift_mm` clear of the plate where the user asked for that.
-fn lifted(mut plan: SupportPlan, lift_mm: Option<f32>) -> SupportPlan {
-    if let Some(lift_mm) = lift_mm {
-        for profile in plan.profiles_mut() {
-            profile.z_lift_mm = lift_mm;
-        }
-    }
-    plan
 }
 
 /// The good ways to stand one model, best first: proven by printing where there is a
@@ -283,13 +273,13 @@ fn run(request: &OrientRequest, (stop, seen): (&AtomicBool, &Seen)) -> OrientOut
 /// How `task`'s model should be turned, judged as the shell and cuts it will print.
 fn turn_of(task: &OrientTask, request: &OrientRequest, watch: Watch<'_>) -> Result<Turn, String> {
     let placing = task.support.placing();
-    let settings = OrientSettings {
-        down_now: task.down_now,
-        max_overhang_deg: placing.max_overhang_deg,
-        contact_spacing_mm: placing.contact_spacing_mm,
-        lift_mm: placing.lift_mm(),
-        ..request.settings
-    };
+    let settings = core_document::placed_by(
+        OrientSettings {
+            down_now: task.down_now,
+            ..request.settings
+        },
+        &task.support,
+    );
     let body = Body {
         outer: Arc::clone(&task.mesh),
         shell: task.shell.clone(),

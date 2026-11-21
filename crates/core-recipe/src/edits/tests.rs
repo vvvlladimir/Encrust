@@ -1,7 +1,7 @@
 use core_edit::{Edit, ObjectId, OrientAim};
 use core_engine::PREPARE_REPAIR;
-use core_geometry::{Aabb, Vec3};
-use core_volume::{HollowMode, PLUG_GAP_MM};
+use core_geometry::{Aabb, Scalar, Vec3};
+use core_volume::{HoleKind, HollowMode, PLUG_GAP_MM};
 
 use super::{NotAnEdit, edits_of};
 use crate::decide::Resolved;
@@ -9,6 +9,7 @@ use crate::recipe::StepKind;
 use crate::resolved::ResolvedSettings;
 
 const OBJECT: ObjectId = ObjectId(7);
+const AREA: ([Scalar; 2], [Scalar; 2]) = ([5.0, 3.0], [200.0, 120.0]);
 
 fn settings(pairs: &[(&str, Resolved)]) -> ResolvedSettings {
     pairs
@@ -23,7 +24,7 @@ fn word(text: &str) -> Resolved {
 
 fn edits(kind: StepKind, set: &ResolvedSettings) -> Result<Vec<Edit>, NotAnEdit> {
     let placed = Aabb::new(Vec3::ZERO, Vec3::splat(10.0));
-    edits_of(kind, set, OBJECT, placed, [200.0, 120.0])
+    edits_of(kind, set, OBJECT, placed, AREA, 0.0)
 }
 
 #[test]
@@ -54,6 +55,10 @@ fn orient_settings_land_in_the_edit() {
             max_tilt_deg: Some(30.0),
             clean_surface: true,
             pick: 0,
+            plate_mm: Some(AREA.1),
+            low_mm: AREA.0,
+            printer: None,
+            resin: None,
         }]
     );
 }
@@ -74,6 +79,21 @@ fn hollow_settings_land_in_the_edit() {
     assert_eq!(settings.mode, HollowMode::Internal);
     assert!(settings.open_floor && settings.infill_on);
     assert_eq!(settings.solid_under_mm, Some(0.4));
+}
+
+#[test]
+fn a_plug_gap_has_the_resin_drift_taken_off() {
+    let set = settings(&[("plugs", Resolved::Bool(true))]);
+    let placed = Aabb::new(Vec3::ZERO, Vec3::splat(10.0));
+    let got = edits_of(StepKind::Drain, &set, OBJECT, placed, AREA, 0.05).expect("an edit");
+
+    let Some(Edit::Plugs { gap_mm, .. }) = got.last() else {
+        panic!("a drain then plugs, got {got:?}");
+    };
+    assert!(
+        (*gap_mm - (PLUG_GAP_MM - 0.05)).abs() < 1e-6,
+        "0.15 less a drift of 0.05 is 0.10, got {gap_mm}"
+    );
 }
 
 #[test]
@@ -104,7 +124,9 @@ fn auto_drain_asks_the_search_and_a_plug() {
         *plugs,
         Edit::Plugs {
             object: OBJECT,
-            gap_mm: PLUG_GAP_MM
+            gap_mm: PLUG_GAP_MM,
+            plate_mm: Some(AREA.1),
+            low_mm: AREA.0,
         }
     );
 }
@@ -116,10 +138,16 @@ fn drain_points_are_fractions_of_the_placed_box() {
         ("points", Resolved::Points(vec![[0.5, 0.5, 1.0]])),
     ]);
     let got = edits(StepKind::Drain, &set).expect("drain is an edit");
-    let [Edit::Drain { at_mm, auto, .. }] = got.as_slice() else {
+    let [
+        Edit::Drain {
+            at_mm, auto, kind, ..
+        },
+    ] = got.as_slice()
+    else {
         panic!("one drain edit with no plug, got {got:?}");
     };
     assert!(!*auto);
+    assert_eq!(*kind, HoleKind::AtDepth, "a point is drilled as a click is");
     let at = at_mm[0];
     assert!(
         (at - Vec3::new(5.0, 5.0, 10.0)).length() < 1e-6,
@@ -147,12 +175,13 @@ fn supports_settings_land_in_the_edit() {
 }
 
 #[test]
-fn arrange_takes_the_plate_and_the_spacing() {
+fn arrange_takes_the_usable_area_and_the_spacing() {
     let set = settings(&[("spacing_mm", Resolved::Number(6.0))]);
     let got = edits(StepKind::Arrange, &set).expect("arrange is an edit");
     assert_eq!(
         got,
         vec![Edit::Arrange {
+            low_mm: [5.0, 3.0],
             plate_mm: [200.0, 120.0],
             clearance_mm: 6.0
         }]

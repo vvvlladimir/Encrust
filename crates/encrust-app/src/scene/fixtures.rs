@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use core_geometry::{Transform, Vec3, cuboid, diagnose};
-use core_volume::{Cancel, HollowSettings, Shell, hollow};
+use core_geometry::{Bvh, Mesh, Transform, Vec3, cuboid, diagnose};
+use core_volume::{Cancel, HoleSize, HollowSettings, ModelHollow, Shell, hollow};
 
 use super::{ImportSummary, Imported, Scene};
 
@@ -42,4 +42,16 @@ pub fn hollow_cube(side_mm: f32, wall_mm: f32, transform: Transform) -> Scene {
         settings,
     });
     scene
+}
+
+/// Drills into `hollow` the hole a click at `point` on the face of `normal` makes, on the model
+/// `(mesh, bvh, transform)`; says whether it was new.
+pub fn drained(
+    hollow: &mut ModelHollow,
+    (mesh, bvh, transform): (&Mesh, &Bvh, Transform),
+    (point, normal): (Vec3, Vec3),
+    size: HoleSize,
+) -> bool {
+    let hole = ModelHollow::drain_at(mesh, bvh, point, normal, size, transform);
+    hollow.add_hole(hole.expect("the point drains"))
 }

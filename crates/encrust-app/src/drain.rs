@@ -3,7 +3,7 @@ use core_engine::CupVent;
 use core_engine::project::DrainState;
 use core_geometry::Scalar;
 use core_supports::Trapped;
-use core_volume::HoleSize;
+use core_volume::{HoleSize, ModelHollow};
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
@@ -159,10 +159,14 @@ impl DrainTool {
         drilled
     }
 
-    /// Drills each of `vents` to its own depth, and says how many it put in.
-    pub fn drill_vents(&mut self, scene: &mut Scene, vents: &[(ObjectId, CupVent)]) -> usize {
+    /// Drills each of `vents` at `size` to its own depth, and says how many it put in.
+    pub fn drill_vents(
+        &mut self,
+        scene: &mut Scene,
+        vents: &[(ObjectId, CupVent)],
+        size: HoleSize,
+    ) -> usize {
         self.stale();
-        let size = self.size();
         let mut drilled = 0;
         for (id, vent) in vents {
             let Some(object) = scene.get_mut(*id) else {
@@ -174,10 +178,8 @@ impl DrainTool {
             };
             let (mesh, bvh, transform) = (&object.mesh, &object.bvh, object.transform);
             let (mouth, outward) = (vent.mouth_mm, vent.outward);
-            if object
-                .hollow
-                .add_drain(mesh, bvh, mouth, outward, size, transform)
-            {
+            let hole = ModelHollow::drain_at(mesh, bvh, mouth, outward, size, transform);
+            if hole.is_some_and(|hole| object.drill_hole(hole)) {
                 drilled += 1;
             }
         }
@@ -370,6 +372,40 @@ mod tests {
         assert!(
             !tool.drill_pocket(&mut scene, id, 5),
             "no pocket five to drill"
+        );
+    }
+
+    #[test]
+    fn a_cup_vent_takes_away_the_support_it_drills_out_and_leaves_the_rest() {
+        let mesh = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
+        let lifted = Transform::from_translation(Vec3::new(0.0, 0.0, 5.0));
+        let summary = ImportSummary::made(diagnose(&mesh));
+        let mut scene = Scene::default();
+        let id = scene.insert(Imported::new(
+            "cube".to_owned(),
+            Arc::new(mesh),
+            lifted,
+            summary,
+        ));
+        let object = scene.get_mut(id).expect("just inserted");
+        object.supports.add(Vec3::new(5.0, 5.0, 5.0), lifted, 0);
+        object.supports.add(Vec3::new(1.0, 1.0, 5.0), lifted, 0);
+        let vent = CupVent {
+            model: 0,
+            mouth_mm: Vec3::new(5.0, 5.0, 5.0),
+            outward: Vec3::NEG_Z,
+            depth_mm: 2.0,
+        };
+
+        let drilled =
+            DrainTool::default().drill_vents(&mut scene, &[(id, vent)], HoleSize::default());
+
+        assert_eq!(drilled, 1, "the vent is drilled");
+        let object = scene.get(id).expect("still there");
+        assert_eq!(
+            object.supports.points().len(),
+            1,
+            "the support under the vent goes, the other stays"
         );
     }
 

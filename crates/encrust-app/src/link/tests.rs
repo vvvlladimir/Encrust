@@ -94,6 +94,18 @@ impl Bench {
         }
     }
 
+    /// Runs `ask` on the window the bench holds.
+    fn with_window(&mut self, ask: impl FnOnce(&mut Window<'_>)) {
+        ask(&mut Window {
+            mode: &mut self.mode,
+            tool: &mut self.tool,
+            doc: &mut self.doc,
+            view: &mut self.view,
+            tools: &mut self.tools,
+            machine: &mut self.machine,
+        });
+    }
+
     fn poll_link(&mut self) -> bool {
         let mut window = Window {
             mode: &mut self.mode,

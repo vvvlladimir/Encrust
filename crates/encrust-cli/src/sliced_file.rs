@@ -65,7 +65,7 @@ pub fn write_plate(
     let run = Run::of(&plate)?;
     // The run holds the baked plate; the models it was baked from are not needed again.
     drop(plate.models);
-    let mut slice = report_of(run.solid(), run.windows(), drainage);
+    let mut slice = report_of(run.solid(), run.windows(), drainage, &plate.material);
     warn_if_exposure_was_measured_elsewhere(run.job(), &plate.material);
     warn_of_limits(run.job());
 

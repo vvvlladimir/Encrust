@@ -1,11 +1,11 @@
 //! What a revision asks of the plate beyond the one before it, as edits of the job's model
 //! (ADR 0466): repaired, mended, pressed, sized, turned, labelled, split, cut, hollowed, drained, channelled, plugged.
 
-use core_edit::{Edit, ObjectId};
+use core_edit::{Edit, ObjectId, OrientAim, PLUG_GAP_MM};
 use serde_json::{Value, json};
 
 use crate::recipe::{
-    Drains, HoleKind, Hollow, Mend, Modelling, Pose, Recipe, Relief, Repair, Supports,
+    Drains, Goal, HoleKind, Hollow, Mend, Modelling, Pose, Recipe, Relief, Repair, Supports,
 };
 
 /// What `--precision` is when not typed.
@@ -18,19 +18,20 @@ const SHOWN_RADIUS_MM: f32 = 4.0;
 /// How far past the surface `--drain` reaches when not typed, mm.
 const DRAIN_DEPTH_MM: f32 = 3.0;
 
-/// The edits `recipe` asks beyond `earlier` of `object`, in the order they are made; `None`
-/// where something changed that no edit carries yet, so the revision is shown as before.
-pub fn asked_edits(recipe: &Recipe, earlier: &Recipe, object: ObjectId) -> Option<Vec<Edit>> {
-    asked_after_check(recipe, earlier, object, None)
-}
+/// What the check of a revision reports for the edits: the turn its search chose, the resin's fit
+/// drift and the printer's usable area as its low corner and size, mm.
+pub type Checked = (Option<[f32; 3]>, Option<f32>, Option<Area>);
 
-/// [`asked_edits`], a pose the search picked taken as the turn `chosen_deg` its check chose
-/// (the report's `oriented.rotate_deg`); without one such a pose is no edit.
+/// A plate area as its low corner and its size, mm.
+pub type Area = ([f32; 2], [f32; 2]);
+
+/// The edits `recipe` asks beyond `earlier` of `object`, `None` where one is no edit yet; the
+/// check's turn and resin fit drift (`slicing.fit_drift_mm`) let a pose and a plug gap be one.
 pub fn asked_after_check(
     recipe: &Recipe,
     earlier: &Recipe,
     object: ObjectId,
-    chosen_deg: Option<[f32; 3]>,
+    (chosen_deg, fit_drift_mm, area_mm): Checked,
 ) -> Option<Vec<Edit>> {
     if !plate_alike(recipe, earlier) {
         return None;
@@ -51,10 +52,13 @@ pub fn asked_after_check(
         object,
     )?);
     if recipe.pose != earlier.pose {
-        let degrees = match recipe.pose {
-            Some(Pose::Rotate { degrees }) => degrees,
-            Some(Pose::Search { .. }) => chosen_deg?,
-            None => return None,
+        let turned = match (&recipe.pose, catalogue_ids(recipe)) {
+            (Some(Pose::Rotate { degrees }), _) => rotated(object, *degrees),
+            (Some(pose @ Pose::Search { .. }), Some(ids)) if keeps_nothing_clear(pose) => {
+                searched(pose, object, (ids, area_mm))?
+            }
+            (Some(Pose::Search { .. }), _) => rotated(object, chosen_deg?),
+            (None, _) => return None,
         };
         // A turn goes after a scale and before a label, which is laid where the model stands.
         let at = asked.iter().position(|edit| {
@@ -63,10 +67,6 @@ pub fn asked_after_check(
                 Edit::Label { .. } | Edit::Split { .. } | Edit::PartOff { .. } | Edit::Cut { .. }
             )
         });
-        let turned = Edit::Rotate {
-            object,
-            degrees: degrees.into(),
-        };
         asked.insert(at.unwrap_or(asked.len()), turned);
     }
     if recipe.hollow != earlier.hollow {
@@ -76,7 +76,7 @@ pub fn asked_after_check(
         asked.extend(drained(
             recipe.drains.as_ref()?,
             earlier.drains.as_ref(),
-            object,
+            (object, fit_drift_mm),
         )?);
     }
     if recipe.supports != earlier.supports {
@@ -84,6 +84,64 @@ pub fn asked_after_check(
         asked.push(supported(recipe.supports.as_ref()?, then, object)?);
     }
     Some(asked)
+}
+
+fn rotated(object: ObjectId, degrees: [f32; 3]) -> Edit {
+    Edit::Rotate {
+        object,
+        degrees: degrees.into(),
+    }
+}
+
+/// The recipe's printer and resin where both are catalogue ids, not the paths of files.
+fn catalogue_ids(recipe: &Recipe) -> Option<(&str, &str)> {
+    fn id(name: &str) -> Option<&str> {
+        let path = name.is_empty() || name.contains(['/', '\\', '.']);
+        (!path).then_some(name)
+    }
+    Some((id(&recipe.printer)?, id(&recipe.resin)?))
+}
+
+/// Whether a search keeps no place clear, which an `Orient` edit cannot be told.
+fn keeps_nothing_clear(pose: &Pose) -> bool {
+    matches!(pose, Pose::Search { keep_clear_at_mm, .. } if keep_clear_at_mm.is_empty())
+}
+
+fn aim_of(goal: Goal) -> OrientAim {
+    match goal {
+        Goal::FewestSupports => OrientAim::FewestSupports,
+        Goal::LeastPeel => OrientAim::LeastPeel,
+        Goal::ShortestPrint => OrientAim::ShortestPrint,
+        Goal::Auto => OrientAim::Auto,
+    }
+}
+
+/// The search `pose` as an edit proved on the job's printer and resin, as its check ran it.
+fn searched(
+    pose: &Pose,
+    object: ObjectId,
+    ((printer, resin), area_mm): ((&str, &str), Option<Area>),
+) -> Option<Edit> {
+    let Pose::Search {
+        goal,
+        max_tilt_deg,
+        pick,
+        ..
+    } = pose
+    else {
+        return None;
+    };
+    Some(Edit::Orient {
+        object,
+        goal: aim_of(*goal),
+        max_tilt_deg: *max_tilt_deg,
+        clean_surface: false,
+        pick: usize::from(pick.unwrap_or(1)).saturating_sub(1),
+        plate_mm: area_mm.map(|(_, size)| size),
+        low_mm: area_mm.map_or([0.0, 0.0], |(low, _)| low),
+        printer: Some(printer.to_owned()),
+        resin: Some(resin.to_owned()),
+    })
 }
 
 /// Whether nothing changed between the two that no edit carries: the way steps are decided or
@@ -205,7 +263,11 @@ fn hollow(hollow: &Hollow, object: ObjectId) -> Option<Edit> {
 
 /// The holes, search, channels and plugs `now` asks beyond `then`; holes into the supports,
 /// walled holes, a size changed or anything taken back are no edit yet (`None`).
-fn drained(now: &Drains, then: Option<&Drains>, object: ObjectId) -> Option<Vec<Edit>> {
+fn drained(
+    now: &Drains,
+    then: Option<&Drains>,
+    (object, fit_drift_mm): (ObjectId, Option<f32>),
+) -> Option<Vec<Edit>> {
     let blank = Drains::default();
     let first = then.is_none();
     let then = then.unwrap_or(&blank);
@@ -241,11 +303,11 @@ fn drained(now: &Drains, then: Option<&Drains>, object: ObjectId) -> Option<Vec<
         asked.push(edit_of(channel)?);
     }
     if now.plugs && (!then.plugs || !asked.is_empty()) {
-        let mut plugs = json!({"edit": "plugs", "object": object});
-        if let Some(gap_mm) = now.plug_gap_mm {
-            plugs["gap_mm"] = json!(gap_mm);
-        }
-        asked.push(edit_of(plugs)?);
+        // An edit's gap is the final one; `--plug-gap` takes the resin's drift off its own.
+        let gap_mm = now.plug_gap_mm.unwrap_or(PLUG_GAP_MM) - fit_drift_mm?;
+        asked.push(edit_of(
+            json!({"edit": "plugs", "object": object, "gap_mm": gap_mm}),
+        )?);
     }
     Some(asked)
 }

@@ -157,7 +157,7 @@ fn stand(piece: &mut Piece, plan: SupportPlan, ctx: &Ctx) -> Result<()> {
     let printed = piece.printed();
     let model = (&mut piece.mesh, printed, &mut cuts);
     let seated = piece.seated;
-    let stood = stand_under(model, &plan, ctx.layer_height_mm, seated)?;
+    let stood = stand_under(model, &plan, core_engine::ANALYSIS_LAYER_MM, seated)?;
     piece.plan = Some(plan);
     if seated && stood.0.contacts.is_empty() {
         return Ok(());

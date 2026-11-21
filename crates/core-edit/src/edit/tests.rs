@@ -268,7 +268,7 @@ fn a_drain_written_by_hand_defaults_its_size_and_kind() {
     assert_eq!(object, ObjectId(2));
     assert_eq!(at_mm.len(), 1);
     assert_eq!(size, core_volume::HoleSize::default());
-    assert_eq!(kind, core_volume::HoleKind::Drain);
+    assert_eq!(kind, core_volume::HoleKind::AtDepth);
     assert!(!auto, "the search runs only when asked for");
     assert!(vent, "a vent is laid unless it is left out on purpose");
 }
@@ -313,6 +313,8 @@ fn a_searching_drain_needs_no_points_and_a_channel_and_plugs_read_back() {
         Edit::Plugs {
             object: ObjectId(2),
             gap_mm: 0.1,
+            plate_mm: Some([100.0, 80.0]),
+            low_mm: [2.0, 3.0],
         },
     ] {
         let text = serde_json::to_string(&edit).expect("an edit serialises");
@@ -328,6 +330,7 @@ fn an_arrange_reads_back_with_its_plate_and_clearance() {
     assert_eq!(
         parsed,
         Edit::Arrange {
+            low_mm: [0.0, 0.0],
             plate_mm: [100.0, 80.0],
             clearance_mm: 2.0,
         }
@@ -345,6 +348,7 @@ fn supports_written_by_hand_default_to_the_active_group_and_no_points() {
         only_at,
         cavity,
         shown_at,
+        clean_surface,
     }) = parsed
     else {
         panic!("supports with only an object are an edit: {parsed:?}");
@@ -355,6 +359,7 @@ fn supports_written_by_hand_default_to_the_active_group_and_no_points() {
     assert!(!only_at);
     assert!(!cavity, "the cavity is held only when asked");
     assert!(shown_at.is_empty());
+    assert!(!clean_surface, "the painted side is read only when asked");
 }
 
 #[test]
@@ -369,6 +374,10 @@ fn an_orient_written_by_hand_defaults_to_auto_and_the_first_pose() {
             max_tilt_deg: None,
             clean_surface: false,
             pick: 0,
+            plate_mm: None,
+            low_mm: [0.0, 0.0],
+            printer: None,
+            resin: None,
         }
     );
 }

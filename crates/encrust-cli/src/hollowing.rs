@@ -347,15 +347,20 @@ pub(crate) fn hole_near(
     size: HoleSize,
     kind: HoleKind,
 ) -> Result<DrainHole> {
-    core_document::hole_near(mesh, bvh, (near, up), (size, kind), ObjectId::UNSET).map_err(
-        |error| match error {
-            ApplyError::OffAFace { mouth_mm, .. } => anyhow!(
-                "--drain-at {near} is nearest an edge or corner of the model, at {mouth_mm}, \
-                 where a hole would sit half off it; give a point over a face"
-            ),
-            _ => anyhow!("no surface near {near} to drill a drain hole into"),
-        },
+    core_document::hole_near(
+        (mesh, bvh),
+        Transform::default(),
+        (near, up),
+        (size, kind),
+        ObjectId::UNSET,
     )
+    .map_err(|error| match error {
+        ApplyError::OffAFace { mouth_mm, .. } => anyhow!(
+            "--drain-at {near} is nearest an edge or corner of the model, at {mouth_mm}, \
+                 where a hole would sit half off it; give a point over a face"
+        ),
+        _ => anyhow!("no surface near {near} to drill a drain hole into"),
+    })
 }
 
 /// Hollows the mesh, keeping the cavity off the channels and walled holes `placed` cuts, and says

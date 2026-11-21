@@ -1,9 +1,10 @@
 //! The engine's drain search over an object as it stands on the plate (ADR 0401).
 
 use core_edit::ObjectId;
-use core_engine::{DrainSearch, Drained, EngineError, Scanning, suggest_drains_heard};
+use core_engine::{
+    ANALYSIS_LAYER_MM, DrainSearch, Drained, EngineError, Scanning, suggest_drains_heard,
+};
 use core_geometry::{Mesh, Scalar, Transform, transform_mesh};
-use core_slicer::SliceSettings;
 use core_volume::{Cancel, HoleSize, ModelHollow};
 
 use crate::error::ApplyError;
@@ -67,7 +68,7 @@ pub(crate) fn search_object(
         size,
         wall: wall.zip(hollow.lattice().map(|(voxel_mm, _)| voxel_mm)),
         vents,
-        layer_height_mm: SliceSettings::default().layer_height,
+        layer_height_mm: ANALYSIS_LAYER_MM,
     };
     let found = drains_proven(
         (&placed, cuts.as_ref()),

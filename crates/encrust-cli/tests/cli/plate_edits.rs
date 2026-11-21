@@ -171,3 +171,45 @@ fn edits_on_a_model_without_project_out_are_refused() {
         stderr(&output)
     );
 }
+
+fn sliced_plain(model: &Path, name: &str, extra: &[&str]) -> PathBuf {
+    let out = output_dir(name);
+    let (panel, resin) = (test_panel(), test_resin());
+    let mut args = vec![
+        model.to_str().expect("a UTF-8 path"),
+        "--profile",
+        panel.to_str().expect("a UTF-8 path"),
+        "--material",
+        resin.to_str().expect("a UTF-8 path"),
+        "-o",
+        out.to_str().expect("a UTF-8 path"),
+    ];
+    args.extend_from_slice(extra);
+    let output = slice(&args);
+    assert!(output.status.success(), "{}", stderr(&output));
+    out
+}
+
+#[test]
+fn a_model_sliced_plain_draws_the_layers_its_written_project_draws() {
+    let model = write_box_stl("plain-vs-project.stl", 10.0, 12, 0);
+    let project = output_file("plain-vs-project.encrust");
+    let project_arg = project.to_str().expect("a UTF-8 path");
+
+    let plain = sliced_plain(&model, "plain-stack", &[]);
+    let through = sliced_plain(&model, "project-stack", &["--project-out", project_arg]);
+
+    let layers = written_layers(&plain);
+    assert_eq!(layers, 200, "a 10 mm cube at 0.05 mm is 200 layers");
+    assert_eq!(
+        written_layers(&through),
+        layers,
+        "the same number of layers"
+    );
+    for index in 0..layers {
+        assert!(
+            layer_pixels(&plain, index) == layer_pixels(&through, index),
+            "layer {index} differs between the model and its project"
+        );
+    }
+}

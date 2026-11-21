@@ -2,10 +2,10 @@
 
 use core_edit::Edit;
 use core_edit::ObjectId;
-use core_engine::project::hollow_of;
+use core_engine::project::{hollow_of, supports_without_drilled};
 use core_geometry::Transform;
 use core_geometry::{Bvh, Mesh, Scalar, Vec3};
-use core_volume::{Cancel, Channel, DrainHole, HoleKind, HoleSize, drill, hole_at};
+use core_volume::{Cancel, Channel, DrainHole, HoleKind, HoleSize, ModelHollow, drill};
 
 use crate::apply::{Applied, Report};
 use crate::document::Document;
@@ -16,7 +16,7 @@ mod plugs;
 
 pub use auto::{SearchAsked, drains_proven, plate_under};
 use plugs::apply_plugs;
-pub use plugs::plugs_cut;
+pub use plugs::{plugs_cut, spaced_plugs};
 
 /// Past this, the point is off an edge or corner rather than over the face the hole is
 /// drilled into: a cube's edge is 45 degrees off, a 12-sided pillar's facets 15.
@@ -26,34 +26,43 @@ const OFF_A_FACE_DEG: Scalar = 20.0;
 /// in any direction, so the offset says nothing of which way the point lies.
 const ON_THE_SURFACE_MM: Scalar = 1e-3;
 
-/// A hole of `size` on the surface nearest `near`, which stands `up` over the model as it is
-/// here, drilled straight into it, refused off an edge or a corner. `object` names the model
-/// in an error.
+/// The hole a click at `near` (plate mm) drills into model `object` standing under `transform`;
+/// refused off an edge or corner.
 pub fn hole_near(
-    mesh: &Mesh,
-    bvh: &Bvh,
+    (mesh, bvh): (&Mesh, &Bvh),
+    transform: Transform,
     (near, up): (Vec3, Vec3),
     (size, kind): (HoleSize, HoleKind),
     object: ObjectId,
 ) -> Result<DrainHole, ApplyError> {
-    let hole = hole_at(mesh, bvh, near - up, size).ok_or(ApplyError::NoSurface(object))?;
-    if off_a_face(near, &hole, up) {
+    let inverse = transform
+        .inverse_matrix()
+        .ok_or(ApplyError::BadTransform(object))?;
+    let closest = bvh
+        .closest(inverse.transform_point3(near - up))
+        .ok_or(ApplyError::NoSurface(object))?;
+    let face = mesh
+        .triangle(closest.face)
+        .ok_or(ApplyError::NoSurface(object))?;
+    let normal = (transform.normal_matrix() * face.normal_unnormalized()).normalize_or_zero();
+    let point = transform.to_matrix().transform_point3(closest.point);
+    let hole = ModelHollow::drain_at(mesh, bvh, point, normal, size, transform)
+        .ok_or(ApplyError::NoSurface(object))?;
+    if off_a_face(near, (point, -normal), up) {
         return Err(ApplyError::OffAFace {
             object,
             at_mm: near,
-            mouth_mm: hole.at + up,
+            mouth_mm: point + up,
         });
     }
     Ok(DrainHole { kind, ..hole })
 }
 
-/// Whether `hole` sits half off the model, put there by a point off an edge or a corner, where
-/// a click always lands on a face. A point over or under a face is off it along its normal,
-/// either way. `near` stands `up` over the model as it is here.
-fn off_a_face(near: Vec3, hole: &DrainHole, up: Vec3) -> bool {
-    let off = near - up - hole.at;
-    let Some(inward) = hole
-        .axis
+/// Whether the hole at `at` along `axis`, plate mm, sits half off the model for a point off
+/// an edge or corner; `near` stands `up` over the model.
+fn off_a_face(near: Vec3, (at, axis): (Vec3, Vec3), up: Vec3) -> bool {
+    let off = near - up - at;
+    let Some(inward) = axis
         .try_normalize()
         .filter(|_| off.length() > ON_THE_SURFACE_MM)
     else {
@@ -87,7 +96,15 @@ pub(crate) fn apply_drains(
             ref points_mm,
             diameter_mm,
         } => apply_channel(document, object, points_mm, diameter_mm),
-        Edit::Plugs { object, gap_mm } => apply_plugs(document, object, gap_mm, cancel),
+        Edit::Plugs {
+            object,
+            gap_mm,
+            plate_mm,
+            low_mm,
+        } => {
+            let area_mm = plate_mm.map(|plate| (low_mm, plate));
+            apply_plugs(document, object, gap_mm, area_mm, cancel)
+        }
         _ => Err(ApplyError::NoObject(asked_of)),
     }
 }
@@ -114,27 +131,14 @@ pub(crate) fn apply_drain(
     if searching.auto && meshes.shell.is_none() {
         return Err(ApplyError::NoCavity(id));
     }
-    let inverse = state
-        .transform
-        .inverse_matrix()
-        .ok_or(ApplyError::BadTransform(id))?;
     let bvh = Bvh::build(&meshes.source);
     let mut hollow = hollow_of(&state.hollow, meshes);
+    let kept_holes = hollow.drains().len();
     let mut holes = 0;
     for plate in at_mm {
-        let own = inverse.transform_point3(*plate);
-        let hole = hole_near(&meshes.source, &bvh, (own, Vec3::ZERO), (size, kind), id).map_err(
-            |error| match error {
-                ApplyError::OffAFace {
-                    object, mouth_mm, ..
-                } => ApplyError::OffAFace {
-                    object,
-                    at_mm: *plate,
-                    mouth_mm: state.transform.to_matrix().transform_point3(mouth_mm),
-                },
-                other => other,
-            },
-        )?;
+        let near = (*plate, Vec3::ZERO);
+        let on = (meshes.source.as_ref(), &bvh);
+        let hole = hole_near(on, state.transform, near, (size, kind), id)?;
         holes += usize::from(hollow.add_hole(hole));
     }
     let mut trapped = 0;
@@ -148,12 +152,27 @@ pub(crate) fn apply_drain(
         }
     }
     let (drains, channels) = (hollow.drains().to_vec(), hollow.channels().to_vec());
+    let drilled = drains.get(kept_holes..).unwrap_or_default().to_vec();
     document.set_cuts(id, drains, channels);
+    clear_drilled_out(document, id, &drilled);
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),
         report: Report::Drained { holes, trapped },
     })
+}
+
+/// Takes away the supports of object `id` whose tips the `drilled` holes (its own space) take
+/// out, as the window's drilling does.
+fn clear_drilled_out(document: &mut Document, id: ObjectId, drilled: &[DrainHole]) {
+    let Some((state, _)) = document.object(id) else {
+        return;
+    };
+    let (supports, taken) = supports_without_drilled(&state.supports, drilled);
+    if taken > 0 {
+        let (points, frozen) = (supports.points().to_vec(), supports.frozen().to_vec());
+        document.set_drilled_supports(id, (points, frozen));
+    }
 }
 
 /// The channel of `diameter_mm` along `points_mm`, plate mm, in the own space of object `id`

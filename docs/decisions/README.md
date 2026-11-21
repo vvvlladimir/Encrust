@@ -569,3 +569,5 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0468](0468-supports-are-grown-the-windows-way-for-every-front-end.md) | Supports are grown the window's way for every front end | Proposed |
 | [0469](0469-the-document-arranges-a-plate-through-core-plate.md) | The document arranges a plate through core-plate | Proposed |
 | [0470](0470-a-recipes-plate-step-is-an-edit.md) | A recipe's plate step is an edit | Proposed |
+| [0471](0471-model-analysis-at-one-step.md) | Model analysis runs at one step, and an edit knows no printer or resin | Proposed |
+| [0472](0472-the-command-line-runs-on-the-document.md) | The command line runs on the document | Proposed |

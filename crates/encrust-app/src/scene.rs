@@ -1,6 +1,7 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
+use core_document::onto_plate;
 pub use core_engine::project::Axis;
 use core_geometry::{Aabb, Bvh, Mesh, MeshDiagnostics, Region, Scalar, Vec2, Vec3, center_of_mass};
 
@@ -19,8 +20,8 @@ mod selection;
 mod shown_patch;
 mod support_surface;
 pub use import_summary::{ImportSummary, Imported, Mapped};
+use object::PlacedBounds;
 pub use object::{OwnSettings, SceneObject, Taken};
-use object::{PlacedBounds, onto_plate};
 use plates::plate_name;
 pub use shown_patch::ShownPatch;
 

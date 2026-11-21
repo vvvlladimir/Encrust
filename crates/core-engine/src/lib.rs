@@ -1,6 +1,7 @@
 //! Nothing here starts a thread; the `*_file` functions are thin wrappers (ADR 0175).
 //! See `docs/architecture.md`.
 
+mod analysis;
 mod bake;
 mod cut;
 mod drains;
@@ -18,6 +19,7 @@ mod strengthen;
 mod trapped;
 mod trial;
 
+pub use analysis::{ANALYSIS_LAYER_MM, analysis_slicing};
 pub use bake::{Baked, bake, parts};
 pub use cut::{Cutting, cut};
 pub use drains::{
@@ -30,7 +32,7 @@ pub use held::{
     CupVent, Hanging, Unvented, cup_vents, held_by_shape, island_floors, island_holds, lever_holds,
     neck_profile,
 };
-pub use open::{Machine, Opening, open_plate};
+pub use open::{Machine, Opening, open_plate, plate_models};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
 pub use prepare::{Hollowing, PREPARE_REPAIR, hollowing, needs_repair};

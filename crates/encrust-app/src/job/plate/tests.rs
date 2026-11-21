@@ -1,5 +1,6 @@
 use super::*;
 use crate::scene::ImportSummary;
+use crate::scene::fixtures::drained;
 use core_engine::bake;
 use core_geometry::{Bvh, Mesh, Orientation, Scalar, Transform, Vec3, diagnose};
 use core_raster::{Grey, PixelPitch, RasterSettings, Rasterizer, ScanlineRasterizer, Shading};
@@ -240,13 +241,11 @@ fn a_hole_leaves_a_second_model_laid_over_its_own_whole() {
     let object = &mut scene.objects_mut()[0];
     let mesh = Arc::clone(&object.mesh);
     let bvh = Bvh::build(&mesh);
-    object.hollow.add_drain(
-        &mesh,
-        &bvh,
-        Vec3::new(10.0, 10.0, 20.0),
-        Vec3::Z,
+    drained(
+        &mut object.hollow,
+        (&mesh, &bvh, transform),
+        (Vec3::new(10.0, 10.0, 20.0), Vec3::Z),
         crate::drain::DrainTool::default().size(),
-        transform,
     );
 
     let merged = merge_plate(&scene, 0).expect("the plate has geometry");
@@ -309,13 +308,11 @@ fn a_hole_placed_on_a_model_is_open_in_the_layers_that_cross_it() {
     let mesh = Arc::clone(&object.mesh);
     let bvh = Bvh::build(&mesh);
     // A click on the middle of the lid, which stands 20 mm up.
-    object.hollow.add_drain(
-        &mesh,
-        &bvh,
-        Vec3::new(10.0, 10.0, 20.0),
-        Vec3::Z,
+    drained(
+        &mut object.hollow,
+        (&mesh, &bvh, transform),
+        (Vec3::new(10.0, 10.0, 20.0), Vec3::Z),
         crate::drain::DrainTool::default().size(),
-        transform,
     );
     let settings = crate::hollow::HollowTool::default().settings();
     let asking = object.hollow.asking(&settings);

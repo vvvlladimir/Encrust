@@ -24,7 +24,9 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
 4. Look before you turn: `render` the job and say what the model is and which surfaces a person
    will see. `compare_poses` shows the search's best ways, each drawn with what it prints —
    `top_contacts` are support marks on faces looking up. Pick one for a reason you can name and
-   `set_pose` with that search and `pick`. Points no support should touch go in
+   `set_pose` with that search and `pick`; the window stands it as an orient proved on the job's
+   printer, so ask which printer, and when the user does not say or will not, name the standard
+   one, `elegoo-saturn-4-ultra`, and tell them. Points no support should touch go in
    `keep_clear_at_mm`, plate mm as the latest revision stands. A new pose clears drain points
    given by hand, which were on the old one.
 5. `set_hollow` only for a large, thick solid; a 2 mm wall is typical. A hollow model needs

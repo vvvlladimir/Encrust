@@ -7,6 +7,7 @@ use std::collections::VecDeque;
 use anyhow::{Result, bail};
 use core_geometry::Quat;
 use core_recipe::{Metrics, Plan};
+use core_volume::HoleSize;
 
 use crate::check::IssueKind;
 use crate::i18n::tr;
@@ -137,6 +138,8 @@ struct Run {
     measured: Vec<(ObjectId, Metrics)>,
     /// The models a supports step of this run stood on supports, which a later one replaces.
     supported: Vec<ObjectId>,
+    /// The hole each model's latest drain step drills, which a check's cup vents take.
+    holes: Vec<(ObjectId, HoleSize)>,
     /// What each model's latest supports step built to, which a check's retry stands islands on.
     built: Vec<(ObjectId, BuiltTo)>,
     /// The models whose latest drain step left their holes with no plug.

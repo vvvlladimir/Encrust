@@ -69,7 +69,7 @@ pub fn estimate(
                 bake(&staged.models, &staged.cutting.compensation).context("nothing to slice")?;
             let windows = cut(&baked, &staged.cutting)?;
             let solid = &baked.solid;
-            let mut slice = report_of(solid, &windows, staged.drainage);
+            let mut slice = report_of(solid, &windows, staged.drainage, &staged.material);
             windows
                 .stream(solid, |sliced| {
                     watch.stop.check()?;
@@ -93,8 +93,9 @@ pub(crate) fn measure_plate(
     watch: &Watch,
 ) -> Result<(SliceReport, Print)> {
     let run = Run::of(&plate)?;
+    let material = plate.material.clone();
     drop(plate);
-    let mut slice = report_of(run.solid(), run.windows(), drainage);
+    let mut slice = report_of(run.solid(), run.windows(), drainage, &material);
     let mut watching = Watching {
         report: &mut slice,
         bar: watch.progress.then(|| bar("layers")),

@@ -45,6 +45,27 @@ fn a_drain_before_hollow_drills_before_hollowing() {
     );
 }
 
+/// The holes a prepare that hollows the large cube to 2 mm and drains it automatically drills,
+/// on a machine printing at `layer_mm`.
+fn auto_drained_at(layer_mm: f32) -> Vec<core_volume::DrainHole> {
+    let (mut bench, id) = Bench::with(large_cube());
+    bench.machine.slicing.material.layer_height_mm = layer_mm;
+    bench.start_by(
+        "[[step]]\ndo = \"hollow\"\nset = { wall_mm = 2.0 }\n\
+         [[step]]\ndo = \"drain\"\nset = { at = \"auto\" }\n",
+    );
+    bench.run_to_end();
+    bench.object(id).hollow.drains().to_vec()
+}
+
+#[test]
+fn an_auto_drain_step_searches_at_the_analysis_step_whatever_the_machine_prints_at() {
+    let coarse = auto_drained_at(0.1);
+    let fine = auto_drained_at(0.03);
+    assert!(!coarse.is_empty(), "the hollow cube is drained");
+    assert_eq!(coarse, fine, "the search reads one step, not the machine's");
+}
+
 #[test]
 fn a_gate_that_stops_waits_and_ended_keeps_the_plate_one_undo_from_before() {
     let (mut bench, id) = Bench::with(large_cube());

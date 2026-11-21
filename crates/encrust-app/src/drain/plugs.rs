@@ -1,10 +1,9 @@
 use std::sync::{Arc, Weak};
 
-use core_geometry::{Aabb, Mesh, Scalar, Transform, Vec2, transform_mesh};
-use core_plate::{ArrangeSettings, Rect, nearest_free};
-use core_volume::{
-    DrainHole, ModelRead, PLUG_SPACING_MM, PlugSource, Plugs, Step, laid_beside, plug_wall_mm,
-};
+use core_document::spaced_plugs;
+use core_geometry::{Aabb, Mesh, Scalar, Vec2};
+use core_plate::Rect;
+use core_volume::{DrainHole, ModelRead, PlugSource, Plugs, Step, laid_beside, plug_wall_mm};
 
 use super::DrainTool;
 use crate::drilling::{ModelReads, least_along};
@@ -362,29 +361,8 @@ fn lay_out(
     plugs: impl Iterator<Item = (usize, Mesh)>,
     plate_mm: Vec2,
 ) -> usize {
-    let mut taken = covered(scene, plate);
-    let settings = ArrangeSettings {
-        clearance_mm: PLUG_SPACING_MM,
-        ..ArrangeSettings::default()
-    };
-    let mut crowded = 0;
-    for (number, plug) in plugs {
-        let Some(bounds) = plug.aabb() else {
-            continue;
-        };
-        let (min, max) = (bounds.mins.truncate(), bounds.maxs.truncate());
-        let toward = (min + max) / 2.0;
-        let at =
-            nearest_free(max - min, &taken, toward, plate_mm, &settings).unwrap_or_else(|| {
-                crowded += 1;
-                toward
-            });
-        let shift = (at - toward).extend(0.0);
-        taken.push(Rect {
-            min: min + shift.truncate(),
-            max: max + shift.truncate(),
-        });
-        let plug = transform_mesh(&plug, Transform::from_translation(shift));
+    let (spaced, crowded) = spaced_plugs(plugs, &covered(scene, plate), (Vec2::ZERO, plate_mm));
+    for (number, plug) in spaced {
         let name = tr!("drain-plug-name", name = name.to_owned(), index = number);
         let (id, _) = place(scene, plate, name, plug);
         if let Some(plug) = scene.get_mut(id) {

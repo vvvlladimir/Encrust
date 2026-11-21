@@ -175,8 +175,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   the window reopens; **Clean surface** and the brush size are remembered and undone with
   the other tool settings.
 - The search shows its step over a bar and **Cancel**: first it scores the ways to stand,
-  then, with a printer chosen, prints the best of them to compare. Cancel leaves the models
-  as they stand.
+  then prints the best of them to compare, on the printer chosen or, with none, on the standard
+  Elegoo Saturn 4 Ultra. Cancel leaves the models as they stand.
 - **Clean surface**, a switch under the presets, works with any of them: of the poses that
   put the fewest contacts where the model shows — within about one contact — the preset
   takes its best. A pose with a few more contacts on show is offered beside the choice
@@ -490,6 +490,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   Auto is chosen, in place of what stood in it; other groups stay and are grown around.
 - Supports go only under what actually hangs over nothing, stay out of the model, and each
   one holds only the part it stands under.
+- Supports, the automatic drain search and the trapped-resin scan are worked out at one
+  analysis step, 0.05 mm, and no longer follow the printer's layer height.
 - A point or a needle hanging down is held at its very tip, however thin, and every
   island Check would name is touched where it begins, even with a bite of nought; a speck
   too small for Check to name is left alone. Small islands are held closer than large

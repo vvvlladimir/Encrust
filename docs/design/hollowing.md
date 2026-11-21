@@ -444,8 +444,8 @@ the neighbour again, drops its hole and sends it to its next proposal. Four roun
 drains, then four for vents, a vent proven with only the vents drilled so it reaches its pocket
 alone, then one scan with everything for what is left: ten at most. A pass earned in the last
 round is checked only by that last scan, which reports the pocket trapped rather than trying
-again. The scans cut the model at the run's layer height, so a hole is proven at the layers it
-prints at.
+again. The scans cut the model at the analysis step (ADR 0471), so a hole is proven the same
+whichever printer prints it.
 
 ## What it does not do
 

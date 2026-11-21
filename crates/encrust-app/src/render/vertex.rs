@@ -273,7 +273,7 @@ fn normal_matrix(model: &core_geometry::Mat4) -> Mat3 {
     if linear.determinant().abs() < 1e-12 {
         return Mat3::IDENTITY;
     }
-    linear.inverse().transpose()
+    core_geometry::normal_matrix_of(linear)
 }
 
 /// One corner of the word lying in front of the plate: a place in plate millimetres and a

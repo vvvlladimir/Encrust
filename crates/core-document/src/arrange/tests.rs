@@ -34,6 +34,7 @@ fn heap(count: u64, side_mm: Scalar) -> Document {
 
 fn arrange_on(document: &mut Document, plate_mm: Scalar) -> Applied {
     let edit = Edit::Arrange {
+        low_mm: [0.0, 0.0],
         plate_mm: [plate_mm, plate_mm],
         clearance_mm: 2.0,
     };
@@ -118,6 +119,7 @@ fn an_object_with_no_surface_is_refused_by_id() {
     let mut document = Document::from_project(project);
 
     let edit = Edit::Arrange {
+        low_mm: [0.0, 0.0],
         plate_mm: [100.0, 100.0],
         clearance_mm: 2.0,
     };
@@ -139,6 +141,7 @@ fn a_cube_longer_than_the_plate_across_is_turned_onto_it() {
     let mut document = Document::from_project(project);
 
     let edit = Edit::Arrange {
+        low_mm: [0.0, 0.0],
         plate_mm: [100.0, 140.0],
         clearance_mm: 2.0,
     };
@@ -168,6 +171,7 @@ fn lifted_cubes_keep_their_supports_clear_of_each_other() {
             only_at: false,
             cavity: false,
             shown_at: Vec::new(),
+            clean_surface: false,
         };
         apply(&mut document, &supports, Cancel::never()).expect("a lifted cube is supported");
     }
@@ -190,4 +194,27 @@ fn lifted_cubes_keep_their_supports_clear_of_each_other() {
         gap >= 2.0 - GAP_TOL_MM,
         "cubes and supports keep 2 mm apart within 1e-3, got {gap}"
     );
+}
+
+#[test]
+fn cubes_stay_inside_an_area_that_starts_off_the_corner() {
+    let mut document = heap(2, 10.0);
+    let edit = Edit::Arrange {
+        low_mm: [60.0, 20.0],
+        plate_mm: [30.0, 50.0],
+        clearance_mm: 2.0,
+    };
+    apply(&mut document, &edit, Cancel::never()).expect("a plate of cubes arranges");
+
+    for id in 1..=2 {
+        let b = bounds_of(&document, id);
+        assert!(
+            b.mins.x >= 60.0 - GAP_TOL_MM && b.maxs.x <= 90.0 + GAP_TOL_MM,
+            "x within 60..90, got {b:?}"
+        );
+        assert!(
+            b.mins.y >= 20.0 - GAP_TOL_MM && b.maxs.y <= 70.0 + GAP_TOL_MM,
+            "y within 20..70, got {b:?}"
+        );
+    }
 }

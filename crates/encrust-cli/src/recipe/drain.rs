@@ -3,7 +3,7 @@
 //! plugs for them as `--drain-plugs` cuts them.
 
 use anyhow::{Context, Result};
-use core_engine::planned_lift;
+use core_engine::{ANALYSIS_LAYER_MM, planned_lift};
 use core_geometry::{Bvh, Scalar, Vec3};
 use core_recipe::Metric;
 use core_volume::{HoleKind, HoleSize};
@@ -67,7 +67,7 @@ fn at_points(piece: &mut Piece, points: &[[Scalar; 3]], size: HoleSize, ctx: &Ct
         let hole = hole_near(&piece.mesh, &bvh, (near, Vec3::ZERO), size, kind)?;
         piece.holes.push(hole);
     }
-    let trapped = piece.trapped(ctx.layer_height_mm, ctx.watch.stop)?;
+    let trapped = piece.trapped(ctx.watch.stop)?;
     piece.note(Metric::Trapped, trapped as Scalar);
     Ok(Did::default())
 }
@@ -100,7 +100,7 @@ fn proven(piece: &mut Piece, (size, vent): (HoleSize, bool), ctx: &Ctx) -> Resul
 /// Where the model prints as its holes are looked for: lifted by the supports it stands on,
 /// or by those a later step of the recipe stands it on, else resting on the plate.
 fn ground_of(piece: &Piece, ctx: &Ctx) -> Result<Ground> {
-    let layer_height_mm = ctx.layer_height_mm;
+    let layer_height_mm = ANALYSIS_LAYER_MM;
     if piece.supports.is_some() {
         return Ok(Ground {
             layer_height_mm,

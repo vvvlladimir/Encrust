@@ -25,6 +25,7 @@ use crate::sliced_file::now_unix_s;
 use crate::supports::{Printed, SupportReport, stand_under};
 use crate::{meeting, plate_edits, plate_file, project};
 
+mod document;
 mod ground;
 mod room;
 
@@ -324,7 +325,7 @@ pub fn plate_of(
     }
 
     let drift_mm = chosen.material.compensation.fit_drift_mm();
-    let held = (printer, layer_height, drift_mm);
+    let held = (printer, drift_mm);
     let (laid, saved) = match &asked {
         Some(asked) => {
             let ctx = recipe::Ctx {
@@ -336,7 +337,7 @@ pub fn plate_of(
             let (parts, models, saved) = recipe::lay(asked, (pieces, found), entries, &ctx)?;
             (Laid::recipe_left(parts, models, entries), saved)
         }
-        None => (put_down_every(pieces, found, entries, held, watch)?, None),
+        None => (document::laid(pieces, found, entries, held, watch)?, None),
     };
     let Laid {
         mut parts,
@@ -422,11 +423,10 @@ fn put_down(
     mut mesh: Mesh,
     shaping: &Shaping,
     seated: bool,
-    layer_height: Scalar,
     drift_mm: Scalar,
     watch: &Watch,
 ) -> Result<PutDown> {
-    let ground = ground_of(&mesh, shaping, seated, layer_height)?;
+    let ground = ground_of(&mesh, shaping, seated)?;
     let shelled = hollow_and_cut(
         &mut mesh,
         &shaping.hollow,
@@ -455,7 +455,7 @@ fn put_down(
         .as_ref()
         .map(|plan| {
             let model = (&mut mesh, printed.clone(), &mut cuts);
-            stand_under(model, plan, layer_height, seated)
+            stand_under(model, plan, core_engine::ANALYSIS_LAYER_MM, seated)
         })
         .transpose()?
         .filter(|(report, _)| !seated || !report.contacts.is_empty());
@@ -526,12 +526,12 @@ struct Laid<'a> {
 }
 
 /// Hollows, supports and puts down every piece of every entry, with its plugs beside it;
-/// `held` is the printer, the layer height and the resin's drift, millimetres.
+/// `held` is the printer and the resin's drift, millimetres.
 fn put_down_every<'a>(
     pieces: Vec<Vec<Mesh>>,
     found: Vec<Found>,
     entries: &'a [(PathBuf, Shaping)],
-    (printer, layer_height, drift_mm): (Option<&PrinterProfile>, Scalar, Scalar),
+    (printer, drift_mm): (Option<&PrinterProfile>, Scalar),
     watch: &Watch,
 ) -> Result<Laid<'a>> {
     let mut laid = Laid {
@@ -552,7 +552,7 @@ fn put_down_every<'a>(
         let (mut hollow, mut drains, mut supports) = (None, None, None);
         let mut stands_in = None;
         for mesh in meshes {
-            let down = put_down(mesh, shaping, seated, layer_height, drift_mm, watch)?;
+            let down = put_down(mesh, shaping, seated, drift_mm, watch)?;
             stands_in = [stands_in, bounds(&down.model)]
                 .into_iter()
                 .flatten()

@@ -8,7 +8,7 @@ mod restore;
 
 pub use defaults::{FIRST_GROUP, FIRST_PLATE};
 pub use ids::{ObjectId, assign as assign_ids};
-pub use restore::{hollow_of, supports_of};
+pub use restore::{hollow_of, supports_of, supports_without_drilled};
 
 use std::io::{Read, Seek, Write};
 use std::ops::Range;

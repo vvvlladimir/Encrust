@@ -87,7 +87,9 @@ left corner as the model prints, after placement and the lift its supports give 
 `cured.risks`, wherever `cured` appears, lists each risk in print order: `kind` (`island`, `floating`, `lever`, `peel`, `suction-cup` or `thin`), `layer` counted from one,
 `at_mm` `[x, y, z]` with z the bottom of that layer, and the kind's own readings — `area_mm2`;
 `stress_mpa`, `lever_mm` and `neck_mm2`; `force_n`; `area_mm2` and `volume_mm3`; `width_mm`.
-`slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
+`slicing.fit_drift_mm` is how much wider, mm a side, a hole-and-part fit prints with the run's
+resin (0 while its tolerance is on), the drift `--drain-plugs` takes off the typed gap; `encrust-mcp`
+reads it to write a plug edit's final gap. `slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
 lowest layer where a hole would go, `volume_mm3` and `bounds_mm` `{min, max}`.
 `supports.contacts_at_mm` lists where each contact touches the model: the points
 `--merge-supports` names supports by. `supports.no_room_at_mm` lists where each contact
@@ -357,9 +359,9 @@ places it; `--support-only-at` stands those alone (ADR 0457). `--shown-at X,Y,Z[
 within `R` mm (4) of each point as the side meant to be seen, as the window's Clean surface
 brush does: Auto stands contacts there 1.3 times as far apart, on its lightest tips (ADR 0425,
 0460). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
-profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
+profile's `max_overhang_deg` does, and the stock `medium` profile's without supports. The
 search's best few are printed to choose between, as the window's **Auto-orient** does
-(ADR 0290). The search draws a bar on a terminal and Ctrl-C stops it (exit 130). A turned model is stood on the plate over the middle it stood over in x and y.
+(ADR 0290), on the printer named or, with none, on the standard `elegoo-saturn-4-ultra` (ADR 0471). The search draws a bar on a terminal and Ctrl-C stops it (exit 130). A turned model is stood on the plate over the middle it stood over in x and y.
 `--orient-choices N` reports the search's first N ways to stand the model under the report's
 `oriented.choices`, each numbered as `pick`, with its `rotate_deg`, whether it is set on the
 plate and offered beside the first, and with a printer what its trial printed: `contacts`,
@@ -633,23 +635,28 @@ its supports and cavity, and keeps its plugs; `hollow` (`object`, and `settings`
 panel keeps them: `thickness_mm`, `mode` of `internal` or `external`, `precision`, `infill_on`,
 `infill`, and optional `open_floor`, `solid_under_mm`) hollows the object by them, which it keeps as
 its own, and keeps its supports; `drain` (`object`, and optional `at_mm`, a list of `[x, y, z]`,
-`size`, `kind`, `auto` and `vent`, on unless set false) drills a hole into the surface nearest each point as `--drain-at`
+`size`, `kind`, `at-depth` where unset, `auto` and `vent`, on unless set false) drills a hole into the surface nearest each point as `--drain-at`
 does, a point nearest an edge or corner being refused, and leaves the shell to be cut when it is
 baked; `auto` then adds the holes the engine proves drain every pocket of the cavity, as
 `--drain-at auto`, with a vent on each pocket where `vent`, and an object with no cavity is
 refused; `channel` (`object`, `points_mm`, a list of `[x, y, z]`, and optional `diameter_mm`, 2 mm)
-digs a channel along the points as `--channel` does; `plugs` (`object`, optional `gap_mm`, 0.15 mm) lays a plug for each of the
+digs a channel along the points as `--channel` does; `plugs` (`object`, optional `gap_mm`, 0.15 mm; the gap is final, in plate mm: `--drain-plugs` takes the resin's drift off the typed gap, an edit does not) lays a plug for each of the
 object's holes in a row beside it, as `--drain-plugs`, in place of those laid before;
-`orient` (`object`, and optional `goal`, `max_tilt_deg`, `clean_surface` and `pick` from 0) runs
-`--orient`'s search with no trial print and stands the object the `pick`th way;
+`orient` (`object`, and optional `goal`, `max_tilt_deg`, `clean_surface`, `pick` from 0, `plate_mm` and `low_mm`, the usable
+area it stays on as `arrange` takes it, and `printer` and `resin`, catalogue ids) runs `--orient`'s search, its best few printed on that
+printer, the standard `elegoo-saturn-4-ultra` where none is named, and stands the object the `pick`th way
+over the middle it stood over. An id is looked up in the shipped catalogue alone, so a printer or resin
+of your own folder is refused (`NoPrinter`, `NoResin`); the window's link takes the window's own;
 `supports` (`object`, and optional `profile`, a shipped support preset, `at_mm`, a list of
-`[x, y, z]`, `only_at`, `cavity` and `shown_at`) stands supports under the object by the preset,
+`[x, y, z]`, `only_at`, `cavity`, `shown_at` and `clean_surface`) stands supports under the object by the preset,
 the plate's active group's where unset, and a contact at the surface nearest each point; with
 `only_at` those contacts alone. `auto` sizes each support by what it holds, as `--supports auto`;
 `cavity` holds up a hollow object's cavity too, as `--support-cavity`; `shown_at`, a list of
-`{"at_mm": [x, y, z], "radius_mm": r}`, marks the side meant to be seen, as `--shown-at`;
-`arrange` (`plate_mm`, `[x, y]`, and `clearance_mm`) spreads every visible object of the active
-plate over a plate that size, each with its supports, turning one no slide fits, as the window's
+`{"at_mm": [x, y, z], "radius_mm": r}`, marks the side meant to be seen, as `--shown-at`; the side painted shown in the file is read only
+with `clean_surface` or strokes, as the window's Clean surface reads it;
+`arrange` (`plate_mm`, `[x, y]`, `clearance_mm` and optional `low_mm`, `[x, y]`, 0) spreads every
+visible object of the active plate over the usable area that size from that corner (the plate less
+its inset), each with its supports, turning one no slide fits, as the window's
 Arrange does; objects with no room are left where they are and named in the report.
 
 ```sh
@@ -668,7 +675,8 @@ check does: quicker, but blind to an island near the smallest one named (ADR 041
 to print but hanging off the plate is named as off it, because the panel clips whatever
 hangs over and the resin figure then counts material no machine would cure. A model in the
 band a maker keeps clear along the plate's edges still fits, and the line names how far it
-reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0371). Once
+reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON; `models[].fit.usable_mm`, the usable plate's low
+corner and size in mm, in the check report, which encrust-mcp reads); it slices whole (ADR 0371). Once
 `--supports` has stood them, an *On the plate* block answers again for the model with its
 supports and raft where it was put down, and each project model that does not fit so is
 named with its `fits` line; `--strict` fails on

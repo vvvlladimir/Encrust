@@ -1,4 +1,5 @@
 use super::*;
+use crate::scene::fixtures::drained;
 use core_geometry::{Bvh, Quat, diagnose};
 use core_supports::Trapped;
 
@@ -144,9 +145,12 @@ fn a_textured_model_drilled_exactly_still_has_its_holes_cut_on_screen() {
     let size = core_volume::HoleSize::round(3.0, 5.0, 1.0);
     let at = Vec3::new(5.0, 5.0, 10.0);
     let bvh = Bvh::build(&mesh);
-    object
-        .hollow
-        .add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+    drained(
+        &mut object.hollow,
+        (&mesh, &bvh, Transform::default()),
+        (at, Vec3::Z),
+        size,
+    );
     let source = Arc::clone(object.uncut());
     let cuts = Arc::clone(object.hollow.cut_bodies().expect("the hole is cut"));
     let drilled = Drilled::of(&source, None, &cuts).expect("a block drills");

@@ -5,4 +5,5 @@ mod edit;
 
 pub use core_engine::project::{Axis, Keep, ObjectId};
 pub use core_joint::{JointKind, Joints};
+pub use core_volume::PLUG_GAP_MM;
 pub use edit::{AUTO, Edit, Op, OrientAim};

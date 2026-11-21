@@ -2,7 +2,7 @@
 //! the command line gives is the point the report locates (ADR 0400).
 
 use anyhow::{Context, Result, bail};
-use core_engine::{Lift, planned_lift};
+use core_engine::{ANALYSIS_LAYER_MM, Lift, planned_lift};
 use core_geometry::{Mesh, Scalar};
 
 use super::Shaping;
@@ -10,19 +10,16 @@ use crate::hollowing::{Ground, HollowArgs};
 
 /// Where `shaping`'s supports will stand `mesh`, worked out only for the holes and channels
 /// it places, which are all that need it before the supports stand.
-pub(super) fn ground_of(
-    mesh: &Mesh,
-    shaping: &Shaping,
-    seated: bool,
-    layer_height_mm: Scalar,
-) -> Result<Ground> {
+pub(super) fn ground_of(mesh: &Mesh, shaping: &Shaping, seated: bool) -> Result<Ground> {
     let lift = match &shaping.supports {
-        Some(plan) if shaping.hollow.cutting() => planned_lift(mesh, plan, seated, layer_height_mm)
-            .context("cannot work out how far the supports stand the model up")?,
+        Some(plan) if shaping.hollow.cutting() => {
+            planned_lift(mesh, plan, seated, ANALYSIS_LAYER_MM)
+                .context("cannot work out how far the supports stand the model up")?
+        }
         _ => Lift::ON_THE_PLATE,
     };
     Ok(Ground {
-        layer_height_mm,
+        layer_height_mm: ANALYSIS_LAYER_MM,
         on_plate: lift.resting,
         lifted_mm: lift.lifted_mm,
     })

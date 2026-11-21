@@ -180,20 +180,37 @@ impl Document {
     }
 
     /// Gives object `id` the support `points` and `grown` trees (its own space), and the plate
-    /// the `groups` they are built to. Nothing changes when `id` is not on the plate.
+    /// the `groups` they are built to, `active` in hand. Nothing changes off the plate.
     pub(crate) fn set_supports(
         &mut self,
         id: ObjectId,
-        groups: Vec<Group>,
+        (groups, active): (Vec<Group>, u16),
         (points, grown): (Vec<SupportPoint>, Vec<SupportTree>),
     ) {
         let Some(index) = self.index_of(id) else {
             return;
         };
-        self.project.manifest.supports.groups = groups;
+        let plate = &mut self.project.manifest.supports;
+        plate.groups = groups;
+        plate.active = active;
         let state = &mut self.project.manifest.objects[index].supports;
         state.points = points;
         state.grown = grown;
+    }
+
+    /// Gives object `id` the support `points` and `frozen` trees left after a hole drilled
+    /// some out; its grown trees go, to grow again without them (ADR 0443).
+    pub(crate) fn set_drilled_supports(
+        &mut self,
+        id: ObjectId,
+        (points, frozen): (Vec<SupportPoint>, Vec<SupportTree>),
+    ) {
+        if let Some(index) = self.index_of(id) {
+            let state = &mut self.project.manifest.objects[index].supports;
+            state.points = points;
+            state.frozen = frozen;
+            state.grown.clear();
+        }
     }
 
     /// Lays `plugs` (plate coordinates) as new objects on `id`'s plate in place of those laid

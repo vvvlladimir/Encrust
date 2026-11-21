@@ -63,7 +63,7 @@ impl Run<'_> {
                     .iter()
                     .filter(|owner| owner.is_none_or(|(owner, _)| owner == id))
                     .count();
-                let trapped = self.pieces[id].trapped(layer_mm, self.ctx.watch.stop)?;
+                let trapped = self.pieces[id].trapped(self.ctx.watch.stop)?;
                 let piece = &mut self.pieces[id];
                 checked(piece, islands, peel_n);
                 piece.note(Metric::Trapped, trapped as Scalar);

@@ -57,16 +57,21 @@ finite or above zero is `ApplyError::BadScale`. None of them adds or removes an 
 (`Report::Placed`). The window sets the transform at once through the same `placement`
 functions.
 
-`Orient { object, goal, max_tilt_deg, clean_surface, pick }` runs `--orient`'s search on the
+`Orient { object, goal, max_tilt_deg, clean_surface, pick, plate_mm, low_mm, printer, resin }` runs `--orient`'s search on the
 object as it stands (outer, shell, cuts, drain vents, what shows), judged on the plate's active
-support group and proven by no print, and sets the `pick`th pose, from 0, as `Rotate` sets a
-turn (`Report::Oriented { rotate_deg }`); past the last pose is `ApplyError::NoChoice`. `goal`
+support group and its best few printed on the shipped catalogue's `printer` and `resin`, the standard
+`elegoo-saturn-4-ultra` and the stock resin numbers where unset (`printer_profiles::standard_machine`; an id
+the catalogue lacks is `ApplyError::NoPrinter` or `NoResin`, one it cannot read `BadCatalogue`), and stands the `pick`th pose, from 0
+(`Report::Oriented { rotate_deg }`): turned keeping the middle of its box over the same spot, slid onto the
+usable area `plate_mm` across from `low_mm` where it hangs off (none where unset), dropped onto the plate and lifted
+by the profile's lift where the pose is not set on it (`placement::stood_turned`). Past the last pose is `ApplyError::NoChoice`. `goal`
 is `auto`, `fewest-supports`, `least-peel` or `shortest-print` (`OrientAim`, the one table of
 the words, which a recipe's orient step reads too). A recipe's orient step is this edit
 (`core-recipe`'s `edits_of`), its `pick` the first. The window
-runs its Orient tool's search on the object and stands the `pick`th ranked pose, offered or
-not; it lifts a pose on supports by its profile's lift where the document drops it to the
-plate. With no support group the document judges the model on the plate.
+runs its Orient tool's search on the object, on the printer chosen in the window or the standard one,
+and stands the `pick`th ranked pose, offered or not, by the same `stood_turned`. With no support group
+the stock profile's plan stands in. MCP asks a search pose as this edit, keeping the `Rotate` handover where
+keep-clear points or a printer file are set.
 
 `Split { object, smallest_mm3 }` and `PartOff { object, at_mm }` run on the object's printed
 mesh placed on the plate and replace it with `Role::Part(n)` pieces, counted from one: a split
@@ -132,7 +137,8 @@ alone; its field cache stays the window's.
 drills `hole_near` its source mesh (the CLI's `--drain-at` call), adding it to the object's
 `ModelHollow`; the shell is not rebuilt, the holes are cut at bake (`Report::Drained`). No
 surface near a point is `NoSurface`, a point nearest an edge or corner `OffAFace`. The window
-drills at once on its own `ModelHollow`.
+drills at once on its own `ModelHollow`. A `kind` left out is `AtDepth`, which a click and a
+recipe's points drill: it stops at its depth, opening the cavity only if that reaches it.
 
 `Drain` with `auto` then runs the engine's search (`drains_proven`, the one call the CLI's
 `--drain-at auto` and the window's search job make) on the object as it stands, adds the holes it
@@ -147,29 +153,35 @@ adds one channel to its `ModelHollow`, as `--channel` lays it (`Report::Channell
 (`plugs_cut`, the CLI's `--drain-plugs` call), lays them in a row past its right-hand side as new
 objects named by `Role::Plug(n)` and marked `plug_of` it, in place of those laid before, which
 `removed` names (`Report::Plugged`). They stand in a row (`laid_beside`) where the window's tool
-moves each to the nearest free spot (`nearest_free`). The window sets the object's plug gap and
-starts its plugs job. The document's search reads the default layer height where the window's
-reads the machine's.
+moves each to the nearest free spot (`nearest_free`). `gap_mm` is the final gap in plate mm,
+no resin drift added or taken off here; the window stores the gap plus its resin's drift, which
+its tool takes off again, and `edits_of` takes the drift off the default (ADR 0471). The window
+starts its plugs job. The search reads the analysis step (ADR 0471).
 
-`Supports { object, profile, at_mm, only_at, cavity, shown_at }` stands supports under one
-object. `profile` is a shipped preset (`SupportProfile::shipped`), the plate's active group's
-where unset; an unknown name is `NoProfile`. The preset becomes a group of the plate where none
-carries its name, and the contacts go into it. `auto` sizes each need by what it holds, as
+`Supports { object, profile, at_mm, only_at, cavity, shown_at, clean_surface }` stands supports under one
+object. `profile` is the plate's group of that name, else a shipped preset
+(`SupportProfile::shipped`), the active group where unset; neither is `NoProfile`. A preset becomes
+a group of the plate where none carries its name; the group named becomes the active one (as the
+panel takes a profile up), and the contacts go into it. A profile of a user's folder reaches an
+edit as a group its front end put on the plate first. `auto` sizes each need by what it holds, as
 `SupportPlan::sized` does against the shipped catalogue (no user folder), by the plate's own
 `SupportState::sizing` where it keeps one, else the catalogue's first; each shape that holds a
-need is the plate's group of its name or a new one, and the `at_mm` points are built as steadying
-ones. `cavity` runs `needs_on` again on the inside of the wall, with the outside's contacts held
+need is the plate's group of its name or a new one, and a shape the plate has a group for is built to
+that group's profile; the `at_mm` points go into the group in hand.
+`cavity` runs `needs_on` again on the inside of the wall, with the outside's contacts held
 (the window's inside pass); `shown_at` strokes are the plan's, read by `shown_on` where the object
-has no painted shown region. The object's `ModelSupports` is restored
+has no painted shown region. The painted shown region is read only with `clean_surface` or
+strokes, as the window's Clean surface (ADR 0425); the front end sets the flag from its toggle. The object's `ModelSupports` is restored
 by `supports_of`; `needs_on` (core-engine's one needs step) reads its printed surface as placed, its
-blocked and shown regions, its contacts as seeds and, on a hollow one, the outside of the wall; each
-need and each `at_mm` point (the surface nearest it) is added, the trees grown by `Growth::grow` and
+blocked and shown regions, its contacts, the `at_mm` points among them, as seeds and, on a hollow one, the outside of the wall; the
+`at_mm` points (the surface nearest each) stand before the run and each need is added after, the trees grown by `Growth::grow` and
 kept as `ObjectSupportState::grown` (`Report::Supported`). `only_at` places the points alone. The
-plate keeps no layer height, so the run uses the slicer's default. The window starts its automatic
+run reads the model at the analysis step (ADR 0471). The window starts its automatic
 run on that object alone, adding to what stands.
 
-`Arrange { plate_mm, clearance_mm }` spreads every visible object of the active plate over a plate
-`plate_mm` across (no inset), each as one footprint with its supports and raft as `supports_of`
+`Arrange { low_mm, plate_mm, clearance_mm }` spreads every visible object of the active plate over
+the usable area (the plate less its inset) `plate_mm` across from its corner `low_mm`, zero where
+unset; the front end that knows the machine works both out (ADR 0471). Each object is one footprint with its supports and raft as `supports_of`
 meshes them (`Standing`, `pack`; the window's Arrange packs through the same `pack`). An object no
 slide fits is first turned the least that does (`turn_to_fit`, ADR 0418); the margin is
 `ArrangeSettings`' default. The supports regrow where the object now stands, so the edit moves

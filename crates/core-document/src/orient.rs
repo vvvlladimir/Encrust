@@ -3,23 +3,62 @@
 
 use std::sync::Arc;
 
-use core_edit::{ObjectId, OrientAim};
+use core_edit::{Edit, ObjectId, OrientAim};
 use core_engine::project::{ModelMeshes, ObjectState, hollow_of};
-use core_engine::{EngineError, orient_for_print};
+use core_engine::{Choice, EngineError, SupportPlan, Trial, orient_for_print};
 use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
 use core_plate::{OrientGoal, OrientPreset, OrientSettings, PlateError, Printed, Watch};
 use core_volume::{Cancel, ModelHollow};
-use printer_profiles::SupportProfile;
+use printer_profiles::{
+    Catalogue, MaterialProfile, PrinterProfile, ProfileError, Raft, SupportProfile, machine_named,
+};
 
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
-use crate::placement::{degrees_of, oriented_to};
-use crate::supports::active_profile;
+use crate::placement::{Footing, degrees_of, stood_turned};
+use crate::supports::orient_plan_of;
 
 /// What an `Orient` edit asks of an object: the aim, the tilt allowed, whether a clean surface
-/// is held to, and the pose picked.
-pub(crate) type OrientAsked = (OrientAim, Option<Scalar>, bool, usize);
+/// is held to, the pose picked, the usable area it must stay on and the machine it is proved on.
+pub(crate) struct OrientAsked {
+    pub goal: OrientAim,
+    pub max_tilt_deg: Option<Scalar>,
+    pub clean_surface: bool,
+    pub pick: usize,
+    pub area_mm: Option<([Scalar; 2], [Scalar; 2])>,
+    pub printer: Option<String>,
+    pub resin: Option<String>,
+}
+
+impl OrientAsked {
+    /// What `edit` asks, if it is an `Orient`.
+    pub(crate) fn of(edit: &Edit) -> Option<Self> {
+        let Edit::Orient {
+            goal,
+            max_tilt_deg,
+            clean_surface,
+            pick,
+            plate_mm,
+            low_mm,
+            printer,
+            resin,
+            ..
+        } = edit
+        else {
+            return None;
+        };
+        Some(Self {
+            goal: *goal,
+            max_tilt_deg: *max_tilt_deg,
+            clean_surface: *clean_surface,
+            pick: *pick,
+            area_mm: plate_mm.map(|plate| (*low_mm, plate)),
+            printer: printer.clone(),
+            resin: resin.clone(),
+        })
+    }
+}
 
 /// The preset an orient step's goal `word` names; any other word is `auto`.
 pub fn preset_named(word: &str) -> OrientPreset {
@@ -38,13 +77,45 @@ pub fn preset_of(aim: OrientAim) -> OrientPreset {
 
 /// How the search judges a model that stands on supports built to `profile`.
 pub fn supported_settings(profile: &SupportProfile) -> OrientSettings {
+    placed_by(supported_base(), &SupportPlan::of(profile.clone()))
+}
+
+fn supported_base() -> OrientSettings {
     OrientSettings {
-        max_overhang_deg: profile.max_overhang_deg,
-        contact_spacing_mm: profile.contact_spacing_mm,
         on_supports: true,
-        lift_mm: profile.lift_mm(),
         rest_on_plate: true,
         ..OrientSettings::default()
+    }
+}
+
+/// The plan orienting weighs supports by: `sized` where a plate keeps an automatic profile,
+/// else the `active` group's profile, every shape on `raft`.
+pub fn orient_plan(sized: Option<SupportPlan>, active: &SupportProfile, raft: Raft) -> SupportPlan {
+    let mut plan = sized.unwrap_or_else(|| SupportPlan::of(active.clone()));
+    for shape in plan.profiles_mut() {
+        shape.raft = raft;
+    }
+    plan
+}
+
+/// `plan` standing a model `lift_mm` clear of the plate, where the user asked for that.
+pub fn lifted(mut plan: SupportPlan, lift_mm: Option<Scalar>) -> SupportPlan {
+    if let Some(lift_mm) = lift_mm {
+        for shape in plan.profiles_mut() {
+            shape.z_lift_mm = lift_mm;
+        }
+    }
+    plan
+}
+
+/// `settings` judging by what `plan` places: its overhang, contact spacing and lift.
+pub fn placed_by(settings: OrientSettings, plan: &SupportPlan) -> OrientSettings {
+    let placing = plan.placing();
+    OrientSettings {
+        max_overhang_deg: placing.max_overhang_deg,
+        contact_spacing_mm: placing.contact_spacing_mm,
+        lift_mm: placing.lift_mm(),
+        ..settings
     }
 }
 
@@ -118,46 +189,97 @@ impl Body {
     }
 }
 
-/// Stands object `id` at the `pick`th pose the search offers.
-pub(crate) fn apply_orient(
-    document: &mut Document,
+/// The printer and resin an orient proves its poses on, the standard ones where unnamed, read
+/// from `catalogue`.
+fn machine_in(
+    catalogue: Result<Catalogue, ProfileError>,
+    (printer, resin): (Option<&str>, Option<&str>),
+) -> Result<(PrinterProfile, MaterialProfile), ApplyError> {
+    let catalogue = catalogue.map_err(|error| ApplyError::BadCatalogue(error.to_string()))?;
+    machine_named(&catalogue, printer, resin).map_err(|error| match error {
+        ProfileError::Unknown { kind: "resin", id } => ApplyError::NoResin(id),
+        ProfileError::Unknown { id, .. } => ApplyError::NoPrinter(id),
+        other => ApplyError::BadCatalogue(other.to_string()),
+    })
+}
+
+/// The plan an orient weighs where the plate has no support group: the stock profile, as the
+/// window's default group builds it.
+pub fn default_plan() -> SupportPlan {
+    let stock = SupportProfile::default();
+    orient_plan(None, &stock, stock.raft)
+}
+
+/// Every pose the search ranks for object `id`, best first, proved on the machine `asked` names,
+/// and the lift a pose set on supports stands at, mm.
+pub(crate) fn ranked_poses(
+    document: &Document,
     id: ObjectId,
-    (goal, max_tilt_deg, clean_surface, pick): OrientAsked,
+    asked: &OrientAsked,
     cancel: Cancel<'_>,
-) -> Result<Applied, ApplyError> {
+) -> Result<(Vec<Choice>, Scalar), ApplyError> {
+    let named = (asked.printer.as_deref(), asked.resin.as_deref());
+    let (printer, material) = machine_in(Catalogue::bundled(), named)?;
     let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
-    let on_supports = active_profile(document, state)
-        .map_or_else(OrientSettings::default, |p| supported_settings(&p));
+    let plan = orient_plan_of(document, state)?.unwrap_or_else(default_plan);
+    let z_lift_mm = plan.placing().z_lift_mm;
+    let on_supports = placed_by(supported_base(), &plan);
+    let volume = &printer.build_volume;
     let settings = OrientSettings {
-        preset: preset_of(goal),
-        clean_surface,
-        max_tilt_deg,
+        preset: preset_of(asked.goal),
+        clean_surface: asked.clean_surface,
+        max_tilt_deg: asked.max_tilt_deg,
         down_now: state.transform.rotation.inverse() * Vec3::NEG_Z,
+        build_volume_mm: Some(Vec3::new(volume.x, volume.y, volume.z)),
         ..on_supports
+    };
+    let trial = Trial {
+        printer: &printer,
+        material: &material,
+        support: &plan,
+        raster_window: rayon::current_num_threads(),
+        keep_clear: None,
     };
     let body = Body::of(state, meshes).sized(state.transform.sizing());
     let told = |_, _, _| !cancel.asked();
     let found = orient_for_print(
         &body.printed(&state.shown_painted),
         &settings,
-        None,
+        Some(&trial),
         Watch::by(&told),
     );
-    let found = match found {
-        Err(EngineError::Orient(PlateError::Cancelled)) => return Err(ApplyError::Cancelled),
-        Err(error) => {
-            let reason = error.to_string();
-            return Err(ApplyError::Failed { object: id, reason });
-        }
-        Ok(found) => found,
-    };
+    match found {
+        Err(EngineError::Orient(PlateError::Cancelled)) => Err(ApplyError::Cancelled),
+        Err(error) => Err(ApplyError::Failed {
+            object: id,
+            reason: error.to_string(),
+        }),
+        Ok(found) => Ok((found, z_lift_mm)),
+    }
+}
+
+/// Stands object `id` at the `pick`th pose the search offers, proved on a printer.
+pub(crate) fn apply_orient(
+    document: &mut Document,
+    id: ObjectId,
+    asked: &OrientAsked,
+    cancel: Cancel<'_>,
+) -> Result<Applied, ApplyError> {
+    let (found, lift_mm) = ranked_poses(document, id, asked, cancel)?;
+    let pick = asked.pick;
     let choice = found.get(pick).ok_or(ApplyError::NoChoice {
         object: id,
         pick,
         found: found.len(),
     })?;
+    let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
     let rotation = choice.oriented.rotation;
-    let transform = oriented_to(state.transform, &meshes.source, rotation);
+    let footing = Footing {
+        area_mm: asked.area_mm,
+        lift_mm,
+    };
+    let at = (footing, choice.oriented.on_plate);
+    let transform = stood_turned(state.transform, &meshes.source, rotation, at);
     document.set_transform(id, transform);
     Ok(Applied {
         removed: Vec::new(),

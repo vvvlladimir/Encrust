@@ -8,6 +8,7 @@ use core_engine::{
 use core_geometry::{Scalar, Vec2, Vec3};
 use core_raster::RasterSettings;
 use core_slicer::LayerPlan;
+use core_volume::HoleSize;
 use egui::Color32;
 use printer_profiles::SupportProfile;
 
@@ -164,15 +165,16 @@ pub fn support_levers(
     )
 }
 
-/// Check's Drill them: the shortest hole into the lowest point of each suction cup of `risks`,
-/// on `only` if named; says how many went in, stand on the plate and are left to the hand.
+/// Check's Drill them: the shortest hole of `size` into the lowest point of each suction cup of
+/// `risks`, on `only` if named; says how many went in, stand on the plate and are left to the hand.
 pub fn drill_cups(
     (scene, drain): (&mut Scene, &mut DrainTool),
     stack: (&LayerPlan, &RasterSettings),
     risks: &[Risk],
     only: Option<&[ObjectId]>,
+    size: HoleSize,
 ) -> Status {
-    let vents = cup_owners(scene, stack, risks, drain.size().diameter_mm);
+    let vents = cup_owners(scene, stack, risks, size.diameter_mm);
     let found: Vec<(ObjectId, CupVent)> = vents
         .iter()
         .flatten()
@@ -180,7 +182,7 @@ pub fn drill_cups(
         .copied()
         .collect();
     let unvented = |why: Unvented| vents.iter().filter(|vent| **vent == Err(why)).count();
-    let drilled = drain.drill_vents(scene, &found);
+    let drilled = drain.drill_vents(scene, &found, size);
     let said = tr!("check-vented-cups", count = drilled);
     let mut notes = Vec::new();
     match unvented(Unvented::OnThePlate) {

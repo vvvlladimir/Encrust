@@ -107,6 +107,14 @@ impl Batch {
 }
 
 impl Work {
+    /// The hole a drain job drills, `None` for any other.
+    pub(super) fn hole(&self) -> Option<HoleSize> {
+        match self {
+            Self::DrainAuto { size, .. } | Self::DrainPoints { size, .. } => Some(*size),
+            _ => None,
+        }
+    }
+
     /// What step `kind` asks with `settings`, and whether its supports also hold the cavity.
     pub(super) fn of(kind: StepKind, settings: &Settings) -> Result<(Self, bool), NotYet> {
         let (spacing_mm, only_in_the_way) = arrange_of(settings);
@@ -255,5 +263,13 @@ impl Hollowed {
 /// which `Work` reads back as fractions and ignores.
 fn stand_in_edits(kind: StepKind, settings: &Settings) -> Option<Vec<Edit>> {
     let unit = Aabb::new(Vec3::ZERO, Vec3::ONE);
-    edits_of(kind, settings, EditId::UNSET, unit, [0.0; 2]).ok()
+    edits_of(
+        kind,
+        settings,
+        EditId::UNSET,
+        unit,
+        ([0.0; 2], [0.0; 2]),
+        0.0,
+    )
+    .ok()
 }

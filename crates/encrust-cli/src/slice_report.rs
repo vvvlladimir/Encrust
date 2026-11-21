@@ -9,6 +9,8 @@ use core_supports::{TrapScan, Trapped};
 #[derive(Debug)]
 pub struct SliceReport {
     pub settings: SliceSettings,
+    /// How much wider, mm a side, a hole-and-part fit prints with the run's resin.
+    pub fit_drift_mm: Scalar,
     plan: LayerPlan,
     layers: usize,
     contours: usize,
@@ -29,6 +31,7 @@ impl SliceReport {
     pub fn new(settings: SliceSettings, plan: LayerPlan) -> Self {
         Self {
             settings,
+            fit_drift_mm: 0.0,
             plan,
             layers: 0,
             contours: 0,

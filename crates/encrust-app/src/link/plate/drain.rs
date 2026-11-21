@@ -23,22 +23,20 @@ pub(super) fn start_drain(
     if auto && !model.hollow.is_hollow() {
         return Err(ApplyError::NoCavity(object).to_string());
     }
-    let inverse = (model.transform.inverse_matrix())
-        .ok_or_else(|| ApplyError::BadTransform(object).to_string())?;
     let mut holes = Vec::with_capacity(at_mm.len());
     for plate in at_mm {
-        let own = inverse.transform_point3(*plate);
-        let near = (own, Vec3::ZERO);
-        let hole = hole_near(&model.mesh, &model.bvh, near, (size, kind), object);
+        let on = (model.mesh.as_ref(), model.bvh.as_ref());
+        let near = (*plate, Vec3::ZERO);
+        let hole = hole_near(on, model.transform, near, (size, kind), object);
         holes.push(hole.map_err(|error| error.to_string())?);
     }
     for hole in holes {
-        model.hollow.add_hole(hole);
+        model.drill_hole(hole);
     }
     if !auto {
         return Ok(None);
     }
-    let layer_mm = window.machine.slicing.layer_height_mm();
+    let layer_mm = core_engine::ANALYSIS_LAYER_MM;
     let job = DrainTool::search_on(&window.doc.scene, &[object], layer_mm, (size, vent))
         .map_err(|error| format!("{error:#}"))?;
     window.tools.drain.auto = Some(job);
@@ -67,8 +65,8 @@ pub(super) fn start_plugs(
     gap_mm: f32,
 ) -> Result<Option<ObjectId>, String> {
     let model = (window.doc.scene.get_mut(object)).ok_or_else(|| no_object(object))?;
-    model.own.plug_gap_mm = Some(gap_mm);
     let drift_mm = window.machine.slicing.material.compensation.fit_drift_mm();
+    model.own.plug_gap_mm = Some(gap_mm + drift_mm);
     let asked_by = window.doc.history.next_edit();
     window.tools.drain.lay_plugs(
         &mut window.doc.scene,

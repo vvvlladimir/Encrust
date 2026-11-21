@@ -1,4 +1,5 @@
 use super::*;
+use crate::scene::fixtures::drained;
 use crate::scene::{ImportSummary, Imported};
 use core_geometry::{Mesh, Transform, diagnose, signed_volume};
 use core_joint::Joints;
@@ -196,9 +197,12 @@ fn a_hole_drilled_before_the_cut_stays_in_the_half_it_was_drilled_into() {
     let (mesh, bvh) = (Arc::clone(&object.mesh), Arc::clone(&object.bvh));
     let size = core_volume::HoleSize::round(4.0, 6.0, 1.0);
     let top = Vec3::new(10.0, 10.0, 20.0);
-    object
-        .hollow
-        .add_drain(&mesh, &bvh, top, Vec3::Z, size, Transform::default());
+    drained(
+        &mut object.hollow,
+        (&mesh, &bvh, Transform::default()),
+        (top, Vec3::Z),
+        size,
+    );
     cut_now(at(Axis::Z, 10.0, Keep::Above), &mut scene, id);
 
     // A 24-gon with its corners on 2 mm holds 12 r^2 sin(pi / 12), 6 mm deep.
@@ -219,9 +223,12 @@ fn a_model_its_holes_cannot_be_cut_into_is_left_whole() {
     // Wider and deeper than the cube, so taking it out leaves nothing.
     let size = core_volume::HoleSize::round(8.0, 4.0, 1.0);
     let top = Vec3::new(1.0, 1.0, 2.0);
-    object
-        .hollow
-        .add_drain(&mesh, &bvh, top, Vec3::Z, size, Transform::default());
+    drained(
+        &mut object.hollow,
+        (&mesh, &bvh, Transform::default()),
+        (top, Vec3::Z),
+        size,
+    );
     let status = cut_now(at(Axis::Z, 1.0, Keep::Both), &mut scene, id);
 
     assert!(

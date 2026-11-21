@@ -1,6 +1,7 @@
 use super::*;
 use crate::job::Placement;
 use crate::scene::Scene;
+use crate::scene::fixtures::drained;
 use crate::status::Status;
 use core_engine::project::FillProfiles;
 use core_geometry::{Adjacency, Scalar, Vec3};
@@ -1482,13 +1483,11 @@ fn a_drilled_hole_is_held_up_inside_like_any_underside() {
     // its crown it is 6 mm wide, 3 mm past the reach of a 45 degree face either side.
     let size = core_volume::HoleSize::round(10.0, 10.0, 1.0);
     let bvh = Bvh::build(&mesh);
-    object.hollow.add_drain(
-        &mesh,
-        &bvh,
-        Vec3::new(20.0, 10.0, 10.0),
-        Vec3::X,
+    drained(
+        &mut object.hollow,
+        (&mesh, &bvh, transform),
+        (Vec3::new(20.0, 10.0, 10.0), Vec3::X),
         size,
-        transform,
     );
     let source = Arc::clone(object.uncut());
     let cuts = Arc::clone(object.hollow.cut_bodies().expect("the hole is cut"));

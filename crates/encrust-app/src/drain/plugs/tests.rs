@@ -1,3 +1,4 @@
+use crate::scene::fixtures::drained;
 use std::sync::Arc;
 
 use core_geometry::{Transform, Vec3, cuboid, diagnose};
@@ -24,13 +25,11 @@ fn drill(scene: &mut Scene, id: ObjectId, tool: &DrainTool, at: &[Scalar]) {
     let object = scene.get_mut(id).expect("the block is on the plate");
     let (mesh, bvh) = (Arc::clone(&object.mesh), Arc::clone(&object.bvh));
     for x in at {
-        object.hollow.add_drain(
-            &mesh,
-            &bvh,
-            Vec3::new(*x, 5.0, 10.0),
-            Vec3::Z,
+        drained(
+            &mut object.hollow,
+            (&mesh, &bvh, Transform::default()),
+            (Vec3::new(*x, 5.0, 10.0), Vec3::Z),
             tool.size(),
-            Transform::default(),
         );
     }
 }

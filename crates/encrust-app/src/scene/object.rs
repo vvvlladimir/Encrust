@@ -5,7 +5,7 @@ use crate::drain::{PlugsLaid, Traps};
 use crate::drilling::{PrintedSupports, SupportsUnder};
 use core_engine::project::HollowState;
 use core_geometry::{
-    Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec2, Vec3, placed_aabb, signed_volume,
+    Aabb, Bvh, Mesh, Quat, Region, Scalar, Transform, Vec3, placed_aabb, signed_volume,
 };
 use core_supports::ModelSupports;
 use core_volume::ModelHollow;
@@ -161,19 +161,6 @@ impl Taken {
     }
 }
 
-/// How far a grid whose near corner is at `min` and which spans `span` has to move to
-/// stand on a plate `plate` across. Zero for a grid already on it, and the move that puts
-/// its near corner in the plate's own corner for one too big to fit.
-pub(super) fn onto_plate(min: Vec2, span: Vec2, plate: Vec2) -> Vec2 {
-    let axis = |min: Scalar, span: Scalar, plate: Scalar| {
-        if span >= plate {
-            return -min;
-        }
-        (0.0 as Scalar).clamp(-min, plate - span - min)
-    };
-    Vec2::new(axis(min.x, span.x, plate.x), axis(min.y, span.y, plate.y))
-}
-
 impl SceneObject {
     /// The mesh the model's cuts are taken out of: its shell once hollowed.
     pub fn uncut(&self) -> &Arc<Mesh> {
@@ -238,7 +225,7 @@ impl SceneObject {
     /// A direction in the model's own space, as the placement turns it. A scale or a
     /// stretch bends a normal the other way from a point, hence the inverse transpose.
     pub fn world_normal(&self, local: Vec3) -> Vec3 {
-        (self.transform.linear().inverse().transpose() * local).normalize_or_zero()
+        (self.transform.normal_matrix() * local).normalize_or_zero()
     }
 
     /// Where the handles stand: the model's centre of mass in plate coordinates, turned
@@ -299,16 +286,6 @@ impl SceneObject {
         self.settle(self.pivot().turned(turn));
         self.stand_on_plate();
         true
-    }
-
-    /// Slides the model along the plate only as far as stands it inside a plate `plate_mm`
-    /// across, or into the plate's near corner where it is too big to.
-    pub fn slide_onto_plate(&mut self, plate_mm: Vec2) {
-        if let Some(bounds) = self.world_bounds() {
-            let min = bounds.mins.truncate();
-            let onto = onto_plate(min, bounds.maxs.truncate() - min, plate_mm);
-            self.transform.translation += onto.extend(0.0);
-        }
     }
 
     /// How high the model's lowest point stands over its raft, millimetres.

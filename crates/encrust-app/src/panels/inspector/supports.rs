@@ -501,7 +501,7 @@ fn start(window: &mut Window, side: Side) {
     }
     let started = window.tools.supports.start(
         &mut window.doc.scene,
-        window.machine.slicing.layer_height_mm(),
+        core_engine::ANALYSIS_LAYER_MM,
         &window.machine.slicing.catalogue,
         (side, window.tools.orient.settings.clean_surface),
     );

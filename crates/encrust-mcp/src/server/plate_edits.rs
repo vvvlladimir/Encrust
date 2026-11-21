@@ -5,7 +5,7 @@ use core_edit::{Edit, ObjectId};
 use serde_json::{Value, json};
 
 use super::Server;
-use super::asked::asked_after_check;
+use super::asked::{Area, asked_after_check};
 use crate::jobs::Revision;
 use crate::recipe::{Cut, Recipe};
 
@@ -61,7 +61,11 @@ impl Server {
             let _ = (self.jobs).keep_window_cut(&revision.job, revision.number, held);
             return Some(json!({"shown": false, "why_not": CUT_HELD}));
         }
-        let chosen = chosen_turn(report);
+        let chosen = (
+            chosen_turn(report),
+            fit_drift_of(report),
+            usable_area_of(report),
+        );
         let asked = asked_after_check(&revision.recipe, &earlier.recipe, ObjectId::UNSET, chosen)?;
         if asked.is_empty() {
             return Some(json!({"shown": false, "why_not": NOTHING_ASKED}));
@@ -88,6 +92,24 @@ impl Server {
         Some(json!({"applied": false,
                     "why_not": "the window's plate changed each time the edits were built on it"}))
     }
+}
+
+/// The fit drift of the check's resin, mm a side.
+pub(super) fn fit_drift_of(report: &Value) -> Option<f32> {
+    report["slicing"]["fit_drift_mm"]
+        .as_f64()
+        .map(|drift| drift as f32)
+}
+
+/// The printer's usable area of the check, its low corner and its size, mm.
+pub(super) fn usable_area_of(report: &Value) -> Option<Area> {
+    let usable = report["models"][0]["fit"]["usable_mm"].as_array()?;
+    let pair = |at: usize| {
+        let pair = usable.get(at)?.as_array()?;
+        let number = |i: usize| pair.get(i)?.as_f64().map(|n| n as f32);
+        Some([number(0)?, number(1)?])
+    };
+    Some((pair(0)?, pair(1)?))
 }
 
 /// The turn the check's search chose for the job's model, `--rotate` angles.

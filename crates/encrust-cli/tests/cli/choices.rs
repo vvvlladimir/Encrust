@@ -116,3 +116,26 @@ fn a_place_kept_clear_is_counted_on_every_choice() {
         );
     }
 }
+
+#[test]
+fn an_orient_with_no_printer_and_no_supports_is_still_proved_on_the_standard_printer() {
+    let path = write_leaning_box_stl("standard", 10.0, 8.0, 12, 0);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--orient",
+        "--orient-choices",
+        "2",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let report = json(&output);
+
+    let choices = report["models"][0]["oriented"]["choices"]
+        .as_array()
+        .expect("choices are reported");
+    assert!(
+        choices[0]["printed"]["layers"].as_u64().unwrap_or(0) > 0,
+        "the first way was printed in a trial: {report}"
+    );
+}

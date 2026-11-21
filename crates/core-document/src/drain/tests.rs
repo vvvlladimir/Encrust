@@ -3,8 +3,9 @@ use std::sync::Arc;
 use core_edit::Edit;
 use core_engine::project::{HollowState, load};
 use core_engine::{Baked, trapped_in};
-use core_geometry::{Mesh, transform_mesh};
-use core_volume::{Cancel, HollowMode, InfillSettings};
+use core_geometry::{Aabb, Mesh, Transform, transform_mesh};
+use core_supports::SupportPoint;
+use core_volume::{Cancel, HollowMode, InfillSettings, PLUG_SPACING_MM};
 
 use super::*;
 use crate::apply::apply;
@@ -137,6 +138,69 @@ fn a_transform_that_cannot_be_inverted_is_bad_and_leaves_the_cube() {
     assert_eq!(error, ApplyError::BadTransform(CUBE));
 }
 
+#[test]
+fn a_hole_on_a_scaled_object_prints_at_its_size_on_the_plate() {
+    let mut project = cube();
+    project.manifest.objects[0].transform.scale = Vec3::splat(2.0);
+    let mut document = Document::from_project(project);
+    let edit = Edit::Drain {
+        object: CUBE,
+        at_mm: vec![Vec3::new(10.0, 10.0, 20.0)],
+        size: HoleSize {
+            diameter_mm: 3.0,
+            ..HoleSize::default()
+        },
+        kind: HoleKind::default(),
+        auto: false,
+        vent: false,
+    };
+
+    apply(&mut document, &edit, Cancel::never()).expect("the top of the scaled cube drains");
+
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    let [hole] = state.hollow.drains[..] else {
+        panic!("one hole was drilled, got {:?}", state.hollow.drains);
+    };
+    let on_plate_mm = hole.diameter_mm * state.transform.least_scale();
+    assert!(
+        (on_plate_mm - 3.0).abs() < 1e-4,
+        "the hole measures 3 mm on the plate, got {on_plate_mm}"
+    );
+}
+
+#[test]
+fn a_hole_takes_away_the_supports_it_drills_out_and_leaves_the_rest() {
+    let mut project = cube();
+    let object = &mut project.manifest.objects[0];
+    object.transform = Transform::from_translation(Vec3::new(0.0, 0.0, 5.0));
+    object.supports.points = vec![
+        SupportPoint::new(Vec3::new(5.0, 5.0, 0.0)),
+        SupportPoint::new(Vec3::new(1.0, 1.0, 0.0)),
+    ];
+    let mut document = Document::from_project(project);
+    let edit = Edit::Drain {
+        object: CUBE,
+        at_mm: vec![Vec3::new(5.0, 5.0, 5.0)],
+        size: HoleSize {
+            diameter_mm: 3.0,
+            ..HoleSize::default()
+        },
+        kind: HoleKind::default(),
+        auto: false,
+        vent: false,
+    };
+
+    apply(&mut document, &edit, Cancel::never()).expect("the underside of the cube drains");
+
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    let kept: Vec<Vec3> = state.supports.points.iter().map(|p| p.contact).collect();
+    assert_eq!(
+        kept,
+        [Vec3::new(1.0, 1.0, 0.0)],
+        "the contact under the hole goes, the one 4 mm off stays"
+    );
+}
+
 fn hollowed_cube() -> Document {
     let mut document = Document::from_project(cube_of(20.0));
     let walled = Edit::Hollow {
@@ -153,6 +217,33 @@ fn hollowed_cube() -> Document {
     };
     apply(&mut document, &walled, Cancel::never()).expect("a 20 mm cube takes a 2 mm wall");
     document
+}
+
+#[test]
+fn a_hole_set_by_hand_into_a_hollow_cube_stops_at_its_depth() {
+    let mut document = hollowed_cube();
+    let edit = Edit::Drain {
+        object: CUBE,
+        at_mm: vec![Vec3::new(10.0, 10.0, 20.5)],
+        size: HoleSize::default(),
+        kind: HoleKind::AtDepth,
+        auto: false,
+        vent: false,
+    };
+
+    apply(&mut document, &edit, Cancel::never()).expect("a hole drills into the top");
+
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    let [hole] = state.hollow.drains[..] else {
+        panic!("one hole was drilled, got {:?}", state.hollow.drains);
+    };
+    assert_eq!(hole.kind, HoleKind::AtDepth, "a hole set by hand");
+    let depth_mm = HoleSize::default().depth_mm;
+    assert!(
+        (hole.depth_mm - depth_mm).abs() < 1e-4,
+        "it stops at {depth_mm} mm, got {}",
+        hole.depth_mm
+    );
 }
 
 fn searching() -> Edit {
@@ -257,17 +348,15 @@ fn plugs_for_two_holes_are_two_objects_naming_the_cube() {
     }
     apply(&mut document, &holes, Cancel::never()).expect("two holes drill");
 
-    let edit = Edit::Plugs {
-        object: CUBE,
-        gap_mm: 0.1,
-    };
+    let edit = plugs_edit();
     let applied = apply(&mut document, &edit, Cancel::never()).expect("the plugs are cut");
 
     assert_eq!(
         applied.report,
         Report::Plugged {
             plugs: 2,
-            closed: 0
+            closed: 0,
+            crowded: 0
         }
     );
     let roles: Vec<Role> = applied.added.iter().map(|(_, role)| *role).collect();
@@ -299,6 +388,8 @@ fn plugs_edit() -> Edit {
     Edit::Plugs {
         object: CUBE,
         gap_mm: 0.1,
+        plate_mm: None,
+        low_mm: [0.0, 0.0],
     }
 }
 
@@ -311,6 +402,118 @@ fn drained_cube() -> Document {
     )
     .expect("the cube drains");
     document
+}
+
+/// A drained cube with a second cube at x 14 to 24, where a row of plugs would stand.
+fn drained_cube_with_neighbour() -> Document {
+    let mut project = cube();
+    let (mut state, meshes) = (
+        project.manifest.objects[0].clone(),
+        project.models[0].clone(),
+    );
+    state.id = ObjectId(2);
+    state.transform = Transform::from_translation(Vec3::new(14.0, 0.0, 0.0));
+    project.manifest.objects.push(state);
+    project.models.push(meshes);
+    let mut document = Document::from_project(project);
+    let mut holes = drain_at(Vec3::new(3.0, 5.0, 10.5));
+    if let Edit::Drain { at_mm, .. } = &mut holes {
+        at_mm.push(Vec3::new(7.0, 5.0, 10.5));
+    }
+    apply(&mut document, &holes, Cancel::never()).expect("two holes drill");
+    document
+}
+
+fn plug_boxes(document: &Document, applied: &Applied) -> Vec<Aabb> {
+    (applied.added.iter())
+        .map(|(id, _)| {
+            let (_, meshes) = document.object(*id).expect("a plug stands on the plate");
+            meshes.source.aabb().expect("a plug has faces")
+        })
+        .collect()
+}
+
+fn apart_mm(a: &Aabb, b: &Aabb) -> Scalar {
+    let x = (a.mins.x - b.maxs.x).max(b.mins.x - a.maxs.x);
+    let y = (a.mins.y - b.maxs.y).max(b.mins.y - a.maxs.y);
+    x.max(y)
+}
+
+#[test]
+fn plugs_with_an_area_stand_clear_of_the_models_and_each_other_inside_it() {
+    let mut document = drained_cube_with_neighbour();
+    let edit = Edit::Plugs {
+        object: CUBE,
+        gap_mm: 0.1,
+        plate_mm: Some([100.0, 100.0]),
+        low_mm: [0.0, 0.0],
+    };
+
+    let applied = apply(&mut document, &edit, Cancel::never()).expect("the plugs are cut");
+
+    let plugs = plug_boxes(&document, &applied);
+    assert_eq!(plugs.len(), 2, "one plug a hole");
+    let mut others = vec![
+        bounds_of(&document, ObjectId(1)),
+        bounds_of(&document, ObjectId(2)),
+    ];
+    for (index, plug) in plugs.iter().enumerate() {
+        assert!(
+            plug.mins.x >= -1e-3
+                && plug.mins.y >= -1e-3
+                && plug.maxs.x <= 100.0 + 1e-3
+                && plug.maxs.y <= 100.0 + 1e-3,
+            "plug {index} is inside the 100 mm area, got {plug:?}"
+        );
+        for other in &others {
+            let apart = apart_mm(plug, other);
+            assert!(
+                apart >= PLUG_SPACING_MM - 1e-3,
+                "plug {index} is at least {PLUG_SPACING_MM} mm from every box, got {apart}"
+            );
+        }
+        others.push(*plug);
+    }
+}
+
+#[test]
+fn plugs_with_no_area_stand_in_the_row_past_the_model() {
+    let mut document = drained_cube_with_neighbour();
+
+    let applied = apply(&mut document, &plugs_edit(), Cancel::never()).expect("the plugs are cut");
+
+    let plugs = plug_boxes(&document, &applied);
+    let expected = 10.0 + PLUG_SPACING_MM;
+    assert!(
+        (plugs[0].mins.x - expected).abs() < 1e-3,
+        "the first plug starts {PLUG_SPACING_MM} mm past the cube at x = {expected}, got {}",
+        plugs[0].mins.x
+    );
+}
+
+#[test]
+fn plugs_that_fit_nowhere_on_a_plate_are_counted_crowded() {
+    let mut document = drained_cube_with_neighbour();
+    let edit = Edit::Plugs {
+        object: CUBE,
+        gap_mm: 0.1,
+        plate_mm: Some([30.0, 12.0]),
+        low_mm: [0.0, 0.0],
+    };
+
+    let applied = apply(&mut document, &edit, Cancel::never()).expect("the plugs are cut");
+
+    let Report::Plugged { plugs, crowded, .. } = applied.report else {
+        panic!("plugs were laid, got {:?}", applied.report);
+    };
+    assert_eq!((plugs, crowded), (2, 2), "both plugs found no room");
+}
+
+fn bounds_of(document: &Document, id: ObjectId) -> Aabb {
+    let (state, meshes) = document.object(id).expect("it is on the plate");
+    transform_mesh(&meshes.source, state.transform)
+        .aabb()
+        .expect("a cube has faces")
 }
 
 #[test]

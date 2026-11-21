@@ -9,7 +9,8 @@ use core_edit::{Edit, ObjectId};
 use serde_json::{Value, json};
 
 use super::Server;
-use super::asked::asked_edits;
+use super::asked::{Area, asked_after_check};
+use super::plate_edits::{fit_drift_of, usable_area_of};
 use super::reply::{Reply, not_applied, revised};
 use crate::jobs::Revision;
 use crate::recipe::Recipe;
@@ -39,19 +40,31 @@ impl Server {
         against: &[String],
         ctx: &Context,
     ) -> Result<Result<Reply>, Box<Recipe>> {
-        let asked = asked_edits(&recipe, &latest.recipe, ObjectId::UNSET);
+        let (drift, area) = self.earlier_check(latest, &recipe);
+        let ask = |object| asked_after_check(&recipe, &latest.recipe, object, (None, drift, area));
+        let asked = ask(ObjectId::UNSET);
         if asked.as_ref().is_none_or(Vec::is_empty) {
             return Err(Box::new(recipe));
         }
         let Some(base) = self.base_of(latest).await else {
             return Err(Box::new(recipe));
         };
-        let Some(edits) = asked_edits(&recipe, &latest.recipe, base.object) else {
+        let Some(edits) = ask(base.object) else {
             return Err(Box::new(recipe));
         };
         Ok(self
             .checked_on_plate((latest, recipe, note), &base, &edits, against, ctx)
             .await)
+    }
+
+    /// The fit drift and usable plate area the previous revision's check reported, where it ran
+    /// on the printer and resin `recipe` names: this revision's check has not run yet.
+    fn earlier_check(&self, latest: &Revision, recipe: &Recipe) -> (Option<f32>, Option<Area>) {
+        let same = latest.recipe.printer == recipe.printer && latest.recipe.resin == recipe.resin;
+        let Some(report) = self.jobs.report(latest).ok().filter(|_| same) else {
+            return (None, None);
+        };
+        (fit_drift_of(&report), usable_area_of(&report))
     }
 
     /// The open window's plate with the job's model on it, which holds whatever the user did

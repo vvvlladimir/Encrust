@@ -601,7 +601,8 @@ machinery (window).
 - R6b core-recipe's `edits_of` (card below).
 - R6c the window's Prepare for print (`prepare/{work,step}.rs`) runs each plate step through
   `edits_of` and the link's `start_edit` path, its own per-step job calls deleted; deferred,
-  it waits on batched edits.
+  it waits on batched edits. Its Supports edits set `clean_surface` from the Orient tool's
+  Clean surface (prepare/step.rs:83 reads it today).
 - R6d the CLI's recipe executor (`recipe/{steps,plate,piece}.rs`) runs on a `Document` of the
   staged models through `apply`; this is the command line's model pipeline moving onto the
   document (the original plan's phase 5) and needs its own design pass first.
@@ -660,3 +661,334 @@ Done: R8, S5, item 5, D2 (C10b but holes into the supports), A1 (C2b), R6a, R6b 
 C14's docs. Deferred by the user: R6c — the window's prepare runs one job over many models
 where the link's edits run one model at a time, so it waits on batched edits (a design
 session); R6d — the CLI's recipe executor on a `Document`, its own design pass.
+
+## Round 4 (2026-11-19): one result whatever the front end
+
+Decided by the user: **the window is the reference**; the edit path (`apply`, the link, MCP) and
+the CLI do what it does. The document and the edits know nothing of a printer or resin: model
+analysis runs at one fixed step; a plate area and a plug gap come into an edit as final numbers,
+the front end that knows the machine (window, CLI, MCP) working them out. Where the window is
+itself inconsistent, the panel button is the reference. Run order: F → B → P → D1 → R6d.
+Checked, no card: 21 (`core-recipe/src/recipe.rs:91` refuses `close-small-holes` and `turn`, so
+`edits.rs:78-85` never sees them); 10 is the CLI's own counting (D1 keeps or drops it).
+
+### F1. A hole drilled by an edit on a scaled object prints at its size (bug 14)
+Fact: `hole_near` (core-document/src/drain.rs:32) drills on the own-space mesh with the size in
+  plate mm, unscaled; `apply_drain` (drain.rs:126) and the link (link/plate/drain.rs:32) call it,
+  so on an object at scale 2 a 3 mm hole prints 6 mm. The window's click goes through
+  `ModelHollow::drain_at` (core-volume/src/model.rs:376), which scales through `into_model`.
+Read: `crates/core-document/src/drain.rs` (+ `drain/tests.rs`), `crates/core-volume/src/model.rs`
+  (`drain_at`, `in_model`), `crates/encrust-app/src/drain/points.rs`, `crates/encrust-app/src/link/plate/drain.rs`,
+  `crates/encrust-cli/src/recipe/drain.rs` (`at_points`, the other caller)
+Touch: those, `crates/encrust-app/src/link/tests/` (the drain test)
+Do: failing test first. `hole_near` takes the plate point and the object's transform and builds
+  the hole as the click does: closest own-space point, its face's plate normal, `drain_at`; the
+  `OffAFace` check stays, in plate mm. The CLI passes `Transform::default()` (its mesh is baked).
+Done when: a 10 mm cube scaled 2, `Drain` at its top middle (10, 10, 20) with a 3 mm hole: the hole
+  measured on the plate (own diameter × 2) is 3 ± 1e-4 (6 before); the same through a window link
+  test; existing drain tests pass.
+Not now: the hole's kind (P7).
+
+### F2. Drilling takes away the supports it drills out, every path (bug 18)
+Fact: the window's `SceneObject::drill_hole` (encrust-app/src/scene/support_surface.rs:155-165)
+  clears every contact the new hole drills out (`drilled_out`, ADR 0443); `apply_drain`
+  (drain.rs:138, 147), the link (link/plate/drain.rs:37) and Check's Drill them
+  (`DrainTool::drill_vents`, encrust-app/src/drain.rs:177, `add_drain`) only add the hole.
+Read: `crates/encrust-app/src/scene/support_surface.rs`, `crates/core-volume/src/drain.rs`
+  (`drilled_out`), `crates/core-supports/src/model/points.rs` (`clear_contacts`), `crates/core-document/src/drain.rs`,
+  `crates/core-engine/src/project.rs` (`supports_of`, how core-document stores a model's supports),
+  `crates/encrust-app/src/link/plate/drain.rs`, `crates/encrust-app/src/drain.rs` (`drill_vents`)
+Touch: those, `crates/core-document/src/drain/tests.rs`, `crates/encrust-app/src/link/tests/`
+Do: failing tests first. `apply_drain` clears, after each hole it adds, the object's contacts that
+  hole drills out (one helper beside `hole_near`, the clearing in core-volume/core-supports as is);
+  the link and `drill_vents` call `drill_hole` instead of `add_hole`/`add_drain`.
+Done when: a 10 mm cube lifted 5 mm with contacts at (5, 5, 5) and (1, 1, 5), `Drain` of 3 mm at
+  (5, 5, 5): the first is gone, the second stays (contact count 2 → 1); the same by a link test and
+  by `drill_vents` over a vent at (5, 5, 5); existing tests pass.
+Not now: holes into the supports (`support_at_mm`).
+
+### F3. A recipe's Check drills cups at the recipe's hole size (bug 20)
+Fact: the prepare's Check (encrust-app/src/prepare/check.rs:154) calls `drill_cups`, which sizes
+  vents by the Drain panel (`drain.size()`, check.rs:175, drain.rs:165) — against
+  prepare/work.rs:1-2 ("never what a panel holds"). The CLI takes the piece's hole size
+  (encrust-cli/src/recipe/plate.rs:127-130).
+Read: `crates/encrust-app/src/check.rs` (`drill_cups`, `cup_owners`), `crates/encrust-app/src/drain.rs`
+  (`drill_vents`), `crates/encrust-app/src/prepare/{check.rs,work.rs}`, `crates/encrust-app/src/panels/inspector/check/fixes.rs`
+Touch: those, their tests
+Do: failing test first. `drill_cups` and `drill_vents` take the `HoleSize`; the panel's Drill them
+  passes `drain.size()`, the prepare passes its run's drain step size (`Work`'s drain `HoleSize`),
+  else `HoleSize::default()`.
+Done when: a prepare whose drain step sets `diameter_mm = 2.5` with the panel at 4 drills cup vents
+  of 2.5 ± 1e-4; with no drain step, `HoleSize::default().diameter_mm`; the panel's button still
+  takes the panel's; existing check tests pass.
+Not now: anything about levers.
+
+### B1a. One analysis step: the constant, the bench, the ADR (items 1, 17)
+Fact: supports and the drain search slice the model; the edit path uses `SliceSettings::default()`
+  (0.05 mm: core-document/src/supports.rs:324, drain/auto.rs:70), the window and CLI the machine's
+  layer height. Step chosen: **0.05 mm** — already the edit path's, the slicer's default and the
+  height every shipped resin is measured at (`printer-profiles`: all `layer_height_mm = 0.05`);
+  supports read layers onto 0.1 mm cells (`docs/design/supports.md`), so a finer step buys nothing
+  there. The user may overrule from the bench.
+Read: `crates/core-engine/src/{stand.rs,stand/needs.rs,drains.rs}` (`needs_on`, `DrainSearch`),
+  `crates/core-engine/benches/plate.rs`, `crates/core-document/src/{supports.rs,drain/auto.rs}`,
+  `docs/decisions/0000-template.md`, `docs/design/{supports.md,hollowing.md}` (the two "at the run's
+  layer height" sentences)
+Touch: `crates/core-engine/src/lib.rs` (+ the file owning the constant), `crates/core-engine/benches/plate.rs`,
+  `crates/core-document/src/{supports.rs,drain/auto.rs}`, new `docs/decisions/0471-model-analysis-at-one-step.md`,
+  `docs/decisions/README.md`, `docs/design/{supports.md,hollowing.md,document.md}`
+Do: `core_engine::ANALYSIS_LAYER_MM: Scalar = 0.05` with one line of rustdoc; core-document reads
+  it. Bench first: a criterion group timing `needs_on` and `suggest_drains_heard` on a 20 mm cube
+  hollowed to a 2 mm wall at 0.02, 0.05 and 0.1 mm (the shipped range: before = the machine's
+  step, after = the constant). ADR 0471 draft, one record for the three decisions taken together:
+  analysis at one step (the bench's numbers), a plate area passed into an edit as the usable area
+  (B2), a plug gap in an edit final (B3). The design pages say "at the analysis step" instead.
+Done when: the bench runs and its numbers are in the ADR; core-document's supports and drain tests
+  pass unchanged (0.05 = the old default); no `SliceSettings::default().layer_height` left in
+  core-document.
+Not now: the window and CLI call sites (B1b); slicing, Check's measure and the orient trial keep
+  the machine's height (they judge the print, not the model).
+
+### B1b. The window and the CLI analyse at that step
+Read: B1a's constant; the call sites: `crates/encrust-app/src/panels/inspector/{supports.rs:504,drain.rs:138}`,
+  `panels/inspector/check/plate.rs:298`, `prepare/step.rs:59,150`, `link/plate.rs:490`,
+  `link/plate/drain.rs:41`, `app/showcase.rs:214`; `crates/encrust-cli/src/stage.rs:458`,
+  `stage/ground.rs:20`, `recipe/drain.rs:118`, `recipe/piece.rs` (`trapped`, `ctx.layer_height_mm`)
+Touch: those files only, one test each side
+Do: each supports run, drain search and trapped-resin scan passes `ANALYSIS_LAYER_MM` instead of
+  `slicing.layer_height_mm()` / the CLI's layer height. Sites that slice the print (section view,
+  plate summary, Check's measure, file names) are left alone.
+Done when: a window test with the machine at 0.1 mm: the supports job and the drain job are asked
+  for 0.05 ± 1e-9; a CLI test: `--supports` on a cube gives the same contacts at `--layer-height
+  0.1` and `0.03` (counts equal); existing tests pass.
+Not now: the CLI's lift before drains (R6d).
+
+### B2. Arrange takes the usable area (item 11)
+Fact: the window's Arrange packs into `BuildPlate::plate_area()` (plate minus `PlateInset`,
+  encrust-app/src/plate.rs:84, arrange.rs:45); the link rebuilds a plate with no inset
+  (link/plate/arrange.rs:20-25), the edit packs `PlateArea::whole` (core-document/src/arrange.rs:154).
+  An inset is asymmetric, so a size alone is not enough.
+Read: `crates/core-edit/src/edit.rs` (+ tests), `crates/core-document/src/arrange.rs` (+ tests),
+  `crates/core-plate/src/arrange.rs` (`PlateArea`), `crates/encrust-app/src/link/plate/arrange.rs`,
+  `crates/encrust-app/src/plate.rs`, `crates/core-recipe/src/edits.rs` (+ tests), `crates/encrust-app/src/prepare/work.rs`
+Touch: those, `docs/design/document.md`, `docs/cli.md`
+Edit: `Arrange` gains `#[serde(default)] low_mm: [Scalar; 2]`; `plate_mm` is the usable area's size
+  from it (`PlateArea { low_mm, high_mm: low_mm + plate_mm }`). `edits_of` takes the area as
+  `(low_mm, plate_mm)`; the window's prepare passes `plate_area()`; the link builds the area from the
+  edit. The same pair is what P5 and P6 add.
+Done when: two 10 mm cubes, `Arrange { plate_mm: [50, 50], low_mm: [10, 20], clearance_mm: 2 }`:
+  every footprint within x 10..60, y 20..70 (± 1e-3); an edit without `low_mm` reads as today; a
+  link test with an inset of 5 on each side keeps every model 5 mm in; existing arrange tests pass.
+Not now: the CLI's area (R6d), MCP (orchestrator).
+
+### B3. A plug gap in an edit is the final gap (item 19, gap)
+Fact: `apply_plugs` cuts at `gap_mm / scale` (core-document/src/drain/plugs.rs:52): already the
+  plate gap, no drift. The link sets `plug_gap_mm = gap` and `lay_plugs` takes the resin's drift off
+  again (link/plate/drain.rs:73-75, drain/plugs.rs:314); `edits_of` writes `PLUG_GAP_MM` raw
+  (core-recipe/src/edits.rs:132).
+Read: `crates/core-document/src/drain/plugs.rs`, `crates/encrust-app/src/link/plate/drain.rs`,
+  `crates/encrust-app/src/drain/plugs.rs` (`plugs_for`), `crates/core-recipe/src/edits.rs` (+ tests),
+  `crates/encrust-app/src/prepare/work.rs`, `crates/core-edit/src/edit.rs` (`Plugs` rustdoc)
+Touch: those, `crates/encrust-app/src/link/tests/`, `docs/design/document.md`
+Do: the link stores `plug_gap_mm = gap_mm + drift_mm`, so the tool's subtraction leaves the edit's
+  gap; `edits_of` takes `plug_drift_mm` and writes `PLUG_GAP_MM - plug_drift_mm`, the window's
+  prepare passing its resin's `fit_drift_mm()`. `Plugs`' rustdoc says the gap is final, plate mm.
+Done when: a link test with a resin of drift 0.05, `Plugs { gap_mm: 0.1 }` on a cube with one 3 mm
+  hole: the plug is 3 − 2 × 0.1 across (± the plug test's tolerance); `edits_of` with drift 0.05
+  writes 0.15 − 0.05 (`PLUG_GAP_MM` stated); existing plug tests pass.
+Not now: where the plugs stand (P6), MCP's drift (orchestrator).
+
+### P1. Points asked stand before the run, as seeds (item 5)
+Window: the link stands each `at_mm` contact in the active group (`stand_points`,
+  encrust-app/src/link/plate.rs:429, 445-464) before the run, which takes every contact standing as
+  a seed (supports/start.rs:61-64). The edit adds them after the run as `Reason::Steady` needs
+  (core-document/src/supports.rs:243-260).
+Read: `crates/core-document/src/supports.rs` (+ tests), `crates/encrust-app/src/link/plate.rs`
+  (`start_supports`, `stand_points`), `crates/encrust-app/src/supports/start.rs`, `crates/core-supports/src/model/points.rs`
+Touch: `crates/core-document/src/supports.rs` (+ tests), `docs/design/document.md`. link/plate.rs is
+  552 lines: first move its Supports arm (`start_supports` … `start_inside`, 404-538) into
+  `link/plate/supports.rs`, own commit, `cargo xtask hygiene --bless`.
+Do: `needs_asked` adds the surface point nearest each `at_mm` to the object's supports in the
+  asked group first, then finds needs with them among the seeds; `only_at` stands them alone.
+Done when: a 10 mm cube lifted 5 mm, `Supports { at_mm: [(5, 5, 5)] }`: one contact within 2 mm
+  of (5, 5, 5) (two before); `only_at` still gives exactly
+  one; existing tests pass.
+Not now: their shape (the group's profile, as the window's).
+
+### P2. What shows is read only for a clean surface (item 6)
+Window: a run reads the painted shown region only when Clean surface is on or strokes are given
+  (`task.shown_only_if(clean)`, supports/start.rs:59, job/place.rs:192; link/plate.rs:433). The
+  edit always reads it (core-document/src/supports.rs:329).
+Read: `crates/core-edit/src/edit.rs` (+ tests), `crates/core-document/src/supports.rs` (+ tests),
+  `crates/encrust-app/src/link/plate/supports.rs` (after P1), `crates/encrust-app/src/job/place.rs`
+Touch: those, `docs/design/document.md`, `docs/cli.md`
+Edit: `Supports` gains `#[serde(default)] clean_surface: bool`; `found` reads `shown_painted` only
+  when `clean_surface || !shown_at.is_empty()`. The link's `clean` is the edit's flag or strokes,
+  not the Orient tool's toggle (the front end writing the edit sets it from that toggle).
+Done when: a 10 mm cube lifted 5 mm with its underside painted shown: `clean_surface: false` gives
+  the same contact count as unpainted, `true` fewer (counts stated); a link test; existing tests pass.
+Not now: the inside pass's flag (link/plate.rs:535 already takes the toggle alone).
+
+### P3. Which profile a supports edit builds to (items 3, 4)
+Window (panel): the group in hand's profile, or the automatic profile in hand sized into its shapes,
+  both out of the catalogue with the user's folder (supports/run.rs:77-85, start.rs:42-47); a
+  profile chosen becomes the group in hand (`take_up_chosen`, groups.rs:208). The link takes a
+  shipped preset only (link/plate.rs:424); the edit a plate group by name, else shipped, without
+  making it active (`group_for`, supports.rs:278), and sizes `auto` against `Catalogue::bundled`
+  (supports.rs:193).
+Read: `crates/core-document/src/supports.rs` (+ tests), `crates/core-engine/src/project.rs` (`SupportState`,
+  `AutoSizing`), `crates/encrust-app/src/supports/{groups.rs,run.rs}`, `crates/encrust-app/src/link/plate/supports.rs`,
+  `crates/printer-profiles/src/{auto.rs,catalogue.rs}`
+Touch: those, `docs/design/document.md`
+Do: a name resolves to the plate's group of that name, else a shipped preset, and that group
+  becomes the plate's active one; `auto`'s shapes are the plate's groups of their names where
+  present, else the shipped ones. The link resolves in the same order. A user-folder profile
+  reaches an edit as a group its front end put on the plate first (the window has it; the CLI in R6d).
+Done when: a plate with a group "mine" (a profile shipped nowhere, tip 0.3 mm): `Supports { profile:
+  "mine" }` stands tips of 0.3 ± 1e-6 and leaves "mine" active; an unknown name → `NoProfile`; a link
+  test of the same; existing tests pass.
+Not now: merges.
+
+### P4. Orient weighs the supports the panel would build (item 7)
+Window (panel, reference): `orient_plans` (supports/groups.rs:84): the automatic profile in hand,
+  sized, else the active group's profile, on the model's raft or the plate's, its `z_lift_mm` the
+  model's asked lift (`lifted`, job/orient.rs:209); `turn_of` (job/orient.rs:284-292) takes overhang,
+  spacing and lift from its `placing()`. The link uses the same; the prepare uses `automatic_plans`
+  (prepare/step.rs:118) — the panel wins, R6c follows. The edit takes the active profile alone
+  (core-document/src/orient.rs:129).
+Read: `crates/core-document/src/{orient.rs,supports.rs}` (+ `orient/tests.rs`), `crates/encrust-app/src/supports/groups.rs`
+  (`orient_plans`, `plans_by`), `crates/encrust-app/src/job/orient.rs`, `crates/core-engine/src/project.rs`
+Touch: `crates/core-document/src/{orient.rs,supports.rs}` (+ tests), `crates/encrust-app/src/supports/groups.rs`,
+  `crates/encrust-app/src/job/orient.rs`
+Do: one fn in core-document, the plan an object's orient weighs (the plate's kept sizing sized,
+  else the active group's; raft; lift), and one making `OrientSettings` from a plan's `placing()`;
+  `plans_by` and `turn_of` call them, `apply_orient` too.
+Done when: a plate keeping an automatic sizing: the orient settings take its lightest shape's
+  overhang and spacing (equal to the profile's, ± 1e-6); without one, the active group's; a model
+  with an asked lift of 3: settings' lift from `z_lift_mm` 3; R6a's cuboid test passes.
+Not now: the orient trial (a decision for the user, see the end).
+
+### P5. Orient stands the model where the window does (item 9)
+Window: `stand` (encrust-app/src/orient.rs:440-456): turned keeping the middle of its box over the
+  same spot, slid onto the plate where it hangs off, dropped onto it, lifted by the placing profile's
+  `z_lift_mm` where the pose is not on the plate. The edit keeps the centre of mass and drops
+  (`oriented_to`, core-document/src/placement.rs:36-72).
+Read: `crates/encrust-app/src/orient.rs`, `crates/encrust-app/src/scene/object.rs` (`onto_plate`:167,
+  `slide_onto_plate`, `stand_on_plate`), `crates/core-document/src/{placement.rs,orient.rs}` (+ tests),
+  `crates/core-edit/src/edit.rs` (+ tests), `crates/encrust-app/src/link/plate/orient.rs`
+Touch: those, `docs/design/document.md`
+Edit: `Orient` gains B2's pair, `#[serde(default)] plate_mm: Option<[Scalar; 2]>, low_mm: [Scalar; 2]`
+  (no slide where `None`). `onto_plate` and the stand move into `placement.rs` (`stood_turned`); the
+  window's `stand` calls it; `apply_orient` uses it with `choice.oriented.on_plate` and P4's lift.
+Done when: a 10 × 10 × 30 cuboid standing at box middle (15, 15), `Orient { goal: shortest-print }`:
+  box middle stays (15, 15) ± 1e-3; with an area it overhangs, its box lands inside ± 1e-3; a pose
+  off the plate stands at the lift ± 1e-3; existing orient tests pass. Rotate keeps the centre of mass.
+Not now: Rotate and Scale (the window turns those about the centre of mass too).
+
+### P6. Plugs stand where the window's tool puts them (item 19, layout)
+Window: `lay_out` (encrust-app/src/drain/plugs.rs:357-396) moves each plug to the nearest free spot
+  (`nearest_free`, `PLUG_SPACING_MM` clear of what models, supports and rafts cover, `covered`:398)
+  inside the plate; one that fits nowhere stays where laid. The edit leaves the row of `laid_beside`.
+Read: `crates/encrust-app/src/drain/plugs.rs`, `crates/core-plate/src/spot.rs`, `crates/core-document/src/{drain/plugs.rs,arrange.rs}`
+  (`standing_meshes`, the footprint with supports), `crates/core-edit/src/edit.rs`
+Touch: those (+ tests), `crates/core-document/src/lib.rs`, `docs/design/document.md`
+Edit: `Plugs` gains B2's pair (`None` → the row, as now). The footprint and spot steps move into
+  core-document beside `apply_plugs` (one copy; the window's `lay_out` calls it, keeping its names
+  and `plug_of`). `Report::Plugged` gains `crowded`.
+Done when: a cube with two holes on a 100 × 100 area with a second cube to its right: each plug's
+  box is ≥ `PLUG_SPACING_MM` (± 1e-3) from every other box and inside the area; no area → the row
+  as before; existing plug tests pass.
+Not now: MCP (orchestrator).
+
+### P7. A hole drilled at a point is the click's kind (item 15)
+Window: a click and the recipe's points drill `HoleKind::AtDepth` through `drain_at`
+  (core-volume/src/model.rs:387, drain/points.rs:30). The edit's `kind` defaults to `Drain`
+  (`HoleKind::default()`), `edits_of` writes it (core-recipe/src/edits.rs:121). A click never
+  misses a face; the edit's `OffAFace` refusal stays (the window's recipe follows it in R6c).
+Read: `crates/core-edit/src/edit.rs` (+ tests), `crates/core-recipe/src/edits.rs` (+ tests),
+  `crates/core-document/src/drain.rs` (+ tests), `crates/encrust-app/src/link/plate.rs` (the Drain arm)
+Touch: those, `docs/design/document.md`, `docs/cli.md`
+Edit: `Drain`'s `kind` defaults to `AtDepth` (`#[serde(default = …)]`); `edits_of` writes `AtDepth`.
+Done when: `Drain` with no `kind` on a 20 mm cube hollowed to a 2 mm wall, at its top middle: the
+  hole is `AtDepth` and stops at `size.depth_mm` ± 1e-4; `edits_of`'s points → `AtDepth`; existing
+  tests pass.
+Not now: a hole before hollowing (`Walled`, the CLI's case in D1).
+
+### P8. Orient proves its poses on a printer, the standard one where none is named
+Decided: the trial runs on every path. A printer and resin named from the catalogue, else the
+  standard printer: `elegoo-saturn-4-ultra` (the machine the window's pictures already use,
+  encrust-app/src/app/states.rs:14) with the catalogue's first resin for it, defined once in
+  printer-profiles (`STANDARD_PRINTER`, `standard_machine(&Catalogue)`). The document stores no
+  printer; the edit names it.
+Read: `crates/core-engine/src/trial.rs` (`orient_for_print`, `Trial`), `crates/encrust-app/src/job/orient.rs`
+  (221-234, the trial it builds), `crates/encrust-cli/src/pipeline/place.rs` (the CLI's trial),
+  `crates/core-document/src/orient.rs`, `crates/printer-profiles/src/catalogue.rs`,
+  `crates/encrust-mcp/src/server/asked.rs`, `crates/encrust-mcp/src/instructions.md`
+Touch: those, `crates/core-edit/src/edit.rs` (+ tests), `crates/printer-profiles/src/lib.rs`,
+  `crates/encrust-app/src/link/plate/orient.rs`, `docs/design/document.md`, `docs/cli.md`, ADR 0471
+Edit: `Orient` gains `#[serde(default)] printer: Option<String>, resin: Option<String>` (catalogue ids).
+apply: builds the `Trial` from them or the standard machine, with P4's support plan, and runs
+  `orient_for_print` with it; the window without a printer chosen passes none (the standard one),
+  the window's panel too, so the panel and the edit rank alike; the CLI passes `--printer`/resin or
+  none. MCP: a pose the search picks becomes `Edit::Orient` with the job's printer in place of the
+  Rotate handover; instructions.md tells the LLM to ask which printer, and to use the standard one
+  when the user does not say or will not.
+Done when: the cuboid test of R6a passes with the trial (printout present on the chosen pose); an
+  unknown printer id → `ApplyError::NoPrinter(id)`; the window with no printer and the edit choose the
+  same pose for the same body (a link test); MCP test: a search pose is asked as `Orient`.
+Not now: a printer stored in the document.
+
+### D1. Design: the CLI on the Document (R6d)
+Who: the orchestrator, or one implementer run on Opus. No code.
+Read: `docs/design/{document.md,recipes.md}`, `docs/cli.md`, `crates/encrust-cli/src/{stage.rs,pipeline.rs,plate_edits.rs}`,
+  `crates/encrust-cli/src/recipe/{plate.rs,piece.rs}`
+Touch: new `docs/decisions/0472-the-command-line-runs-on-the-document.md` (draft), `docs/decisions/README.md`,
+  new `docs/design/cli-on-document.md`
+Write: the page, sized so an implementer can follow it:
+  1. The run: stage models into a `Document` (ids as the window gives them) → each shaping flag
+     folds to an `Edit` in the window's order (repair, modelling, orient, hollow, drains / channels /
+     plugs, supports, arrange) → `apply` each → `into_project` → slice and write as today. A plain
+     slice changes no byte.
+  2. A table, every flag of `docs/cli.md`: its edit; or the front end's (printer, resin, exposure,
+     drift off the plug gap, usable area from the inset, a user-folder support profile written as a
+     plate group first); or a steer (check, gate, pause, save).
+  3. The window's way for each CLI difference: 2 no lift by the profile, supports grow where it
+     stands; 8 orient on shell + cuts + vents (trial: the user's decision); 10 `--orient-pick` from 1
+     or 0; 11-13 arrange after supports with their footprint over the usable area, a no-fit an
+     info with what was left out; 16-17 drain and channel points in plate mm where the object
+     stands, the search with no planned lift; 19 gap − drift and P6's spot; 22 re-hollow as the
+     window does, flags overriding a recipe step's keys, gate and pause as now.
+  4. The recipe executor: plate steps through `edits_of` + `apply` on the run's Document, per
+     model; Check, Save, Gate, Pause stay steps; retries and readings unchanged.
+  5. What is deleted (`stage.rs` put-down, `pipeline.rs`, `hollowing*`, `supports.rs`, `stage/room.rs`
+     spread, `recipe/{steps,plate,piece,drain}.rs` parts) and what stays (slice, write, measure,
+     estimate, batch).
+  6. The card split below, corrected, each ≤ ~10 files, each with its closed-form test and the one
+     cross-check: the flags and the same edits through `--edits` give the same `.encrust`.
+  7. Open points for the user.
+  ADR 0472: the decision (the CLI's model pipeline is the Document's; ADR 0466's phase 5), the
+  options weighed (keep the pipeline and patch each difference / one executor), consequences.
+Done when: the user has read both; R6d1-8 below are rewritten in full from the page.
+Not now: code.
+
+### R6d1-8 — sketched; to be written in full after the design card (D1)
+- R6d1 Stage into a `Document` and slice from it; no shaping flag yet; a plain slice's bytes equal.
+- R6d2 Modelling flags (`--cut`, `--split`, `--part-off`, `--label`, `--combine`, `--relief`,
+  `--repair`, mends) as edits.
+- R6d3 Orient flags as `Edit::Orient` (P4, P5; pick base and trial per D1).
+- R6d4 Hollow, `--drain-at`, `--channel`, `--drain-plugs` as edits: no lift before drains, points in
+  plate mm where the object stands, the gap final (flag − drift), plugs at P6's spot.
+- R6d5 Supports flags as `Edit::Supports`: no lift by the profile; catalogue and user profiles as
+  plate groups first (P3).
+- R6d6 Arrange after supports, their footprint, the printer's usable area; no-fit an info.
+- R6d7 The recipe executor's plate steps through `edits_of` + `apply`; flags override keys.
+- R6d8 Delete the old pipeline; `docs/cli.md`, `docs/features.md`, `docs/architecture.md`.
+
+## Status (2026-11-20)
+Done, uncommitted: F1–F3, B1a, B1b, B2, B3, P1–P8 (tests, clippy, hygiene, arch green); D1's page
+`docs/design/cli-on-document.md` and ADR 0472 drafted. The user took every recommendation (2026-11-21):
+the page's "Decided" section; R6d1 done (unshaped models staged as a `Document`). Next: R6d2.
+
+### Decided by the user (2026-11-19)
+- The orient trial runs everywhere: with no printer named, on the standard printer (card P8).
+- `--orient-pick` keeps counting from 1; the CLI subtracts 1 into the edit's `pick` (D1).

@@ -3,6 +3,10 @@ use crate::recipe::{Cut, Drains, Hollow, Supports};
 
 const MODEL: ObjectId = ObjectId(3);
 
+fn asked_edits(recipe: &Recipe, earlier: &Recipe, object: ObjectId) -> Option<Vec<Edit>> {
+    asked_after_check(recipe, earlier, object, (None, None, None))
+}
+
 fn bare() -> Recipe {
     Recipe::bare("/m/cube.stl".into(), "p".into(), "r".into())
 }
@@ -134,8 +138,8 @@ fn a_drain_search_with_channels_and_plugs_is_a_drain_a_channel_each_and_plugs() 
         }),
         ..bare()
     };
-    let asked =
-        asked_edits(&recipe, &bare(), MODEL).expect("a search, a channel and plugs are edits");
+    let asked = asked_after_check(&recipe, &bare(), MODEL, (None, Some(0.0), None))
+        .expect("a search, a channel and plugs are edits");
     assert!(
         matches!(
             asked.as_slice(),
@@ -205,24 +209,103 @@ fn supports_by_a_preset_or_sized_automatically_are_an_edit() {
     }
 }
 
+fn searching(pick: Option<u16>, keep_clear_at_mm: Vec<[f32; 3]>) -> Pose {
+    Pose::Search {
+        goal: crate::recipe::Goal::LeastPeel,
+        max_tilt_deg: Some(30.0),
+        pick,
+        keep_clear_at_mm,
+        keep_clear_radius_mm: None,
+        keep_clear_seen_deg: None,
+    }
+}
+
 #[test]
-fn a_pose_the_search_picked_is_the_turn_its_check_chose_and_nothing_before_the_check() {
+fn a_pose_the_search_picked_is_an_orient_proved_on_the_jobs_printer_and_resin() {
     let recipe = Recipe {
-        pose: Some(Pose::Search {
-            goal: crate::recipe::Goal::Auto,
-            max_tilt_deg: None,
-            pick: None,
-            keep_clear_at_mm: Vec::new(),
-            keep_clear_radius_mm: None,
-            keep_clear_seen_deg: None,
+        pose: Some(searching(Some(2), Vec::new())),
+        ..bare()
+    };
+
+    let area = Some(([5.0, 3.0], [200.0, 120.0]));
+    let asked = asked_after_check(&recipe, &bare(), MODEL, (None, None, area))
+        .expect("a search is an edit");
+
+    assert_eq!(
+        asked,
+        vec![Edit::Orient {
+            object: MODEL,
+            goal: OrientAim::LeastPeel,
+            max_tilt_deg: Some(30.0),
+            clean_surface: false,
+            pick: 1,
+            plate_mm: Some([200.0, 120.0]),
+            low_mm: [5.0, 3.0],
+            printer: Some("p".to_owned()),
+            resin: Some("r".to_owned()),
+        }]
+    );
+}
+
+#[test]
+fn a_search_keeping_a_place_clear_or_on_a_printer_file_is_the_turn_its_check_chose() {
+    let keeping = Recipe {
+        pose: Some(searching(None, vec![[1.0, 2.0, 3.0]])),
+        ..bare()
+    };
+    let by_file = Recipe {
+        printer: "/m/printer.toml".into(),
+        pose: Some(searching(None, Vec::new())),
+        ..bare()
+    };
+    for recipe in [keeping, by_file] {
+        assert_eq!(asked_edits(&recipe, &bare(), MODEL), None);
+        let asked = asked_after_check(
+            &recipe,
+            &bare(),
+            MODEL,
+            (Some([90.0, 0.0, 0.0]), None, None),
+        )
+        .expect("the turn chosen is an edit");
+        assert!(
+            matches!(asked.as_slice(), [Edit::Rotate { degrees, .. }] if (degrees.x - 90.0).abs() < 1e-6),
+            "{asked:?}"
+        );
+    }
+}
+
+#[test]
+fn a_plug_gap_is_the_typed_gap_less_the_resins_fit_drift() {
+    let drains = |plug_gap_mm| Recipe {
+        drains: Some(Drains {
+            diameter_mm: 3.0,
+            at_mm: vec![[1.0, 2.0, 3.0]],
+            plugs: true,
+            plug_gap_mm,
+            ..Drains::default()
         }),
         ..bare()
     };
-    assert_eq!(asked_edits(&recipe, &bare(), MODEL), None);
-    let asked = asked_after_check(&recipe, &bare(), MODEL, Some([90.0, 0.0, 0.0]))
-        .expect("the turn chosen is an edit");
+    let gap_of = |recipe: &Recipe| {
+        let asked = asked_after_check(recipe, &bare(), MODEL, (None, Some(0.05), None))
+            .expect("holes and plugs are edits");
+        match asked.last() {
+            Some(Edit::Plugs { gap_mm, .. }) => *gap_mm,
+            other => panic!("plugs last, got {other:?}"),
+        }
+    };
+
     assert!(
-        matches!(asked.as_slice(), [Edit::Rotate { degrees, .. }] if (degrees.x - 90.0).abs() < 1e-6),
-        "{asked:?}"
+        (gap_of(&drains(Some(0.2))) - 0.15).abs() < 1e-6,
+        "0.2 less 0.05"
+    );
+    assert!(
+        (gap_of(&drains(None)) - 0.10).abs() < 1e-6,
+        "0.15 less 0.05"
+    );
+    assert_eq!(
+        asked_after_check(&drains(None), &bare(), MODEL, (None, None, None)),
+        None,
+        "without the resin's drift a plug is no edit"
     );
 }

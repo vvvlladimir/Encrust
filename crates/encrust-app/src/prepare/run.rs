@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 
 use anyhow::Result;
 use core_recipe::{Decision, Metric, OnFail, Plan, StepKind, decide};
+use core_volume::HoleSize;
 
 use super::step::Going;
 use super::work::{Batch, CheckFixes, NotYet, Settings, Work};
@@ -29,7 +30,7 @@ pub(super) enum Next {
 }
 
 /// What a step decided for the run's models.
-enum Decided {
+pub(super) enum Decided {
     Batches(Vec<Batch>),
     Stop(Status),
     /// Wait for Continue, saying this.
@@ -49,6 +50,7 @@ impl Run {
             step: Step::Orient,
             measured: Vec::new(),
             supported: Vec::new(),
+            holes: Vec::new(),
             built: Vec::new(),
             unplugged: Vec::new(),
             answers: Vec::new(),
@@ -234,7 +236,7 @@ impl Run {
     }
 
     /// Decides the next plan step for each model of the run.
-    fn decide_next(&mut self, scene: &Scene, plate: &BuildPlate) -> Result<Decided> {
+    pub(super) fn decide_next(&mut self, scene: &Scene, plate: &BuildPlate) -> Result<Decided> {
         let index = self.next;
         self.index = index;
         self.next += 1;
@@ -257,9 +259,26 @@ impl Run {
             }
         }
         match batches(kind, runs) {
-            Ok(batches) => Ok(Decided::Batches(batches)),
+            Ok(batches) => {
+                for batch in &batches {
+                    if let Some(size) = batch.work.hole() {
+                        self.holes.retain(|(owner, _)| !batch.ids.contains(owner));
+                        self.holes.extend(batch.ids.iter().map(|id| (*id, size)));
+                    }
+                }
+                Ok(Decided::Batches(batches))
+            }
             Err(not) => Ok(Decided::Stop(not_yet(not))),
         }
+    }
+
+    /// The widest hole a drain step drills in any of `ids`, else the default.
+    pub(super) fn widest_hole(&self, ids: &[ObjectId]) -> HoleSize {
+        let held = self.holes.iter().filter(|(owner, _)| ids.contains(owner));
+        let widest = held.map(|(_, size)| *size);
+        widest
+            .max_by(|a, b| a.diameter_mm.total_cmp(&b.diameter_mm))
+            .unwrap_or_default()
     }
 
     /// Ends the batch in hand, and the step with it once it has no batch left.

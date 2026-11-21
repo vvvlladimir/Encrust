@@ -5,9 +5,12 @@ use std::sync::Arc;
 
 use core_engine::project::HollowState;
 use core_geometry::{Transform, Vec3, cuboid, diagnose, signed_volume, transform_mesh};
+use core_volume::HoleSize;
 
 use super::*;
 use crate::scene::{ImportSummary, Imported, ObjectId};
+use crate::supports::SupportGroup;
+use printer_profiles::SupportProfile;
 
 /// A 10 mm cube standing on the plate, recorded as the plate's first edit.
 fn with_cube(bench: &mut Bench) -> ObjectId {
@@ -234,6 +237,83 @@ fn a_drain_drills_a_hole_into_the_cube_at_once_and_keeps_its_id() {
 }
 
 #[test]
+fn a_drain_on_a_scaled_cube_drills_a_hole_of_the_size_asked_on_the_plate() {
+    let file = scratch("drain-scaled");
+    let mut bench = Bench::new(file.clone());
+    let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    let summary = ImportSummary::made(diagnose(&mesh));
+    let scaled = Transform {
+        scale: Vec3::splat(2.0),
+        ..Transform::default()
+    };
+    let cube = bench.doc.scene.insert(Imported::new(
+        "cube".into(),
+        Arc::new(mesh),
+        scaled,
+        summary,
+    ));
+    bench.run_to_end();
+    let version = bench.doc.history.plate_version();
+    let size = HoleSize {
+        diameter_mm: 3.0,
+        ..HoleSize::default()
+    };
+    let drain = json!({"base_version": version,
+        "apply": [{"edit": "drain", "object": cube.0, "size": size,
+                   "at_mm": [[10.0, 10.0, 20.0]]}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, drain));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("a drain keeps the id");
+    let [hole] = object.hollow.drains() else {
+        panic!("one hole in the cube, got {:?}", object.hollow.drains());
+    };
+    let on_plate_mm = hole.diameter_mm * object.transform.least_scale();
+    assert!(
+        (on_plate_mm - 3.0).abs() < 1e-4,
+        "the hole measures 3 mm on the plate, got {on_plate_mm}"
+    );
+}
+
+#[test]
+fn a_drain_takes_away_the_supports_it_drills_out_and_leaves_the_rest() {
+    let file = scratch("drain-supports");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let stood = json!({"base_version": version,
+        "apply": [{"edit": "move", "object": cube.0, "by_mm": [0.0, 0.0, 5.0]},
+                  {"edit": "supports", "object": cube.0, "profile": "medium",
+                   "at_mm": [[5.0, 5.0, 4.0], [1.0, 1.0, 4.0]], "only_at": true}]});
+    bench.hand_over_running(&file, asking(&file, stood));
+    bench.run_to_end();
+    let version = bench.doc.history.plate_version();
+    let size = HoleSize {
+        diameter_mm: 3.0,
+        ..HoleSize::default()
+    };
+    let drain = json!({"base_version": version,
+        "apply": [{"edit": "drain", "object": cube.0, "size": size,
+                   "at_mm": [[5.0, 5.0, 5.0]]}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, drain));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("a drain keeps the id");
+    let contacts = object.supports.contacts(object.transform);
+    let [contact] = contacts[..] else {
+        panic!("one of two contacts is left, got {contacts:?}");
+    };
+    assert!(
+        contact.x < 2.0,
+        "the contact at (1, 1) stays, got {contact}"
+    );
+}
+
+#[test]
 fn an_auto_drain_searches_a_hollow_cube_and_keeps_the_id() {
     let file = scratch("drain-auto");
     let mut bench = Bench::new(file.clone());
@@ -314,6 +394,44 @@ fn plugs_for_two_holes_stand_as_two_objects_naming_the_cube() {
     assert_eq!(laid, 2, "a plug for each hole");
 }
 
+/// How wide, mm, the plug laid for a 3 mm hole is when `gap_mm` is asked on a resin whose fit
+/// drifts by `drift_mm`.
+fn plug_width_mm(gap_mm: f32, drift_mm: f32) -> f32 {
+    let file = scratch("plug-gap");
+    let mut bench = Bench::new(file.clone());
+    let compensation = &mut bench.machine.slicing.material.compensation;
+    compensation.tolerance_on = false;
+    compensation.hole_offset_mm = drift_mm;
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let plugs = json!({"base_version": version,
+        "apply": [{"edit": "drain", "object": cube.0, "at_mm": [[5.0, 5.0, 10.5]]},
+                  {"edit": "plugs", "object": cube.0, "gap_mm": gap_mm}]});
+    let reply = bench.hand_over_running(&file, asking(&file, plugs));
+    bench.run_to_end();
+    assert_eq!(reply["applied"], true, "{reply}");
+    let plug = (bench.doc.scene.objects().iter())
+        .find(|object| object.plug_of == Some(cube))
+        .expect("a plug for the hole");
+    let bounds = plug.world_bounds().expect("a plug has faces");
+    bounds.maxs.x - bounds.mins.x
+}
+
+#[test]
+fn a_plug_gap_is_the_final_gap_whatever_the_resin_drifts_by() {
+    let drifted = plug_width_mm(0.1, 0.05);
+    let plain = plug_width_mm(0.1, 0.0);
+
+    assert!(
+        (drifted - plain).abs() < 1e-3,
+        "the same plug on either resin, got {drifted} and {plain}"
+    );
+    assert!(
+        (drifted - (3.0 - 2.0 * 0.1)).abs() < 0.02,
+        "3 mm less 2 gaps of 0.1 is 2.8 across, got {drifted}"
+    );
+}
+
 #[test]
 fn an_arrange_spreads_two_stacked_cubes_apart_on_the_plate_it_names() {
     let file = scratch("arrange");
@@ -343,6 +461,34 @@ fn an_arrange_spreads_two_stacked_cubes_apart_on_the_plate_it_names() {
         apart >= 2.0 - 1e-3,
         "the cubes keep 2 mm apart, got {apart}"
     );
+}
+
+#[test]
+fn an_arrange_keeps_every_model_inside_the_area_it_names() {
+    let file = scratch("arrange-area");
+    let mut bench = Bench::new(file.clone());
+    let ids = [with_cube(&mut bench), with_cube(&mut bench)];
+    let version = bench.doc.history.plate_version();
+    let spread = json!({"base_version": version,
+        "apply": [{"edit": "arrange", "low_mm": [60.0, 0.0],
+                   "plate_mm": [30.0, 90.0], "clearance_mm": 2.0}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, spread));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    for id in ids {
+        let at = bench.doc.scene.get(id).and_then(|o| o.world_bounds());
+        let at = at.expect("kept");
+        assert!(
+            at.mins.x >= 60.0 - 1e-3 && at.maxs.x <= 90.0 + 1e-3,
+            "x within 60..90, got {at:?}"
+        );
+        assert!(
+            at.mins.y >= -1e-3 && at.maxs.y <= 90.0 + 1e-3,
+            "y within 0..90, got {at:?}"
+        );
+    }
 }
 
 #[test]
@@ -411,6 +557,74 @@ fn auto_supports_stand_contacts_under_a_lifted_cube() {
             "every contact is at the underside, z 5 less the tip's 0.25 sink, got {contact}"
         );
     }
+}
+
+/// The contacts auto supports stand under a cube lifted 5 mm, on a machine printing at `layer_mm`.
+fn lifted_contacts_at(layer_mm: f32) -> Vec<Vec3> {
+    let file = scratch("supports-step");
+    let mut bench = Bench::new(file.clone());
+    bench.machine.slicing.material.layer_height_mm = layer_mm;
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let lifted = json!({"base_version": version,
+        "apply": [{"edit": "move", "object": cube.0, "by_mm": [0.0, 0.0, 5.0]},
+                  {"edit": "supports", "object": cube.0, "profile": "auto"}]});
+    bench.hand_over_running(&file, asking(&file, lifted));
+    bench.run_to_end();
+    let object = bench.doc.scene.get(cube).expect("supports keep the id");
+    object.supports.contacts(object.transform)
+}
+
+#[test]
+fn auto_supports_stand_the_same_contacts_whatever_layer_height_the_machine_prints_at() {
+    let coarse = lifted_contacts_at(0.1);
+    let fine = lifted_contacts_at(0.03);
+    assert!(!coarse.is_empty(), "the lifted cube is held up");
+    assert_eq!(coarse, fine, "analysis reads one step, not the machine's");
+}
+
+/// The contacts auto supports stand under a cube lifted 5 mm whose underside is painted shown
+/// when `painted`, the edit asking for a clean surface when `clean_surface`.
+fn lifted_contact_count(painted: bool, clean_surface: bool) -> usize {
+    let file = scratch("supports-clean");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    if painted {
+        let object = bench.doc.scene.get_mut(cube).expect("the cube stands");
+        let mesh = Arc::clone(&object.mesh);
+        for (at, face) in mesh.faces.iter().enumerate() {
+            if face
+                .iter()
+                .all(|vertex| mesh.vertices[*vertex as usize].z == 0.0)
+            {
+                object.shown_painted.set(at, true);
+            }
+        }
+    }
+    bench.run_to_end();
+    let version = bench.doc.history.plate_version();
+    let lifted = json!({"base_version": version,
+        "apply": [{"edit": "move", "object": cube.0, "by_mm": [0.0, 0.0, 5.0]},
+                  {"edit": "supports", "object": cube.0, "profile": "medium",
+                   "clean_surface": clean_surface}]});
+    let reply = bench.hand_over_running(&file, asking(&file, lifted));
+    bench.run_to_end();
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("supports keep the id");
+    object.supports.contacts(object.transform).len()
+}
+
+#[test]
+fn supports_read_the_painted_shown_side_only_when_the_edit_asks_for_a_clean_surface() {
+    let unpainted = lifted_contact_count(false, false);
+    let ignored = lifted_contact_count(true, false);
+    let read = lifted_contact_count(true, true);
+
+    assert_eq!(ignored, unpainted, "unread: {unpainted} contacts");
+    assert!(
+        read < unpainted,
+        "read: {read} contacts, fewer than {unpainted}"
+    );
 }
 
 #[test]
@@ -695,6 +909,51 @@ fn an_orient_lays_a_bar_standing_on_its_end_for_the_shortest_print_and_keeps_the
 }
 
 #[test]
+fn an_orient_with_no_printer_stands_the_bar_as_the_panel_does_on_the_standard_printer() {
+    let file = scratch("orient-panel");
+    let mut linked = Bench::new(file.clone());
+    let bar = with_bar(&mut linked);
+    let version = linked.doc.history.plate_version();
+    linked.hand_over_running(&file, asking(&file, orient_of(bar, version, 0)));
+    linked.run_to_end();
+    let mut panel = Bench::new(file.clone());
+    let same = with_bar(&mut panel);
+    panel.with_window(|window| crate::panels::auto_orient(window, Some(same)));
+    panel.run_to_end();
+
+    for bench in [&linked, &panel] {
+        assert!(
+            bench.tools.orient.proven_on().is_some(),
+            "a search with no printer chosen is proved on the standard one"
+        );
+    }
+    let turn = |bench: &Bench, id| bench.doc.scene.get(id).expect("the bar stands").transform;
+    let (linked, panel) = (turn(&linked, bar), turn(&panel, same));
+    assert!(
+        linked.rotation.angle_between(panel.rotation) < 1e-3,
+        "the link and the panel stand the bar alike, got {:?} and {:?}",
+        linked.rotation,
+        panel.rotation
+    );
+}
+
+#[test]
+fn an_orient_naming_a_printer_the_catalogue_lacks_is_answered_with_why() {
+    let file = scratch("orient-no-printer");
+    let mut bench = Bench::new(file.clone());
+    let bar = with_bar(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let ask = json!({"base_version": version,
+        "apply": [{"edit": "orient", "object": bar.0, "printer": "no-such-printer"}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, ask));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], false, "{reply}");
+    assert!(reply.to_string().contains("no-such-printer"), "{reply}");
+}
+
+#[test]
 fn an_orient_asking_for_a_pose_the_search_did_not_find_is_answered_with_why() {
     let file = scratch("orient-past");
     let mut bench = Bench::new(file.clone());
@@ -705,4 +964,44 @@ fn an_orient_asking_for_a_pose_the_search_did_not_find_is_answered_with_why() {
     bench.run_to_end();
 
     assert_eq!(reply["applied"], false, "{reply}");
+}
+
+#[test]
+fn supports_named_for_a_group_of_the_plate_stand_in_that_group_which_stays_in_hand() {
+    let file = scratch("supports-group");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
+    "mine".clone_into(&mut profile.name);
+    profile.contact_spacing_mm = 20.0;
+    profile.steep_contact_spacing_mm = 20.0;
+    let tool = &mut bench.tools.supports;
+    tool.groups.push(SupportGroup {
+        name: "mine".to_owned(),
+        profile,
+        hidden: false,
+    });
+    let version = bench.doc.history.plate_version();
+    let supports = json!({"base_version": version,
+        "apply": [{"edit": "move", "object": cube.0, "by_mm": [0.0, 0.0, 5.0]},
+                  {"edit": "supports", "object": cube.0, "profile": "mine",
+                   "at_mm": [[5.0, 5.0, 4.0]]}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, supports));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let tool = &bench.tools.supports;
+    assert_eq!(tool.groups[usize::from(tool.active)].name, "mine");
+    let object = bench.doc.scene.get(cube).expect("supports keep the id");
+    assert_eq!(
+        object.supports.points()[0].group,
+        tool.active,
+        "the point stands in the plate's group"
+    );
+    assert!(
+        object.supports.point_count() <= 2,
+        "built to the group's 20 mm spacing the 10 mm underside holds at most 2 contacts (medium stands 10), got {}",
+        object.supports.point_count()
+    );
 }

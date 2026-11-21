@@ -1,5 +1,6 @@
 use super::*;
 use crate::scene::ImportSummary;
+use crate::scene::fixtures::drained;
 use core_geometry::{Mesh, Orientation, Transform, diagnose};
 use std::sync::Arc;
 
@@ -337,9 +338,12 @@ fn drilled_block(scene: &mut Scene) -> ObjectId {
     let bvh = core_geometry::Bvh::build(&mesh);
     let size = core_volume::HoleSize::round(3.0, 5.0, 1.0);
     let top = Vec3::new(5.0, 5.0, 10.0);
-    object
-        .hollow
-        .add_drain(&mesh, &bvh, top, Vec3::Z, size, Transform::default());
+    drained(
+        &mut object.hollow,
+        (&mesh, &bvh, Transform::default()),
+        (top, Vec3::Z),
+        size,
+    );
     let cuts = Arc::clone(object.hollow.cut_bodies().expect("a hole is a cut"));
     let source = Arc::clone(object.uncut());
     let drilled = core_volume::Drilled::of(&source, None, &cuts).expect("a block drills");

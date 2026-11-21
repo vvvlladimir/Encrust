@@ -4,15 +4,19 @@ use std::sync::Arc;
 
 use core_edit::ObjectId;
 use core_engine::project::hollow_of;
-use core_geometry::{Bvh, Mesh, Scalar, transform_mesh};
+use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec2, transform_mesh};
+use core_plate::{ArrangeSettings, Rect, nearest_free};
 use core_volume::{
-    Cancel, DrainHole, ModelRead, Plugs, VolumeError, laid_beside, plug_wall_mm, plugs,
+    Cancel, DrainHole, ModelRead, PLUG_SPACING_MM, Plugs, VolumeError, laid_beside, plug_wall_mm,
+    plugs,
 };
 
 use crate::apply::{Applied, Report};
+use crate::arrange::{Standing, standing_rect};
 use crate::document::Document;
 use crate::error::ApplyError;
 use crate::piece::{Piece, Role};
+use crate::supports::standing_meshes;
 
 /// A plug for each of `holes`, as they are cut, out of the solid `mesh`: `wall_mm` long where
 /// there is a wall, `gap_mm` narrower a side.
@@ -34,12 +38,78 @@ pub fn plugs_cut(
     )
 }
 
-/// Lays a plug for each hole of object `id` in a row past its right-hand side, `gap_mm`
-/// narrower a side than the hole, in place of the plugs laid before.
+/// Moves each of `plugs`, numbered and in plate mm, to the nearest spot `PLUG_SPACING_MM`
+/// clear of `taken` and of one another, in the area `size_mm` across from its corner `low_mm`.
+/// Answers them moved and how many fit nowhere, left where they were.
+pub fn spaced_plugs(
+    plugs: impl IntoIterator<Item = (usize, Mesh)>,
+    taken: &[Rect],
+    (low_mm, size_mm): (Vec2, Vec2),
+) -> (Vec<(usize, Mesh)>, usize) {
+    let settings = ArrangeSettings {
+        clearance_mm: PLUG_SPACING_MM,
+        ..ArrangeSettings::default()
+    };
+    let mut taken: Vec<Rect> = taken
+        .iter()
+        .map(|rect| Rect {
+            min: rect.min - low_mm,
+            max: rect.max - low_mm,
+        })
+        .collect();
+    let mut crowded = 0;
+    let mut spaced = Vec::new();
+    for (number, plug) in plugs {
+        let Some(bounds) = plug.aabb() else {
+            continue;
+        };
+        let (min, max) = (
+            bounds.mins.truncate() - low_mm,
+            bounds.maxs.truncate() - low_mm,
+        );
+        let toward = (min + max) / 2.0;
+        let at = nearest_free(max - min, &taken, toward, size_mm, &settings).unwrap_or_else(|| {
+            crowded += 1;
+            toward
+        });
+        let shift = at - toward;
+        taken.push(Rect {
+            min: min + shift,
+            max: max + shift,
+        });
+        let moved = transform_mesh(&plug, Transform::from_translation(shift.extend(0.0)));
+        spaced.push((number, moved));
+    }
+    (spaced, crowded)
+}
+
+/// What each printable object of the active plate covers with its supports and raft.
+fn footprints(document: &Document) -> Vec<Rect> {
+    let mut covered = Vec::new();
+    for id in document.printable() {
+        let Some((state, meshes)) = document.object(id) else {
+            continue;
+        };
+        let supports = standing_meshes(document, id);
+        let standing = Standing {
+            mesh: meshes.printed(),
+            transform: state.transform,
+            supports: supports.iter().map(|mesh| &**mesh).collect(),
+            moved: Transform::default(),
+        };
+        covered.extend(standing_rect(&standing));
+    }
+    covered
+}
+
+/// Lays a plug for each hole of object `id`, `gap_mm` narrower a side than the hole, in place
+/// of the plugs laid before: in a row past its right-hand side, or with an `area_mm` (its
+/// corner and size) each at the nearest spot clear of the plate.
 pub(crate) fn apply_plugs(
     document: &mut Document,
     id: ObjectId,
     gap_mm: Scalar,
+    area_mm: Option<([Scalar; 2], [Scalar; 2])>,
     cancel: Cancel<'_>,
 ) -> Result<Applied, ApplyError> {
     let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
@@ -67,12 +137,23 @@ pub(crate) fn apply_plugs(
         .filter(|(_, plug)| !plug.is_empty())
         .map(|(number, _)| number);
     let laid = laid_beside(&made.meshes, holes, transform, beside);
-    let pieces: Vec<Piece> = numbers
-        .zip(laid)
+    let numbered: Vec<(usize, Mesh)> = numbers.zip(laid).collect();
+    let (removed, _) = document
+        .lay_plugs(id, Vec::new())
+        .ok_or(ApplyError::NoObject(id))?;
+    let (numbered, crowded) = match area_mm {
+        Some((low_mm, size_mm)) => {
+            let area = (Vec2::from_array(low_mm), Vec2::from_array(size_mm));
+            spaced_plugs(numbered, &footprints(document), area)
+        }
+        None => (numbered, 0),
+    };
+    let pieces: Vec<Piece> = numbered
+        .into_iter()
         .map(|(number, mesh)| Piece::sound(Role::Plug(number), mesh))
         .collect();
     let plugs = pieces.len();
-    let (removed, added) = document
+    let (_, added) = document
         .lay_plugs(id, pieces)
         .ok_or(ApplyError::NoObject(id))?;
     Ok(Applied {
@@ -81,6 +162,7 @@ pub(crate) fn apply_plugs(
         report: Report::Plugged {
             plugs,
             closed: made.closed,
+            crowded,
         },
     })
 }

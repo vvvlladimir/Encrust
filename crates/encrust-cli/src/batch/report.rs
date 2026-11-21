@@ -191,6 +191,8 @@ pub struct Slicing {
     /// Each of those pockets, located.
     pub trapped: Vec<TrappedAt>,
     pub open_contours: usize,
+    /// How much wider a hole-and-part fit prints with the run's resin, mm a side.
+    pub fit_drift_mm: Scalar,
 }
 
 /// What the written masks cure, and the layers that pull hardest on the film. Layers
@@ -327,6 +329,7 @@ impl Slicing {
                 .max(0.0),
             trapped: slice.trapped().iter().map(TrappedAt::from).collect(),
             open_contours: slice.open_contours(),
+            fit_drift_mm: slice.fit_drift_mm,
         }
     }
 }
@@ -540,6 +543,7 @@ mod tests {
                 trapped_mm3: 0.0,
                 trapped: Vec::new(),
                 open_contours: 0,
+                fit_drift_mm: 0.0,
             }),
             cured: Some(Cured {
                 resin_mm3,

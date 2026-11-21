@@ -211,7 +211,7 @@ fn on_supports(name: &str) -> SlicerApp {
     let window = &mut app.window();
     let started = window.tools.supports.start(
         &mut window.doc.scene,
-        window.machine.slicing.layer_height_mm(),
+        core_engine::ANALYSIS_LAYER_MM,
         &window.machine.slicing.catalogue,
         (crate::supports::Side::Outside, false),
     );

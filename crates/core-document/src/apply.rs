@@ -11,7 +11,7 @@ use crate::drain::apply_drains;
 use crate::error::ApplyError;
 use crate::hollow::apply_hollow;
 use crate::label::{LabelAsked, apply_label};
-use crate::orient::apply_orient;
+use crate::orient::{OrientAsked, apply_orient};
 use crate::piece::Role;
 use crate::placement::{moved, sized_to, turned_to};
 use crate::plate_contents::{delete, duplicate, mirrored};
@@ -100,6 +100,8 @@ pub enum Report {
         plugs: usize,
         /// Holes the gap closed at the mouth, which got none.
         closed: usize,
+        /// Plugs that fit nowhere on the plate, left where they were laid.
+        crowded: usize,
     },
     /// Supports were stood under an object.
     Supported {
@@ -186,18 +188,13 @@ pub fn apply(
             apply_supports(document, object, &asked, cancel)
         }
         Edit::Arrange {
+            low_mm,
             plate_mm,
             clearance_mm,
-        } => apply_arrange(document, plate_mm, clearance_mm),
-        Edit::Orient {
-            object,
-            goal,
-            max_tilt_deg,
-            clean_surface,
-            pick,
-        } => {
-            let asked = (goal, max_tilt_deg, clean_surface, pick);
-            apply_orient(document, object, asked, cancel)
+        } => apply_arrange(document, (low_mm, plate_mm), clearance_mm),
+        Edit::Orient { object, .. } => {
+            let asked = OrientAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
+            apply_orient(document, object, &asked, cancel)
         }
         Edit::Move { object, .. }
         | Edit::Rotate { object, .. }

@@ -63,8 +63,8 @@ pub use split::{split, split_at_edges};
 pub use surface_path::{SurfacePath, SurfacePathError, SurfacePoint, WalkWatch, surface_path};
 pub use topology::{Adjacency, Components};
 pub use transform::{
-    Transform, center_over_plate, drop_to_plate, lift_over_plate, placed_aabb, smallest_scale,
-    transform_mesh,
+    Transform, center_over_plate, drop_to_plate, lift_over_plate, normal_matrix_of, placed_aabb,
+    smallest_scale, transform_mesh,
 };
 pub use triangle::Triangle;
 pub use triangulate::triangulate;

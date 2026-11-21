@@ -47,6 +47,35 @@ fn only_the_supports_placed_by_hand_stand_under_the_model() {
 }
 
 #[test]
+fn automatic_supports_stand_the_same_contacts_whatever_layer_height_is_asked() {
+    let contacts = |layer_height: &str| {
+        let path = write_leaning_box_stl("supports-step", 16.0, 6.0, 12, 0);
+        let panel = test_panel();
+        let output = estimate(&[
+            path.to_str().unwrap(),
+            "--profile",
+            panel.to_str().unwrap(),
+            "--layer-height",
+            layer_height,
+            "--supports",
+            "medium",
+            "--json",
+        ]);
+        assert!(output.status.success(), "{}", stderr(&output));
+        json(&output)["models"][0]["supports"]["contacts_at_mm"].clone()
+    };
+    let (coarse, fine) = (contacts("0.1"), contacts("0.03"));
+    assert!(
+        coarse.as_array().is_some_and(|at| !at.is_empty()),
+        "the overhang is held up: {coarse}"
+    );
+    assert_eq!(
+        coarse, fine,
+        "contacts stand where one analysis step puts them, not the layer height"
+    );
+}
+
+#[test]
 fn a_support_placed_by_hand_with_no_profile_is_refused() {
     let path = write_box_stl("by-hand-no-profile", 16.0, 12, 0);
     let output = estimate(&[

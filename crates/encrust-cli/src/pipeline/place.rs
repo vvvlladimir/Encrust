@@ -4,7 +4,7 @@ use crate::pipeline::Watch;
 use crate::profiles::Chosen;
 use crate::progress::bar;
 use anyhow::{Context, Result};
-use core_document::{degrees_of, euler_degrees, supported_settings};
+use core_document::{default_plan, degrees_of, euler_degrees, supported_settings};
 use core_engine::{
     ByHand, Choice, EngineError, KeepClear, Printout, SupportPlan, Trial, orient_for_print,
 };
@@ -15,7 +15,9 @@ use core_geometry::{
 use core_plate::{
     Asked, OrientPreset, OrientSettings, Phase, PlateError, Printed, Watch as OrientWatch,
 };
-use printer_profiles::{PrinterProfile, SupportProfile};
+use printer_profiles::{
+    Catalogue, MaterialProfile, PrinterProfile, SupportProfile, standard_machine,
+};
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 /// The turn auto-orientation applied, and why it chose it.
@@ -169,31 +171,34 @@ pub(crate) fn orientation(
     chosen: &Chosen,
     watch: &Watch,
 ) -> Result<OrientSummary> {
-    let profile = chosen.printer.as_ref();
+    let (profile, material) = trial_machine(chosen)?;
+    let stock = default_plan();
+    let plan = supports.unwrap_or(&stock);
     let settings = OrientSettings {
         preset: asked.preset,
         clean_surface: asked.clean_surface,
         max_tilt_deg,
-        build_volume_mm: profile
-            .map(|p| Vec3::new(p.build_volume.x, p.build_volume.y, p.build_volume.z)),
-        ..orient_settings(supports.map(SupportPlan::placing).as_ref())
+        build_volume_mm: Some(Vec3::new(
+            profile.build_volume.x,
+            profile.build_volume.y,
+            profile.build_volume.z,
+        )),
+        ..orient_settings(Some(&plan.placing()))
     };
     // Points given by hand stand where the chosen pose puts them, so no trial pose takes them.
-    let unhanded = supports.map(|plan| SupportPlan {
+    let unhanded = SupportPlan {
         by_hand: ByHand::default(),
         shown_at: Vec::new(),
         ..plan.clone()
-    });
-    let keep_clear = keep_clear(mesh, transform, profile);
-    let trial = profile
-        .zip(unhanded.as_ref())
-        .map(|(printer, support)| Trial {
-            printer,
-            material: &chosen.material,
-            support,
-            raster_window: rayon::current_num_threads(),
-            keep_clear: keep_clear.as_ref(),
-        });
+    };
+    let keep_clear = keep_clear(mesh, transform, chosen.printer.as_ref());
+    let trial = Trial {
+        printer: &profile,
+        material: &material,
+        support: &unhanded,
+        raster_window: rayon::current_num_threads(),
+        keep_clear: keep_clear.as_ref(),
+    };
     let progress = watch.progress.then(|| bar("% of the orientation search"));
     if let Some(progress) = &progress {
         progress.set_length(100);
@@ -211,7 +216,7 @@ pub(crate) fn orientation(
     let searched = orient_for_print(
         &Printed::solid(mesh),
         &settings,
-        trial.as_ref(),
+        Some(&trial),
         OrientWatch::by(&told),
     );
     if let Some(progress) = &progress {
@@ -237,6 +242,15 @@ pub(crate) fn orientation(
         on_plate: supports.is_some() && found.oriented.on_plate,
         choices: ranked.iter().take(shown).map(OrientChoice::of).collect(),
     })
+}
+
+/// The machine the poses are proved on: the chosen printer and resin, else the standard ones.
+fn trial_machine(chosen: &Chosen) -> Result<(PrinterProfile, MaterialProfile)> {
+    if let Some(printer) = &chosen.printer {
+        return Ok((printer.clone(), chosen.material.clone()));
+    }
+    let catalogue = Catalogue::bundled().context("cannot read the shipped catalogue")?;
+    standard_machine(&catalogue).context("cannot find the standard printer")
 }
 
 /// The `--orient-keep-clear` points taken back into `mesh`'s own frame, from the turn they were
@@ -306,4 +320,39 @@ pub(super) fn centred(mesh: Mesh, profile: Option<&PrinterProfile>) -> Result<Me
         return Ok(mesh);
     }
     Ok(transform_mesh(&mesh, Transform::from_translation(offset)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unchosen() -> Chosen {
+        Chosen {
+            printer: None,
+            material: MaterialProfile::default(),
+            invented_exposure: false,
+        }
+    }
+
+    #[test]
+    fn no_printer_named_proves_on_the_standard_printer() {
+        let (printer, _) = trial_machine(&unchosen()).expect("the standard printer ships");
+
+        let catalogue = Catalogue::bundled().expect("the shipped catalogue reads");
+        let standard = &catalogue
+            .printer(printer_profiles::STANDARD_PRINTER)
+            .expect("the standard printer ships")
+            .profile;
+        assert_eq!(printer.name, standard.name);
+    }
+
+    #[test]
+    fn a_printer_named_is_the_one_proved_on() {
+        let mut named = unchosen();
+        named.printer = Some(PrinterProfile::default());
+
+        let (printer, _) = trial_machine(&named).expect("a chosen printer needs no lookup");
+
+        assert_eq!(printer.name, PrinterProfile::default().name);
+    }
 }

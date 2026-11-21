@@ -17,13 +17,16 @@ use crate::resolved::{ResolvedSettings, flag, number, points, text};
 pub struct NotAnEdit(pub StepKind);
 
 /// The edits step `kind` makes of `object` with `settings`, a key left out taking its default.
-/// `placed` and `plate_mm` are the object's box and the plate's size, in plate mm.
+/// `placed` is the object's box in plate mm; `area_mm` is the usable area of the plate, its
+/// corner and its size; `plug_drift_mm` is what the resin's fit drifts by, which a plug gap
+/// written here has taken off, so the gap in the edit is the final one.
 pub fn edits_of(
     kind: StepKind,
     settings: &ResolvedSettings,
     object: ObjectId,
     placed: Aabb,
-    plate_mm: [Scalar; 2],
+    area_mm: ([Scalar; 2], [Scalar; 2]),
+    plug_drift_mm: Scalar,
 ) -> Result<Vec<Edit>, NotAnEdit> {
     Ok(match kind {
         StepKind::Repair => vec![Edit::Repair {
@@ -36,12 +39,16 @@ pub fn edits_of(
             max_tilt_deg: number(settings, "max_tilt_deg"),
             clean_surface: flag(settings, "clean_surface").unwrap_or(false),
             pick: 0,
+            plate_mm: Some(area_mm.1),
+            low_mm: area_mm.0,
+            printer: None,
+            resin: None,
         }],
         StepKind::Hollow => vec![Edit::Hollow {
             object,
             settings: hollow_of(settings),
         }],
-        StepKind::Drain => drain_of(settings, object, placed),
+        StepKind::Drain => drain_of(settings, (object, placed), (area_mm, plug_drift_mm)),
         StepKind::Supports => vec![Edit::Supports {
             object,
             profile: Some(text(settings, "profile").unwrap_or(AUTO).to_owned()),
@@ -49,6 +56,7 @@ pub fn edits_of(
             only_at: false,
             cavity: flag(settings, "cavity").unwrap_or(false),
             shown_at: Vec::new(),
+            clean_surface: false,
         }],
         // Sliding clear only what is in the way is the window's, with no edit yet.
         StepKind::Arrange => {
@@ -56,7 +64,9 @@ pub fn edits_of(
             if only_in_the_way {
                 return Err(NotAnEdit(kind));
             }
+            let (low_mm, plate_mm) = area_mm;
             vec![Edit::Arrange {
+                low_mm,
                 plate_mm,
                 clearance_mm,
             }]
@@ -101,7 +111,11 @@ fn hollow_of(settings: &ResolvedSettings) -> HollowState {
     }
 }
 
-fn drain_of(settings: &ResolvedSettings, object: ObjectId, placed: Aabb) -> Vec<Edit> {
+fn drain_of(
+    settings: &ResolvedSettings,
+    (object, placed): (ObjectId, Aabb),
+    (area_mm, plug_drift_mm): (([Scalar; 2], [Scalar; 2]), Scalar),
+) -> Vec<Edit> {
     let default = HoleSize::default();
     let size = HoleSize {
         diameter_mm: number(settings, "diameter_mm").unwrap_or(default.diameter_mm),
@@ -120,7 +134,7 @@ fn drain_of(settings: &ResolvedSettings, object: ObjectId, placed: Aabb) -> Vec<
             Vec::new()
         },
         size,
-        kind: HoleKind::default(),
+        kind: HoleKind::AtDepth,
         auto: !by_points,
         vent: !by_points && flag(settings, "vent").unwrap_or(true),
     };
@@ -130,7 +144,9 @@ fn drain_of(settings: &ResolvedSettings, object: ObjectId, placed: Aabb) -> Vec<
     if plugs {
         edits.push(Edit::Plugs {
             object,
-            gap_mm: PLUG_GAP_MM,
+            gap_mm: PLUG_GAP_MM - plug_drift_mm,
+            plate_mm: Some(area_mm.1),
+            low_mm: area_mm.0,
         });
     }
     edits

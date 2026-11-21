@@ -4,9 +4,10 @@
 use core_document::{ApplyError, preset_of};
 use core_edit::{Edit, ObjectId};
 use core_plate::Asked;
+use printer_profiles::{ProfileError, machine_named};
 
 use super::no_object;
-use crate::orient::Turning;
+use crate::orient::{Turning, proof_machine};
 use crate::panels::Window;
 
 /// Starts the Orient search on `object` alone and answers it; [`stand_pick`] stands the pose
@@ -17,6 +18,8 @@ pub(super) fn start_orient(window: &mut Window, edit: &Edit) -> Result<Option<Ob
         goal,
         max_tilt_deg,
         clean_surface,
+        ref printer,
+        ref resin,
         ..
     } = edit
     else {
@@ -33,14 +36,31 @@ pub(super) fn start_orient(window: &mut Window, edit: &Edit) -> Result<Option<Ob
     };
     let catalogue = &window.machine.slicing.catalogue;
     let plans = (window.tools.supports.orient_plans(catalogue)).map_err(|e| format!("{e:#}"))?;
+    let named = printer.is_some() || resin.is_some();
+    let proof = if named {
+        let (printer, resin) = (printer.as_deref(), resin.as_deref());
+        machine_named(catalogue, printer, resin).map_err(unlisted)?
+    } else {
+        proof_machine(&window.machine.slicing).ok_or("no printer to prove the poses on")?
+    };
+    let machine = Some((&proof.0, &proof.1));
     let tool = &mut window.tools.orient;
     tool.forget();
     let asked = (wanted, max_tilt_deg, plans);
-    let started = tool.start_on(&window.doc.scene, &[object], asked, None);
+    let started = tool.start_on(&window.doc.scene, &[object], asked, machine);
     if let Turning::Search(job) = started.map_err(|e| format!("{e:#}"))? {
         tool.job = Some(job);
     }
     Ok(Some(object))
+}
+
+/// What the link answers for a printer or resin the catalogue does not list.
+fn unlisted(error: ProfileError) -> String {
+    match error {
+        ProfileError::Unknown { kind: "resin", id } => ApplyError::NoResin(id).to_string(),
+        ProfileError::Unknown { id, .. } => ApplyError::NoPrinter(id).to_string(),
+        other => format!("{other:#}"),
+    }
 }
 
 /// Stands `object` the `pick`th of every pose the landed search ranked, from 0; a search that

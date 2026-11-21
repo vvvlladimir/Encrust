@@ -16,6 +16,8 @@ use crate::stats::MeshStats;
 pub struct FitCheck {
     pub printer: String,
     pub fit: PlateFit,
+    /// The plate inside its inset as its low corner and its size, mm.
+    pub usable_mm: [[Scalar; 2]; 2],
 }
 
 impl FitCheck {
@@ -28,6 +30,7 @@ impl FitCheck {
             .area_mm(volume.x, volume.y);
         Self {
             printer: profile.name.clone(),
+            usable_mm: [low, [high[0] - low[0], high[1] - low[1]]],
             fit: PlateFit::of(
                 bounds,
                 Vec3::new(volume.x, volume.y, volume.z),

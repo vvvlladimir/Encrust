@@ -74,6 +74,15 @@ pub enum ApplyError {
     /// window's catalogue's, not the document's.
     #[error("no shipped support profile is named {0:?}")]
     NoProfile(String),
+    /// A printer the catalogue does not list, named by an orient to prove its poses on.
+    #[error("no printer {0:?} in the catalogue")]
+    NoPrinter(String),
+    /// A resin the catalogue does not list, named by an orient to prove its poses with.
+    #[error("no resin {0:?} in the catalogue")]
+    NoResin(String),
+    /// The shipped catalogue could not be read, so no machine is known to prove poses on.
+    #[error("the printer catalogue could not be read: {0}")]
+    BadCatalogue(String),
     /// An orient asked for a pose past the last the search found.
     #[error("object {object:?} has no pose {pick}: the search found {found}")]
     NoChoice {

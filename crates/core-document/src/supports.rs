@@ -4,18 +4,19 @@ use std::sync::Arc;
 
 use core_edit::{AUTO, Edit, ObjectId};
 use core_engine::project::{AutoSizing, Group, ModelMeshes, ObjectState, inner_faces, supports_of};
-use core_engine::{NeedsAsked, ShownAt, SupportPlan, needs_on_both, plan_of, shown_on};
-use core_geometry::{Bvh, Mat4, Mesh, Transform, Vec3, transform_mesh};
-use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
-use core_supports::{
-    Blocked, ModelSupports, Need, Reason, Shown, SupportTree, WallSide, low_points,
+use core_engine::{
+    NeedsAsked, ShownAt, SupportPlan, analysis_slicing, needs_on_both, plan_of, shown_on,
 };
+use core_geometry::{Bvh, Mat4, Mesh, Transform, Vec3, transform_mesh};
+use core_slicer::{PlaneSliceEngine, SliceEngine};
+use core_supports::{Blocked, ModelSupports, Need, Shown, SupportTree, WallSide, low_points};
 use core_volume::Cancel;
 use printer_profiles::{Catalogue, Raft, SupportProfile};
 
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
+use crate::orient::orient_plan;
 
 /// What a `Supports` edit asks of an object.
 pub(crate) struct SupportsAsked<'a> {
@@ -24,6 +25,7 @@ pub(crate) struct SupportsAsked<'a> {
     pub only_at: bool,
     pub cavity: bool,
     pub shown_at: &'a [ShownAt],
+    pub clean_surface: bool,
 }
 
 impl<'a> SupportsAsked<'a> {
@@ -36,6 +38,7 @@ impl<'a> SupportsAsked<'a> {
                 only_at,
                 cavity,
                 shown_at,
+                clean_surface,
                 ..
             } => Some(Self {
                 profile: profile.as_deref(),
@@ -43,6 +46,7 @@ impl<'a> SupportsAsked<'a> {
                 only_at: *only_at,
                 cavity: *cavity,
                 shown_at,
+                clean_surface: *clean_surface,
             }),
             _ => None,
         }
@@ -65,7 +69,11 @@ pub(crate) fn apply_supports(
     let named = asked.profile.filter(|name| *name != AUTO);
     let (mut groups, group) = group_for(&plate.groups, plate.active, named)?;
     let table = table_of(state, &groups, plate.raft);
-    let plan = plan_for(asked, plate.sizing.as_ref(), &table[usize::from(group)])?;
+    let plan = plan_for(
+        asked,
+        (plate.sizing.as_ref(), &groups),
+        &table[usize::from(group)],
+    )?;
 
     let surface = meshes.printed();
     let bvh = Arc::new(Bvh::build(surface));
@@ -85,7 +93,9 @@ pub(crate) fn apply_supports(
         meshes,
         placed: (&placed, &placed_bvh),
         wall: wall_outside(state, meshes, &bvh, into_model),
+        read_painted: asked.clean_surface || !asked.shown_at.is_empty(),
     };
+    let stood = stand_asked(&mut supports, &on, asked.at_mm, (transform, group), id)?;
     let needs = needs_asked(&on, &supports, (asked, &plan), (id, cancel))?;
     stand_needs(
         &mut supports,
@@ -99,10 +109,10 @@ pub(crate) fn apply_supports(
     let table = table_of(on.state, &groups, plate.raft);
     let grown = grown_trees(&mut supports, &on, (&bvh, &table));
     let report = Report::Supported {
-        placed: needs.len(),
+        placed: stood + needs.len(),
         trees: grown.len(),
     };
-    document.set_supports(id, groups, (supports.points().to_vec(), grown));
+    document.set_supports(id, (groups, group), (supports.points().to_vec(), grown));
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),
@@ -138,12 +148,22 @@ pub(crate) fn standing_meshes(document: &Document, id: ObjectId) -> Vec<Arc<Mesh
     .collect()
 }
 
-/// The profile the plate's active group builds `state` to, which an orientation is judged by.
-pub(crate) fn active_profile(document: &Document, state: &ObjectState) -> Option<SupportProfile> {
+/// The plan an orientation of `state` weighs: the plate's kept sizing, sized, where it is on,
+/// else the active group's profile; none where the plate has no group.
+pub(crate) fn orient_plan_of(
+    document: &Document,
+    state: &ObjectState,
+) -> Result<Option<SupportPlan>, ApplyError> {
     let plate = document.support_state();
     let table = table_of(state, &plate.groups, plate.raft);
-    let active = table.get(usize::from(plate.active)).or(table.first());
-    active.cloned()
+    let Some(active) = table.get(usize::from(plate.active)).or(table.first()) else {
+        return Ok(None);
+    };
+    let kept = plate.sizing.as_ref().filter(|sizing| sizing.on);
+    let sized = kept
+        .map(|sizing| sized_plan((Some(sizing), &plate.groups), active))
+        .transpose()?;
+    Ok(Some(orient_plan(sized, active, active.raft)))
 }
 
 /// The profiles of `groups` as `state` is built to them: its own where it keeps any, on its raft.
@@ -169,14 +189,14 @@ fn stand_needs(
 }
 
 /// What the run builds to: the plate's own automatic profile, else the catalogue's first, for
-/// `auto`; the group's `profile` alone otherwise.
+/// `auto`, its shapes the plate's groups of their names; the group's `profile` otherwise.
 fn plan_for(
     asked: &SupportsAsked<'_>,
-    sizing: Option<&AutoSizing>,
+    (sizing, groups): (Option<&AutoSizing>, &[Group]),
     profile: &SupportProfile,
 ) -> Result<SupportPlan, ApplyError> {
     let mut plan = match asked.profile {
-        Some(AUTO) => sized_plan(sizing, profile)?,
+        Some(AUTO) => sized_plan((sizing, groups), profile)?,
         _ => plan_of(profile, None),
     };
     plan.cavity = asked.cavity;
@@ -185,9 +205,9 @@ fn plan_for(
 }
 
 /// Supports sized by `sizing`'s profile where the plate keeps one, else by the shipped
-/// catalogue's first, each shape on the raft of `profile`.
+/// catalogue's first; a shape is the plate's group of its name where there is one.
 fn sized_plan(
-    sizing: Option<&AutoSizing>,
+    (sizing, groups): (Option<&AutoSizing>, &[Group]),
     profile: &SupportProfile,
 ) -> Result<SupportPlan, ApplyError> {
     let catalogue = Catalogue::bundled().map_err(|_| ApplyError::NoProfile(AUTO.into()))?;
@@ -198,6 +218,9 @@ fn sized_plan(
     let mut plan =
         SupportPlan::sized(auto, &catalogue).map_err(|_| ApplyError::NoProfile(AUTO.into()))?;
     for shape in plan.profiles_mut() {
+        if let Some(group) = groups.iter().find(|g| g.profile.name == shape.name) {
+            *shape = group.profile.clone();
+        }
         shape.raft = profile.raft;
     }
     Ok(plan)
@@ -238,24 +261,34 @@ fn group_by_size(
     by_size
 }
 
-/// The needs to add, plate mm: those the plan finds unless `only_at`, then the surface point
-/// nearest each point asked for, built as sturdy as a steadying one.
+/// Stands a support in `group` at the surface point nearest each of `at_mm`, which the run
+/// then takes as seeds; answers how many.
+fn stand_asked(
+    supports: &mut ModelSupports,
+    on: &PlacedModel<'_>,
+    at_mm: &[Vec3],
+    (transform, group): (Transform, u16),
+    id: ObjectId,
+) -> Result<usize, ApplyError> {
+    for at in at_mm {
+        let closest = on.placed.1.closest(*at).ok_or(ApplyError::NoSurface(id))?;
+        supports.add(closest.point, transform, group);
+    }
+    Ok(at_mm.len())
+}
+
+/// The needs the plan finds, plate mm, unless `only_at`, with the points asked standing.
 fn needs_asked(
     on: &PlacedModel<'_>,
     supports: &ModelSupports,
     (asked, plan): (&SupportsAsked<'_>, &SupportPlan),
     (id, cancel): (ObjectId, Cancel<'_>),
 ) -> Result<Vec<Need>, ApplyError> {
-    let mut needs = Vec::new();
-    if !asked.only_at {
-        let seeds = supports.contacts(on.state.transform);
-        needs = found(on, &seeds, plan, (id, cancel))?;
+    if asked.only_at {
+        return Ok(Vec::new());
     }
-    for at in asked.at_mm {
-        let closest = on.placed.1.closest(*at).ok_or(ApplyError::NoSurface(id))?;
-        needs.push(Need::new(closest.point, Reason::Steady));
-    }
-    Ok(needs)
+    let seeds = supports.contacts(on.state.transform);
+    found(on, &seeds, plan, (id, cancel))
 }
 
 /// Grows the trees of `supports` against the printed surface, whose hierarchy is `bvh`, and
@@ -308,6 +341,7 @@ struct PlacedModel<'a> {
     meshes: &'a ModelMeshes,
     placed: (&'a Mesh, &'a Bvh),
     wall: Option<WallSide>,
+    read_painted: bool,
 }
 
 /// Where the model needs holding up by `plan`, plate mm, with `seeds` standing already: its
@@ -321,12 +355,16 @@ fn found(
     let failed = |reason: String| ApplyError::Failed { object: id, reason };
     let (placed, bvh) = on.placed;
     let transform = on.state.transform;
-    let settings = SliceSettings::default();
+    let settings = analysis_slicing();
     let stack = PlaneSliceEngine
         .slice(placed, &settings)
         .map_err(|error| failed(error.to_string()))?;
     let source = &on.meshes.source;
-    let shown = Shown::new(source, &on.state.shown_painted, transform)
+    let painted = on
+        .read_painted
+        .then(|| Shown::new(source, &on.state.shown_painted, transform));
+    let shown = painted
+        .flatten()
         .or_else(|| shown_on(placed, bvh, &plan.shown_at));
     let lows = low_points(on.meshes.printed(), transform);
     let asked = |inside: bool| NeedsAsked {

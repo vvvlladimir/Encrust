@@ -135,7 +135,7 @@ fn running(ui: &mut egui::Ui, window: &mut Window) -> bool {
 
 /// Check drainage, and Auto beside it; off with nothing on the plate or while Prepare runs.
 fn check_and_auto(ui: &mut egui::Ui, window: &mut Window) {
-    let layer_height_mm = window.machine.slicing.layer_height_mm();
+    let layer_height_mm = core_engine::ANALYSIS_LAYER_MM;
     let label = if window.tools.drain.checked {
         tr!("drain-check-again")
     } else {

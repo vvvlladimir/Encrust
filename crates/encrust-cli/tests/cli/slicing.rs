@@ -1,6 +1,8 @@
 //! Cutting a model into layers: what the stack adds up to, what a broken mesh is
 //! reported as, and what the machine refuses to print.
 
+use std::fs;
+
 use crate::support::*;
 
 #[test]
@@ -149,4 +151,34 @@ fn estimate_reports_the_stack_and_writes_nothing() {
     // A 10 mm cube cures 1000 mm3, which is one millilitre.
     assert_eq!(field(&text, "resin"), "1.0 ml, 1.1 g", "{text}");
     assert!(text.contains("print time"));
+}
+
+#[test]
+fn the_report_carries_the_fit_drift_of_a_resin_with_its_tolerance_off() {
+    let path = write_box_stl("drift", 10.0, 12, 0);
+    let mut resin = fs::read_to_string(test_resin()).expect("the fixture resin reads");
+    resin.push_str(
+        "\n[compensation]\ntolerance_on = false\nhole_offset_mm = 0.04\nouter_offset_mm = 0.03\n",
+    );
+    let resin_file = output_file("drift-resin.toml");
+    fs::write(&resin_file, resin).expect("the resin is written");
+
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--profile",
+        test_panel().to_str().unwrap(),
+        "--material",
+        resin_file.to_str().unwrap(),
+        "--json",
+    ]);
+    let report: serde_json::Value =
+        serde_json::from_str(&stdout(&output)).expect("--json prints one report");
+
+    let drift = report["slicing"]["fit_drift_mm"]
+        .as_f64()
+        .expect("a number");
+    assert!(
+        (drift - 0.07).abs() < 1e-6,
+        "0.04 hole and 0.03 outer drift 0.07 a side, got {drift}"
+    );
 }

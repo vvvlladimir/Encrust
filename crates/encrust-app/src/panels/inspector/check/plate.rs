@@ -295,7 +295,7 @@ fn keeps_resin(ui: &mut egui::Ui, window: &mut Window, issues: &[PlateIssue]) {
         tr!("check-drill-drains-tip"),
     )];
     if offer(ui, window, &offers).is_some() {
-        let layer_height_mm = window.machine.slicing.layer_height_mm();
+        let layer_height_mm = core_engine::ANALYSIS_LAYER_MM;
         let scene = &window.doc.scene;
         let started = window
             .tools

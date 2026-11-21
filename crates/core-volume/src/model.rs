@@ -338,21 +338,6 @@ impl ModelHollow {
         self.remesh_markers();
     }
 
-    /// Drills a hole into the face of `normal` clicked at `point`, plate coordinates, unless one
-    /// drilled takes it in, walled on a solid model (ADR 0346); says whether it drilled one.
-    pub fn add_drain(
-        &mut self,
-        mesh: &Mesh,
-        bvh: &Bvh,
-        point: Vec3,
-        normal: Vec3,
-        size: HoleSize,
-        transform: Transform,
-    ) -> bool {
-        Self::drain_at(mesh, bvh, point, normal, size, transform)
-            .is_some_and(|hole| self.add_hole(hole))
-    }
-
     /// Drills `hole` of [`Self::drain_at`], model space, as a click would, unless one drilled
     /// takes it in; says whether it drilled one.
     pub fn add_hole(&mut self, hole: DrainHole) -> bool {

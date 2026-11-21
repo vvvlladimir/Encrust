@@ -126,10 +126,11 @@ pub fn spread(
     })
 }
 
-/// Spreads every printable object of the active plate over a plate `plate_mm` across.
+/// Spreads every printable object of the active plate over the usable area `plate_mm` across
+/// from its corner `low_mm`.
 pub(crate) fn apply_arrange(
     document: &mut Document,
-    plate_mm: [Scalar; 2],
+    (low_mm, plate_mm): ([Scalar; 2], [Scalar; 2]),
     clearance_mm: Scalar,
 ) -> Result<Applied, ApplyError> {
     let ids = document.printable();
@@ -151,7 +152,11 @@ pub(crate) fn apply_arrange(
         clearance_mm,
         ..ArrangeSettings::default()
     };
-    let area = PlateArea::whole(Vec2::from_array(plate_mm));
+    let low = Vec2::from_array(low_mm);
+    let area = PlateArea {
+        low_mm: low,
+        high_mm: low + Vec2::from_array(plate_mm),
+    };
     let Spread {
         transforms,
         arranged,

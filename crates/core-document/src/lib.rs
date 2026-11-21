@@ -26,13 +26,20 @@ pub use arrange::{NoFootprint, Spread, Standing, spread, standing_rect, turn_to_
 pub use combine::{boolean_of, combined};
 pub use cut::{CutAsked, CutModel, axis_normal, cut, pieces};
 pub use document::{Document, ImportedModel};
-pub use drain::{SearchAsked, channel_in, drains_proven, hole_near, plate_under, plugs_cut};
+pub use drain::{
+    SearchAsked, channel_in, drains_proven, hole_near, plate_under, plugs_cut, spaced_plugs,
+};
 pub use error::ApplyError;
 pub use hollow::{NoRoom, settings_of, shell_from, shelled};
 pub use label::{LabelAsked, Lettering, label_prisms, labelled};
-pub use orient::{Body, preset_named, preset_of, supported_settings, vents_of};
+pub use orient::{
+    Body, default_plan, lifted, orient_plan, placed_by, preset_named, preset_of,
+    supported_settings, vents_of,
+};
 pub use piece::{Piece, Role};
-pub use placement::{degrees_of, euler_degrees, moved, oriented_to, sized_to, turned_to};
+pub use placement::{
+    Footing, degrees_of, euler_degrees, moved, onto_plate, sized_to, stood_turned, turned_to,
+};
 pub use plate_contents::mirrored;
 pub use relief::{ReliefAsked, Relieved, press_picture, read_picture, relieved};
 pub use repair::{MendAsked, Mended, mended, repaired};

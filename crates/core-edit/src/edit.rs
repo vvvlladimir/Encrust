@@ -136,7 +136,7 @@ pub enum Edit {
         object: ObjectId,
         settings: HollowState,
     },
-    /// Drills holes of `size` and `kind` nearest each of `at_mm`, as `--drain-at` does; with
+    /// Drills holes of `size` and `kind`, `AtDepth` where unset as a click makes them, nearest each of `at_mm`, as `--drain-at` does; with
     /// `auto` a search adds the holes that drain every pocket, and `vent` a vent on each.
     Drain {
         object: ObjectId,
@@ -144,7 +144,7 @@ pub enum Edit {
         at_mm: Vec<Vec3>,
         #[serde(default)]
         size: HoleSize,
-        #[serde(default)]
+        #[serde(default = "at_depth")]
         kind: HoleKind,
         #[serde(default)]
         auto: bool,
@@ -160,20 +160,32 @@ pub enum Edit {
         diameter_mm: Scalar,
     },
     /// Lays a plug for each of the drain holes of `object` as new objects beside it, each
-    /// `gap_mm` narrower a side than its hole, as `--drain-plugs` does.
+    /// `gap_mm` narrower a side than its hole: the final gap, in plate mm. With a usable area
+    /// `plate_mm` across from `low_mm`, as `Arrange` takes them, each stands at the nearest
+    /// free spot in it; without, in a row past the object.
     Plugs {
         object: ObjectId,
         #[serde(default = "plug_gap_mm")]
         gap_mm: Scalar,
+        #[serde(default)]
+        plate_mm: Option<[Scalar; 2]>,
+        #[serde(default)]
+        low_mm: [Scalar; 2],
     },
-    /// Spreads every printable object of the active plate, with its supports, over a plate
-    /// `plate_mm` across, `clearance_mm` apart, turning one no slide fits as the window does.
+    /// Spreads every printable object of the active plate, with its supports, over the usable
+    /// area of a plate, `plate_mm` across from its corner `low_mm` (the plate less its inset),
+    /// `clearance_mm` apart, turning one no slide fits as the window does.
     Arrange {
+        #[serde(default)]
+        low_mm: [Scalar; 2],
         plate_mm: [Scalar; 2],
         clearance_mm: Scalar,
     },
     /// Stands `object` the way it prints best for `goal`, the `pick`th best from 0, tilted at
     /// most `max_tilt_deg` if set; `clean_surface` keeps to the fewest supports where it shows.
+    /// It stays on the usable area `plate_mm` across from `low_mm`, as `Arrange` takes them,
+    /// and its poses are proved on the catalogue's `printer` and `resin`, the standard ones
+    /// where unset.
     Orient {
         object: ObjectId,
         #[serde(default)]
@@ -184,12 +196,17 @@ pub enum Edit {
         clean_surface: bool,
         #[serde(default)]
         pick: usize,
+        #[serde(default)]
+        plate_mm: Option<[Scalar; 2]>,
+        #[serde(default)]
+        low_mm: [Scalar; 2],
+        #[serde(default)]
+        printer: Option<String>,
+        #[serde(default)]
+        resin: Option<String>,
     },
-    /// Stands supports under `object` by the shipped support preset `profile`, the plate's
-    /// active group's where unset, and by a contact at the surface nearest each of `at_mm`;
-    /// with `only_at` those contacts alone. `auto` sizes each support by what it holds; with
-    /// `cavity` a hollow object's cavity is held up too, and `shown_at` strokes mark the side
-    /// meant to be seen.
+    /// Stands supports under `object` by a shipped preset (the active group's where unset), with
+    /// a contact nearest each of `at_mm`, those alone with `only_at`; see `docs/cli.md`.
     Supports {
         object: ObjectId,
         #[serde(default)]
@@ -202,6 +219,9 @@ pub enum Edit {
         cavity: bool,
         #[serde(default)]
         shown_at: Vec<ShownAt>,
+        /// Reads the side painted shown in the file, as the window's Clean surface does.
+        #[serde(default)]
+        clean_surface: bool,
     },
 }
 
@@ -215,6 +235,10 @@ fn precision_by_default() -> Scalar {
 
 fn raised_by_default() -> bool {
     true
+}
+
+fn at_depth() -> HoleKind {
+    HoleKind::AtDepth
 }
 
 fn yes() -> bool {

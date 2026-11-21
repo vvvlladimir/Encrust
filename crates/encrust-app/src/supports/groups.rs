@@ -1,6 +1,7 @@
 use super::{FIRST_GROUP, SHAPES, SupportGroup, SupportTool};
 use crate::scene::{OwnSettings, Scene, SceneObject};
 use anyhow::Result;
+use core_document::orient_plan;
 use core_engine::project::own_table;
 use core_engine::{SupportPlan, SupportShapes};
 use printer_profiles::{AutoProfile, Catalogue, Raft, SupportProfile};
@@ -102,24 +103,18 @@ impl SupportTool {
         sized: Option<(AutoProfile, [SupportProfile; SHAPES])>,
     ) -> impl Fn(&SceneObject) -> SupportPlan + 'a {
         move |object: &SceneObject| {
-            let mut plan = match &sized {
-                Some((auto, shapes)) => SupportPlan {
-                    shapes: SupportShapes::Sized {
-                        auto: Box::new(auto.clone()),
-                        shapes: Box::new(shapes.clone()),
-                    },
-                    cavity: false,
-                    merges: Vec::new(),
-                    by_hand: core_engine::ByHand::default(),
-                    shown_at: Vec::new(),
+            let sized = sized.as_ref().map(|(auto, shapes)| SupportPlan {
+                shapes: SupportShapes::Sized {
+                    auto: Box::new(auto.clone()),
+                    shapes: Box::new(shapes.clone()),
                 },
-                None => SupportPlan::of(self.profile_for(object).clone()),
-            };
+                cavity: false,
+                merges: Vec::new(),
+                by_hand: core_engine::ByHand::default(),
+                shown_at: Vec::new(),
+            });
             let raft = object.own.raft.unwrap_or(self.raft);
-            for profile in plan.profiles_mut() {
-                profile.raft = raft;
-            }
-            plan
+            orient_plan(sized, self.profile_for(object), raft)
         }
     }
 

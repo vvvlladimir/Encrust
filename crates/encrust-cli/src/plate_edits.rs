@@ -109,7 +109,7 @@ pub fn stage_models(
     project::stage_checked(out, &project, None, job, watch)
 }
 
-fn imported_model(path: &Path, mesh: Mesh, import: &ImportReport) -> ImportedModel {
+pub(crate) fn imported_model(path: &Path, mesh: Mesh, import: &ImportReport) -> ImportedModel {
     let summary = Summary {
         vertices_merged: import.welded.vertices_merged,
         faces_removed: import.welded.faces_removed(),

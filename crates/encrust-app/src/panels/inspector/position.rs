@@ -477,12 +477,10 @@ pub(crate) fn auto_orient(window: &mut Window, only: Option<ObjectId>) {
         window.machine.status = crate::status::Status::Info(why);
         return;
     }
-    let machine = window
-        .machine
-        .slicing
-        .printer
+    let proof = crate::orient::proof_machine(&window.machine.slicing);
+    let machine = proof
         .as_ref()
-        .map(|printer| (printer, &window.machine.slicing.material));
+        .map(|(printer, material)| (printer, material));
     let started = window
         .tools
         .supports

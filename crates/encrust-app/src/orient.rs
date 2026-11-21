@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
+use core_document::{Footing, stood_turned};
 use core_engine::SupportPlan;
-use core_geometry::{Adjacency, Mesh, Region, Scalar, Vec2, Vec3};
+use core_geometry::{Adjacency, Mesh, Region, Scalar, Vec3};
 use core_plate::{OrientPreset, OrientSettings};
-use printer_profiles::{MaterialProfile, PrinterProfile};
+use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, standard_machine};
 
 use crate::i18n::tr;
 use crate::job::{
@@ -12,6 +13,7 @@ use crate::job::{
 };
 use crate::plate::BuildPlate;
 use crate::scene::{ObjectId, Scene, SceneObject};
+use crate::slicing::Slicing;
 use crate::status::{Reading, Status};
 
 mod shown;
@@ -63,6 +65,17 @@ impl Default for OrientTool {
             offers: Vec::new(),
             asked: None,
         }
+    }
+}
+
+/// The machine a search proves its poses on: the printer chosen in the window, else the
+/// standard one with its resin.
+pub fn proof_machine(slicing: &Slicing) -> Option<(PrinterProfile, MaterialProfile)> {
+    match &slicing.printer {
+        Some(printer) => Some((printer.clone(), slicing.material.clone())),
+        None => Catalogue::bundled()
+            .ok()
+            .and_then(|catalogue| standard_machine(&catalogue).ok()),
     }
 }
 
@@ -176,6 +189,13 @@ impl OrientTool {
             stand(object, pose, turn.lift_mm, plate);
         }
         Ok(())
+    }
+
+    /// The machine the last search proved its poses on, if it was asked to.
+    #[cfg(test)]
+    pub fn proven_on(&self) -> Option<&PrinterProfile> {
+        let asked = self.asked.as_ref()?;
+        asked.proof.as_ref().map(|proof| &proof.printer)
     }
 
     /// Why the button is greyed out, or `None` when it is not.
@@ -438,22 +458,14 @@ fn costed(headline: String, costs: Option<Costs>, was: Option<Costs>) -> Status 
 /// keeps it on `plate`, dropped back onto it and lifted `lift_mm` onto its supports where it
 /// is not set on it. Returns whether that turned it.
 fn stand(object: &mut SceneObject, pose: Pose, lift_mm: f32, plate: &BuildPlate) -> bool {
-    let middle = |object: &SceneObject| {
-        object
-            .world_bounds()
-            .map(|bounds| ((bounds.mins + bounds.maxs) / 2.0).truncate())
-    };
-    let before = middle(object);
     let by = pose.rotation * object.transform.rotation.inverse();
-    object.transform = object.transform.turned(by);
-    if let Some((before, after)) = before.zip(middle(object)) {
-        object.transform.translation += (before - after).extend(0.0);
-    }
-    object.slide_onto_plate(Vec2::new(plate.x_mm, plate.y_mm));
-    object.stand_on_plate();
-    if !pose.on_plate {
-        object.transform.translation.z += lift_mm;
-    }
+    let footing = Footing {
+        area_mm: Some(([0.0, 0.0], [plate.x_mm, plate.y_mm])),
+        lift_mm,
+    };
+    let at = (footing, pose.on_plate);
+    object.transform = stood_turned(object.transform, &object.mesh, pose.rotation, at);
+    object.supports.set_raft_lift_mm(0.0);
     by.to_axis_angle().1.to_degrees() > SETTLED_DEG
 }
 

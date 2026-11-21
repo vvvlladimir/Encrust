@@ -350,7 +350,7 @@ fn cut_without_a_container(
     let baked = bake(&staged.models, &cutting.compensation).context("nothing to slice")?;
     let windows = cut(&baked, cutting)?;
     let solid = &baked.solid;
-    let mut slice = report_of(solid, &windows, staged.drainage);
+    let mut slice = report_of(solid, &windows, staged.drainage, material);
 
     let Some(profile) = staged.printer.as_ref() else {
         tracing::warn!("rasterisation needs --profile to know the panel; nothing was written");
@@ -378,9 +378,15 @@ fn cut_without_a_container(
 }
 
 /// An empty report over `windows`, watching the stack for trapped resin when `drainage`
-/// asks for it.
-pub fn report_of(solid: &Solid, windows: &Windows, drainage: bool) -> SliceReport {
+/// asks for it; `material` is the resin the run prints with, whose fit drift it reports.
+pub fn report_of(
+    solid: &Solid,
+    windows: &Windows,
+    drainage: bool,
+    material: &MaterialProfile,
+) -> SliceReport {
     let mut slice = SliceReport::new(windows.settings(), windows.plan().clone());
+    slice.fit_drift_mm = material.compensation.fit_drift_mm();
     if drainage && let Some(bounds) = solid.aabb() {
         slice.watch_drainage(bounds.mins.truncate(), bounds.maxs.truncate());
     }

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use core_engine::{Drained, Model, SupportPlan, bake, trapped_in};
+use core_engine::{ANALYSIS_LAYER_MM, Drained, Model, SupportPlan, bake, trapped_in};
 use core_geometry::{Aabb, BoundingVolume, Mesh, MeshDiagnostics, Scalar, Transform, Vec3};
 use core_geometry::{diagnose, placed_aabb, signed_volume, transform_mesh};
 use core_recipe::{Metric, Metrics, Plan, Value, measure_planned};
@@ -233,7 +233,7 @@ impl Piece {
     }
 
     /// The pockets of resin with no way out of it, by the drainage scan; none with no cavity.
-    pub(super) fn trapped(&self, layer_height_mm: Scalar, stop: &Stop) -> Result<usize> {
+    pub(super) fn trapped(&self, stop: &Stop) -> Result<usize> {
         if self.cavity.is_none() {
             return Ok(0);
         }
@@ -243,7 +243,7 @@ impl Piece {
             ..self.model()?
         };
         let baked = bake(&[model], &Compensation::default()).context("nothing to scan")?;
-        let found = trapped_in(&baked, layer_height_mm, |_, _| !stop.requested())
+        let found = trapped_in(&baked, ANALYSIS_LAYER_MM, |_, _| !stop.requested())
             .context("cannot scan the model for trapped resin")?
             .ok_or(Cancelled)?;
         Ok(found.len())

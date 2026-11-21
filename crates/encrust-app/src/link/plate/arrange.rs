@@ -7,10 +7,11 @@ use crate::arrange::arrange_plate;
 use crate::panels::Window;
 use crate::plate::BuildPlate;
 
-/// Spreads the plate's models over one `plate_mm` across at once, answering `None`; refused
+/// Spreads the plate's models over the usable area `plate_mm` across from `low_mm` at once, answering `None`; refused
 /// where the window's Arrange ends in an error.
 pub(super) fn start_arrange(window: &mut Window, edit: &Edit) -> Result<Option<ObjectId>, String> {
     let &Edit::Arrange {
+        low_mm,
         plate_mm,
         clearance_mm,
     } = edit
@@ -18,9 +19,13 @@ pub(super) fn start_arrange(window: &mut Window, edit: &Edit) -> Result<Option<O
         return Ok(None);
     };
     let plate = BuildPlate {
-        x_mm: plate_mm[0],
-        y_mm: plate_mm[1],
-        inset: PlateInset::default(),
+        x_mm: low_mm[0] + plate_mm[0],
+        y_mm: low_mm[1] + plate_mm[1],
+        inset: PlateInset {
+            min_x_mm: low_mm[0],
+            min_y_mm: low_mm[1],
+            ..PlateInset::default()
+        },
         ..window.doc.plate.clone()
     };
     let status = arrange_plate(&mut window.doc.scene, &plate, clearance_mm);

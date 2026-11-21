@@ -68,15 +68,7 @@ pub fn open_plate(
         None => machine.resin.clone(),
     };
 
-    let table = support_table(manifest);
-    let models = manifest
-        .objects
-        .iter()
-        .zip(&project.models)
-        .filter(|(object, _)| object.printable_on(opening.plate))
-        .map(|(object, meshes)| model(object, meshes, &table, manifest.supports.raft))
-        .collect();
-
+    let models = plate_models(project, opening.plate);
     let slicing = &manifest.slicing;
     Ok(Plate {
         models,
@@ -97,6 +89,18 @@ pub fn open_plate(
         raster_window: opening.raster_window,
         created_unix_s: opening.created_unix_s,
     })
+}
+
+/// The models printed on `plate` of `project`, standing where the file has them, for a caller
+/// that picks its own machine.
+pub fn plate_models(project: &Project, plate: u32) -> Vec<Model> {
+    let manifest = &project.manifest;
+    let table = support_table(manifest);
+    (manifest.objects.iter())
+        .zip(&project.models)
+        .filter(|(object, _)| object.printable_on(plate))
+        .map(|(object, meshes)| model(object, meshes, &table, manifest.supports.raft))
+        .collect()
 }
 
 /// The profile of every support group, the first of which everything falls back to.
