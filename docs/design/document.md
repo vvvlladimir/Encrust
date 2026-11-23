@@ -76,6 +76,7 @@ a printer file is set. `keep_clear_mm` are places no support should touch, ranke
 (`kept_clear`): plate mm where the object stands, or, with `keep_clear_seen_deg`, as it stood turned so
 and centred on the plate, as `--orient-keep-clear` reads them; `KEEP_CLEAR_RADIUS_MM` where no reach is
 given. The window's link passes them to its Orient tool. `Report::Oriented` lists every pose ranked.
+The search's share goes to a `Cancel` that reports, as `Step::Searching`, which the command line draws as a bar.
 
 `Split { object, smallest_mm3 }` and `PartOff { object, at_mm }` run on the object's printed
 mesh placed on the plate and replace it with `Role::Part(n)` pieces, counted from one: a split
@@ -125,7 +126,8 @@ too. core-document reads the picture through core-mesh-io's `Texture::decode`, i
 The press is at the size the object prints at, so its scale and stretch go into the mesh, which
 `Document::reshape` replaces (`Report::Relieved`); the faces painted for relief limit it where
 any are. A picture that does not read is `BadPicture { path, reason }`, else `Cancelled` or
-`Failed`. The model is left solid, its cavity gone, until a `Hollow` follows. A file's own texture is not an edit: a `.encrust` keeps none. The window's Relief tool
+`Failed`. A hollow model keeps its blockers, holes and channels, carried onto the pressed surface, and is
+hollowed again by the settings its shell was built to (`hollowed_again`), as the window's Relief tool does. A file's own texture is not an edit: a `.encrust` keeps none. The window's Relief tool
 runs the edit as its own job, `press_picture` being the call both make.
 
 `Hollow { object, settings: HollowState, keep_solid, keep_solid_reach_mm }` hollows the object by the

@@ -41,7 +41,7 @@ impl InspectCommand {
             intersections: self.intersections,
             shells: self.shells,
         };
-        let report = pipeline::inspect(&self.input, &self.import, &chosen, asked)?;
+        let report = pipeline::inspect(&self.input, &self.import, (&self.profile, &chosen), asked)?;
         if global.json {
             json::print(&ModelReport::inspected(&report, started.elapsed()))?;
         } else if !global.quiet {

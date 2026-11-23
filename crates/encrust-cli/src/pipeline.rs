@@ -24,14 +24,14 @@ use crate::stage::{self, Part, Staged};
 
 mod checked;
 mod inspect;
-mod place;
+mod oriented;
 mod relief;
 
 use checked::checked;
-pub(crate) use checked::{read_again, repair_refused, with_repair_bar};
+pub(crate) use checked::{read_again, repair_refused, with_bar};
 use inspect::talk_mapping;
 pub use inspect::{Inspect, inspect};
-pub use place::{OrientChoice, OrientSummary, orient_settings, rotate_degrees};
+pub use oriented::{OrientChoice, OrientSummary, orient_settings, rotate_degrees};
 use relief::press_relief;
 
 /// How a run talks while it works, and what can stop it.
@@ -111,7 +111,7 @@ pub fn import(
     let welded = weld(&loaded.mesh, args.weld_tolerance);
     // Before the orientation fix, which rewinds the faces the file's texture map is indexed by.
     let mut mesh = press_relief(welded.mesh.clone(), &welded, &loaded, args, talk)?;
-    let import = checked(&mut mesh, (input, welded), args, profile, false, watch)?;
+    let import = checked(&mut mesh, (input, welded), args, profile)?;
     Ok((mesh, import))
 }
 

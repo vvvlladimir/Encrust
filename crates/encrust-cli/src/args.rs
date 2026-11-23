@@ -329,6 +329,13 @@ pub struct SupportArgs {
 /// The brush's radius where `--shown-at` gives none, mm.
 const SHOWN_RADIUS_MM: Scalar = 4.0;
 
+/// `T` as its flags leave it when none is typed.
+pub(crate) fn untyped<T: clap::Args + clap::FromArgMatches>() -> Result<T> {
+    let command = T::augment_args(clap::Command::new("untyped").no_binary_name(true));
+    let matches = command.try_get_matches_from(std::iter::empty::<&str>())?;
+    Ok(T::from_arg_matches(&matches)?)
+}
+
 /// `X,Y,Z` or `X,Y,Z:R`, a point and the radius painted round it.
 fn shown_at(text: &str) -> Result<ShownAt, String> {
     let (point, radius) = match text.split_once(':') {

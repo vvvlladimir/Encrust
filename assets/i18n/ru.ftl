@@ -2625,6 +2625,7 @@ job-step-combining = Объединение
 job-step-finishing = Сборка результата
 job-step-mending = Починка сетки
 job-step-crossing = Поиск самопересечений
+job-step-searching = Подбор положения модели
 job-hollow-preparing = Проверка модели
 job-hollow-seeding = Измерение поверхности
 job-hollow-carrying = Проход через стенку

@@ -1029,10 +1029,10 @@ flags are, it is set against no autopilot, and the open window is not sent it.
 arrange, relief — `set_repair` — the repair, its seam and shell limits, faces flipped or
 dropped and shells dropped by number, bridges — and `set_slicing` — layer height, adaptive
 layers, exposure bands, anti-aliasing, greys, blur, islands removed — reach the rest of the
-command line's flags; `set_hollow` takes the mode, precision and `keep_solid_at_mm`,
+command line's flags; `set_hollow` takes the mode, precision, `keep_solid_at_mm` and `keep_solid_reach_mm`,
 `set_drains` the hole's depth, taper, sides, turn, walled holes, holes into the supports and
 channels, and `set_supports` a profile TOML, `at_mm` with `only_at` and `shown_at_mm`, the
-side meant to be seen, as `--shown-at`. `list_recipes` answers `recipes list` with each
+side meant to be seen, as `--shown-at`, and `merge_at_mm`, as `--merge-supports`. `list_recipes` answers `recipes list` with each
 recipe's TOML; `use_recipe` prepares the job by one with `--recipe` in place of `--prepare`;
 `save_recipe` runs `recipes save` on a revision's steps, or on a recipe the client wrote.
 `write_file` notes the revision it wrote; `report_print` runs `diagnose` on the check of that

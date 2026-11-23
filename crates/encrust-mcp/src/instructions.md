@@ -37,7 +37,8 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
 6. `set_supports` with `auto`, and `cavity: true` for a hollow model. `shown_at_mm` names the
    side a person will look at — a face, the front of a figure — so its supports stand sparser
    and lightest; plate mm as the latest revision stands. `at_mm` stands a support under the
-   surface nearest each point, by hand; `keep_solid_at_mm` on `set_hollow` keeps the
+   surface nearest each point, by hand, and `merge_at_mm` joins the supports nearest a group of
+   points into one tree; `keep_solid_at_mm` on `set_hollow` keeps the
    wall solid round a point, as for a hole or a thin part. `set_shape` scales, combines,
    labels, cuts with a joint (`arrange: true` lays the halves apart), splits or cuts a part off,
    and presses a texture in; `set_repair` repairs and turns or drops faces by `inspect_model`'s

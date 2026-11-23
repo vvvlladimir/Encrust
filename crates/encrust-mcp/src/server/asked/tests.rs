@@ -1,5 +1,5 @@
 use super::*;
-use crate::recipe::{Cut, Drains, Hollow, Supports};
+use crate::recipe::{Cut, Drains, HoleKind, Hollow, Mend, Supports};
 
 const MODEL: ObjectId = ObjectId(3);
 
@@ -74,6 +74,86 @@ fn a_full_repair_reads_as_the_windows_repair() {
 }
 
 #[test]
+fn a_repairs_limits_given_as_a_mend_reach_the_repair() {
+    let recipe = Recipe {
+        repair: Some(Repair::Full),
+        mend: Some(Mend {
+            seam_tolerance_mm: Some(0.2),
+            smallest_shell_mm2: Some(3.0),
+            ..Mend::default()
+        }),
+        ..bare()
+    };
+    let asked = asked_edits(&recipe, &bare(), MODEL).expect("a repair is an edit");
+    assert!(
+        matches!(
+            asked.as_slice(),
+            [Edit::Repair { seam_tolerance_mm: Some(seam), smallest_shell_mm2: Some(shell), .. }]
+                if (seam - 0.2).abs() < 1e-6 && (shell - 3.0).abs() < 1e-6
+        ),
+        "the limits go with the repair and no empty mend is asked: {asked:?}"
+    );
+}
+
+#[test]
+fn a_repairs_limits_changed_alone_ask_the_repair_again() {
+    let earlier = Recipe {
+        repair: Some(Repair::Full),
+        ..bare()
+    };
+    let recipe = Recipe {
+        mend: Some(Mend {
+            seam_tolerance_mm: Some(0.2),
+            ..Mend::default()
+        }),
+        ..earlier.clone()
+    };
+    let asked = asked_edits(&recipe, &earlier, MODEL).expect("a repair is an edit");
+    assert!(
+        matches!(
+            asked.as_slice(),
+            [Edit::Repair {
+                seam_tolerance_mm: Some(_),
+                ..
+            }]
+        ),
+        "{asked:?}"
+    );
+}
+
+#[test]
+fn a_bridge_asked_is_mended_before_the_repair() {
+    let recipe = Recipe {
+        repair: Some(Repair::Full),
+        mend: Some(Mend {
+            bridge: vec!["1-2:5-6".into()],
+            ..Mend::default()
+        }),
+        ..bare()
+    };
+    let asked = asked_edits(&recipe, &bare(), MODEL).expect("a bridge is an edit");
+    assert!(
+        matches!(
+            asked.as_slice(),
+            [Edit::Mend { bridge, .. }, Edit::Repair { .. }] if *bridge == [[[1, 2], [5, 6]]]
+        ),
+        "the faces are numbered as imported, so the mend goes first: {asked:?}"
+    );
+}
+
+#[test]
+fn a_bridge_not_written_as_two_edges_is_no_edit() {
+    let recipe = Recipe {
+        mend: Some(Mend {
+            bridge: vec!["1-2".into()],
+            ..Mend::default()
+        }),
+        ..bare()
+    };
+    assert_eq!(asked_edits(&recipe, &bare(), MODEL), None);
+}
+
+#[test]
 fn a_hollow_asked_is_the_windows_hollow_by_its_numbers() {
     let recipe = Recipe {
         hollow: Some(Hollow {
@@ -90,16 +170,59 @@ fn a_hollow_asked_is_the_windows_hollow_by_its_numbers() {
 }
 
 #[test]
-fn walls_kept_solid_at_points_are_no_edit_yet_and_the_revision_is_shown_as_before() {
+fn walls_kept_solid_at_points_are_the_hollows_blockers() {
     let recipe = Recipe {
         hollow: Some(Hollow {
             wall_mm: 2.0,
-            keep_solid_at_mm: vec![[1.0, 1.0, 1.0]],
+            keep_solid_at_mm: vec![[1.0, 1.0, 1.0], [5.0, 1.0, 1.0]],
+            keep_solid_reach_mm: Some(3.0),
             ..Hollow::default()
         }),
         ..bare()
     };
-    assert_eq!(asked_edits(&recipe, &bare(), MODEL), None);
+    let asked = asked_edits(&recipe, &bare(), MODEL).expect("a wall kept solid is an edit");
+    assert!(
+        matches!(
+            asked.as_slice(),
+            [Edit::Hollow { keep_solid, keep_solid_reach_mm: Some(reach), .. }]
+                if keep_solid.len() == 2 && keep_solid[0].len() == 1 && (reach - 3.0).abs() < 1e-6
+        ),
+        "each point is a blocker of its own, as `--keep-solid` takes one: {asked:?}"
+    );
+}
+
+#[test]
+fn walled_holes_are_drilled_before_the_hollow_they_shape() {
+    let earlier = Recipe {
+        hollow: Some(Hollow {
+            wall_mm: 2.0,
+            ..Hollow::default()
+        }),
+        ..bare()
+    };
+    let recipe = Recipe {
+        drains: Some(Drains {
+            diameter_mm: 3.0,
+            at_mm: vec![[1.0, 1.0, 1.0]],
+            kind: Some(HoleKind::Walled),
+            ..Drains::default()
+        }),
+        ..earlier.clone()
+    };
+    let asked = asked_edits(&recipe, &earlier, MODEL).expect("a walled hole is an edit");
+    assert!(
+        matches!(
+            asked.as_slice(),
+            [
+                Edit::Drain {
+                    kind: core_edit::HoleKind::Walled,
+                    ..
+                },
+                Edit::Hollow { .. }
+            ]
+        ),
+        "the hollow is grown again round the hole: {asked:?}"
+    );
 }
 
 #[test]
@@ -154,16 +277,37 @@ fn a_drain_search_with_channels_and_plugs_is_a_drain_a_channel_each_and_plugs() 
 }
 
 #[test]
-fn drains_into_the_supports_or_a_search_taken_back_are_no_edit_yet() {
-    let into_supports = Recipe {
+fn holes_into_the_raft_are_drilled_once_the_supports_stand() {
+    let recipe = Recipe {
         drains: Some(Drains {
             diameter_mm: 3.0,
             support_at_mm: vec![[1.0, 1.0, 0.0]],
             ..Drains::default()
         }),
+        supports: Some(Supports {
+            profile: "medium".into(),
+            ..Supports::default()
+        }),
         ..bare()
     };
-    assert_eq!(asked_edits(&into_supports, &bare(), MODEL), None);
+    let asked = asked_edits(&recipe, &bare(), MODEL).expect("a hole into the raft is an edit");
+    assert!(
+        matches!(
+            asked.as_slice(),
+            [
+                Edit::Supports { .. },
+                Edit::Drain {
+                    kind: core_edit::HoleKind::Support,
+                    ..
+                }
+            ]
+        ),
+        "{asked:?}"
+    );
+}
+
+#[test]
+fn a_search_taken_back_is_no_edit_yet() {
     let searched = Recipe {
         drains: Some(Drains {
             diameter_mm: 3.0,
@@ -180,6 +324,31 @@ fn drains_into_the_supports_or_a_search_taken_back_are_no_edit_yet() {
         ..bare()
     };
     assert_eq!(asked_edits(&not_searched, &searched, MODEL), None);
+}
+
+#[test]
+fn a_merge_added_joins_those_supports_alone() {
+    let earlier = Recipe {
+        supports: Some(Supports {
+            profile: "medium".into(),
+            ..Supports::default()
+        }),
+        ..bare()
+    };
+    let group = vec![[1.0, 1.0, 0.0], [3.0, 1.0, 0.0]];
+    let recipe = Recipe {
+        supports: Some(Supports {
+            profile: "medium".into(),
+            merge_at_mm: vec![group],
+            ..Supports::default()
+        }),
+        ..bare()
+    };
+    let asked = asked_edits(&recipe, &earlier, MODEL).expect("a merge is an edit");
+    assert!(
+        matches!(asked.as_slice(), [Edit::MergeSupports { near_mm, .. }] if near_mm.len() == 2),
+        "the supports standing are not grown again: {asked:?}"
+    );
 }
 
 #[test]

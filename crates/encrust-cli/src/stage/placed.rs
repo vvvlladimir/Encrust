@@ -7,14 +7,12 @@ use anyhow::{Context, Result, anyhow};
 use core_document::{ApplyError, Report, degrees_of, euler_degrees};
 use core_edit::{Edit, ObjectId, OrientAim};
 use core_geometry::{Quat, Vec3};
-use core_volume::Cancel;
-use indicatif::ProgressBar;
 use printer_profiles::{Catalogue, PrinterProfile};
 
 use super::document::{Staging, said};
 use super::{Found, Shaping};
-use crate::args::{Goal, JobArgs, TransformArgs};
-use crate::pipeline::{OrientChoice, OrientSummary, Watch};
+use crate::args::{Goal, ProfileArgs, TransformArgs};
+use crate::pipeline::{OrientChoice, OrientSummary, Watch, with_bar};
 
 /// What import leaves to edits of the placing flags.
 pub(super) fn left_to_edits(transform: &mut TransformArgs) {
@@ -30,7 +28,7 @@ pub(super) fn placed(
     staging: &mut Staging,
     found: &mut [Found],
     entries: &[(PathBuf, Shaping)],
-    (job, printer): (&JobArgs, Option<&PrinterProfile>),
+    (profile, printer): (&ProfileArgs, Option<&PrinterProfile>),
     watch: &Watch,
 ) -> Result<()> {
     for (entry, ((_, oriented), (_, shaping))) in found.iter_mut().zip(entries).enumerate() {
@@ -45,7 +43,13 @@ pub(super) fn placed(
         }
         if transform.orient {
             let supported = shaping.supports.is_some();
-            let summary = orient(staging, id, (transform, job), (printer, supported), watch)?;
+            let summary = orient(
+                staging,
+                id,
+                (transform, profile),
+                (printer, supported),
+                watch,
+            )?;
             *oriented = Some(summary);
         }
         if let Some(degrees) = transform.rotate {
@@ -67,11 +71,11 @@ pub(super) fn placed(
 fn orient(
     staging: &mut Staging,
     object: ObjectId,
-    (transform, job): (&TransformArgs, &JobArgs),
+    (transform, profile): (&TransformArgs, &ProfileArgs),
     (printer, supported): (Option<&PrinterProfile>, bool),
     watch: &Watch,
 ) -> Result<OrientSummary> {
-    let edit = orient_edit(object, (transform, job), printer);
+    let edit = orient_edit(object, (transform, profile), printer);
     let report = searched(staging, &edit, object, watch)?;
     let summary = summary_of(report, transform, supported)?;
     if watch.talk {
@@ -93,7 +97,7 @@ fn orient(
 /// The search the flags ask, on the usable plate of `printer` where one is named.
 fn orient_edit(
     object: ObjectId,
-    (transform, job): (&TransformArgs, &JobArgs),
+    (transform, profile): (&TransformArgs, &ProfileArgs),
     printer: Option<&PrinterProfile>,
 ) -> Edit {
     let area = printer.map(|printer| {
@@ -110,10 +114,7 @@ fn orient_edit(
         pick: usize::from(transform.orient_pick.unwrap_or(1)).saturating_sub(1),
         plate_mm: area.map(|(_, size)| size),
         low_mm: area.map_or([0.0, 0.0], |(low, _)| low),
-        printer: shipped_printer(
-            job.profile.printer.as_deref(),
-            job.profile.profile.is_some(),
-        ),
+        printer: shipped_printer(profile.printer.as_deref(), profile.profile.is_some()),
         resin: None,
         keep_clear_mm: transform.orient_keep_clear.clone(),
         keep_clear_radius_mm: Some(transform.orient_keep_clear_radius),
@@ -122,23 +123,11 @@ fn orient_edit(
     }
 }
 
-/// The search run with a spinner on a terminal, Ctrl-C stopping it.
+/// The search run with its bar on a terminal, Ctrl-C stopping it.
 fn searched(staging: &mut Staging, edit: &Edit, object: ObjectId, watch: &Watch) -> Result<Report> {
-    let spinner = watch.progress.then(|| {
-        let spinner = ProgressBar::new_spinner();
-        spinner.set_message("searching the ways to stand the model");
-        spinner
+    let applied = with_bar(watch, "% of the orientation search", |cancel| {
+        staging.apply_with(edit, object, cancel)
     });
-    let asked = || {
-        if let Some(spinner) = &spinner {
-            spinner.tick();
-        }
-        watch.stop.requested()
-    };
-    let applied = staging.apply_with(edit, object, Cancel::when(&asked));
-    if let Some(spinner) = &spinner {
-        spinner.finish_and_clear();
-    }
     let applied = applied.map_err(|error| match error {
         ApplyError::NoChoice { pick, found, .. } => anyhow!(
             "--orient-pick {}: the search found {found} ways to stand this model",
@@ -220,11 +209,17 @@ fn turn(
     };
     staging.apply(&edit, object, watch.stop).map_err(said)?;
     if let Some(summary) = oriented
-        && !(rotation * Vec3::NEG_Z).abs_diff_eq(Vec3::NEG_Z, 1e-4)
+        && !keeps_face_down(rotation)
     {
         summary.on_plate = false;
     }
     Ok(())
+}
+
+/// Whether a turn by `rotation` leaves a model seated by the search on the face it was seated
+/// on; a tip onto an edge stands it on supports.
+fn keeps_face_down(rotation: Quat) -> bool {
+    (rotation * Vec3::NEG_Z).abs_diff_eq(Vec3::NEG_Z, 1e-4)
 }
 
 /// Moves the object over the middle of `printer`'s plate, of the origin with none.
@@ -245,4 +240,25 @@ fn centre(
     let edit = Edit::Move { object, by_mm };
     staging.apply(&edit, object, watch.stop).map_err(said)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_rotate_that_tips_a_seated_model_stands_it_on_supports() {
+        assert!(
+            keeps_face_down(Quat::IDENTITY),
+            "no turn keeps the face down"
+        );
+        assert!(
+            !keeps_face_down(euler_degrees(Vec3::new(30.0, 0.0, 0.0))),
+            "tipped onto an edge, it no longer rests on a face"
+        );
+        assert!(
+            keeps_face_down(euler_degrees(Vec3::new(0.0, 0.0, 30.0))),
+            "a turn about the vertical keeps the face down"
+        );
+    }
 }

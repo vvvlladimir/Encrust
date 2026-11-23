@@ -170,7 +170,8 @@ impl HollowJob {
             | Step::Combining
             | Step::Finishing
             | Step::Mending
-            | Step::Crossing => {
+            | Step::Crossing
+            | Step::Searching => {
                 tr!("job-hollow-shaping")
             }
         }

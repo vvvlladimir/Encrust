@@ -14,6 +14,8 @@ use core_volume::{
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
+use crate::hollow::hollowed_again;
+use core_engine::project::hollow_of;
 
 /// What a relief asks: the picture, where it is tiled and how it is pressed.
 #[derive(Debug, Clone, PartialEq)]
@@ -145,12 +147,12 @@ pub(crate) fn apply_relief(
 ) -> Result<Applied, ApplyError> {
     let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
     let transform = state.transform;
+    let hollow = hollow_of(&state.hollow, meshes);
     let sized = transform_mesh(&meshes.source, transform.sizing());
     let mut asked = asked.clone();
     asked.settings.mask.up = transform.rotation.inverse() * Vec3::Z;
     let painted = Some(&state.relief_painted).filter(|region| !region.is_empty());
     let done = relieved(&sized, &asked, painted, cancel, id)?;
-    // TODO(step-C9): re-hollow the object as the window's Relief tool does, once Hollow is an edit.
     document.reshape(id, done.mesh);
     document.set_transform(
         id,
@@ -160,6 +162,7 @@ pub(crate) fn apply_relief(
             ..transform
         },
     );
+    hollowed_again(document, id, (&hollow, transform.sizing().linear()), cancel)?;
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),

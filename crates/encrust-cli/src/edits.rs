@@ -4,9 +4,7 @@
 use std::str::FromStr;
 
 use anyhow::{Result, anyhow};
-use core_document::{ApplyError, MendAsked, mended};
-use core_edit::ObjectId;
-use core_geometry::{Mesh, list_shells};
+use core_document::{ApplyError, MendAsked};
 
 use crate::args::ImportArgs;
 
@@ -18,37 +16,14 @@ impl FromStr for BridgeEdges {
     type Err = String;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let edge = |part: &str| -> Option<[u32; 2]> {
-            let (a, b) = part.split_once('-')?;
-            Some([a.trim().parse().ok()?, b.trim().parse().ok()?])
-        };
-        let (first, second) = text
-            .split_once(':')
-            .ok_or_else(|| format!("`{text}` is not two edges as A-B:C-D"))?;
-        match (edge(first), edge(second)) {
-            (Some(a), Some(b)) => Ok(Self(a, b)),
-            _ => Err(format!(
-                "`{text}` is not two edges of vertex numbers as A-B:C-D"
-            )),
-        }
+        let [a, b] = core_edit::bridge_edges(text)
+            .ok_or_else(|| format!("`{text}` is not two edges of vertex numbers as A-B:C-D"))?;
+        Ok(Self(a, b))
     }
 }
 
 /// What the changes by hand did.
 pub use core_document::Mended as Edited;
-
-/// Turns, bridges and drops what `args` names on `mesh`: the turns and bridges first, the
-/// drops last, so no number moves under one still to come. `None` where none was named.
-pub fn apply(mesh: &mut Mesh, args: &ImportArgs) -> Result<Option<Edited>> {
-    let asked = mend_asked(args);
-    if asked.is_empty() {
-        return Ok(None);
-    }
-    let (faces, shells) = (mesh.faces.len(), list_shells(mesh).len());
-    mended(mesh, &asked, ObjectId::UNSET)
-        .map(Some)
-        .map_err(|error| refused(&error, (faces, shells), args))
-}
 
 /// The changes by hand `args` name.
 pub fn mend_asked(args: &ImportArgs) -> MendAsked {

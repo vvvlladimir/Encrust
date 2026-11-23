@@ -131,9 +131,14 @@ pub struct Hollow {
     /// Plate points round which the wall stays solid, mm, as `--keep-solid`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keep_solid_at_mm: Vec<[f32; 3]>,
-    /// The radius of each of those, mm; 4 when absent.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub keep_solid_radius_mm: Option<f32>,
+    /// How far each of those reaches past the wall into the cavity, mm, as `--keep-solid-size`;
+    /// fitted to the model when absent.
+    #[serde(
+        default,
+        alias = "keep_solid_radius_mm",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub keep_solid_reach_mm: Option<f32>,
     /// Opens the shell through the floor it stands on, so it drains with no hole.
     #[serde(default)]
     pub open_floor: bool,
@@ -225,6 +230,10 @@ pub struct Supports {
     /// How far round each of those the side reaches, mm; 4 when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shown_radius_mm: Option<f32>,
+    /// Groups of two plate points or more, mm: the supports whose contacts lie nearest one
+    /// group's points are joined into one tree, as `--merge-supports`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub merge_at_mm: Vec<Vec<[f32; 3]>>,
 }
 
 impl Repair {
@@ -394,6 +403,10 @@ impl Supports {
                 .iter()
                 .map(|at| format!("--shown-at={}{radius}", triple(*at))),
         );
+        for group in &self.merge_at_mm {
+            let points: Vec<String> = group.iter().map(|at| triple(*at)).collect();
+            flags.push(format!("--merge-supports={}", points.join(";")));
+        }
     }
 }
 
@@ -475,10 +488,10 @@ impl Hollow {
                 .map(|at| format!("--keep-solid={}", triple(*at))),
         );
         if let Some(mm) = self
-            .keep_solid_radius_mm
+            .keep_solid_reach_mm
             .filter(|_| !self.keep_solid_at_mm.is_empty())
         {
-            flags.push(format!("--keep-solid-radius={mm}"));
+            flags.push(format!("--keep-solid-size={mm}"));
         }
     }
 }

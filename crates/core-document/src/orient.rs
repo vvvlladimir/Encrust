@@ -9,8 +9,8 @@ use core_engine::{
     Choice, EngineError, KEEP_CLEAR_RADIUS_MM, KeepClear, SupportPlan, Trial, orient_for_print,
 };
 use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3, transform_mesh};
-use core_plate::{OrientGoal, OrientPreset, OrientSettings, PlateError, Printed, Watch};
-use core_volume::{Cancel, ModelHollow};
+use core_plate::{OrientGoal, OrientPreset, OrientSettings, Phase, PlateError, Printed, Watch};
+use core_volume::{Cancel, ModelHollow, Step};
 use printer_profiles::{
     Catalogue, MaterialProfile, PrinterProfile, ProfileError, Raft, SupportProfile, machine_named,
 };
@@ -20,6 +20,9 @@ use crate::document::Document;
 use crate::error::ApplyError;
 use crate::placement::{Footing, degrees_of, euler_degrees, stood_turned};
 use crate::supports::orient_plan_of;
+
+/// The pieces a search's share is counted in, so a bar moves in steps of a thousandth.
+const SHARE_PIECES: usize = 1000;
 
 /// What an `Orient` edit asks of an object: the aim, the tilt allowed, whether a clean surface
 /// is held to, the pose picked, the usable area it must stay on and the machine it is proved on.
@@ -279,7 +282,15 @@ pub(crate) fn ranked_poses(
         raster_window: rayon::current_num_threads(),
         keep_clear: keep_clear.as_ref(),
     };
-    let told = |_, _, _| !cancel.asked();
+    let told = |phase: Phase, done, total| {
+        let share = phase.share(done, total);
+        cancel.reached(
+            Step::Searching,
+            (share * SHARE_PIECES as f32) as usize,
+            SHARE_PIECES,
+        );
+        !cancel.asked()
+    };
     let found = orient_for_print(
         &body.printed(&state.shown_painted),
         &settings,

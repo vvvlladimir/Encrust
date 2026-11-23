@@ -1,15 +1,14 @@
 //! What a model is, read and checked without slicing it: `encrust inspect`.
 
-use super::checked::checked;
-use super::place::{centred, place};
-use super::relief::press_relief;
-use super::{Watch, load};
-use crate::args::ImportArgs;
+use super::Watch;
+use crate::args::{ImportArgs, ProfileArgs};
 use crate::exit::Stop;
 use crate::profiles::Chosen;
 use crate::report::ImportReport;
-use anyhow::Result;
-use core_geometry::{Bvh, self_intersections, weld};
+use crate::stage::{Shaping, placed_by_edits};
+use anyhow::{Context, Result};
+use core_edit::ObjectId;
+use core_geometry::{Bvh, self_intersections};
 use core_mesh_io::Loaded;
 use std::path::Path;
 
@@ -41,33 +40,21 @@ pub struct Inspect {
     pub shells: bool,
 }
 
-/// Loads and repairs a model without slicing it, for `inspect`, counting what `asked` names.
+/// A model read, mended, repaired and placed as `slice` takes it, without slicing it, for
+/// `inspect`, counting what `asked` names.
 pub fn inspect(
     input: &Path,
     args: &ImportArgs,
-    chosen: &Chosen,
+    (profile, chosen): (&ProfileArgs, &Chosen),
     asked: Inspect,
 ) -> Result<ImportReport> {
-    let profile = chosen.printer.as_ref();
-    let loaded = load(input)?;
-    let welded = weld(&loaded.mesh, args.weld_tolerance);
     let never = Stop::default();
     let quiet = Watch::quiet(&never);
-    let (mesh, _) = place(welded.mesh.clone(), args, None, chosen, &quiet)?;
-    // Pressed here too, so that what `inspect` measures is what would be printed.
-    let mut mesh = press_relief(mesh, &welded, &loaded, args, false)?;
-    if args.transform.center {
-        mesh = centred(mesh, profile)?;
-    }
-    let mut report = checked(
-        &mut mesh,
-        (input, welded),
-        args,
-        profile,
-        asked.shells,
-        &quiet,
-    )?;
+    let entry = (input.to_path_buf(), Shaping::of_import(args.clone())?);
+    let (staging, found) = placed_by_edits(&[entry], (profile, chosen), asked.shells, &quiet)?;
+    let (mut report, _) = found.into_iter().next().context("one model was read")?;
     if asked.intersections {
+        let mesh = staging.mesh(ObjectId(1)).unwrap_or_default();
         report.crossing_pairs = Some(self_intersections(&mesh, &Bvh::build(&mesh)).len());
     }
     Ok(report)

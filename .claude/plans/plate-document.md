@@ -985,12 +985,12 @@ Not now: code.
 - R6d8 Delete the old pipeline; `docs/cli.md`, `docs/features.md`, `docs/architecture.md`.
 
 ## Status (2026-11-20)
-Done, uncommitted: F1–F3, B1a, B1b, B2, B3, P1–P8 (tests, clippy, hygiene, arch green); D1's page
+Done, committed in c443284d: F1–F3, B1a, B1b, B2, B3, P1–P8 (tests, clippy, hygiene, arch green); D1's page
 `docs/design/cli-on-document.md` and ADR 0472 drafted. The user took every recommendation (2026-11-21):
 the page's "Decided" section; R6d1 done (unshaped models staged as a `Document`).
 
 ## Status (2026-11-22)
-Done, uncommitted: R6d2-R6d8. The command line stages every model as a `Document` and carries
+Done, committed in ea21c48d: R6d2-R6d8. The command line stages every model as a `Document` and carries
 each shaping flag out as an edit (`stage/{document,repaired,placed,modelled,finished}.rs`), the
 recipe executor's plate steps through `edits_of` + `apply` (`recipe/{piece,steps,plate}.rs`), the
 old pipeline deleted (`put_down`, `hollow_and_cut`, `stand_under`, `stage/ground.rs`,
@@ -998,6 +998,15 @@ old pipeline deleted (`put_down`, `hollow_and_cut`, `stand_under`, `stage/ground
 MCP too), `Hollow` keep-solid, `Drain { kind: Support }`, `MergeSupports`. Open: `inspect` still
 places a model by `pipeline/place.rs`; MCP does not yet map keep-solid, raft holes and merges to
 edits; the orient search shows a spinner, not its bar.
+
+## Status (2026-11-23)
+Done, uncommitted: the three left open above. `inspect` stages through `placed_by_edits`, the old
+search (`pipeline/place.rs`, now `oriented.rs`) and import's own repair and mends deleted; MCP maps
+keep-solid, walled and raft holes and merges (`merge_at_mm`) to edits and passes `--keep-solid-size`;
+the orient search reports through `Cancel::reporting` (`Step::Searching`), the CLI drawing its bar.
+Also: a relief edit hollows a hollow model again (`hollowed_again`), as the window's Relief does;
+MCP's mend carries bridges and the repair its limits. Open: R6c (the window's prepare on edits) and
+a revision shown by its file rather than its recipe (`unshown.rs`), both awaiting a design session.
 
 ### Decided by the user (2026-11-19)
 - The orient trial runs everywhere: with no printer named, on the standard printer (card P8).

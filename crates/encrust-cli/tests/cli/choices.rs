@@ -139,3 +139,28 @@ fn an_orient_with_no_printer_and_no_supports_is_still_proved_on_the_standard_pri
         "the first way was printed in a trial: {report}"
     );
 }
+
+#[test]
+fn inspect_stands_a_model_the_way_its_orientation_search_does() {
+    let bar = core_geometry::cuboid(
+        core_geometry::Vec3::ZERO,
+        core_geometry::Vec3::new(10.0, 20.0, 30.0),
+    );
+    let path = write_mesh_stl("inspect-orient", &bar);
+    let output = encrust(&[
+        "--json",
+        "inspect",
+        path.to_str().unwrap(),
+        "--orient",
+        "--orient-goal",
+        "shortest-print",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let height_mm = json(&output)["model"]["size_mm"][2]
+        .as_f64()
+        .expect("the size is reported");
+    assert!(
+        (height_mm - 10.0).abs() < 1e-3,
+        "the shortest print lays the 30 mm bar on its widest face, 10 mm tall, got {height_mm}"
+    );
+}

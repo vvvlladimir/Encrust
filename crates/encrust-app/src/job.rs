@@ -162,6 +162,7 @@ impl Counted {
             Step::Finishing => tr!("job-step-finishing"),
             Step::Mending => tr!("job-step-mending"),
             Step::Crossing => tr!("job-step-crossing"),
+            Step::Searching => tr!("job-step-searching"),
         }
     }
 }

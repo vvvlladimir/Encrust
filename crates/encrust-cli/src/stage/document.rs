@@ -10,7 +10,9 @@ use core_edit::{Edit, ObjectId};
 use core_engine::plate_models;
 use core_engine::project::{AutoSizing, Group, Manifest, SupportState, save};
 use core_engine::{Model, SupportPlan};
-use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar, Transform, signed_volume, transform_mesh};
+use core_geometry::{
+    Aabb, BoundingVolume, Mesh, Scalar, Transform, list_shells, signed_volume, transform_mesh,
+};
 use core_plate::ArrangeSettings;
 use core_volume::Cancel;
 use printer_profiles::{PrinterProfile, SupportProfile};
@@ -19,7 +21,7 @@ use super::finished::{self, Finished};
 use super::{
     Found, Laid, Part, Shaping, bounds, imported, modelled, placed, repaired, standing_of,
 };
-use crate::args::JobArgs;
+use crate::args::{JobArgs, ProfileArgs};
 use crate::exit::{Cancelled, Stop};
 use crate::pipeline::{Watch, read_again};
 use crate::plate_edits::{EditArgs, imported_model};
@@ -256,9 +258,6 @@ pub(super) fn shaped(
     watch: &Watch,
     by_recipe: bool,
 ) -> Result<(Staging, Vec<Found>)> {
-    let (meshes, mut found) = imported(entries, chosen, watch)?;
-    let pieces = meshes.into_iter().map(|mesh| vec![mesh]).collect();
-    let mut staging = Staging::of(pieces, &found, (entries, catalogue_ids(job)));
     // A recipe's orient and repair steps run what --orient and --repair ask.
     let owned: Vec<(PathBuf, Shaping)>;
     let edited = match by_recipe {
@@ -275,17 +274,35 @@ pub(super) fn shaped(
             &owned
         }
     };
-    let printer = chosen.printer.as_ref();
-    repaired::repaired(&mut staging, &mut found, edited, watch)?;
-    placed::placed(&mut staging, &mut found, edited, (job, printer), watch)?;
-    repaired::pressed(&mut staging, edited, watch)?;
-    read_again_where_reshaped(&staging, &mut found, edited, printer)?;
+    let (mut staging, found) = placed_by_edits(edited, (&job.profile, chosen), false, watch)?;
     if watch.talk {
         for (import, _) in &found {
             print!("{import}");
         }
     }
     modelled::modelled(&mut staging, &job.model, (watch.talk, watch.stop))?;
+    Ok((staging, found))
+}
+
+/// Each entry imported, then mended, repaired, placed and pressed by its flags' edits, as `slice`
+/// and `inspect` take it; `with_shells` lists its shells as import leaves it.
+pub(crate) fn placed_by_edits(
+    entries: &[(PathBuf, Shaping)],
+    (profile, chosen): (&ProfileArgs, &Chosen),
+    with_shells: bool,
+    watch: &Watch,
+) -> Result<(Staging, Vec<Found>)> {
+    let (meshes, mut found) = imported(entries, chosen, watch)?;
+    for (mesh, (import, _)) in meshes.iter().zip(&mut found) {
+        import.shells = with_shells.then(|| list_shells(mesh));
+    }
+    let pieces = meshes.into_iter().map(|mesh| vec![mesh]).collect();
+    let mut staging = Staging::of(pieces, &found, (entries, catalogue_ids(profile)));
+    let printer = chosen.printer.as_ref();
+    repaired::repaired(&mut staging, &mut found, entries, watch)?;
+    placed::placed(&mut staging, &mut found, entries, (profile, printer), watch)?;
+    repaired::pressed(&mut staging, entries, watch)?;
+    read_again_where_reshaped(&staging, &mut found, entries, printer)?;
     Ok((staging, found))
 }
 
@@ -321,8 +338,7 @@ fn hold(supports: &mut SupportState, plan: &SupportPlan) {
 
 /// The printer and resin the run names by catalogue id, which a project written keeps; none
 /// for one of a file.
-fn catalogue_ids(job: &JobArgs) -> Named {
-    let selection = &job.profile;
+fn catalogue_ids(selection: &ProfileArgs) -> Named {
     let printer = selection
         .printer
         .clone()

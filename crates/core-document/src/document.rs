@@ -167,13 +167,19 @@ impl Document {
         shell: Arc<Mesh>,
         settings: HollowState,
     ) {
-        let Some(index) = self.index_of(id) else {
-            return;
-        };
-        let state = &mut self.project.manifest.objects[index];
-        state.hollow.built = Some(built);
-        state.own_hollow = Some(settings);
-        self.project.models[index].shell = Some(shell);
+        if let Some(index) = self.index_of(id) {
+            self.project.manifest.objects[index].own_hollow = Some(settings);
+        }
+        self.set_built(id, built, shell);
+    }
+
+    /// Stands `shell` on object `id`, built as `built` records; the numbers it keeps as its own
+    /// and its supports stay. Nothing changes when `id` is not on the plate.
+    pub(crate) fn set_built(&mut self, id: ObjectId, built: BuiltCavity, shell: Arc<Mesh>) {
+        if let Some(index) = self.index_of(id) {
+            self.project.manifest.objects[index].hollow.built = Some(built);
+            self.project.models[index].shell = Some(shell);
+        }
     }
 
     /// Gives object `id` the blockers its wall is kept solid by, in its own space.

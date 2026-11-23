@@ -107,3 +107,52 @@ fn a_stopped_relief_is_cancelled() {
 
     assert_eq!(error, ApplyError::Cancelled);
 }
+
+#[test]
+fn a_hollow_cube_pressed_is_hollowed_again_keeping_its_holes() {
+    let mut document = Document::from_project(cube());
+    let walled = Edit::Hollow {
+        object: CUBE,
+        settings: core_engine::project::HollowState {
+            thickness_mm: 2.0,
+            mode: core_volume::HollowMode::Internal,
+            precision: 1.0,
+            infill_on: false,
+            infill: core_volume::InfillSettings::default(),
+            open_floor: false,
+            solid_under_mm: None,
+        },
+        keep_solid: Vec::new(),
+        keep_solid_reach_mm: None,
+    };
+    apply(&mut document, &walled, Cancel::never()).expect("the cube has room for a 2 mm wall");
+    let drilled = Edit::Drain {
+        object: CUBE,
+        at_mm: vec![core_geometry::Vec3::new(
+            SIDE_MM / 2.0,
+            SIDE_MM / 2.0,
+            SIDE_MM,
+        )],
+        size: core_volume::HoleSize::default(),
+        kind: core_volume::HoleKind::default(),
+        auto: false,
+        vent: false,
+    };
+    apply(&mut document, &drilled, Cancel::never()).expect("the top of the hollow cube drains");
+    let picture = checker_picture("hollow");
+
+    apply(&mut document, &relief_of(picture.clone()), Cancel::never())
+        .expect("a readable picture presses into a hollow cube");
+    std::fs::remove_file(&picture).expect("the picture is there to remove");
+
+    let (state, meshes) = document.object(CUBE).expect("the cube stays on the plate");
+    assert!(
+        state.hollow.built.is_some() && meshes.shell.is_some(),
+        "the window's Relief hollows the pressed model again, so the edit does"
+    );
+    assert_eq!(
+        state.hollow.drains.len(),
+        1,
+        "the hole is carried onto the new surface"
+    );
+}

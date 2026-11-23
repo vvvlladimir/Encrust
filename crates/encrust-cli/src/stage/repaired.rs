@@ -13,7 +13,7 @@ use super::document::{Staging, said};
 use super::{Found, Shaping};
 use crate::args::ImportArgs;
 use crate::edits::{mend_asked, refused};
-use crate::pipeline::{Watch, repair_refused, with_repair_bar};
+use crate::pipeline::{Watch, repair_refused, with_bar};
 use crate::report::{ImportReport, Wrapped};
 
 /// What import leaves to edits: the changes by hand, the repair and a picture's relief.
@@ -115,8 +115,10 @@ fn repair(
         seam_tolerance_mm: Some(args.seam_tolerance),
         smallest_shell_mm2: Some(args.smallest_shell),
     };
-    let applied = with_repair_bar(watch, |cancel| staging.apply_with(&edit, object, cancel))
-        .map_err(repair_refused)?;
+    let applied = with_bar(watch, "% of the repair", |cancel| {
+        staging.apply_with(&edit, object, cancel)
+    })
+    .map_err(repair_refused)?;
     if let Report::Repaired { mended, wrapped } = applied.report {
         import.mended = Some(mended);
         import.wrapped = method.wraps().then_some(match wrapped {

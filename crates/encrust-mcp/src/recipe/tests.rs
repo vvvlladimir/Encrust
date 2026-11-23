@@ -292,7 +292,7 @@ fn what_is_placed_by_hand_and_how_it_is_sliced_become_flags() {
             wall_mm: 2.0,
             mode: Some(HollowMode::External),
             keep_solid_at_mm: vec![[5.0, 5.0, 5.0]],
-            keep_solid_radius_mm: Some(3.0),
+            keep_solid_reach_mm: Some(3.0),
             ..Default::default()
         }),
         drains: Some(Drains {
@@ -308,6 +308,7 @@ fn what_is_placed_by_hand_and_how_it_is_sliced_become_flags() {
             only_at: true,
             shown_at_mm: vec![[2.0, 3.0, 4.0]],
             shown_radius_mm: Some(6.0),
+            merge_at_mm: vec![vec![[1.0, 1.0, 0.0], [2.0, 1.0, 0.0]]],
             ..Default::default()
         }),
         slicing: Some(Slicing {
@@ -332,13 +333,14 @@ fn what_is_placed_by_hand_and_how_it_is_sliced_become_flags() {
         "--hollow-mode=external",
         "--shown-at=2,3,4:6",
         "--keep-solid=5,5,5",
-        "--keep-solid-radius=3",
+        "--keep-solid-size=3",
         "--channel=0,0,1:10,0,1",
         "--drain-sides=6",
         "--drain-walled",
         "--support-profile=/profiles/thin.toml",
         "--support-at=1,1,0",
         "--support-only-at",
+        "--merge-supports=1,1,0;2,1,0",
         "--layer-height=0.03",
         "--no-anti-alias",
         "--remove-islands",

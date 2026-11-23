@@ -2569,6 +2569,7 @@ job-step-combining = Combining them
 job-step-finishing = Building the result
 job-step-mending = Repairing the mesh
 job-step-crossing = Finding where it crosses itself
+job-step-searching = Finding the best way to stand it
 job-hollow-preparing = Checking the model
 job-hollow-seeding = Measuring the surface
 job-hollow-carrying = Reaching across the wall

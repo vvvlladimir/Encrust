@@ -645,9 +645,9 @@ async fn each_revision_keeps_the_steps_its_check_ran_and_hands_them_to_the_open_
     let job = start(&client, &model).await;
     let edited = call(
         &client,
-        "set_hollow",
-        // Walls kept solid at points are no edit yet, so the revision goes by its recipe.
-        json!({"job": job, "hollow": {"wall_mm": 2.5, "keep_solid_at_mm": [[10.0, 10.0, 10.0]]}}),
+        "use_recipe",
+        // The way steps are decided is no edit, so the revision goes by its recipe.
+        json!({"job": job, "recipe": "miniatures"}),
     )
     .await;
     assert_eq!(answer(&edited)["window"], json!({"shown": true}));
@@ -659,8 +659,8 @@ async fn each_revision_keeps_the_steps_its_check_ran_and_hands_them_to_the_open_
     assert_eq!(lines[1]["revision"], 2);
     assert_eq!(lines[1]["recipe"].as_str(), Some(kept.as_str()));
     assert!(
-        kept.contains("wall_mm = 2.5"),
-        "the wall typed is the hollow step's: {kept}"
+        kept.contains("Miniatures"),
+        "the window runs the recipe's steps: {kept}"
     );
 }
 

@@ -6,8 +6,8 @@ use core_edit::ObjectId;
 use core_engine::project::{BuiltCavity, HollowState, hollow_of};
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
-    BLOCKER_REACH_MM, Blocker, BlockerSize, Cancel, HollowMode, HollowSettings, Hollowed, Shell,
-    VolumeError, blocker_under, carve, cavity_field, plate_down, rod_on,
+    BLOCKER_REACH_MM, Blocker, BlockerSize, Cancel, HollowMode, HollowSettings, Hollowed,
+    ModelHollow, Shell, VolumeError, blocker_under, carve, cavity_field, plate_down, rod_on,
 };
 
 use crate::apply::{Applied, Report};
@@ -148,6 +148,30 @@ pub(crate) fn apply_hollow(
         added: Vec::new(),
         report,
     })
+}
+
+/// Carries `hollow`, object `id`'s before its surface was replaced with one sized by `sizing`,
+/// onto the new surface and hollows it again as built, as the window's Relief tool does.
+pub(crate) fn hollowed_again(
+    document: &mut Document,
+    id: ObjectId,
+    (hollow, sizing): (&ModelHollow, Mat3),
+    cancel: Cancel<'_>,
+) -> Result<(), ApplyError> {
+    let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
+    let transform = state.transform;
+    let source = Arc::clone(&meshes.source);
+    let bvh = Bvh::build(&source);
+    let carried = hollow.carried_onto(&source, &bvh, sizing);
+    document.set_blockers(id, carried.blockers().to_vec());
+    document.set_cuts(id, carried.drains().to_vec(), carried.channels().to_vec());
+    let Some(asked) = hollow.asked() else {
+        return Ok(());
+    };
+    let settings = carried.asking(asked);
+    let shell = shelled((&source, &bvh), &settings, transform.unturned(), cancel, id)?;
+    document.set_built(id, BuiltCavity::of(&shell), shell.mesh);
+    Ok(())
 }
 
 #[cfg(test)]

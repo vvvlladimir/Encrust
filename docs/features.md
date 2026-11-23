@@ -622,7 +622,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Pick two or more supports of one model and **Merge into one** joins them into a single tree
   on one trunk, each tip kept however many there are; where the model is in the way or the
   trunk has nowhere to stand, the supports stay as they were and the stage says why.
-  `encrust --merge-supports` does the same by the contacts `--json` lists.
+  `encrust --merge-supports` does the same by the contacts `--json` lists, and a chat client
+  by `set_supports`' `merge_at_mm`.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports
@@ -1087,8 +1088,8 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 |---|---|
 | `slice` | One model, several models on one plate, a plate file (TOML) or a project, to a printer file or PNGs. A project slices one plate of your choosing or all of them, a file each. Orient, support, hollow, drain, relief, exposure bands, adaptive layers and island removal are all flags. |
 | `batch` | A whole folder of models, several at once, with a JSON report for each. A model that fails does not stop the rest. |
-| `estimate` | Time, resin, weight, cost and risky layers, without writing a file; the recipe the run took, your flags written into its steps, with `--recipe-out`. A project's plate edited first by a list of edits — a cut, a split, a part-off, a combine, a label, a repair, a mend by hand, a picture pressed in as relief, a hollowing, drain holes at points and by the engine's search with vents, a drainage channel, plugs for the holes, supports by a preset or sized automatically, at points, under a hollow's cavity and off what shows, a move, a turn, a scale, a delete, a duplicate, a mirror, an orientation by the search and the plate arranged — and the plate they leave written as a project; models are staged as such a plate and every flag that shapes them is one of those edits, so a flag and the same edit give one project. |
-| `inspect` | What is wrong with a model and whether it fits. |
+| `estimate` | Time, resin, weight, cost and risky layers, without writing a file; the recipe the run took, your flags written into its steps, with `--recipe-out`. A project's plate edited first by a list of edits — a cut, a split, a part-off, a combine, a label, a repair, a mend by hand, a picture pressed in as relief (a hollow model hollowed again under it, as in the window), a hollowing, drain holes at points and by the engine's search with vents, a drainage channel, plugs for the holes, supports by a preset or sized automatically, at points, under a hollow's cavity and off what shows, a move, a turn, a scale, a delete, a duplicate, a mirror, an orientation by the search and the plate arranged — and the plate they leave written as a project; models are staged as such a plate and every flag that shapes them is one of those edits, so a flag and the same edit give one project. |
+| `inspect` | What is wrong with a model and whether it fits, repaired, turned and placed as `slice` would. |
 | `render` | The plate as `slice` would build it — hollowed, drilled, supported — drawn as PNG pictures from the sides you name, the bottom included, with points of your choosing marked even where the model hides them. For a person at a terminal, or a model that reads images. |
 | `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
 | `convert` | A sliced file to another format. |
@@ -1136,7 +1137,7 @@ its models you change in the window.
 
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,
-progress bars that turn off when not on a terminal, and Ctrl-C that stops cleanly and
+progress bars — the repair's and the orientation search's among them — that turn off when not on a terminal, and Ctrl-C that stops cleanly and
 removes the half-written file.
 
 **Choosing a pose:** `--orient-choices` lists the search's best ways to stand a model with

@@ -10,7 +10,7 @@ use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar, Vec2, placed_aabb};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
-use crate::args::{ImportArgs, JobArgs};
+use crate::args::{ImportArgs, JobArgs, untyped};
 use crate::hollowing::{HollowArgs, HollowReport};
 use crate::modelling::ModelArgs;
 use crate::pipeline::{
@@ -25,7 +25,7 @@ use crate::{meeting, plate_file, project};
 
 mod document;
 
-pub(crate) use document::{Staging, said};
+pub(crate) use document::{Staging, placed_by_edits, said};
 pub(crate) use finished::{Finished, usable_area};
 pub(crate) use placed::{shipped_printer, summary_of};
 mod finished;
@@ -64,6 +64,17 @@ impl Shaping {
             import: job.import.clone(),
             hollow: job.hollow.clone(),
             supports: job.supports.plan()?,
+            position: None,
+            keyed: Keyed::default(),
+        })
+    }
+
+    /// What `import` asks of a model taken on its own, hollowing and supporting nothing.
+    pub fn of_import(import: ImportArgs) -> Result<Self> {
+        Ok(Self {
+            import,
+            hollow: untyped()?,
+            supports: None,
             position: None,
             keyed: Keyed::default(),
         })

@@ -64,6 +64,26 @@ fn a_bar_standing_on_its_end_is_laid_with_its_length_along_the_plate_for_the_sho
 }
 
 #[test]
+fn a_watched_search_reports_how_far_it_has_got_to_the_end() {
+    let mut document = standing_bar();
+    let progress = core_volume::Progress::default();
+
+    apply(
+        &mut document,
+        &orient(OrientAim::ShortestPrint, 0),
+        Cancel::never().reporting(&progress),
+    )
+    .expect("a bar can be oriented");
+
+    let (step, share) = progress.share().expect("the search reported its progress");
+    assert_eq!(step, core_volume::Step::Searching);
+    assert!(
+        (share - 1.0).abs() < 1e-6,
+        "a finished search is all done, got {share}"
+    );
+}
+
+#[test]
 fn a_pick_past_the_poses_found_is_no_choice() {
     let mut document = standing_bar();
     let edit = orient(OrientAim::ShortestPrint, 10_000);
