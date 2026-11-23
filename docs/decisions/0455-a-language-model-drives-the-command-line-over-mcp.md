@@ -5,7 +5,7 @@
 
 ## Context
 
-Users want a model in a chat client — Claude Desktop, Claude Code, Codex, Cursor — to take a
+Users want a model in a chat client — Claude Desktop, Claude Code or another — to take a
 file through repair, pose, hollow, drains, supports and the check to a printer file. The
 Model Context Protocol is how those clients reach a local program; a subscription's plan
 reaches a program only through such a client, never through an app's own login. `encrust`

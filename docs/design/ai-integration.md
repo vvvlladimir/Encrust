@@ -1,8 +1,8 @@
 # AI integration
 
 How a language model takes a model from its file to a checked printer file through Encrust,
-with no window open: from Claude Desktop through a local extension, from ChatGPT through a
-connector whose work runs in the user's browser, or from the window's own panel. The engine
+with no window open: from Claude Desktop through a local extension, from a web chat that
+reaches only remote servers through a connector whose work runs in the user's browser, or from the window's own panel. The engine
 computes on the user's machine in every case; nothing that reads a model runs on encrust.app.
 The server is ADR 0455; the rest is the plan.
 
@@ -30,7 +30,7 @@ orchestrates; every geometric choice — a pose, a wall, a hole, a tip — is th
 strict check decides when the work is done.
 
 ```
- Claude Desktop, Claude Code, Codex, Cursor ── stdio ──> encrust-mcp ──┐
+ Claude Desktop, Claude Code, an MCP client ── stdio ──> encrust-mcp ──┐
                                         └── or into the open window ───┤
  the window's agent panel (step 9) ── in process ───────────────────────┤
                                                                        v
@@ -38,7 +38,7 @@ strict check decides when the work is done.
                                                                        v
                                        core-engine, core-plate, core-volume, core-supports …
 
- ChatGPT ── HTTPS ──> the connector (routes calls, holds nothing) ──> its page in the chat
+ a web chat ── HTTPS ──> the connector (routes calls, holds nothing) ──> its page in the chat
                                                                        v
                                          web-engine in the user's browser: the same cores
 ```
@@ -137,7 +137,7 @@ release builds for ARM64 Windows and Linux (0454), which the extension ships for
 
 `encrust-mcp` as a binary over stdio, packed with `encrust` as an `.mcpb` bundle per
 platform (`server.type = "binary"`, `cargo xtask mcpb`). Double-clicking it installs it in
-Claude Desktop; Claude Code, Codex, Cursor and LM Studio take the same binary from their
+Claude Desktop; Claude Code and other MCP clients take the same binary from their
 config. The files are the user's own paths and the printer is on the user's network.
 
 - **Built by the release.** `release.yml` packs a bundle for each of its six targets after
@@ -154,12 +154,12 @@ config. The files are the user's own paths and the printer is on the user's netw
 Claude on the web and on a phone runs no local program and gives an MCP App page no file
 from the chat; it is served once one of those changes.
 
-### ChatGPT: a connector whose page computes
+### A web chat: a connector whose page computes
 
-ChatGPT reaches only a remote server. The connector is that server kept thin: it lists the
+A web chat that runs no local program reaches only a remote server. The connector is that server kept thin: it lists the
 tools and serves one MCP Apps page (SEP-1865), and does no geometry.
 
-- **The file.** `start_job` declares its model as `openai/fileParams`, so the file the user
+- **The file.** `start_job` declares its model as a file parameter in the host's metadata, so the file the user
   attaches in the chat arrives as a short-lived `download_url` and a `file_id`. The server
   hands the URL to the page, which fetches the bytes and keeps them in the browser under the
   `file_id`.
@@ -171,10 +171,10 @@ tools and serves one MCP Apps page (SEP-1865), and does no geometry.
 - **The file out.** The page offers the printer file as a download. Sending to a printer is
   not offered: the browser cannot reach the user's network.
 
-Step 18 is a spike (`prototypes/connector/README.md`) that settles, in ChatGPT on the web and the desktop app, with a 20 MB STL:
+Step 18 is a spike (commit 602ae603, its throwaway code since removed) that settles, in such a chat on the web and its desktop app, with a 20 MB STL:
 the page can fetch the `download_url`; a prepare of a figure finishes within a minute on a
 laptop with no cross-origin isolation; the report reaches the model in the same turn; the
-file downloads. A failed answer stops the connector, and ChatGPT users go through Codex,
+file downloads. A failed answer stops the connector, and that chat's users go through a local MCP client,
 which runs the local server today.
 
 ### In the window
@@ -188,9 +188,9 @@ threads the window already uses, never on the page's thread in a browser. Its pr
 | Provider | Needs | In the window | Over MCP |
 |---|---|---|---|
 | A Claude subscription | Claude Desktop or Claude Code | no: Anthropic lets no other product sign in with it | yes, the extension |
-| A ChatGPT subscription | ChatGPT for the connector, or Codex | only through OpenAI's own "Sign in with ChatGPT" for apps, once its terms are read | the connector, or Codex locally |
-| An API key | Anthropic, OpenAI or any OpenAI-compatible service | yes, the key in the system's keychain | yes |
-| A local model | Ollama or LM Studio | yes, no key and no account | yes |
+| Another chat subscription | its web chat for the connector, or its local MCP client | only through a sign-in its maker offers to apps, once its terms are read | the connector, or its client locally |
+| An API key | Anthropic or any compatible service | yes, the key in the system's keychain | yes |
+| A local model | a local model server | yes, no key and no account | yes |
 
 The window never borrows a client's login token, nor drives an installed Claude Code as
 its engine: neither is a route its maker offers. A small local model calls tools less
@@ -244,7 +244,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0460); a resin from a label's numbers by `create_resin` (done, ADR 0464) | 12 |
 | 16 | After the print: `report_print`, `print-failures.md` and the command line reading it | `encrust-cli`, `encrust-mcp` (done, ADR 0463) | 12 |
 | 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `encrust-cli`, `encrust-mcp` (done, ADR 0462) | 14 |
-| 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | `prototypes/connector` (built; a prepare in an unisolated page measured at 20 s for a 175k-face figure; the rest waits on a run in ChatGPT) | 12 |
+| 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | the spike, removed after 602ae603 (built; a prepare in an unisolated page measured at 20 s for a 175k-face figure; the rest waits on a run in a web chat) | 12 |
 | 19 | `web-engine` prepares, checks and draws; the connector and its page | `web-engine`, a new crate | 18 |
 | 20 | The extension shipped: bundles in `release.yml`, signed where the certificate is set, File → Use with Claude Desktop | `.github`, `xtask`, `encrust-app` (done, ADR 0461); the site's button is the site's | 12, 15 |
 | 21 | The bench's sets per use, and their prints | `agent-lab` | 13–17 |
@@ -269,8 +269,8 @@ Order: 19 once the spike's live run answers; 21 grows with each; 9 and 10 last.
 
 ## Open decisions
 
-1. **The window's providers:** an API key and local models first; "Sign in with ChatGPT"
-   once OpenAI's terms for apps are confirmed.
+1. **The window's providers:** an API key and local models first; another maker's sign-in
+   once its terms for apps are confirmed.
 2. **The connector's server** (before step 19, an ADR): where it is hosted on a free tier,
    and in what language; it sees a file's URL, never its bytes.
 3. **Photos** (settled by ADR 0463): the client names symptoms from the fixed list, and no

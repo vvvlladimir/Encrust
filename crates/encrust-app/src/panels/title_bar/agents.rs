@@ -232,8 +232,6 @@ fn client_name(client: Option<&str>) -> String {
     match client {
         Some("claude-code") => "Claude Code".to_owned(),
         Some("claude-ai") => "Claude Desktop".to_owned(),
-        Some(name) if name.starts_with("codex") => "Codex".to_owned(),
-        Some(name) if name.to_ascii_lowercase().contains("cursor") => "Cursor".to_owned(),
         Some(name) if !name.is_empty() => name.to_owned(),
         _ => tr!("agents-unnamed"),
     }

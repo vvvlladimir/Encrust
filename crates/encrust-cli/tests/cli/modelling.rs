@@ -119,3 +119,34 @@ fn a_label_on_several_models_not_combined_is_refused() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("--combine"));
 }
+
+#[test]
+fn models_combined_and_centred_are_joined_where_their_files_put_them_then_centred_as_one() {
+    let big = write_box_stl("model-centred-big", 16.0, 12, 0);
+    let beside = write_boxes_stl(
+        "model-centred-beside",
+        &[([10.0, 0.0, 0.0], [20.0, 10.0, 10.0])],
+    );
+    let panel = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/project-panel.toml");
+    let out = output_dir("combined-centred");
+    let output = slice(&[
+        big.to_str().unwrap(),
+        beside.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--combine",
+        "union",
+        "--center",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    succeeded(&output);
+    // 2.5 mm up: the 16 mm square and the 4 x 10 mm the box beside it reaches past, 296 mm².
+    let lit = lit_pixels(&out, 2);
+    assert!(
+        (lit as f32 - 7_400.0).abs() / 7_400.0 < 0.02,
+        "joined as the files place them, 7 400 pixels at a 0.2 mm pitch, got {lit}"
+    );
+}

@@ -258,29 +258,35 @@ pub(super) fn shaped(
     watch: &Watch,
     by_recipe: bool,
 ) -> Result<(Staging, Vec<Found>)> {
-    // A recipe's orient and repair steps run what --orient and --repair ask.
-    let owned: Vec<(PathBuf, Shaping)>;
-    let edited = match by_recipe {
-        false => entries,
-        true => {
-            owned = (entries.iter())
-                .map(|(path, shaping)| {
-                    let mut shaping = shaping.clone();
-                    shaping.import.transform.orient = false;
-                    shaping.import.repair = None;
-                    (path.clone(), shaping)
-                })
-                .collect();
-            &owned
-        }
-    };
-    let (mut staging, found) = placed_by_edits(edited, (&job.profile, chosen), false, watch)?;
+    // A recipe's orient and repair steps run what --orient and --repair ask; models combined
+    // are joined where their files put them and the one they make is centred.
+    let combining = job.model.combine.is_some();
+    let edited: Vec<(PathBuf, Shaping)> = (entries.iter())
+        .map(|(path, shaping)| {
+            let mut shaping = shaping.clone();
+            let transform = &mut shaping.import.transform;
+            if by_recipe {
+                transform.orient = false;
+                shaping.import.repair = None;
+            }
+            if combining {
+                transform.center = false;
+            }
+            (path.clone(), shaping)
+        })
+        .collect();
+    let centred = entries
+        .iter()
+        .any(|(_, shaping)| shaping.import.transform.center);
+    let printer = chosen.printer.as_ref();
+    let (mut staging, found) = placed_by_edits(&edited, (&job.profile, chosen), false, watch)?;
     if watch.talk {
         for (import, _) in &found {
             print!("{import}");
         }
     }
-    modelled::modelled(&mut staging, &job.model, (watch.talk, watch.stop))?;
+    let centred = (combining && centred).then_some(printer);
+    modelled::modelled(&mut staging, &job.model, centred, watch)?;
     Ok((staging, found))
 }
 

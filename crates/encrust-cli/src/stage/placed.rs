@@ -223,7 +223,7 @@ fn keeps_face_down(rotation: Quat) -> bool {
 }
 
 /// Moves the object over the middle of `printer`'s plate, of the origin with none.
-fn centre(
+pub(super) fn centre(
     staging: &mut Staging,
     object: ObjectId,
     printer: Option<&PrinterProfile>,

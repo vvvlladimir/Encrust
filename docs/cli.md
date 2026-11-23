@@ -214,7 +214,8 @@ encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 --keep-solid-u
 
 Modelling, as the window's Relief and Cut tools do it, before the models are hollowed and
 supported (ADR 0312). `--combine union|difference|intersection` makes every model given one,
-a difference keeping the first; `--label TEXT --label-at X,Y,Z` writes on the surface nearest
+a difference keeping the first, joined where their files put them and, with `--center`, the one
+they make centred; `--label TEXT --label-at X,Y,Z` writes on the surface nearest
 that plate point, with `--label-height`, `--label-depth`, `--label-sunk`, `--label-follow`,
 `--label-angle` and `--label-font`; `--cut x|y|z:MM` cuts at a plate coordinate, `--keep
 both|lower|upper` picks the halves and `--joint dowels|pins|magnets|key` joins them at the
@@ -1004,8 +1005,8 @@ The bundle carries both binaries for the platform it is built on, or for `--targ
 Desktop installs it by a double click or from Settings, Extensions. Each release attaches one
 for each of its platforms, `releases/latest/download/encrust-<os>-<arch>.mcpb`, and the
 window's File → Use with Claude Desktop downloads the one for its version (ADR 0461). By hand, Claude Desktop takes the server in
-`claude_desktop_config.json` and Codex in `~/.codex/config.toml`, whose 60 s default is too
-short for a hollowed model:
+`claude_desktop_config.json`; a client that times its tools out needs more than 60 s for a
+hollowed model, as in a TOML configuration:
 
 ```json
 { "mcpServers": { "encrust": { "command": "/path/to/encrust-mcp" } } }
@@ -1189,7 +1190,7 @@ not change (ADR 0458).
 cargo build --release -p encrust-cli -p encrust-mcp
 target/release/agent-lab model.stl --printer elegoo-mars-4-ultra --resin my-grey \
   --agent 'sonnet=claude -p {prompt} --model sonnet --output-format json --mcp-config {mcp_config} --strict-mcp-config --allowedTools mcp__encrust' \
-  --agent 'codex=codex exec --json -c mcp_servers.encrust.command={encrust_mcp} -c mcp_servers.encrust.args={mcp_args} -c mcp_servers.encrust.tool_timeout_sec=1800 {prompt}' \
+  --agent 'haiku=claude -p {prompt} --model haiku --output-format json --mcp-config {mcp_config} --strict-mcp-config --allowedTools mcp__encrust' \
   --json now.json --baseline before.json \
   --judge 'claude -p {prompt} --model opus --allowedTools Read'
 ```

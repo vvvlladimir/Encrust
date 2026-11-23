@@ -272,7 +272,7 @@ pub fn models(
     let shaping = Shaping::of(job)?;
     refuse_idle_cavity(job, &shaping)?;
     if paths.len() > 1 {
-        refuse_one_model_flags(&shaping)?;
+        refuse_one_model_flags(&shaping, job.model.combine.is_some())?;
         let one_spot = job.model.label.is_some() || job.model.part_off.is_some();
         if one_spot && job.model.combine.is_none() {
             bail!("--label-at and --part-off point at one model; --combine makes the models one");
@@ -289,9 +289,10 @@ pub fn models(
     plate_of(&entries, arrange, layer_height, job, chosen, watch)
 }
 
-/// Flags that point at one spot on one model mean nothing across several.
-pub fn refuse_one_model_flags(shaping: &Shaping) -> Result<()> {
-    if shaping.import.transform.center {
+/// Flags that point at one spot on one model mean nothing across several; models `combined`
+/// make one, which `--center` stands in the middle.
+pub fn refuse_one_model_flags(shaping: &Shaping, combined: bool) -> Result<()> {
+    if shaping.import.transform.center && !combined {
         bail!("--center stands every model in the middle of the plate; --arrange spreads them");
     }
     if shaping.hollow.pointing() {

@@ -6,19 +6,30 @@ use core_document::{ApplyError, Report};
 use core_edit::{Edit, ObjectId};
 use core_geometry::{Scalar, Vec3};
 use core_joint::{JointKind, Joints};
+use printer_profiles::PrinterProfile;
 
 use super::document::{Staging, said};
+use super::placed::centre;
 use crate::exit::Stop;
 use crate::modelling::{ModelArgs, Op};
+use crate::pipeline::Watch;
 
-/// Combines, labels, cuts and parts the plate's objects as `args` ask.
+/// Combines, centres the one model that makes where `centred` names the printer's plate, then
+/// labels, cuts and parts the plate's objects as `args` ask.
 pub(super) fn modelled(
     staging: &mut Staging,
     args: &ModelArgs,
-    (talk, stop): (bool, &Stop),
+    centred: Option<Option<&PrinterProfile>>,
+    watch: &Watch,
 ) -> Result<()> {
+    let (talk, stop) = (watch.talk, watch.stop);
     if let Some(op) = args.combine {
         combine(staging, op, (talk, stop))?;
+        if let Some(printer) = centred {
+            for id in staging.ids() {
+                centre(staging, id, printer, watch)?;
+            }
+        }
     }
     if let Some(text) = &args.label {
         for id in staging.ids() {

@@ -1126,3 +1126,20 @@ async fn a_revision_asked_for_is_shown_in_the_window_marked_open_and_with_none_t
     );
     client.cancel().await.expect("the server stops");
 }
+
+#[tokio::test]
+async fn models_combined_are_one_model_the_command_line_takes() {
+    let dir = scratch("combine");
+    let (model, client) = cube_and_server(&dir).await;
+    let other = dir.join("other.stl");
+    write_stl(&cuboid(Vec3::splat(10.0), Vec3::splat(30.0)), &other);
+    let job = start(&client, &model).await;
+    let combine = json!({"op": "union", "with": [other]});
+    let combined = call(
+        &client,
+        "set_shape",
+        json!({"job": job, "modelling": {"combine": combine}}),
+    )
+    .await;
+    assert!(!failed(&combined), "{}", answer(&combined));
+}
