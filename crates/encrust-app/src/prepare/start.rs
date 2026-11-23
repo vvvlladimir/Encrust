@@ -5,7 +5,7 @@ use core_recipe::{Plan, StepKind};
 
 use super::{Run, poll};
 use crate::i18n::tr;
-use crate::scene::{ObjectId, SceneObject};
+use crate::scene::ObjectId;
 use crate::state::{Doc, Machine, Tools};
 use crate::tool_settings::ToolSettings;
 
@@ -86,32 +86,6 @@ pub(super) fn start_on(
 ) -> Result<()> {
     can_start(&plan, &ids, doc, tools, machine)?;
     hold(doc, tools, machine);
-    tools.prepare.run = Some(Run::new(plan, ids));
-    poll(doc, tools, machine, true);
-    Ok(())
-}
-
-/// Starts `plan` on `fresh`'s models, each put back as `fresh` holds it and `gone` taken off
-/// the plate first, within the run's one undo: a revision of a chat client's job run again
-/// from the model as it came in (ADR 0459).
-pub fn start_replay(
-    plan: Plan,
-    (fresh, gone): (&[SceneObject], &[ObjectId]),
-    doc: &mut Doc,
-    tools: &mut Tools,
-    machine: &mut Machine,
-) -> Result<()> {
-    let ids: Vec<ObjectId> = fresh.iter().map(|object| object.id).collect();
-    can_start(&plan, &ids, doc, tools, machine)?;
-    hold(doc, tools, machine);
-    for id in gone {
-        doc.scene.remove(*id);
-    }
-    for object in fresh {
-        if let Some(standing) = doc.scene.get_mut(object.id) {
-            *standing = object.clone();
-        }
-    }
     tools.prepare.run = Some(Run::new(plan, ids));
     poll(doc, tools, machine, true);
     Ok(())

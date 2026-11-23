@@ -12,8 +12,8 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
 
-use super::line::{Line, PLATE_SCHEMA, read as read_line};
-use super::request::Reply;
+use super::line::{Line, read as read_line};
+use super::request::{Reply, SCHEMA};
 
 /// The longest line read from a connection, bytes: a recipe is a few hundred.
 const MOST_BYTES: u64 = 1 << 20;
@@ -117,7 +117,7 @@ fn write_file(file: &Path, port: u16, token: &str) -> Result<()> {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
     let text = json!({
-        "schema": PLATE_SCHEMA, "port": port, "token": token, "pid": std::process::id(),
+        "schema": SCHEMA, "port": port, "token": token, "pid": std::process::id(),
     });
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);

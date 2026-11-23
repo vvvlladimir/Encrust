@@ -1,7 +1,7 @@
-//! The open window, when there is one: each revision kept is handed to it to run its recipe on
-//! its plate, over the loopback port its file names (`docs/design/window-link.md`).
+//! The open window, when there is one: each revision kept is handed to it as the plate its
+//! check wrote, over the loopback port its file names (`docs/design/window-link.md`).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -14,8 +14,8 @@ use tokio::net::TcpStream;
 
 use crate::jobs::Revision;
 
-/// The schema of the line the window reads.
-const SCHEMA: u64 = 2;
+/// The schema of a revision handed over as its plate (ADR 0473).
+const SCHEMA: u64 = 4;
 /// How long the window may take to take the connection.
 const CONNECT_WAIT: Duration = Duration::from_secs(1);
 /// How long it may take to answer: its next frame, which a busy plate can hold up.
@@ -46,24 +46,18 @@ impl Window {
 
     /// Hands `revision` to the window marked `open`, so it is shown whether the window
     /// follows its agents or not, starting the window first where none answers (ADR 0465).
-    pub async fn show_now(&self, revision: &Revision) -> Result<(Value, bool)> {
-        if revision.steps.is_none() {
-            bail!(
-                "revision {} keeps no recipe for the window to run",
-                revision.number
-            );
-        }
+    pub async fn show_now(&self, revision: &Revision, plate: &Path) -> Result<(Value, bool)> {
         if self.file.is_none() {
             bail!("this server was started with --no-window");
         }
-        if let Some(answer) = self.show(revision, true).await {
+        if let Some(answer) = self.show(revision, plate, true).await {
             return Ok((answer, false));
         }
         self.start()?;
         let started = Instant::now();
         while started.elapsed() < START_WAIT {
             tokio::time::sleep(START_POLL).await;
-            if let Some(answer) = self.show(revision, true).await {
+            if let Some(answer) = self.show(revision, plate, true).await {
                 return Ok((answer, true));
             }
         }
@@ -96,11 +90,10 @@ impl Window {
         )
     }
 
-    /// Hands `revision` to the window and answers what it said; `None` when no window is
-    /// open or the revision has no recipe to run, so the tool's answer says nothing of one.
-    /// One not marked `open` is run only while the window follows its agents.
-    pub async fn show(&self, revision: &Revision, open: bool) -> Option<Value> {
-        let steps = revision.steps.as_ref()?;
+    /// Hands `revision`, its `plate` as its check wrote it, to the window and answers what it
+    /// said; `None` when no window is open, so the tool's answer says nothing of one. One not
+    /// marked `open` is shown only while the window follows its agents.
+    pub async fn show(&self, revision: &Revision, plate: &Path, open: bool) -> Option<Value> {
         let (stream, token) = self.connect().await?;
         let line = json!({
             "schema": SCHEMA,
@@ -110,7 +103,7 @@ impl Window {
             "model": revision.recipe.model,
             "printer": revision.recipe.printer,
             "resin": revision.recipe.resin,
-            "recipe": steps,
+            "plate": plate,
             "open": open,
         });
         Some(
@@ -198,6 +191,8 @@ mod tests {
         }
     }
 
+    const PLATE: &str = "/jobs/cube-1/2.encrust";
+
     fn file(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
             "encrust-mcp-window-{name}-{}.json",
@@ -206,23 +201,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_revision_with_no_recipe_is_not_handed_over() {
-        let unstepped = Revision {
-            steps: None,
-            ..revision()
-        };
-        assert_eq!(
-            Window::new(Some(file("unstepped")), Vec::new())
-                .show(&unstepped, false)
-                .await,
-            None
-        );
-    }
-
-    #[tokio::test]
     async fn with_no_window_file_there_is_no_window() {
         let window = Window::new(Some(file("none")), Vec::new());
-        assert_eq!(window.show(&revision(), false).await, None);
+        assert_eq!(
+            window.show(&revision(), Path::new(PLATE), false).await,
+            None
+        );
     }
 
     #[tokio::test]
@@ -245,7 +229,7 @@ mod tests {
             serde_json::from_str::<Value>(&line).expect("the line is JSON")
         });
         let answered = Window::new(Some(path), Vec::new())
-            .show(&revision(), true)
+            .show(&revision(), Path::new(PLATE), true)
             .await;
         assert_eq!(answered, Some(json!({"shown": true})));
         let line = window.await.expect("the window's task ends");
@@ -255,7 +239,8 @@ mod tests {
             (Some("cube-1"), Some(2))
         );
         assert_eq!(line["model"], "/m/cube.stl");
-        assert_eq!(line["recipe"], "name = \"r\"\nformat = 1\n");
+        assert_eq!(line["plate"], PLATE);
+        assert_eq!(line["schema"], 4);
         assert_eq!(line["open"], true);
     }
 
@@ -263,7 +248,7 @@ mod tests {
     async fn with_no_window_and_nothing_to_start_one_the_client_is_told_to_open_encrust() {
         let window = Window::new(Some(file("nothing")), vec!["/no/such/encrust-app".into()]);
         let error = window
-            .show_now(&revision())
+            .show_now(&revision(), Path::new(PLATE))
             .await
             .expect_err("no window could be shown");
         assert!(format!("{error:#}").contains("open Encrust"), "{error:#}");

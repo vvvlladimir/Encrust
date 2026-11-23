@@ -2,20 +2,33 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 
+use core_engine::project::save;
+use core_geometry::{Vec3, transform_mesh};
 use serde_json::{Value, json};
 
 use super::*;
 use crate::camera::OrbitCamera;
+use crate::project::state::{Captured, capture};
+use crate::scene::fixtures::scene_of_boxes;
+use crate::slicing::Slicing;
 use crate::state::{Doc, Machine, Tools, View};
 use crate::tool_settings::ToolSettings;
 use crate::undo::Frame;
 use crate::workspace::{Mode, Tool};
 
-/// A hollow step alone, at a wall `wall_mm` thick.
-fn hollowing(wall_mm: f32) -> String {
-    format!(
-        "name = \"r\"\nformat = 1\n\n[[step]]\ndo = \"hollow\"\nset = {{ wall_mm = {wall_mm} }}\n"
-    )
+/// A plate of one 10 mm box with its low corner at `low`, written as the server keeps a
+/// revision's, at `path`.
+fn plate_at(path: &Path, low: Vec3) -> PathBuf {
+    let scene = scene_of_boxes(&[(low, low + Vec3::splat(10.0))]);
+    let (slicing, tools) = (Slicing::default(), Tools::default());
+    let plate = capture(Captured {
+        scene: &scene,
+        slicing: &slicing,
+        tools: &tools,
+    });
+    std::fs::create_dir_all(path.parent().expect("a folder")).expect("writable");
+    save(path, &plate).expect("the plate is written");
+    path.to_owned()
 }
 
 fn cube() -> PathBuf {
@@ -45,17 +58,23 @@ fn send(file: &Path, line: &Value) -> Value {
     serde_json::from_str(&reply).expect("the answer is JSON")
 }
 
-/// Revision `revision` of job `cube-1` with `recipe`, as `encrust-mcp` writes it.
-fn line(file: &Path, revision: u32, recipe: &str) -> Value {
+/// Revision `revision` of job `cube-1` shown by `plate`, as `encrust-mcp` writes it.
+fn line(file: &Path, revision: u32, plate: &Path) -> Value {
     json!({"schema": request::SCHEMA, "token": found(file)["token"], "job": "cube-1",
-           "revision": revision, "model": cube(), "printer": "", "resin": "", "recipe": recipe})
+           "revision": revision, "model": cube(), "printer": "", "resin": "", "plate": plate})
+}
+
+/// The plate of revision `revision` with its box at `x` mm, beside the window's file.
+fn revision_plate(file: &Path, revision: u32, x: f32) -> PathBuf {
+    let path = file.with_file_name(format!("plates/{revision}-{x}.encrust"));
+    plate_at(&path, Vec3::new(x, 0.0, 0.0))
 }
 
 #[test]
 fn a_line_with_another_token_is_refused_and_never_reaches_the_window() {
     let file = scratch("token");
     let link = Link::start(file.clone(), || {}).expect("a loopback port is free");
-    let mut refused = line(&file, 1, &hollowing(2.0));
+    let mut refused = line(&file, 1, &revision_plate(&file, 1, 0.0));
     refused["token"] = json!("not-it");
     assert_eq!(send(&file, &refused)["shown"], false);
     assert!(
@@ -169,35 +188,47 @@ impl Bench {
         working
     }
 
-    fn wall_mm(&self) -> Option<f32> {
-        let objects = self.doc.scene.objects();
-        assert_eq!(objects.len(), 1, "the job's model was read in once");
-        objects[0].hollow.asked().map(|asked| asked.thickness_mm)
+    /// Where each box on the plate starts along x, mm, in plate order.
+    fn lows_x(&self) -> Vec<f32> {
+        (self.doc.scene.objects().iter())
+            .filter_map(|object| transform_mesh(&object.mesh, object.transform).aabb())
+            .map(|bounds| bounds.mins.x)
+            .collect()
     }
 }
 
 #[test]
-fn a_recipe_that_does_not_read_is_refused_with_why() {
+fn a_plate_that_does_not_read_is_refused_with_why() {
     let file = scratch("unread");
     let mut bench = Bench::new(file.clone());
-    let reply = bench.hand_over(&file, line(&file, 1, "do = \"nothing\""));
+    let missing = file.with_file_name("no-such.encrust");
+    let reply = bench.hand_over(&file, line(&file, 1, &missing));
     assert_eq!(reply["shown"], false);
     assert!(
         reply["why_not"]
             .as_str()
-            .is_some_and(|why| why.contains("recipe")),
+            .is_some_and(|why| why.contains("plate")),
         "{reply}"
     );
 }
 
 #[test]
-fn a_revision_runs_its_recipe_on_the_model_read_in_and_is_undone_as_one_edit() {
-    let file = scratch("replay");
+fn a_revision_stands_its_plate_beside_the_users_model_and_is_undone_as_one_edit() {
+    let file = scratch("shown");
     let mut bench = Bench::new(file.clone());
-    let reply = bench.hand_over(&file, line(&file, 1, &hollowing(1.5)));
-    assert_eq!(reply, json!({"shown": true}));
+    bench.doc.scene = scene_of_boxes(&[(Vec3::new(50.0, 0.0, 0.0), Vec3::splat(60.0))]);
     bench.run_to_end();
-    assert_eq!(bench.wall_mm(), Some(1.5), "hollowed at the recipe's wall");
+    let plate = revision_plate(&file, 1, 0.0);
+    assert_eq!(
+        bench.hand_over(&file, line(&file, 1, &plate)),
+        json!({"shown": true})
+    );
+    bench.run_to_end();
+    assert_eq!(
+        bench.lows_x(),
+        [50.0, 0.0],
+        "the user's box and the revision's"
+    );
     let Bench {
         doc,
         tools,
@@ -208,25 +239,21 @@ fn a_revision_runs_its_recipe_on_the_model_read_in_and_is_undone_as_one_edit() {
         doc.history
             .undo(&mut doc.scene, tools, &mut machine.slicing)
     );
-    let objects = doc.scene.objects();
-    assert!(
-        objects.len() == 1 && !objects[0].hollow.is_hollow(),
-        "one undo takes the revision off and leaves the model as it came in"
-    );
+    assert_eq!(bench.lows_x(), [50.0], "one undo takes the revision off");
 }
 
 #[test]
-fn the_next_revision_starts_again_from_the_model_as_it_came_in() {
+fn the_next_revision_stands_in_place_of_the_last() {
     let file = scratch("again");
     let mut bench = Bench::new(file.clone());
-    bench.hand_over(&file, line(&file, 1, &hollowing(1.5)));
+    bench.hand_over(&file, line(&file, 1, &revision_plate(&file, 1, 0.0)));
     bench.run_to_end();
-    bench.hand_over(&file, line(&file, 2, "name = \"r\"\nformat = 1\n"));
+    bench.hand_over(&file, line(&file, 2, &revision_plate(&file, 2, 20.0)));
     bench.run_to_end();
     assert_eq!(
-        bench.wall_mm(),
-        None,
-        "a recipe of no steps leaves the cube solid"
+        bench.lows_x(),
+        [20.0],
+        "revision 2 alone, where its plate stands it"
     );
 }
 
@@ -235,7 +262,8 @@ fn a_revision_handed_over_while_not_following_is_listed_only_unless_marked_open(
     let file = scratch("not-following");
     let mut bench = Bench::new(file.clone());
     bench.machine.general.follow_agents = false;
-    let reply = bench.hand_over(&file, line(&file, 1, &hollowing(1.5)));
+    let plate = revision_plate(&file, 1, 0.0);
+    let reply = bench.hand_over(&file, line(&file, 1, &plate));
     assert_eq!(reply["shown"], false);
     assert!(
         reply["why_not"]
@@ -249,11 +277,11 @@ fn a_revision_handed_over_while_not_following_is_listed_only_unless_marked_open(
         "the plate is left alone"
     );
 
-    let mut asked = line(&file, 2, &hollowing(1.5));
+    let mut asked = line(&file, 2, &plate);
     asked["open"] = json!(true);
     assert_eq!(bench.hand_over(&file, asked), json!({"shown": true}));
     bench.run_to_end();
-    assert_eq!(bench.wall_mm(), Some(1.5));
+    assert_eq!(bench.lows_x(), [0.0]);
 }
 
 #[test]
@@ -262,26 +290,35 @@ fn a_revision_the_user_asks_for_is_read_from_the_servers_jobs_and_shown() {
     let job = file.with_file_name("mcp-jobs").join("cube-1");
     std::fs::create_dir_all(&job).expect("writable");
     let flags = json!([cube(), "--printer=", "--resin="]).to_string();
-    std::fs::write(job.join("3.args.json"), flags).expect("writable");
-    std::fs::write(job.join("3.recipe.toml"), hollowing(1.5)).expect("writable");
+    std::fs::write(job.join("3.args.json"), &flags).expect("writable");
+    plate_at(&job.join("3.encrust"), Vec3::new(5.0, 0.0, 0.0));
     let mut bench = Bench::new(file);
     bench.machine.general.follow_agents = false;
-    bench.machine.agents.asked.push(crate::agents::Asked {
+    let ask = |revision| crate::agents::Asked {
         job: "cube-1".into(),
-        revision: 3,
-    });
+        revision,
+    };
+    bench.machine.agents.asked.push(ask(3));
     bench.run_to_end();
-    assert_eq!(bench.wall_mm(), Some(1.5));
+    assert_eq!(bench.lows_x(), [5.0]);
     assert_eq!(bench.machine.agents.on_plate, ["cube-1"]);
 
-    bench.machine.agents.asked.push(crate::agents::Asked {
-        job: "cube-1".into(),
-        revision: 9,
-    });
+    bench.machine.agents.asked.push(ask(9));
     bench.run_to_end();
     assert!(
         matches!(bench.machine.status, Status::Error(_)),
         "a revision not kept is said, not shown"
+    );
+
+    std::fs::write(job.join("4.args.json"), &flags).expect("writable");
+    std::fs::write(job.join("4.edits.json"), "[]").expect("writable");
+    bench.machine.status = Status::default();
+    bench.machine.agents.asked.push(ask(4));
+    bench.run_to_end();
+    assert!(
+        matches!(&bench.machine.status, Status::Error(why) if why.contains("holds it already")),
+        "a revision made on this plate is there already: {:?}",
+        bench.machine.status
     );
 }
 
@@ -289,20 +326,14 @@ fn a_revision_the_user_asks_for_is_read_from_the_servers_jobs_and_shown() {
 fn a_second_job_of_the_same_model_takes_the_first_ones_place_on_the_plate() {
     let file = scratch("same-model");
     let mut bench = Bench::new(file.clone());
-    assert_eq!(
-        bench.hand_over(&file, line(&file, 1, &hollowing(1.5))),
-        json!({"shown": true})
-    );
+    let first = line(&file, 1, &revision_plate(&file, 1, 0.0));
+    assert_eq!(bench.hand_over(&file, first), json!({"shown": true}));
     bench.run_to_end();
-    let mut second = line(&file, 1, &hollowing(2.5));
+    let mut second = line(&file, 1, &revision_plate(&file, 1, 30.0));
     second["job"] = json!("cube-2");
     assert_eq!(bench.hand_over(&file, second), json!({"shown": true}));
     bench.run_to_end();
-    assert_eq!(
-        bench.wall_mm(),
-        Some(2.5),
-        "one model, run by the second job"
-    );
+    assert_eq!(bench.lows_x(), [30.0], "one model, shown by the second job");
     assert_eq!(bench.machine.agents.on_plate, ["cube-2"]);
 }
 

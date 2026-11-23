@@ -1,6 +1,6 @@
 # 0469. The document arranges a plate through core-plate
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-19
 
 ## Context

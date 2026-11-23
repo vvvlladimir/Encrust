@@ -329,8 +329,8 @@ pub fn plate_of(
     let printer = chosen.printer.as_ref();
     check_adaptive(job, printer)?;
     let asked = recipe::Asked::of(job)?;
-    if asked.is_some() && job.edits.wanted() {
-        bail!("--edits and --project-out take the flags' plate, and a recipe prepares its own");
+    if asked.is_some() && job.edits.edits.is_some() {
+        bail!("--edits takes the flags' plate, and a recipe prepares its own");
     }
     let (staging, found) = document::shaped(entries, (job, chosen), watch, asked.is_some())?;
     let pieces = staging.pieces(entries.len());
@@ -353,7 +353,8 @@ pub fn plate_of(
                 document::arranged(&mut staging, entries, printer, watch)?;
             }
             let reported = (left.found, left.finished);
-            let mut laid = staging.laid(reported, (entries, None), printer, watch.talk)?;
+            let out = job.edits.project_out.as_deref();
+            let mut laid = staging.laid(reported, (entries, out), printer, watch.talk)?;
             for (part, said) in laid.parts.iter_mut().zip(left.said) {
                 if let Some((prepared, run)) = said {
                     part.prepared = prepared;

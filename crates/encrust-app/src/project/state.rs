@@ -253,14 +253,14 @@ fn take_machine(printer: Option<String>, resin: Option<String>, slicing: &mut Sl
 }
 
 /// Puts every object the file holds back on `scene`, with the shell, the cuts and the
-/// trees it was saved with: nothing here is hollowed or grown again.
-fn restore_objects(
+/// trees it was saved with: nothing here is hollowed or grown again. Answers their ids.
+pub(super) fn restore_objects(
     scene: &mut Scene,
     objects: Vec<ObjectState>,
     models: Vec<ModelMeshes>,
     table: &[SupportProfile],
     plate_raft: Raft,
-) {
+) -> Vec<ObjectId> {
     // The hierarchy is the expensive half of opening a model and is per mesh, so the
     // plate's models are built at once rather than one after another.
     let measured: Vec<(Arc<Bvh>, Vec3)> = models
@@ -340,6 +340,7 @@ fn restore_objects(
             object.plug_of = model;
         }
     }
+    ids
 }
 
 #[cfg(test)]

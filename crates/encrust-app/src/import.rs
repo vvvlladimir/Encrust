@@ -15,7 +15,7 @@ use crate::job::{ImportJob, ImportOutcome, ImportStage};
 use crate::panels::frame_view;
 use crate::plate::BuildPlate;
 use crate::recent::picture::Parts;
-use crate::scene::{ImportSummary, Imported, Mapped, ObjectId, Scene};
+use crate::scene::{ImportSummary, Imported, Mapped, Scene};
 use crate::status::Status;
 
 /// The imports currently being read, one thread each.
@@ -28,9 +28,6 @@ pub struct Imports {
     /// The files on disk that reached the plate since the window last took them, for the
     /// recent list, each with what its picture is drawn from.
     opened: Vec<(PathBuf, Parts)>,
-    /// The files on disk that reached the plate since the window last took them, each with
-    /// the model it became, for `encrust-mcp`'s jobs.
-    landed: Vec<(PathBuf, ObjectId)>,
 }
 
 impl Imports {
@@ -60,12 +57,6 @@ impl Imports {
     /// The files that reached the plate since the last call.
     pub fn take_opened(&mut self) -> Vec<(PathBuf, Parts)> {
         std::mem::take(&mut self.opened)
-    }
-
-    /// The files on disk that reached the plate and the models they became, since the last
-    /// call.
-    pub fn take_landed(&mut self) -> Vec<(PathBuf, ObjectId)> {
-        std::mem::take(&mut self.landed)
     }
 
     pub fn is_busy(&self) -> bool {
@@ -127,10 +118,7 @@ impl Imports {
                         let parts = vec![(Arc::clone(&imported.mesh), imported.transform)];
                         self.opened.push((path.clone(), parts));
                     }
-                    let id = scene.insert(*imported);
-                    if on_disk {
-                        self.landed.push((path.clone(), id));
-                    }
+                    scene.insert(*imported);
                     *status = Status::Info(tr!("status-opened", path = path.display().to_string()));
                     frame_view(scene, plate, camera);
                 }

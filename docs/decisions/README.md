@@ -557,17 +557,18 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0456](0456-a-model-is-benched-through-its-own-client-against-the-autopilot.md) | Bench a language model through its own client, against the autopilot | Proposed |
 | [0457](0457-the-command-line-places-supports-by-hand.md) | Place supports by hand on the command line | Proposed |
 | [0458](0458-a-client-chooses-among-poses-the-engine-proved.md) | A client chooses among the poses the engine proved, and is held to its own last step | Proposed |
-| [0459](0459-a-revision-is-a-recipe-the-open-window-runs.md) | A job's revision is a recipe, which the open window runs | Proposed; partly superseded by 0465, 0466 |
+| [0459](0459-a-revision-is-a-recipe-the-open-window-runs.md) | A job's revision is a recipe, which the open window runs | Superseded by 0473 |
 | [0460](0460-a-chat-client-names-what-shows-and-brings-the-resin-with-no-window.md) | A chat client names what shows, picks the recipe and brings the resin, with no window | Proposed |
 | [0461](0461-each-release-ships-the-claude-desktop-extension.md) | Each release ships the Claude Desktop extension, one per installer's platform | Proposed |
 | [0462](0462-a-chat-client-keeps-a-way-of-preparing-as-a-recipe.md) | A chat client keeps a way of preparing as a recipe the engine checked | Proposed |
 | [0463](0463-a-failed-print-is-read-against-its-check.md) | A failed print is read against the check of the file printed | Proposed |
 | [0464](0464-a-chat-client-makes-a-resin-from-its-makers-numbers.md) | A chat client makes a resin from its maker's numbers, held to the printer's limits | Proposed |
 | [0465](0465-the-window-lists-agents-and-shows-their-work-when-asked.md) | The window lists its agents and shows their work when asked | Proposed |
-| [0466](0466-one-plate-document-is-edited-by-one-apply-and-the-open-window-owns-it.md) | One plate document is edited by one apply, and the open window owns it | Proposed |
-| [0467](0467-the-document-reaches-the-cores-its-edits-run-on.md) | The document reaches the cores its edits run on | Proposed |
-| [0468](0468-supports-are-grown-the-windows-way-for-every-front-end.md) | Supports are grown the window's way for every front end | Proposed |
-| [0469](0469-the-document-arranges-a-plate-through-core-plate.md) | The document arranges a plate through core-plate | Proposed |
-| [0470](0470-a-recipes-plate-step-is-an-edit.md) | A recipe's plate step is an edit | Proposed |
-| [0471](0471-model-analysis-at-one-step.md) | Model analysis runs at one step, and an edit knows no printer or resin | Proposed |
-| [0472](0472-the-command-line-runs-on-the-document.md) | The command line runs on the document | Proposed |
+| [0466](0466-one-plate-document-is-edited-by-one-apply-and-the-open-window-owns-it.md) | One plate document is edited by one apply, and the open window owns it | Accepted; the window's Prepare for print keeps its own jobs (0470) |
+| [0467](0467-the-document-reaches-the-cores-its-edits-run-on.md) | The document reaches the cores its edits run on | Accepted |
+| [0468](0468-supports-are-grown-the-windows-way-for-every-front-end.md) | Supports are grown the window's way for every front end | Accepted |
+| [0469](0469-the-document-arranges-a-plate-through-core-plate.md) | The document arranges a plate through core-plate | Accepted |
+| [0470](0470-a-recipes-plate-step-is-an-edit.md) | A recipe's plate step is an edit | Accepted |
+| [0471](0471-model-analysis-at-one-step.md) | Model analysis runs at one step, and an edit knows no printer or resin | Accepted |
+| [0472](0472-the-command-line-runs-on-the-document.md) | The command line runs on the document | Accepted |
+| [0473](0473-a-revision-is-shown-by-the-plate-its-check-wrote.md) | A revision is shown by the plate its check wrote | Accepted |

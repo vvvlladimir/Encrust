@@ -1,6 +1,6 @@
 # 0468. Supports are grown the window's way for every front end
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-19
 
 ## Context

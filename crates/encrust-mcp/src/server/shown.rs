@@ -18,7 +18,8 @@ impl Server {
                 revision.recipe.model.display()
             );
         }
-        let (window, started) = self.window.show_now(&revision).await?;
+        let plate = self.jobs.shown_plate(&revision)?;
+        let (window, started) = self.window.show_now(&revision, &plate).await?;
         let shown = window["shown"] == true;
         Ok(Reply {
             body: json!({
@@ -26,7 +27,6 @@ impl Server {
                 "revision": revision.number,
                 "window": window,
                 "started": started,
-                "unshown": revision.recipe.unshown(),
             }),
             failed: !shown,
         })

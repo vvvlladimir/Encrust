@@ -4,6 +4,7 @@
 //! The format itself — the manifest, the mesh blobs and their (de)serialisation — is
 //! `core_engine::project`. What the window converts to and from it is `state`.
 
+pub mod inserted;
 pub mod state;
 
 use std::path::PathBuf;

@@ -36,8 +36,8 @@ pub struct Revision {
     /// Counted from one.
     pub number: u32,
     pub recipe: Recipe,
-    /// The `core-recipe` file its check ran, the flags folded in (ADR 0459); what the window
-    /// runs.
+    /// The `core-recipe` file its check ran, the flags folded in (ADR 0459); what `save_recipe`
+    /// keeps.
     pub steps: Option<String>,
 }
 
@@ -212,6 +212,21 @@ impl Jobs {
     /// A scratch path for a plate one check writes, kept as a revision's once it is kept.
     pub fn scratch_plate(&self) -> Result<PathBuf> {
         Ok(self.scratch_steps()?.with_extension("encrust"))
+    }
+
+    /// Revision `revision`'s plate as its check wrote it, for the window to show: refused for
+    /// one made by edits on the window's plate, which holds it already, or one with none.
+    pub fn shown_plate(&self, revision: &Revision) -> Result<PathBuf> {
+        let dir = self.dir(&revision.job)?;
+        let number = revision.number;
+        if dir.join(format!("{number}.edits.json")).is_file() {
+            bail!("revision {number} was made on the window's plate, which holds it already");
+        }
+        let plate = dir.join(format!("{number}.encrust"));
+        if !plate.is_file() {
+            bail!("revision {number} keeps no plate for the window to show");
+        }
+        Ok(plate)
     }
 
     /// Keeps the plate a check wrote at `from` as revision `number`'s `N.encrust`.

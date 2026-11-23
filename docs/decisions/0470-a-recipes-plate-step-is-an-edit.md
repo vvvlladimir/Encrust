@@ -1,6 +1,6 @@
 # 0470. A recipe's plate step is an edit
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-19
 
 ## Context

@@ -1,7 +1,7 @@
 # The window link
 
 How `encrust-mcp` hands each revision it keeps to an open window, so a chat client's steps
-land in the viewport and on the undo stack (ADR 0459; the plan is `ai-integration.md`).
+land in the viewport and on the undo stack (ADR 0473; the plan is `ai-integration.md`).
 
 ## Finding the window
 
@@ -10,7 +10,7 @@ user's cache directory — `ProjectDirs("", "", "Encrust").cache_dir()`, beside 
 `mcp-jobs` — readable by the user alone:
 
 ```json
-{"schema": 3, "port": 50123, "token": "9f0c…32 hex digits", "pid": 4242}
+{"schema": 4, "port": 50123, "token": "9f0c…32 hex digits", "pid": 4242}
 ```
 
 A window that closes takes the file away unless another has written over it; the last window
@@ -20,26 +20,28 @@ file, or a port nobody answers on, is no window, and the tool answers as it did 
 
 ## One revision
 
-Each check the server runs passes `--recipe-out`, and the recipe written is kept as
-`N.recipe.toml` beside the revision's `N.toml`. After it keeps a revision, the server
-connects, writes one line of JSON and reads one back:
+Each check of a model the server runs passes `--project-out`, and the plate written is kept
+as `N.encrust` beside the revision's `N.toml` (ADR 0473); `--recipe-out` keeps the recipe it
+ran as `N.recipe.toml` for `save_recipe`. After it keeps a revision, the server connects,
+writes one line of JSON and reads one back:
 
 ```json
-{"schema": 2, "token": "…", "job": "cube-18e4…", "revision": 2, "model": "/m/cube.stl",
- "printer": "elegoo-mars-4-ultra", "resin": "my-grey", "recipe": "name = \"Prepare for print\"\n…"}
+{"schema": 4, "token": "…", "job": "cube-18e4…", "revision": 2, "model": "/m/cube.stl",
+ "printer": "elegoo-mars-4-ultra", "resin": "my-grey", "plate": "…/cube-18e4…/2.encrust"}
 ```
 
-`printer` and `resin` are catalogue ids or TOML paths, as the job holds them. A line with
-another token or schema is refused and never reaches the plate. The window answers on its
-next frame, at most 10 s later:
+`printer` and `resin` are catalogue ids or TOML paths, as the job holds them. The window's
+link thread reads the plate; a line with another token or schema, or a plate that does not
+read, is refused and never reaches the plate. The window answers on its next frame, at most
+10 s later, and the tool's answer carries it as `window`:
 
 ```json
 {"shown": true}
-{"shown": false, "why_not": "the revision's recipe: …"}
+{"shown": false, "why_not": "the revision's plate …: …"}
 ```
 
-The tool's answer carries it as `window`, and beside it `unshown`: what the job asks that no
-recipe step says, which the window leaves out.
+A revision made by edits on the window's plate (below) is not handed over again: that plate
+holds it, and its file holds the user's other models too.
 
 ## The plate and its edits (schema 3)
 
@@ -76,16 +78,16 @@ With the window followed, a revision whose every change is an edit is built on t
 plate: the server asks for it, checks it with the edits (`estimate PLATE --edits --project-out`)
 and keeps the plate they leave as `N.encrust` and the edits as `N.edits.json`, then hands the
 edits over on that plate's version. What the user changed or undid there is in the next check,
-whatever the change. A first revision that only places its model keeps the plate its check
-wrote as well; without a window, revisions are checked by their recipe as before.
+whatever the change. Without a window, revisions are checked by their flags as before.
 
 A revision after the first hands over, as edits of the job's model, what it asks beyond the
 revision before: a repair, the faces mended, a picture pressed in, a scale, a turn typed, a
-label, a split or part cut off, a cut, a hollow, drains — at points or by the engine's search, channels, plugs — supports — by a
-preset or sized automatically, under a cavity, off what shows — and points placed by hand, in
-that order. One that asks anything no edit carries yet — walls kept solid at points, holes
-into the supports, a walled hole, a combination — or takes back what an earlier one asked is
-shown by its recipe instead, as below. A pose the search picks is handed over as an `Orient`
+label, a split or part cut off, a cut, walled holes, a hollow with its walls kept solid, drains
+— at points or by the engine's search, channels, plugs — supports — by a preset or sized
+automatically, under a cavity, off what shows — points placed by hand, merges and holes into
+the raft, in that order. One that asks anything no edit carries yet — a combination — or takes
+back what an earlier one asked is checked by its flags and shown by its plate instead, as
+below. A pose the search picks is handed over as an `Orient`
 edit on the job's printer, its places kept clear with it; on a printer of a file, as the turn the
 check chose (`oriented.rotate_deg`). While the window holds a cut it was
 handed, the job's model is no longer on its plate whole, and a revision keeping that cut is not
@@ -93,17 +95,20 @@ shown; a cut the user undid there is taken out of the job's next revision.
 
 ## What the window does with it
 
-What follows is what the window does with a revision it shows (see Following). The first revision of a job reads its model in, as Open does, unless another job of the
-same model file is followed: the new job takes that one's place, so a model stands on the
-plate once however many jobs an agent starts on it; a model taken off the plate is
-read in again for the job's next revision. Each revision then puts the model back as it came
-in, takes away what the last run left beside it — plugs, say — puts the window on the job's
-printer and resin, and starts Prepare for print by the revision's recipe on that model. The
-run is one undo entry. A newer revision of the job stops the run of an older one; another
-job's run, or a job of the user's own still landing, holds it until it ends.
+What follows is what the window does with a revision it shows (see Following). Once no job
+runs on its plate — a tool's, a Prepare for print, an import — it puts the window on the
+job's printer and resin, takes off the objects the job's last revision stood as, plugs among
+them, and stands the plate's objects on its active plate beside what stands
+(`project::inserted::insert`): an id the plate has taken gets the next free one, and each
+support group joins the window's group of its name, a new one where there is none, the
+file's profile kept as the object's own where the window's differs. That is one undo entry.
+A newer revision of the job waiting takes the older one's place. A job of the same model file
+takes the place of another job of it, so a model stands on the plate once however many jobs
+an agent starts on it. The job's model, for edits, is the revision's one object that is no
+plug.
 
-The check every tool answers with is still the command line's: the window shows the steps, it
-does not answer for them.
+The check every tool answers with is still the command line's: the window shows its plate, it
+does not answer for it.
 
 ## Agents
 
@@ -128,8 +133,8 @@ latest revision — the highest `N.toml` — whose model is the first of `N.args
 verdict is `N.json`'s `status`. The jobs of the last day — their folder changed within it — that no agent's file names are
 listed after the agents as *Earlier jobs*: a server that keeps no file, as one built before
 ADR 0465, still has its work listed. A press on a job builds the same line the server sends from
-`N.args.json` (`--printer` or `--profile`, `--resin` or `--material`) and `N.recipe.toml`,
-marked `open`, and takes it as one handed over.
+`N.args.json` (`--printer` or `--profile`, `--resin` or `--material`) and `N.encrust`,
+marked `open`, and takes it as one handed over; one made on the plate is said to be there.
 
 ## Following
 

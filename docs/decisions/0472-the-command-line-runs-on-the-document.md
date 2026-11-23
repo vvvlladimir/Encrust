@@ -1,6 +1,6 @@
 # 0472. The command line runs on the document
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-20
 
 ## Context

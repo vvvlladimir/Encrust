@@ -1005,8 +1005,9 @@ search (`pipeline/place.rs`, now `oriented.rs`) and import's own repair and mend
 keep-solid, walled and raft holes and merges (`merge_at_mm`) to edits and passes `--keep-solid-size`;
 the orient search reports through `Cancel::reporting` (`Step::Searching`), the CLI drawing its bar.
 Also: a relief edit hollows a hollow model again (`hollowed_again`), as the window's Relief does;
-MCP's mend carries bridges and the repair its limits. Open: R6c (the window's prepare on edits) and
-a revision shown by its file rather than its recipe (`unshown.rs`), both awaiting a design session.
+MCP's mend carries bridges and the repair its limits. Later the same day: ADRs 0466–0472 accepted;
+a revision is shown by the plate its check wrote (ADR 0473, link schema 4, `project::inserted`),
+`unshown.rs` and the window's recipe replay deleted. R6c stays as it is, by the user's choice.
 
 ### Decided by the user (2026-11-19)
 - The orient trial runs everywhere: with no printer named, on the standard printer (card P8).

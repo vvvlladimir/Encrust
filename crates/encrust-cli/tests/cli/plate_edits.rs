@@ -182,14 +182,44 @@ fn a_hollow_by_its_flag_and_by_the_edit_write_the_same_project() {
 fn edits_on_a_model_with_a_recipe_are_refused() {
     let model = write_box_stl("edits-with-a-recipe", 10.0, 12, 0);
     let out = output_file("edits-with-a-recipe.encrust");
+    let edits = edits_file("edits-with-a-recipe.json", "[]");
 
-    let output = estimate_model(&model, &out, &["--prepare"]);
+    let edits_arg = edits.to_str().expect("a UTF-8 path");
+    let output = estimate_model(&model, &out, &["--prepare", "--edits", edits_arg]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
         stderr(&output).contains("a recipe prepares its own"),
         "{}",
         stderr(&output)
+    );
+}
+
+#[test]
+fn a_model_prepared_by_a_recipe_is_written_as_the_plate_it_leaves() {
+    let model = write_leaning_box_stl("project-prepared", 10.0, 8.0, 12, 0);
+    let out = output_file("project-prepared.encrust");
+
+    let panel = project_fixture().with_file_name("project-panel.toml");
+    let output = estimate(&[
+        model.to_str().expect("a UTF-8 path"),
+        "--profile",
+        panel.to_str().expect("a UTF-8 path"),
+        "--material",
+        test_resin().to_str().expect("a UTF-8 path"),
+        "--center",
+        "--prepare",
+        "--project-out",
+        out.to_str().expect("a UTF-8 path"),
+    ]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let project = load(&out).expect("the prepared plate is written");
+    assert_eq!(project.manifest.objects.len(), 1, "one model, prepared");
+    let supports = &project.manifest.objects[0].supports;
+    assert!(
+        !supports.grown.is_empty() || !supports.frozen.is_empty(),
+        "a leaning box is prepared on supports, which the plate keeps"
     );
 }
 

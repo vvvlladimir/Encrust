@@ -1,6 +1,6 @@
-//! The window as `encrust-mcp`'s viewport: each revision a chat client's job keeps is run on
-//! the open plate as Prepare for print by the revision's recipe, one undo entry a revision
-//! (ADR 0459, `docs/design/window-link.md`).
+//! The window as `encrust-mcp`'s viewport: each revision a chat client's job keeps stands on
+//! the open plate as the plate its check wrote, in place of the job's last, one undo entry a
+//! revision (ADR 0473, `docs/design/window-link.md`).
 
 mod line;
 mod listen;
@@ -11,60 +11,43 @@ mod request;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
-use anyhow::Result;
-use core_recipe::Plan;
 use serde_json::Value;
 
-use crate::files::Handed;
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::scene::{ObjectId, SceneObject};
+use crate::scene::ObjectId;
 use crate::status::Status;
 
 use line::Line;
 use listen::{Listening, default_file};
-use request::{Reply, Request};
+use request::{Reply, Request, Shown};
 
 /// The port listened on and the jobs followed on the plate.
 #[derive(Debug)]
 pub struct Link {
     listening: Listening,
     followed: Vec<Followed>,
-    /// The job whose revision the Prepare run going is, and the plate's models as it began,
-    /// to tell what it left.
-    replaying: Option<(usize, Vec<ObjectId>)>,
     /// Where the server keeps its jobs, beside the window's file.
     jobs: PathBuf,
     /// Edits a server handed over, being applied one after another (ADR 0466).
     applying: Option<plate::Applying>,
 }
 
-/// What a server is told of edits handed over while others are still being applied.
+/// What the server is told of edits handed over while others are still being applied.
 const EDITS_UNDER_WAY: &str = "the window is still applying the edits handed over before";
 
 /// What the server is told of a revision handed over while the window does not follow.
 const NOT_FOLLOWING: &str = "the window is not following its agents; it lists the revision, \
     which the user can show, or show_in_window shows it";
 
-/// One job on the plate: its model as it came in once read, what the last run left besides,
-/// and the revision waiting to be run.
+/// One job on the plate: the objects its last revision shown stands as, and the revision
+/// waiting for the plate to be still.
 #[derive(Debug)]
 struct Followed {
     job: String,
     model: PathBuf,
-    fresh: Option<SceneObject>,
-    reading: bool,
-    left: Vec<ObjectId>,
-    waiting: Option<Waiting>,
-}
-
-/// A revision to run: its recipe and the machine it is printed on.
-#[derive(Debug)]
-struct Waiting {
-    revision: u32,
-    plan: Plan,
-    printer: String,
-    resin: String,
+    objects: Vec<ObjectId>,
+    waiting: Option<Box<Shown>>,
 }
 
 impl Link {
@@ -79,51 +62,45 @@ impl Link {
     }
 
     /// Listens for the server, the file that says where written to `file`.
-    pub fn start(file: PathBuf, wake: impl Fn() + Send + 'static) -> Result<Self> {
+    pub fn start(file: PathBuf, wake: impl Fn() + Send + 'static) -> anyhow::Result<Self> {
         let jobs = file.with_file_name("mcp-jobs");
         Ok(Self {
             listening: Listening::start(file, wake)?,
             followed: Vec::new(),
-            replaying: None,
             jobs,
             applying: None,
         })
     }
 
-    /// Answers what the server asked since the last frame and runs what is waiting. Called
-    /// every frame after the jobs are polled; returns whether a revision waits or runs.
+    /// Answers what the server asked since the last frame and shows what is waiting. Called
+    /// every frame after the jobs are polled; returns whether a revision waits.
     pub fn poll(&mut self, window: &mut Window) -> bool {
-        for (path, id) in window.doc.imports.take_landed() {
-            let reading = self
-                .followed
-                .iter_mut()
-                .find(|f| f.reading && f.model == path);
-            if let Some(followed) = reading {
-                followed.fresh = window.doc.scene.get(id).cloned();
-                followed.reading = false;
-            }
-        }
         let follow = window.machine.general.follow_agents;
         while let Ok((line, reply)) = self.listening.asked.try_recv() {
             self.answer(line, reply, follow, window);
         }
         let applying = plate::advance(&mut self.applying, window);
         self.take_asked(window);
-        self.note_what_was_left(window);
         for index in 0..self.followed.len() {
-            self.replay(index, window);
+            self.show(index, window);
         }
-        applying || self.replaying.is_some() || self.followed.iter().any(|f| f.waiting.is_some())
+        window.machine.agents.on_plate = self
+            .followed
+            .iter()
+            .filter(|f| (f.objects.iter()).any(|id| window.doc.scene.get(*id).is_some()))
+            .map(|f| f.job.clone())
+            .collect();
+        applying || self.followed.iter().any(|f| f.waiting.is_some())
     }
 
-    /// Answers one line: a revision is taken as ADR 0459 runs it, the plate handed over or
-    /// edits applied as ADR 0466 does, all only while the window follows its agents.
+    /// Answers one line: a revision is taken to show, the plate handed over or edits applied
+    /// as ADR 0466 does, all only while the window follows its agents.
     fn answer(&mut self, line: Line, reply: Sender<Value>, follow: bool, window: &mut Window) {
         let refused = |why: &str| serde_json::to_value(Reply::refused(why.to_owned()));
         match line {
-            Line::Revision(request) if request.open || follow => {
-                let answer = self.take(request, window);
-                let _ = reply.send(serde_json::to_value(answer).unwrap_or_default());
+            Line::Revision(shown) if shown.request.open || follow => {
+                self.take(shown);
+                let _ = reply.send(serde_json::to_value(Reply::taken()).unwrap_or_default());
             }
             _ if !follow => {
                 let _ = reply.send(refused(NOT_FOLLOWING).unwrap_or_default());
@@ -147,64 +124,34 @@ impl Link {
     /// Takes the revisions the user asked to see from the agents' list.
     fn take_asked(&mut self, window: &mut Window) {
         for asked in std::mem::take(&mut window.machine.agents.asked) {
-            let taken = Request::of_job(&self.jobs, &asked.job, asked.revision)
-                .map(|request| self.take(request, window));
-            match taken {
-                Ok(Reply { why_not: None, .. }) => {}
-                Ok(Reply {
-                    why_not: Some(why), ..
-                }) => {
-                    window.machine.status = Status::Error(why);
-                }
+            let read =
+                Request::of_job(&self.jobs, &asked.job, asked.revision).and_then(Request::read);
+            match read {
+                Ok(shown) => self.take(Box::new(shown)),
                 Err(error) => window.machine.status = Status::failed(&error),
             }
         }
-        window.machine.agents.on_plate = self
-            .followed
-            .iter()
-            .filter(|f| {
-                f.fresh
-                    .as_ref()
-                    .is_some_and(|fresh| window.doc.scene.get(fresh.id).is_some())
-            })
-            .map(|f| f.job.clone())
-            .collect();
     }
 
-    /// Notes a revision to run, reading its model in where the plate does not have it.
-    fn take(&mut self, request: Request, window: &mut Window) -> Reply {
-        let plan = match request.plan() {
-            Ok(plan) => plan,
-            Err(error) => return Reply::refused(format!("{error:#}")),
-        };
+    /// Notes a revision to show, in place of one of its job still waiting.
+    fn take(&mut self, shown: Box<Shown>) {
+        let request = &shown.request;
         let index = self.followed_index(&request.job, &request.model);
-        let followed = &mut self.followed[index];
-        let on_plate = followed
-            .fresh
-            .as_ref()
-            .is_some_and(|fresh| window.doc.scene.get(fresh.id).is_some());
-        // A model taken off the plate is read in again for its job's next revision.
-        if !on_plate && !followed.reading {
-            followed.fresh = None;
-            followed.reading = true;
-            let (doc, status) = (&mut window.doc, &mut window.machine.status);
-            let file = Handed::Path(followed.model.clone());
-            doc.imports.open(file, &doc.plate, status);
-        }
-        followed.waiting = Some(Waiting {
-            revision: request.revision,
-            plan,
-            printer: request.printer,
-            resin: request.resin,
-        });
-        Reply::taken()
+        self.followed[index].waiting = Some(shown);
     }
 
-    /// Where `job`'s model stands on the plate whole, as it was read in for the job.
+    /// Where `job`'s model stands on the plate whole: its last revision shown's one object
+    /// that is no plug, `None` where that revision left pieces or none.
     fn job_object(&self, job: &str, window: &Window) -> Option<ObjectId> {
         let followed = self.followed.iter().find(|followed| followed.job == job)?;
-        let id = followed.fresh.as_ref()?.id;
-        window.doc.scene.get(id).is_some().then_some(id)
+        let scene = &window.doc.scene;
+        let mut whole = (followed.objects.iter().copied()).filter(|id| {
+            scene
+                .get(*id)
+                .is_some_and(|object| object.plug_of.is_none())
+        });
+        let first = whole.next()?;
+        whole.next().is_none().then_some(first)
     }
 
     /// The job's place in the list, a new entry where it is new or names another model. A
@@ -219,9 +166,7 @@ impl Link {
         let entry = Followed {
             job: job.to_owned(),
             model: model.clone(),
-            fresh: None,
-            reading: false,
-            left: Vec::new(),
+            objects: Vec::new(),
             waiting: None,
         };
         match found {
@@ -236,74 +181,32 @@ impl Link {
         }
     }
 
-    /// Once the run going has ended, notes what it left on the plate besides its model, for
-    /// the next revision to take away.
-    fn note_what_was_left(&mut self, window: &Window) {
-        let Some((index, before)) = &self.replaying else {
-            return;
-        };
-        if window.tools.prepare.is_running() {
-            return;
-        }
-        if let Some(followed) = self.followed.get_mut(*index) {
-            let model = followed.fresh.as_ref().map(|fresh| fresh.id);
-            followed.left = window
-                .doc
-                .scene
-                .objects()
-                .iter()
-                .map(|object| object.id)
-                .filter(|id| !before.contains(id) && Some(*id) != model)
-                .collect();
-        }
-        self.replaying = None;
-    }
-
-    /// Starts the job's waiting revision once its model is in and nothing else runs on the
-    /// plate: on the job's machine, from the model as it came in, what the last run left
-    /// taken away. A newer revision stops the run of an older one of its own job first.
-    fn replay(&mut self, index: usize, window: &mut Window) {
-        let followed = &self.followed[index];
-        if followed.fresh.is_none() || followed.waiting.is_none() {
-            return;
-        }
-        if let Some((replaying, _)) = self.replaying
-            && window.tools.prepare.is_running()
-        {
-            // Another job's run is never undone: this one waits for it to land.
-            if replaying != index {
-                return;
-            }
-            crate::prepare::cancel(window.doc, window.tools, window.machine);
-        }
-        self.note_what_was_left(window);
-        if crate::prepare::busy(window.doc, window.tools, window.machine)
-            || window.tools.prepare.is_running()
-        {
-            return;
-        }
+    /// Stands the job's waiting revision on the plate once nothing runs there: on the job's
+    /// machine, its plate's objects in place of the ones its last revision stood as.
+    fn show(&mut self, index: usize, window: &mut Window) {
         let followed = &mut self.followed[index];
-        let (Some(waiting), Some(fresh)) = (followed.waiting.take(), followed.fresh.clone()) else {
+        let (doc, tools, held) = (&*window.doc, &*window.tools, &*window.machine);
+        if followed.waiting.is_none() || crate::prepare::busy(doc, tools, held) {
+            return;
+        }
+        let Some(shown) = followed.waiting.take() else {
             return;
         };
-        let started =
-            machine::set_machine(window, (&waiting.printer, &waiting.resin)).and_then(|()| {
-                let (doc, tools, held) =
-                    (&mut *window.doc, &mut *window.tools, &mut *window.machine);
-                let models = (std::slice::from_ref(&fresh), followed.left.as_slice());
-                crate::prepare::start_replay(waiting.plan, models, doc, tools, held)
-            });
-        let before = window.doc.scene.objects().iter().map(|o| o.id).collect();
-        self.replaying =
-            (started.is_ok() && window.tools.prepare.is_running()).then_some((index, before));
-        window.machine.status = match started {
-            Ok(()) => Status::Info(tr!(
-                "link-replaying",
-                job = followed.job.clone(),
-                revision = waiting.revision
-            )),
-            Err(error) => Status::failed(&error),
-        };
+        let Shown { request, project } = *shown;
+        if let Err(error) = machine::set_machine(window, (&request.printer, &request.resin)) {
+            window.machine.status = Status::failed(&error);
+            return;
+        }
+        for id in followed.objects.drain(..) {
+            window.doc.scene.remove(id);
+        }
+        let (scene, supports) = (&mut window.doc.scene, &mut window.tools.supports);
+        followed.objects = crate::project::inserted::insert(project, scene, supports);
+        window.machine.status = Status::Info(tr!(
+            "link-replaying",
+            job = request.job,
+            revision = request.revision
+        ));
     }
 }
 

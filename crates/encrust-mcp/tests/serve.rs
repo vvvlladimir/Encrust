@@ -615,7 +615,7 @@ async fn points_kept_clear_are_kept_with_the_turn_they_were_seen_in() {
 }
 
 #[tokio::test]
-async fn each_revision_keeps_the_steps_its_check_ran_and_hands_them_to_the_open_window() {
+async fn each_revision_keeps_the_plate_its_check_wrote_and_hands_it_to_the_open_window() {
     use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 
     let dir = scratch("window");
@@ -646,21 +646,27 @@ async fn each_revision_keeps_the_steps_its_check_ran_and_hands_them_to_the_open_
     let edited = call(
         &client,
         "use_recipe",
-        // The way steps are decided is no edit, so the revision goes by its recipe.
+        // The way steps are decided is no edit, so the window is shown the plate it prepared.
         json!({"job": job, "recipe": "miniatures"}),
     )
     .await;
     assert_eq!(answer(&edited)["window"], json!({"shown": true}));
     client.cancel().await.expect("the server stops");
 
-    let kept = fs::read_to_string(jobs.join(&job).join("2.recipe.toml"))
-        .expect("the revision keeps its steps");
-    let lines = window.await.expect("the window's task ends");
-    assert_eq!(lines[1]["revision"], 2);
-    assert_eq!(lines[1]["recipe"].as_str(), Some(kept.as_str()));
+    let kept = jobs.join(&job).join("2.encrust");
     assert!(
-        kept.contains("Miniatures"),
-        "the window runs the recipe's steps: {kept}"
+        kept.is_file(),
+        "the revision keeps the plate its recipe prepared"
+    );
+    let lines = window.await.expect("the window's task ends");
+    assert_eq!(
+        (lines[1]["schema"].as_u64(), lines[1]["revision"].as_u64()),
+        (Some(4), Some(2))
+    );
+    assert_eq!(
+        lines[1]["plate"].as_str(),
+        kept.to_str(),
+        "the window is shown that plate"
     );
 }
 

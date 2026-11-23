@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 
 mod shape;
 mod slicing;
-mod unshown;
 
 pub use shape::{Cut, Mend, Modelling, Relief};
 pub use slicing::Slicing;
@@ -273,22 +272,6 @@ impl Recipe {
         self.model
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("encrust"))
-    }
-
-    /// Whether the recipe only places its model, so its check can write the plate it leaves
-    /// (`--project-out` takes no flag that shapes a model).
-    pub fn only_places(&self) -> bool {
-        !self.is_project()
-            && !self.prepare
-            && self.steps_by.is_none()
-            && self.repair.is_none()
-            && self.mend.is_none()
-            && self.modelling.is_none()
-            && self.relief.is_none()
-            && self.pose.is_none()
-            && self.hollow.is_none()
-            && self.drains.is_none()
-            && self.supports.is_none()
     }
 
     /// The flags a check of a plate takes from this recipe: the machine and the slicing.

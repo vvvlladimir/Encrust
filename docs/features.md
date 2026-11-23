@@ -1114,9 +1114,9 @@ the step before and the autopilot's own preparation, so it can undo one that mad
 worse. The window lists every agent — Claude Code, Claude Desktop — in a robot's ring beside the
 print chip, there while an agent works or waits and turning while it works, each working,
 waiting or ended, with its latest models and what the check found; a click
-shows one on the plate as Prepare for print by the same recipe the check ran, one undo, on
-the job's printer and resin, whenever the window was opened. With Follow agents on, each
-step an agent keeps is run on the plate as it comes; asked to show you the model, the agent
+stands one on the plate beside your own models exactly as the check left it, supports and
+all, one undo, on the job's printer and resin, whenever the window was opened. With Follow
+agents on, each step an agent keeps stands there as it comes; asked to show you the model, the agent
 puts it on the plate itself, opening Encrust if it is closed. Followed, the window owns the
 plate: a repair, faces mended, a picture pressed in, a scale, a turn typed, a label, a split,
 a cut, a hollow, a hole drilled at a point or supports an agent makes lands there as an edit

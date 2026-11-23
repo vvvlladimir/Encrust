@@ -1,6 +1,6 @@
 # 0467. The document reaches the cores its edits run on
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-18
 
 ## Context

@@ -13,7 +13,6 @@ use rmcp::model::{
 };
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
-use serde_json::json;
 
 use crate::agents::Presence;
 use crate::findings::{MOST_MARKED, findings};
@@ -531,10 +530,10 @@ impl Server {
         args.extend(recipe.flags());
         args.extend(against.iter().cloned());
         args.push(format!("--recipe-out={}", out.display()));
-        let plate = if recipe.only_places() {
-            Some(self.jobs.scratch_plate()?)
-        } else {
+        let plate = if recipe.is_project() {
             None
+        } else {
+            Some(self.jobs.scratch_plate()?)
         };
         if let Some(plate) = &plate {
             args.push(format!("--project-out={}", plate.display()));
@@ -546,16 +545,14 @@ impl Server {
         Ok((outcome, steps, plate.filter(|plate| plate.is_file())))
     }
 
-    /// Keeps the plate a check wrote as the revision's; a revision without one is built on by
-    /// its recipe.
+    /// Keeps the plate a check wrote as the revision's, which the window is shown.
     fn keep_plate(&self, revision: &Revision, plate: Option<PathBuf>) {
         if let Some(plate) = plate {
             let _ = (self.jobs).keep_plate(&revision.job, revision.number, &plate);
         }
     }
 
-    /// The answer for a revision just kept: what the open window, if any, said of running its
-    /// steps, and what the steps leave out.
+    /// The answer for a revision just kept: what the open window, if any, said of it.
     async fn kept(&self, revision: &Revision, outcome: &Outcome, note: Option<&str>) -> Reply {
         let mut reply = revised(revision, outcome, note);
         // The window reads a job's model in beside the plate; a project would take its place.
@@ -566,9 +563,11 @@ impl Server {
             reply.body["window"] = applied;
             return reply;
         }
-        if let Some(shown) = self.window.show(revision, false).await {
+        let plate = self.jobs.shown_plate(revision).ok();
+        if let Some(plate) = plate
+            && let Some(shown) = self.window.show(revision, &plate, false).await
+        {
             reply.body["window"] = shown;
-            reply.body["unshown"] = json!(revision.recipe.unshown());
         }
         reply
     }

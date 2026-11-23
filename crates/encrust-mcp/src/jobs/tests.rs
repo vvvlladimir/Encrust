@@ -127,3 +127,34 @@ fn a_revision_keeps_the_flags_it_stages_with_and_the_autopilot_s_check_beside_it
         "the kept files are no revision"
     );
 }
+
+#[test]
+fn a_revision_is_shown_by_the_plate_its_check_wrote() {
+    let jobs = scratch("shown-plate");
+    let job = Jobs::name_for(&recipe());
+    let first = jobs
+        .commit(&job, (recipe(), None), &Value::Null)
+        .expect("the root is writable");
+    let error = jobs.shown_plate(&first).expect_err("no plate was kept yet");
+    assert!(format!("{error:#}").contains("keeps no plate"), "{error:#}");
+
+    let written = jobs.scratch_plate().expect("the root is writable");
+    fs::write(&written, b"plate").expect("the scratch dir is writable");
+    jobs.keep_plate(&job, first.number, &written)
+        .expect("the job exists");
+    let plate = jobs.shown_plate(&first).expect("the plate is kept");
+    assert!(plate.ends_with("1.encrust"), "{}", plate.display());
+}
+
+#[test]
+fn a_revision_made_on_the_windows_plate_is_not_shown_again() {
+    let jobs = scratch("shown-edits");
+    let job = Jobs::name_for(&recipe());
+    let first = jobs
+        .commit(&job, (recipe(), None), &Value::Null)
+        .expect("the root is writable");
+    jobs.keep_edits(&job, first.number, &[])
+        .expect("the job exists");
+    let error = jobs.shown_plate(&first).expect_err("the window holds it");
+    assert!(format!("{error:#}").contains("window's plate"), "{error:#}");
+}

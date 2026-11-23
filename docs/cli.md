@@ -616,8 +616,8 @@ as a project. An edit that cannot be carried out stops the run and writes nothin
 staged as one such plate, an object each, and every shaping flag is an edit of it in the
 window's order (`docs/design/cli-on-document.md`, ADR 0472): `--edits` follows the flags' own
 and `--project-out` writes the plate both leave, so a flag and the same edit by `--edits` write
-one project. A recipe prepares a plate of its own, so `--edits` and `--project-out` with
-`--recipe` or `--prepare` are refused; a plate file takes neither yet. Besides `cut`, `move` (`by_mm`),
+one project. A recipe prepares a plate of its own, so `--edits` with `--recipe` or `--prepare`
+is refused, and `--project-out` writes the plate it prepared; a plate file takes neither yet. Besides `cut`, `move` (`by_mm`),
 `rotate` (`degrees`) and `scale` (`factors`), each `[x, y, z]`, place an object; `delete`
 takes it and its plugs off, `duplicate` (`offset_mm`, `[x, y, z]`) puts a copy beside it and
 `mirror` (`axis`, `x`, `y` or `z`) flips it in place; `split` (`smallest_mm3`, optional)
@@ -983,8 +983,9 @@ recipe its check ran as `N.recipe.toml`, and the autopilot's own check of the mo
 `autopilot.json`; a run is stopped after `--timeout-s` seconds
 (1800), and reports progress every five seconds while it runs. `--trace FILE` appends a JSON
 line per tool call: `tool`, `ms`, `failed`, and the `job` and `revision` it answered with,
-`null` when it named none. With the window open, each revision kept is run on its plate and
-the answer carries the window's `window` and what it leaves out as `unshown`;
+`null` when it named none. Each check of a model keeps the plate it wrote as `N.encrust`; with
+the window open, each revision kept stands on its plate as that file, the answer carrying the
+window's `window`;
 `--window FILE` reads another window's file, `--no-window` shows none
 (`docs/design/window-link.md`). The server lists itself for the window as an agent, a file in
 `agents/` beside the jobs saying which client drives it, what it runs and the jobs it touched;
