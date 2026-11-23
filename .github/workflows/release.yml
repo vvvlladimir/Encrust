@@ -261,7 +261,7 @@ jobs:
           ref: ${{ github.sha }}
           sparse-checkout: assets/msix
 
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: store-*
           path: binaries
