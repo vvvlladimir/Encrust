@@ -4,13 +4,11 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
-use core_engine::{Model, SupportPlan};
-use core_geometry::{Mesh, Scalar};
+use core_geometry::Scalar;
 use core_recipe::{
     Decision, Metrics, OnFail, Plan, Setting, StepKind, decide, decide_forced, validate,
 };
 
-mod drain;
 mod folded;
 pub mod library;
 mod piece;
@@ -29,10 +27,10 @@ use settings::{Settings, forced, typed_over};
 
 use crate::args::JobArgs;
 use crate::pipeline::Watch;
-use crate::profiles::{AUTO, Chosen, plan_of};
+use crate::profiles::Chosen;
 use crate::raster_report::RasterReport;
 use crate::slice_report::SliceReport;
-use crate::stage::{Found, Part, Shaping};
+use crate::stage::{Finished, Found, Shaping, Staging};
 
 /// The built-in recipe `--prepare` runs.
 pub const PREPARE: &str = "prepare";
@@ -81,19 +79,6 @@ pub struct Ctx<'a> {
     pub watch: &'a Watch<'a>,
 }
 
-impl Ctx<'_> {
-    /// The supports `piece` is judged on and its holes placed for before a supports step
-    /// stands it: those it was given or stands on, else the catalogue's automatic where the
-    /// recipe stands it on any.
-    fn support_plan(&self, piece: &Piece) -> Result<Option<SupportPlan>> {
-        match piece.shaping.supports.clone().or(piece.plan.clone()) {
-            Some(plan) => Ok(Some(plan)),
-            None if piece.stands => plan_of(AUTO).map(Some),
-            None => Ok(None),
-        }
-    }
-}
-
 /// The plate as a save step wrote it.
 pub struct Saved {
     pub output: PathBuf,
@@ -120,25 +105,32 @@ impl Did {
     }
 }
 
-/// A model as a recipe left it, and the plugs laid beside it.
-pub type Laid = (Model, Vec<Model>);
-
 /// A recipe going over the models of a plate.
 struct Run<'a> {
     asked: &'a Asked,
     ctx: &'a Ctx<'a>,
+    staging: Staging,
     pieces: Vec<Piece>,
     saved: Option<Saved>,
 }
 
-/// Takes every imported model through `asked`'s steps and answers the parts and models of
-/// the plate it leaves, and the plate as its last save step wrote it.
+/// What a recipe left of the plate: the document, what each entry's import, hollowing and
+/// supports found, what `--prepare` and each step said of it, and the last save.
+pub struct Left {
+    pub staging: Staging,
+    pub found: Vec<Found>,
+    pub finished: Vec<Finished>,
+    pub said: Vec<Option<(Option<Prepared>, RecipeRun)>>,
+    pub saved: Option<Saved>,
+}
+
+/// Takes every entry's object on `staging` through `asked`'s steps.
 pub fn lay(
     asked: &Asked,
-    (pieces, found): (Vec<Vec<Mesh>>, Vec<Found>),
+    (staging, found): (Staging, Vec<Found>),
     entries: &[(PathBuf, Shaping)],
     ctx: &Ctx,
-) -> Result<(Vec<Part>, Vec<Laid>, Option<Saved>)> {
+) -> Result<Left> {
     for (_, shaping) in entries {
         refuse_pointing(shaping)?;
         refuse_unstepped(&asked.plan, shaping)?;
@@ -146,14 +138,14 @@ pub fn lay(
     check_sends(&asked.plan, ctx)?;
     let mut steps = asked.plan.recipe().steps.iter();
     let stands = steps.any(|step| step.enabled && step.kind == StepKind::Supports);
-    let pieces = pieces
-        .into_iter()
-        .zip(found)
-        .zip(entries)
-        .flat_map(|((meshes, found), (path, shaping))| {
-            let mesh = meshes.into_iter().next();
-            let shaped = (path.clone(), shaping.clone(), stands);
-            mesh.map(|mesh| Piece::new(shaped, mesh, found))
+    let pieces = (found.into_iter().zip(entries).enumerate())
+        .filter_map(|(entry, (found, (path, shaping)))| {
+            let id = staging.ids_of(entry).first().copied()?;
+            Some(Piece::new(
+                (path.clone(), shaping.clone(), stands),
+                id,
+                found,
+            ))
         })
         .collect();
     if ctx.watch.talk {
@@ -162,13 +154,14 @@ pub fn lay(
     let mut run = Run {
         asked,
         ctx,
+        staging,
         pieces,
         saved: None,
     };
     for index in 0..asked.plan.recipe().steps.len() {
         run.step(index)?;
     }
-    run.finish()
+    Ok(run.finish(entries.len()))
 }
 
 /// Refuses what points at the model as imported, which a recipe's steps may move first.
@@ -303,7 +296,8 @@ impl Run<'_> {
         let step = &self.asked.plan.recipe().steps[index];
         for (id, settings) in runs {
             let piece = &mut self.pieces[id];
-            let did = match steps::run(step.kind, piece, &settings, self.ctx) {
+            let on = (&mut *piece, &mut self.staging);
+            let did = match steps::run(step.kind, on, &settings, self.ctx) {
                 Err(error) if step.on_fail == OnFail::Skip => {
                     let why = format!("failed and skipped: {error:#}");
                     tracing::warn!("{}: step {index} {why}", piece.input.display());
@@ -342,27 +336,36 @@ impl Run<'_> {
 
     /// Every variable of `piece` as it stands.
     fn metrics_of(&self, piece: &Piece) -> Metrics {
-        piece.metrics(&self.asked.plan, self.ctx.chosen.printer.as_ref())
+        let printer = self.ctx.chosen.printer.as_ref();
+        piece.metrics(&self.staging, &self.asked.plan, printer)
     }
 
-    /// The parts and models the pieces make as the run left them, with what `--prepare`
-    /// says of each where it was asked.
-    fn finish(self) -> Result<(Vec<Part>, Vec<Laid>, Option<Saved>)> {
+    /// What the run left of the plate, an entry of `entries` each, `--prepare`'s word said.
+    fn finish(self, entries: usize) -> Left {
         let ctx = self.ctx;
         let name = self.asked.plan.recipe().name.clone();
-        let printer = ctx.chosen.printer.as_ref();
-        let mut parts = Vec::with_capacity(self.pieces.len());
-        let mut models = Vec::with_capacity(self.pieces.len());
+        let mut left = Left {
+            staging: self.staging,
+            found: Vec::with_capacity(entries),
+            finished: Vec::with_capacity(entries),
+            said: Vec::with_capacity(entries),
+            saved: self.saved,
+        };
         for piece in self.pieces {
             if ctx.watch.talk && self.asked.prepare {
                 print!("{}", piece.prepared);
             }
-            let (part, model, plugs) =
-                piece.laid((&name, self.asked.prepare), printer, ctx.watch.talk)?;
-            parts.push(part);
-            models.push((model, plugs));
+            let (found, finished, (prepared, steps)) = piece.found();
+            left.found.push(found);
+            left.finished.push(finished);
+            let run = RecipeRun {
+                name: name.clone(),
+                steps,
+            };
+            left.said
+                .push(Some((self.asked.prepare.then_some(prepared), run)));
         }
-        Ok((parts, models, self.saved))
+        left
     }
 }
 

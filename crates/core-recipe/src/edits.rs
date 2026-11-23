@@ -32,6 +32,8 @@ pub fn edits_of(
         StepKind::Repair => vec![Edit::Repair {
             object,
             method: text(settings, "method").map_or(PREPARE_REPAIR, method_of),
+            seam_tolerance_mm: None,
+            smallest_shell_mm2: None,
         }],
         StepKind::Orient => vec![Edit::Orient {
             object,
@@ -43,10 +45,15 @@ pub fn edits_of(
             low_mm: area_mm.0,
             printer: None,
             resin: None,
+            keep_clear_mm: Vec::new(),
+            keep_clear_radius_mm: None,
+            keep_clear_seen_deg: None,
         }],
         StepKind::Hollow => vec![Edit::Hollow {
             object,
             settings: hollow_of(settings),
+            keep_solid: Vec::new(),
+            keep_solid_reach_mm: None,
         }],
         StepKind::Drain => drain_of(settings, (object, placed), (area_mm, plug_drift_mm)),
         StepKind::Supports => vec![Edit::Supports {

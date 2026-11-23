@@ -30,11 +30,11 @@ pub use drain::{
     SearchAsked, channel_in, drains_proven, hole_near, plate_under, plugs_cut, spaced_plugs,
 };
 pub use error::ApplyError;
-pub use hollow::{NoRoom, settings_of, shell_from, shelled};
+pub use hollow::{NoRoom, blockers_along, settings_of, shell_from, shelled};
 pub use label::{LabelAsked, Lettering, label_prisms, labelled};
 pub use orient::{
-    Body, default_plan, lifted, orient_plan, placed_by, preset_named, preset_of,
-    supported_settings, vents_of,
+    Body, Ranked, default_plan, kept_clear, lifted, orient_plan, placed_by, preset_named,
+    preset_of, supported_settings, vents_of,
 };
 pub use piece::{Piece, Role};
 pub use placement::{
@@ -42,5 +42,6 @@ pub use placement::{
 };
 pub use plate_contents::mirrored;
 pub use relief::{ReliefAsked, Relieved, press_picture, read_picture, relieved};
-pub use repair::{MendAsked, Mended, mended, repaired};
+pub use repair::{MendAsked, Mended, mended, repair_settings, repaired};
 pub use split::{part_off_at, part_settings, split};
+pub use supports::{standing_meshes, support_near};

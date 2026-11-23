@@ -243,35 +243,53 @@ fn a_pose_the_search_picked_is_an_orient_proved_on_the_jobs_printer_and_resin() 
             low_mm: [5.0, 3.0],
             printer: Some("p".to_owned()),
             resin: Some("r".to_owned()),
+            keep_clear_mm: Vec::new(),
+            keep_clear_radius_mm: None,
+            keep_clear_seen_deg: None,
         }]
     );
 }
 
 #[test]
-fn a_search_keeping_a_place_clear_or_on_a_printer_file_is_the_turn_its_check_chose() {
-    let keeping = Recipe {
-        pose: Some(searching(None, vec![[1.0, 2.0, 3.0]])),
-        ..bare()
-    };
+fn a_search_on_a_printer_file_is_the_turn_its_check_chose() {
     let by_file = Recipe {
         printer: "/m/printer.toml".into(),
         pose: Some(searching(None, Vec::new())),
         ..bare()
     };
-    for recipe in [keeping, by_file] {
-        assert_eq!(asked_edits(&recipe, &bare(), MODEL), None);
-        let asked = asked_after_check(
-            &recipe,
-            &bare(),
-            MODEL,
-            (Some([90.0, 0.0, 0.0]), None, None),
-        )
-        .expect("the turn chosen is an edit");
-        assert!(
-            matches!(asked.as_slice(), [Edit::Rotate { degrees, .. }] if (degrees.x - 90.0).abs() < 1e-6),
-            "{asked:?}"
-        );
-    }
+    assert_eq!(asked_edits(&by_file, &bare(), MODEL), None);
+    let asked = asked_after_check(
+        &by_file,
+        &bare(),
+        MODEL,
+        (Some([90.0, 0.0, 0.0]), None, None),
+    )
+    .expect("the turn chosen is an edit");
+    assert!(
+        matches!(asked.as_slice(), [Edit::Rotate { degrees, .. }] if (degrees.x - 90.0).abs() < 1e-6),
+        "{asked:?}"
+    );
+}
+
+#[test]
+fn a_search_keeping_a_place_clear_is_an_orient_keeping_it_clear_as_the_check_saw_it() {
+    let keeping = Recipe {
+        pose: Some(searching(None, vec![[1.0, 2.0, 3.0]])),
+        ..bare()
+    };
+
+    let asked = asked_after_check(&keeping, &bare(), MODEL, (None, None, None))
+        .expect("a search is an edit");
+
+    assert!(
+        matches!(
+            asked.as_slice(),
+            [Edit::Orient { keep_clear_mm, keep_clear_seen_deg: Some(seen), .. }]
+                if keep_clear_mm == &[core_geometry::Vec3::new(1.0, 2.0, 3.0)]
+                    && *seen == core_geometry::Vec3::ZERO
+        ),
+        "{asked:?}"
+    );
 }
 
 #[test]

@@ -66,12 +66,10 @@ fn a_hole_in_the_mesh_is_counted_once_and_not_warned_about_per_layer() {
 
 #[test]
 fn a_model_small_enough_but_standing_off_the_plate_is_reported_by_estimate() {
-    // Turned a quarter about X without --center, so the box hangs off the front edge.
-    let path = write_box_stl("off-the-edge", 10.0, 12, 0);
+    // Drawn in front of the plate's edge and not centred, so the box hangs off it.
+    let path = write_boxes_stl("off-the-edge", &[([0.0, -10.0, 0.0], [10.0, 0.0, 10.0])]);
     let output = estimate(&[
         path.to_str().unwrap(),
-        "--rotate",
-        "90,0,0",
         "--profile",
         shipped_profile().to_str().unwrap(),
         "--strict",
@@ -91,8 +89,8 @@ fn a_model_small_enough_but_standing_off_the_plate_is_reported_by_estimate() {
 
 #[test]
 fn supports_reaching_off_the_plate_are_reported_though_the_model_fits() {
-    // In the plate's corner the block fits, but its raft reaches past it on every side.
-    let path = write_boxes_stl("raft-off-the-edge", &[([0.0, 0.0, 0.0], [12.0, 12.0, 4.0])]);
+    // In the plate's corner, drawn over it, the block fits, but its raft reaches past it.
+    let path = write_boxes_stl("raft-off-the-edge", &[([0.0, 0.0, 5.0], [12.0, 12.0, 9.0])]);
     let output = estimate(&[
         path.to_str().unwrap(),
         "--profile",

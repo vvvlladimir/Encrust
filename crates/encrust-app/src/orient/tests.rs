@@ -377,6 +377,7 @@ fn a_start_on_named_models_leaves_the_others_standing_and_asked_again_steps() {
             &[slab],
             (OrientPreset::Auto.into(), None, plans),
             None,
+            None,
         )
         .expect("a named slab can be oriented")
     else {
@@ -404,6 +405,7 @@ fn a_start_on_named_models_leaves_the_others_standing_and_asked_again_steps() {
             &scene,
             &[slab],
             (OrientPreset::Auto.into(), None, plans),
+            None,
             None,
         )
         .expect("a named slab can be oriented");

@@ -231,6 +231,8 @@ fn hollow_lifted_cube() -> Document {
             open_floor: false,
             solid_under_mm: None,
         },
+        keep_solid: Vec::new(),
+        keep_solid_reach_mm: None,
     };
     apply(&mut document, &hollow, Cancel::never()).expect("a 20 mm cube has room for a 2 mm wall");
     document

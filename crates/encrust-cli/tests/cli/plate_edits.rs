@@ -133,40 +133,61 @@ fn a_cut_edit_on_a_model_writes_its_two_halves() {
     assert_eq!(project.manifest.objects.len(), 2, "the cube's two halves");
 }
 
-#[test]
-fn hollowing_a_model_written_as_a_project_is_refused() {
-    let model = write_box_stl("model-hollow", 20.0, 12, 0);
-    let out = output_file("model-hollow.encrust");
-
-    let output = estimate_model(&model, &out, &["--hollow", "2"]);
-
-    assert_eq!(output.status.code(), Some(1));
-    assert!(
-        stderr(&output).contains("--project-out writes models as imported"),
-        "{}",
-        stderr(&output)
-    );
-    assert!(!out.exists(), "nothing is written for a refused run");
+/// The shell and the cavity a run writes into the project at `out`, or why it failed.
+fn shell_written(out: &Path) -> (Vec<core_geometry::Vec3>, f32) {
+    let project = load(out).expect("the project written reads back");
+    let shell = (project.models[0].shell.as_ref()).expect("the cube is hollowed");
+    let built = (project.manifest.objects[0].hollow.built.as_ref()).expect("its cavity is kept");
+    (shell.vertices.clone(), built.cavity_mm3)
 }
 
 #[test]
-fn edits_on_a_model_without_project_out_are_refused() {
-    let model = write_box_stl("edits-on-a-model", 10.0, 12, 0);
-    let edits = edits_file("edits-on-a-model.json", "[]");
+fn a_hollow_by_its_flag_and_by_the_edit_write_the_same_project() {
+    let model = write_box_stl("model-hollow", 20.0, 12, 0);
+    let (by_flag, by_edit) = (
+        output_file("model-hollow-flag.encrust"),
+        output_file("model-hollow-edit.encrust"),
+    );
+    let edits = edits_file(
+        "model-hollow.json",
+        r#"[{"edit": "hollow", "object": 1, "settings": {"thickness_mm": 2.0,
+            "mode": "internal", "precision": 0.5, "infill_on": false,
+            "infill": {"kind": "hive", "cell_mm": 6.0, "density": 0.3, "wall_mm": null}}}]"#,
+    );
 
-    let output = estimate(&[
-        model.to_str().expect("a UTF-8 path"),
-        "--profile",
-        test_panel().to_str().expect("a UTF-8 path"),
-        "--material",
-        test_resin().to_str().expect("a UTF-8 path"),
-        "--edits",
-        edits.to_str().expect("a UTF-8 path"),
-    ]);
+    let flagged = estimate_model(&model, &by_flag, &["--hollow", "2", "--precision", "0.5"]);
+    let edited = estimate_model(
+        &model,
+        &by_edit,
+        &["--edits", edits.to_str().expect("a UTF-8 path")],
+    );
+
+    assert!(flagged.status.success(), "{}", stderr(&flagged));
+    assert!(edited.status.success(), "{}", stderr(&edited));
+    let (shell, cavity_mm3) = shell_written(&by_flag);
+    assert_eq!(
+        (shell, cavity_mm3),
+        shell_written(&by_edit),
+        "one hollow, two ways asked"
+    );
+    let side = cavity_side_mm(20.0, 2.0);
+    assert!(
+        (cavity_mm3 - side.powi(3)).abs() < side.powi(3) * 0.02,
+        "a cavity of {side} mm a side, {} mm3, got {cavity_mm3}",
+        side.powi(3)
+    );
+}
+
+#[test]
+fn edits_on_a_model_with_a_recipe_are_refused() {
+    let model = write_box_stl("edits-with-a-recipe", 10.0, 12, 0);
+    let out = output_file("edits-with-a-recipe.encrust");
+
+    let output = estimate_model(&model, &out, &["--prepare"]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
-        stderr(&output).contains("needs --project-out"),
+        stderr(&output).contains("a recipe prepares its own"),
         "{}",
         stderr(&output)
     );

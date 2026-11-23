@@ -29,7 +29,7 @@ use crate::plate::{Model, Plate};
 use crate::run::Run;
 use crate::stand::{Stood, SupportPlan, ToStand, stand_seated, stand_under};
 use crate::trial::islands::islands_born;
-pub use crate::trial::keep_clear::KeepClear;
+pub use crate::trial::keep_clear::{KEEP_CLEAR_RADIUS_MM, KeepClear};
 
 /// Poses printed to choose between, on top of the way the model stands: four for a model
 /// of a million faces, more for a lighter one, which prints as many in the same time, but

@@ -234,12 +234,12 @@ encrust slice bust.stl --printer elegoo-mars-4-ultra --resin my-grey \
 
 A hole into the surface nearest a point, cut with or without a cavity behind it, and the
 check that says whether any resin is still stuck. `--check-drainage` asks for it alone. The
-point is in plate millimetres from the plate's front left corner, after `--center` and the
-rest of the placement and after the lift `--supports` gives the model, which is worked out
-before the hole is placed: the frame the report gives `slicing.trapped` in, so a pocket's
-`at_mm` can be fed straight back. `encrust inspect model.stl --center --printer …` prints the
-bounds to pick it out of. A model its supports stand otherwise than planned — a mould, whose
-wall grows under it — refuses a point:
+point is in plate millimetres from the plate's front left corner, where the model stands once
+placed (`--center`, `--rotate`, `--orient`), as the window's Drain tool takes a click: supports
+grow under the model where it stands and lift nothing first, so a model on the plate gets
+none under its floor (ADR 0472). It is the frame the report gives `slicing.trapped` in, so a
+pocket's `at_mm` can be fed straight back. `encrust inspect model.stl --center --printer …`
+prints the bounds to pick it out of:
 
 ```sh
 encrust slice model.stl \
@@ -272,12 +272,11 @@ through; `--drain-walled` drills it before hollowing instead, a recess at its de
 kept around it, which drains nothing (ADR 0346). `--drain-support-at X,Y,Z` drills into the
 raft nearest the point once it stands, sized as `--drain`, with no plug (ADR 0347); no hole
 cuts a support tree, only the model and the raft (ADR 0441).
-`--drain-plugs` prints a plug for each hole, standing on the plate past the model's
-right-hand side: what the hole took out of the wall, `--plug-gap` millimetres narrower a
+`--drain-plugs` prints a plug for each hole, standing at the nearest free spot of the usable
+plate as the window's plugs stand: what the hole took out of the wall, `--plug-gap` millimetres narrower a
 side (0.15 by default, never less than 0), its outer face flush with the surface (ADR 0313).
 A resin whose tolerance compensation is off takes its hole and outer offsets off that gap,
-so the fit prints as asked. A run whose plugs would land off the plate or on another model
-stops and says so; `--arrange` does not make room for them.
+so the fit prints as asked. A run whose plugs find no free spot stops and says so.
 
 ```sh
 encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 \
@@ -549,9 +548,12 @@ encrust slice model.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
 
 ## Plates: several models, a plate file, a project
 
-Several models go on one plate. `--arrange` spreads them, biggest first, and turns one longer
-than the plate about the vertical by the least that fits it (ADR 0418); without it each
-stands where its file put it. `--center` and a `--drain-at` point aim at one model, so they
+Several models go on one plate. `--arrange` spreads them over the usable plate last, once each
+stands on its supports, biggest first with their supports' footprint, and turns one longer
+than the plate about the vertical by the least that fits it (ADR 0418, 0472); one that finds no
+room is warned of and stands where it was. Without it each stands where its file put it.
+`--rotate` and `--scale` turn and size a model about its centre of mass and stand it on the
+plate, as the window's Position panel does. `--center` and a `--drain-at` point aim at one model, so they
 are refused for several; `--drain-at auto` drains each model on its own:
 
 ```sh
@@ -609,11 +611,12 @@ A flag wins over the plate file or project, which wins over the profiles' own nu
 A project's plate is edited as the window's tools edit it by `--edits FILE`, a JSON list of
 edits carried out in order before the run, each naming its object by the id the project
 keeps (`docs/design/document.md`, ADR 0466); `--project-out FILE` writes the plate they leave
-as a project. An edit that cannot be carried out stops the run and writes nothing. Models
-given with `--project-out` are written as imported and placed (`--center`, `--check-drainage`
-and the import flags are kept), one object each, and `--edits` then applies to that project; a
-flag that shapes, hollows, drains or supports them, or `--arrange`, is refused. A plate file takes
-neither yet. Besides `cut`, `move` (`by_mm`),
+as a project. An edit that cannot be carried out stops the run and writes nothing. Models are
+staged as one such plate, an object each, and every shaping flag is an edit of it in the
+window's order (`docs/design/cli-on-document.md`, ADR 0472): `--edits` follows the flags' own
+and `--project-out` writes the plate both leave, so a flag and the same edit by `--edits` write
+one project. A recipe prepares a plate of its own, so `--edits` and `--project-out` with
+`--recipe` or `--prepare` are refused; a plate file takes neither yet. Besides `cut`, `move` (`by_mm`),
 `rotate` (`degrees`) and `scale` (`factors`), each `[x, y, z]`, place an object; `delete`
 takes it and its plugs off, `duplicate` (`offset_mm`, `[x, y, z]`) puts a copy beside it and
 `mirror` (`axis`, `x`, `y` or `z`) flips it in place; `split` (`smallest_mm3`, optional)

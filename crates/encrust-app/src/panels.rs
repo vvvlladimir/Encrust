@@ -5,6 +5,8 @@ mod find;
 pub(crate) mod fixtures;
 mod hint_bar;
 mod inspector;
+
+pub(crate) use inspector::merge_supports;
 mod mask_pane;
 mod plate_strip;
 mod plate_summary;

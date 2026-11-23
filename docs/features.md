@@ -1087,7 +1087,7 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 |---|---|
 | `slice` | One model, several models on one plate, a plate file (TOML) or a project, to a printer file or PNGs. A project slices one plate of your choosing or all of them, a file each. Orient, support, hollow, drain, relief, exposure bands, adaptive layers and island removal are all flags. |
 | `batch` | A whole folder of models, several at once, with a JSON report for each. A model that fails does not stop the rest. |
-| `estimate` | Time, resin, weight, cost and risky layers, without writing a file; the recipe the run took, your flags written into its steps, with `--recipe-out`. A project's plate edited first by a list of edits — a cut, a split, a part-off, a combine, a label, a repair, a mend by hand, a picture pressed in as relief, a hollowing, drain holes at points and by the engine's search with vents, a drainage channel, plugs for the holes, supports by a preset or sized automatically, at points, under a hollow's cavity and off what shows, a move, a turn, a scale, a delete, a duplicate, a mirror, an orientation by the search and the plate arranged — and the plate they leave written as a project, which models too can be, as imported, to edit that way. |
+| `estimate` | Time, resin, weight, cost and risky layers, without writing a file; the recipe the run took, your flags written into its steps, with `--recipe-out`. A project's plate edited first by a list of edits — a cut, a split, a part-off, a combine, a label, a repair, a mend by hand, a picture pressed in as relief, a hollowing, drain holes at points and by the engine's search with vents, a drainage channel, plugs for the holes, supports by a preset or sized automatically, at points, under a hollow's cavity and off what shows, a move, a turn, a scale, a delete, a duplicate, a mirror, an orientation by the search and the plate arranged — and the plate they leave written as a project; models are staged as such a plate and every flag that shapes them is one of those edits, so a flag and the same edit give one project. |
 | `inspect` | What is wrong with a model and whether it fits. |
 | `render` | The plate as `slice` would build it — hollowed, drilled, supported — drawn as PNG pictures from the sides you name, the bottom included, with points of your choosing marked even where the model hides them. For a person at a terminal, or a model that reads images. |
 | `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
@@ -1167,11 +1167,11 @@ does (`--supports auto`), and hold up a hollowed model's cavity as well as its o
 
 **Holes:** open a shell's floor, cut drain holes round or as polygons, and
 print a plug for each beside the model, with the gap you choose. A hole's point is where the
-model prints, supports' lift included, so a point `--json` reports can be drilled as it stands. `--drain-at auto` finds the
+model stands, as the window's Drain tool takes a click, so a point `--json` reports can be drilled as it stands; supports grow under the model where it stands, lifting nothing first. `--drain-at auto` finds the
 holes itself: a drain low on each pocket of trapped resin and a vent high on it, each kept only
 once a fresh scan shows the pocket empty, and listed in `--json`; a pocket no hole can drain is
-still reported; the window's Drain tool does the same with Auto. A run whose plugs have no
-room beside their model stops rather than printing them on a neighbour.
+still reported; the window's Drain tool does the same with Auto. Plugs stand at the nearest free
+spot of the plate, as the window's do; a run whose plugs find none stops rather than printing them on a neighbour.
 
 **By hand:** stand a support under the surface nearest a point with `--support-at`, alone with
 `--support-only-at`; paint the side meant to be seen round a point with `--shown-at`, so the

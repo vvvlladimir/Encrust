@@ -13,10 +13,12 @@ use crate::error::ApplyError;
 
 mod auto;
 mod plugs;
+mod raft;
 
 pub use auto::{SearchAsked, drains_proven, plate_under};
 use plugs::apply_plugs;
 pub use plugs::{plugs_cut, spaced_plugs};
+use raft::raft_holes;
 
 /// Past this, the point is off an edge or corner rather than over the face the hole is
 /// drilled into: a cube's edge is 45 degrees off, a 12-sided pillar's facets 15.
@@ -135,13 +137,19 @@ pub(crate) fn apply_drain(
     let mut hollow = hollow_of(&state.hollow, meshes);
     let kept_holes = hollow.drains().len();
     let mut holes = 0;
-    for plate in at_mm {
-        let near = (*plate, Vec3::ZERO);
-        let on = (meshes.source.as_ref(), &bvh);
-        let hole = hole_near(on, state.transform, near, (size, kind), id)?;
-        holes += usize::from(hollow.add_hole(hole));
+    if kind == HoleKind::Support {
+        for hole in raft_holes(document, id, at_mm, size)? {
+            holes += usize::from(hollow.add_hole(hole));
+        }
+    } else {
+        for plate in at_mm {
+            let near = (*plate, Vec3::ZERO);
+            let on = (meshes.source.as_ref(), &bvh);
+            let hole = hole_near(on, state.transform, near, (size, kind), id)?;
+            holes += usize::from(hollow.add_hole(hole));
+        }
     }
-    let mut trapped = 0;
+    let (mut trapped, mut searched) = (0, None);
     if searching.auto {
         let on = (meshes.printed().as_ref(), &hollow, state.transform);
         let found = auto::search_object(on, (size, searching.vent), (id, cancel))?;
@@ -150,6 +158,7 @@ pub(crate) fn apply_drain(
             let own = hole.into_model(state.transform);
             holes += usize::from(own.is_some_and(|hole| hollow.add_hole(hole)));
         }
+        searched = Some(found);
     }
     let (drains, channels) = (hollow.drains().to_vec(), hollow.channels().to_vec());
     let drilled = drains.get(kept_holes..).unwrap_or_default().to_vec();
@@ -158,7 +167,11 @@ pub(crate) fn apply_drain(
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),
-        report: Report::Drained { holes, trapped },
+        report: Report::Drained {
+            holes,
+            trapped,
+            searched,
+        },
     })
 }
 

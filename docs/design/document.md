@@ -28,7 +28,7 @@ document, so an edit naming a deleted object fails rather than landing on anothe
 | repair | `Repair`, `Mend`, `Relief` |
 | shaping | `Combine`, `Label`, `Cut`, `Split`, `PartOff` |
 | hollow and drains | `Hollow`, `Drain`, `Channel`, `Plugs` |
-| supports | `Supports` |
+| supports | `Supports`, `MergeSupports` |
 
 Points and positions are plate millimetres. An edit names the objects it acts on; one that
 adds objects answers their ids and what each is (`Applied`), so a front end can name or select
@@ -57,7 +57,8 @@ finite or above zero is `ApplyError::BadScale`. None of them adds or removes an 
 (`Report::Placed`). The window sets the transform at once through the same `placement`
 functions.
 
-`Orient { object, goal, max_tilt_deg, clean_surface, pick, plate_mm, low_mm, printer, resin }` runs `--orient`'s search on the
+`Orient { object, goal, max_tilt_deg, clean_surface, pick, plate_mm, low_mm, printer, resin, keep_clear_mm,
+keep_clear_radius_mm, keep_clear_seen_deg }` runs `--orient`'s search on the
 object as it stands (outer, shell, cuts, drain vents, what shows), judged on the plate's active
 support group and its best few printed on the shipped catalogue's `printer` and `resin`, the standard
 `elegoo-saturn-4-ultra` and the stock resin numbers where unset (`printer_profiles::standard_machine`; an id
@@ -71,7 +72,10 @@ the words, which a recipe's orient step reads too). A recipe's orient step is th
 runs its Orient tool's search on the object, on the printer chosen in the window or the standard one,
 and stands the `pick`th ranked pose, offered or not, by the same `stood_turned`. With no support group
 the stock profile's plan stands in. MCP asks a search pose as this edit, keeping the `Rotate` handover where
-keep-clear points or a printer file are set.
+a printer file is set. `keep_clear_mm` are places no support should touch, ranked first by the trial
+(`kept_clear`): plate mm where the object stands, or, with `keep_clear_seen_deg`, as it stood turned so
+and centred on the plate, as `--orient-keep-clear` reads them; `KEEP_CLEAR_RADIUS_MM` where no reach is
+given. The window's link passes them to its Orient tool. `Report::Oriented` lists every pose ranked.
 
 `Split { object, smallest_mm3 }` and `PartOff { object, at_mm }` run on the object's printed
 mesh placed on the plate and replace it with `Role::Part(n)` pieces, counted from one: a split
@@ -105,8 +109,8 @@ letters (the window runs it, then the stamp on a job); `labelled` is both. Error
 (no outline in the text), `NoSurface` (no face near `at_mm`), `BadFont { path, reason }`, the
 stamp's own `NothingLeft`, `NotSolid` and `Failed`.
 
-`Repair { object, method }` runs `core_document::repaired` (`core_volume::repair`, the window's
-default `RepairSettings`) on the object's source mesh and `Mend { object, flip_faces, drop_faces,
+`Repair { object, method, seam_tolerance_mm, smallest_shell_mm2 }` runs `core_document::repaired`
+(`core_volume::repair` at `repair_settings`, the window's lengths where unset) on the object's source mesh and `Mend { object, flip_faces, drop_faces,
 drop_shells, bridge }` runs `mended`, which `--flip-faces` and its kin call too: turns and bridges
 first, drops last. Both end in `Document::reshape`, which replaces the source and takes off what
 was built on the old surface (supports, cavity, painted regions; plugs stay, as the window keeps
@@ -124,8 +128,11 @@ any are. A picture that does not read is `BadPicture { path, reason }`, else `Ca
 `Failed`. The model is left solid, its cavity gone, until a `Hollow` follows. A file's own texture is not an edit: a `.encrust` keeps none. The window's Relief tool
 runs the edit as its own job, `press_picture` being the call both make.
 
-`Hollow { object, settings: HollowState }` hollows the object by the numbers of the window's
-Hollow panel, which it keeps as its own (`own_hollow`): `settings_of` turns them into the run's
+`Hollow { object, settings: HollowState, keep_solid, keep_solid_reach_mm }` hollows the object by the
+numbers of the window's Hollow panel, which it keeps as its own (`own_hollow`), the wall kept solid
+along each `keep_solid` run of plate points as Keep solid clicks lay it (`blockers_along`: a ball at the
+surface nearest the first, rods on; fitted to the model without a reach), the blockers kept with the
+object: `settings_of` turns them into the run's
 settings (an open floor faces the plate), the object's blockers and channels laid over them as
 `ModelHollow::asking` does. `shelled` is `cavity_field` then `carve` on the source mesh under
 `Transform::unturned`; the shell goes into `ModelMeshes::shell` and `BuiltCavity::of` into
@@ -145,6 +152,10 @@ recipe's points drill: it stops at its depth, opening the cavity only if that re
 proves, and a vent per pocket where `vent`; an object with no shell is `NoCavity`, a stop is
 `Cancelled`; `Report::Drained::trapped` counts the pockets left. The window starts its own
 search job on that object and the edit is done when it lands.
+
+A `kind` of `Support` drills the raft the object stands on nearest each point (`--drain-support-at`),
+kept with its holes; one standing on no raft is `NoRaft`. `Report::Drained::searched` is what the search
+found and chose, which `--json` lists.
 
 `Channel { object, points_mm, diameter_mm }` takes the points into the object's own space and
 adds one channel to its `ModelHollow`, as `--channel` lays it (`Report::Channelled`).
@@ -178,6 +189,12 @@ blocked and shown regions, its contacts, the `at_mm` points among them, as seeds
 kept as `ObjectSupportState::grown` (`Report::Supported`). `only_at` places the points alone. The
 run reads the model at the analysis step (ADR 0471). The window starts its automatic
 run on that object alone, adding to what stands.
+
+`Report::Supported` gives every contact, plate mm, the tips standing and each contact no tree carries
+with why, which the command line's report says. `MergeSupports { object, near_mm }` joins the supports
+whose contacts lie within `MERGE_NAMING_MM` of each point into one tree, as the window's Merge into one
+joins those picked, the rest grown again beside it; a point near no contact is `NoSupportNear`, points
+naming one support `OneSupportToMerge`, a tree the model or the plate refuses `MergeRefused` with why.
 
 `Arrange { low_mm, plate_mm, clearance_mm }` spreads every visible object of the active plate over
 the usable area (the plate less its inset) `plate_mm` across from its corner `low_mm`, zero where

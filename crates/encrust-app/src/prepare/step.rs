@@ -122,7 +122,7 @@ impl Going {
             .map(|(printer, material)| (printer, material));
         let asked = (wanted, max_tilt_deg, plans);
         Ok(Self::Orient(
-            tools.orient.start_on(&doc.scene, ids, asked, proof)?,
+            tools.orient.start_on(&doc.scene, ids, asked, proof, None)?,
         ))
     }
 

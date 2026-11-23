@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_document::{Footing, stood_turned};
-use core_engine::SupportPlan;
+use core_engine::{KeepClear, SupportPlan};
 use core_geometry::{Adjacency, Mesh, Region, Scalar, Vec3};
 use core_plate::{OrientPreset, OrientSettings};
 use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, standard_machine};
@@ -245,10 +245,14 @@ impl OrientTool {
             impl Fn(&SceneObject) -> SupportPlan,
         ),
         machine: Option<(&PrinterProfile, &MaterialProfile)>,
+        keep_clear: Option<&KeepClear>,
     ) -> Result<Turning> {
         let tasks = scene
             .named(ids)
-            .map(|object| OrientTask::of(object, plan_of(object)))
+            .map(|object| OrientTask {
+                keep_clear: keep_clear.cloned(),
+                ..OrientTask::of(object, plan_of(object))
+            })
             .collect();
         let settings = OrientSettings {
             preset: wanted.preset,

@@ -605,9 +605,10 @@ fn medium_on_a_raft(name: &str) -> PathBuf {
     path
 }
 
-/// The first layer of a 12 mm block stood on supports and a raft, with whatever follows.
+/// The first layer of a 12 mm block drawn 5 mm over the plate, so it stands on supports and
+/// a raft, with whatever follows.
 fn raft_layer(name: &str, extra: &[&str]) -> Vec<u8> {
-    let path = write_boxes_stl(name, &[([0.0, 0.0, 0.0], [12.0, 12.0, 4.0])]);
+    let path = write_boxes_stl(name, &[([0.0, 0.0, 5.0], [12.0, 12.0, 9.0])]);
     let out = output_dir(name);
     let panel = test_panel();
     let supports = medium_on_a_raft(name);

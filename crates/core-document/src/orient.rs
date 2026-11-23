@@ -5,8 +5,10 @@ use std::sync::Arc;
 
 use core_edit::{Edit, ObjectId, OrientAim};
 use core_engine::project::{ModelMeshes, ObjectState, hollow_of};
-use core_engine::{Choice, EngineError, SupportPlan, Trial, orient_for_print};
-use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
+use core_engine::{
+    Choice, EngineError, KEEP_CLEAR_RADIUS_MM, KeepClear, SupportPlan, Trial, orient_for_print,
+};
+use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3, transform_mesh};
 use core_plate::{OrientGoal, OrientPreset, OrientSettings, PlateError, Printed, Watch};
 use core_volume::{Cancel, ModelHollow};
 use printer_profiles::{
@@ -16,7 +18,7 @@ use printer_profiles::{
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
-use crate::placement::{Footing, degrees_of, stood_turned};
+use crate::placement::{Footing, degrees_of, euler_degrees, stood_turned};
 use crate::supports::orient_plan_of;
 
 /// What an `Orient` edit asks of an object: the aim, the tilt allowed, whether a clean surface
@@ -29,6 +31,8 @@ pub(crate) struct OrientAsked {
     pub area_mm: Option<([Scalar; 2], [Scalar; 2])>,
     pub printer: Option<String>,
     pub resin: Option<String>,
+    /// Places kept clear, plate mm; how near still touches, mm; the turn they were seen at.
+    pub keep_clear: (Vec<Vec3>, Option<Scalar>, Option<Vec3>),
 }
 
 impl OrientAsked {
@@ -43,6 +47,9 @@ impl OrientAsked {
             low_mm,
             printer,
             resin,
+            keep_clear_mm,
+            keep_clear_radius_mm,
+            keep_clear_seen_deg,
             ..
         } = edit
         else {
@@ -56,6 +63,11 @@ impl OrientAsked {
             area_mm: plate_mm.map(|plate| (*low_mm, plate)),
             printer: printer.clone(),
             resin: resin.clone(),
+            keep_clear: (
+                keep_clear_mm.clone(),
+                *keep_clear_radius_mm,
+                *keep_clear_seen_deg,
+            ),
         })
     }
 }
@@ -203,6 +215,28 @@ fn machine_in(
     })
 }
 
+/// The places `points` name on a model whose sized own mesh is `sized`, in that mesh's frame:
+/// seen turned `seen_deg` and centred on a plate `plate_mm` across, else standing by `transform`.
+pub fn kept_clear(
+    sized: &Mesh,
+    transform: Transform,
+    (points, radius_mm, seen_deg): (&[Vec3], Option<Scalar>, Option<Vec3>),
+    plate_mm: Vec2,
+) -> Option<KeepClear> {
+    if points.is_empty() {
+        return None;
+    }
+    let radius_mm = radius_mm.unwrap_or(KEEP_CLEAR_RADIUS_MM);
+    if let Some(seen) = seen_deg {
+        return KeepClear::seen_turned(sized, euler_degrees(seen), plate_mm, points, radius_mm);
+    }
+    let back = transform.rotation.inverse();
+    let at_mm = (points.iter())
+        .map(|point| back * (*point - transform.translation))
+        .collect();
+    Some(KeepClear { at_mm, radius_mm })
+}
+
 /// The plan an orient weighs where the plate has no support group: the stock profile, as the
 /// window's default group builds it.
 pub fn default_plan() -> SupportPlan {
@@ -233,14 +267,18 @@ pub(crate) fn ranked_poses(
         build_volume_mm: Some(Vec3::new(volume.x, volume.y, volume.z)),
         ..on_supports
     };
+    let body = Body::of(state, meshes).sized(state.transform.sizing());
+    let (points, radius_mm, seen_deg) = &asked.keep_clear;
+    let plate_mm = Vec2::new(volume.x, volume.y);
+    let asked_clear = (points.as_slice(), *radius_mm, *seen_deg);
+    let keep_clear = kept_clear(&body.outer, state.transform, asked_clear, plate_mm);
     let trial = Trial {
         printer: &printer,
         material: &material,
         support: &plan,
         raster_window: rayon::current_num_threads(),
-        keep_clear: None,
+        keep_clear: keep_clear.as_ref(),
     };
-    let body = Body::of(state, meshes).sized(state.transform.sizing());
     let told = |_, _, _| !cancel.asked();
     let found = orient_for_print(
         &body.printed(&state.shown_painted),
@@ -255,6 +293,28 @@ pub(crate) fn ranked_poses(
             reason: error.to_string(),
         }),
         Ok(found) => Ok((found, z_lift_mm)),
+    }
+}
+
+/// One pose the search ranked, as an orient's report lists it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Ranked {
+    pub rotation: core_geometry::Quat,
+    /// Whether it sets the model on the plate, needing no supports this way up.
+    pub on_plate: bool,
+    /// Whether it is worth offering beside the first.
+    pub offered: bool,
+    pub printout: Option<core_engine::Printout>,
+}
+
+impl Ranked {
+    fn of(choice: &Choice) -> Self {
+        Self {
+            rotation: choice.oriented.rotation,
+            on_plate: choice.oriented.on_plate,
+            offered: choice.ruling.is_offered(),
+            printout: choice.printout,
+        }
     }
 }
 
@@ -286,6 +346,10 @@ pub(crate) fn apply_orient(
         added: Vec::new(),
         report: Report::Oriented {
             rotate_deg: degrees_of(rotation),
+            on_plate: choice.oriented.on_plate,
+            peak_mm2: choice.oriented.score.peak_mm2.unwrap_or_default(),
+            overhang_mm2: choice.oriented.score.overhang_mm2,
+            ranked: found.iter().map(Ranked::of).collect(),
         },
     })
 }

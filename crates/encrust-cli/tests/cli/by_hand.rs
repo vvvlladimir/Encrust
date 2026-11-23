@@ -4,9 +4,10 @@ use serde_json::Value;
 
 use crate::support::*;
 
-/// `estimate --json` of a 16 mm cube standing on the plate's corner, with `extra`.
+/// `estimate --json` of a 16 mm cube drawn 5 mm over the plate's corner, so it stands on
+/// supports where it is, with `extra`.
 fn estimated(name: &str, extra: &[&str]) -> Value {
-    let path = write_box_stl(name, 16.0, 12, 0);
+    let path = write_boxes_stl(name, &[([0.0, 0.0, 5.0], [16.0, 16.0, 21.0])]);
     let panel = test_panel();
     let mut args = vec![
         path.to_str().unwrap(),
@@ -34,7 +35,7 @@ fn only_the_supports_placed_by_hand_stand_under_the_model() {
             "--supports",
             "medium",
             "--support-at",
-            "8,8,0",
+            "8,8,5",
             "--support-only-at",
         ],
     );
@@ -49,7 +50,7 @@ fn only_the_supports_placed_by_hand_stand_under_the_model() {
 #[test]
 fn automatic_supports_stand_the_same_contacts_whatever_layer_height_is_asked() {
     let contacts = |layer_height: &str| {
-        let path = write_leaning_box_stl("supports-step", 16.0, 6.0, 12, 0);
+        let path = write_boxes_stl("supports-step", &[([0.0, 0.0, 5.0], [16.0, 16.0, 21.0])]);
         let panel = test_panel();
         let output = estimate(&[
             path.to_str().unwrap(),
@@ -103,7 +104,7 @@ fn an_underside_painted_to_be_seen_stands_on_fewer_contacts() {
             .expect("supports are reported")
     };
     let plain = contacts("shown-plain", &[]);
-    let painted = contacts("shown-painted", &["--shown-at", "8,8,0:30"]);
+    let painted = contacts("shown-painted", &["--shown-at", "8,8,5:30"]);
     assert!(
         painted < plain,
         "the painted side stands sparser: {painted} against {plain}"

@@ -1,21 +1,16 @@
-//! `--edits` carried out on a project through `core-document`'s apply, and `--project-out`
-//! writing the plate they leave (ADR 0466).
+//! `--edits` carried out through `core-document`'s apply, on a project or on models after their
+//! flags, and `--project-out` writing the plate they leave (ADR 0466, 0472).
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use core_document::{Document, ImportedModel, apply};
 use core_edit::Edit;
-use core_engine::project::{Manifest, Project, Summary, save};
+use core_engine::project::{Project, Summary, save};
 use core_geometry::{Mesh, Orientation, diagnose};
 use core_volume::Cancel;
 
-use crate::args::JobArgs;
-use crate::pipeline::{Watch, import};
-use crate::profiles::Chosen;
-use crate::project;
 use crate::report::ImportReport;
-use crate::stage::Staged;
 
 /// The edits a run makes to a project's plate, and where the plate they leave is written.
 #[derive(Debug, Clone, Default, clap::Args)]
@@ -36,12 +31,17 @@ impl EditArgs {
         self.edits.is_some() || self.project_out.is_some()
     }
 
+    /// The edits `--edits` names, none without it.
+    pub fn listed(&self) -> Result<Vec<Edit>> {
+        match &self.edits {
+            Some(path) => read(path),
+            None => Ok(Vec::new()),
+        }
+    }
+
     /// `project` with `--edits` carried out on it, written to `--project-out` where asked.
     pub fn applied(&self, project: Project) -> Result<Project> {
-        let edits = match &self.edits {
-            Some(path) => read(path)?,
-            None => Vec::new(),
-        };
+        let edits = self.listed()?;
         let mut document = Document::from_project(project);
         for (index, edit) in edits.iter().enumerate() {
             apply(&mut document, edit, Cancel::never())
@@ -58,55 +58,12 @@ impl EditArgs {
     /// Refuses the flags for a plate file, which its own keys shape.
     pub fn refuse_for_models(&self) -> Result<()> {
         if self.wanted() {
-            // TODO(step-C1): models staged into a Document, so --edits and --project-out take them.
             bail!(
-                "--edits and --project-out take a project (.encrust); a model is shaped by its flags"
+                "--edits and --project-out take a project or models; a plate file is shaped by its keys"
             );
         }
         Ok(())
     }
-}
-
-/// The models as imported and placed written as a project by `--project-out`, `--edits` carried
-/// out on it first, and staged as that project.
-pub fn stage_models(
-    paths: &[PathBuf],
-    arrange: bool,
-    job: &JobArgs,
-    chosen: &Chosen,
-    watch: &Watch,
-) -> Result<Staged> {
-    let Some(out) = &job.edits.project_out else {
-        bail!("--edits on models needs --project-out, which writes them as a project first");
-    };
-    let shaped = !project::shaping_flags(job)
-        .iter()
-        .all(|flag| *flag == "--center");
-    if arrange || shaped || job.model.wanted() {
-        bail!(
-            "--project-out writes models as imported; shape them by --edits on the project it writes"
-        );
-    }
-    chosen.measured()?;
-    let mut models = Vec::with_capacity(paths.len());
-    for path in paths {
-        let (mesh, import, _) = import(path, &job.import, None, chosen, watch)?;
-        models.push(imported_model(path, mesh, &import));
-        watch.stop.check()?;
-    }
-    let selection = &job.profile;
-    let printer = selection
-        .profile
-        .is_none()
-        .then(|| selection.printer.clone());
-    let resin = selection
-        .material
-        .is_none()
-        .then(|| selection.resin.clone());
-    let manifest = Manifest::new(printer.flatten(), resin.flatten());
-    let project = Document::of_models(manifest, models).into_project();
-    let project = job.edits.applied(project)?;
-    project::stage_checked(out, &project, None, job, watch)
 }
 
 pub(crate) fn imported_model(path: &Path, mesh: Mesh, import: &ImportReport) -> ImportedModel {

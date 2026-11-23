@@ -1,16 +1,13 @@
-//! What the window's Combine, Text, Cut and Split do, done to the models on the command line
-//! after they are placed and before they are hollowed; see docs/decisions/0312.
+//! The flags of the window's Combine, Text, Cut and Split, which `stage/modelled.rs` folds to
+//! edits of the plate after placing and before hollowing (ADR 0312).
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
-use anyhow::{Context, Result, anyhow, bail};
-use core_document::{ApplyError, CutAsked, CutModel, LabelAsked, part_off_at, pieces, split};
-use core_edit::{Axis, ObjectId};
-use core_geometry::{Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_joint::{JointKind, Joints};
+use core_edit::Axis;
+use core_geometry::{Scalar, Vec3};
+use core_joint::JointKind;
 use core_text::{LABEL_DEPTH_MM, LETTER_HEIGHT_MM};
-use core_volume::{Boolean, Cancel, PartSettings};
+use core_volume::PartSettings;
 
 use crate::hollowing::point;
 
@@ -23,7 +20,7 @@ pub enum Op {
     Intersection,
 }
 
-impl From<Op> for Boolean {
+impl From<Op> for core_edit::Op {
     fn from(op: Op) -> Self {
         match op {
             Op::Union => Self::Union,
@@ -179,166 +176,4 @@ fn cut_at(text: &str) -> Result<(Axis, Scalar), String> {
         return Err(format!("{text:?} names no plane"));
     }
     Ok((axis, at))
-}
-
-/// The models as `args` shapes them, each into the pieces it becomes, in plate coordinates.
-/// Combining leaves the first the whole result and the others nothing.
-pub fn shaped(models: Vec<Mesh>, args: &ModelArgs, talk: bool) -> Result<Vec<Vec<Mesh>>> {
-    let models = match args.combine {
-        Some(op) => combined(models, op, talk)?,
-        None => models,
-    };
-    models
-        .into_iter()
-        .map(|mesh| {
-            if mesh.faces.is_empty() {
-                return Ok(Vec::new());
-            }
-            let mesh = match &args.label {
-                Some(text) => labelled(&mesh, text, args, talk)?,
-                None => mesh,
-            };
-            let halves = match args.cut {
-                Some(plane) => cut(&mesh, plane, args, talk)?,
-                None => vec![mesh],
-            };
-            let mut pieces = Vec::new();
-            for half in halves {
-                pieces.extend(parted(half, args, talk)?);
-            }
-            Ok(pieces)
-        })
-        .collect()
-}
-
-/// Every model as one, in the first one's place; the others are left empty.
-fn combined(models: Vec<Mesh>, op: Op, talk: bool) -> Result<Vec<Mesh>> {
-    if models.len() < 2 {
-        bail!("--combine takes two models or more, got {}", models.len());
-    }
-    let joined =
-        core_document::combined(&models, op.into(), None, Cancel::never(), ObjectId::UNSET)
-            .map_err(|error| match error {
-                ApplyError::NotSolid(_) => anyhow!("a model is not a closed solid"),
-                other => other.into(),
-            })
-            .context("combining the models")?;
-    if talk {
-        match joined.voxel_mm {
-            None => println!("Combined {} models\n", models.len()),
-            Some(voxel_mm) => println!(
-                "Combined {} models on a {voxel_mm:.2} mm lattice, as one is not a closed solid\n",
-                models.len()
-            ),
-        }
-    }
-    let mut out = vec![joined.mesh];
-    out.resize_with(models.len(), Mesh::default);
-    Ok(out)
-}
-
-/// `mesh` with `text` written on the surface nearest `--label-at`.
-fn labelled(mesh: &Mesh, text: &str, args: &ModelArgs, talk: bool) -> Result<Mesh> {
-    let at_mm = args.label_at.context("--label needs --label-at")?;
-    let asked = LabelAsked {
-        text: text.to_owned(),
-        at_mm,
-        height_mm: args.label_height,
-        depth_mm: args.label_depth,
-        raised: !args.label_sunk,
-        follow_surface: args.label_follow,
-        angle_deg: args.label_angle,
-        font: args.label_font.clone(),
-    };
-    let stamped = core_document::labelled(mesh, &asked, Cancel::never(), ObjectId::UNSET)
-        .map_err(|error| match error {
-            ApplyError::NoSurface(_) => anyhow!("the model has no surface near --label-at"),
-            ApplyError::NotSolid(_) => anyhow!("the model is not a closed solid"),
-            ApplyError::BadFont {
-                path: Some(path), ..
-            } => anyhow!("cannot read the font {}", path.display()),
-            other => other.into(),
-        })
-        .context("writing the label")?;
-    if talk {
-        println!("Labelled with {text:?} at {at_mm}\n");
-    }
-    Ok(stamped)
-}
-
-/// The halves `--cut` cuts `mesh` into that `--keep` keeps, each laid on its cut face as
-/// the window's Lay flat does, and the loose dowels a dowel joint prints (ADR 0466).
-fn cut(
-    mesh: &Mesh,
-    (axis, at_mm): (Axis, Scalar),
-    args: &ModelArgs,
-    talk: bool,
-) -> Result<Vec<Mesh>> {
-    let asked = CutAsked {
-        axis,
-        at_mm,
-        keep: args.keep.into(),
-        joints: Joints {
-            kind: args.joint.map(JointKind::from),
-            ..Joints::default()
-        },
-        lay_flat: true,
-    };
-    let model = CutModel {
-        printed: Arc::new(mesh.clone()),
-        cuts: None,
-        solid: None,
-        transform: Transform::default(),
-    };
-    let Ok(done) = core_document::cut(&model, &asked, ObjectId::UNSET) else {
-        bail!("the --cut plane misses the model");
-    };
-    if let Some(reason) = done.unjoined {
-        bail!("the joint could not be built into the halves: {reason}");
-    }
-    if talk {
-        println!(
-            "Cut: {} fixings, {} open loops left uncapped\n",
-            done.joined.placed, done.open_loops
-        );
-    }
-    let kept = pieces(done.joined, &asked);
-    Ok(kept
-        .into_iter()
-        .map(|piece| transform_mesh(&piece.mesh, piece.transform))
-        .collect())
-}
-
-/// `mesh` as `--split` or `--part-off` leaves it, or whole.
-fn parted(mesh: Mesh, args: &ModelArgs, talk: bool) -> Result<Vec<Mesh>> {
-    if let Some(at) = args.part_off {
-        let parted = part_off_at(&mesh, at, Cancel::never(), ObjectId::UNSET)
-            .map_err(|error| match error {
-                ApplyError::NoNeck(_) => {
-                    anyhow!("there is no narrow join to cut at from this point")
-                }
-                other => other.into(),
-            })
-            .context("cutting the part off")?;
-        if talk {
-            println!("Cut the part at {at} off where it joins the rest\n");
-        }
-        return Ok(vec![parted.part, parted.rest]);
-    }
-    if !args.split {
-        return Ok(vec![mesh]);
-    }
-    let settings = PartSettings {
-        smallest_mm3: args.split_smallest,
-    };
-    let found = split(&mesh, &settings);
-    if talk {
-        println!(
-            "Split into {} parts: {} scraps joined, {} dropped\n",
-            found.parts.len(),
-            found.joined,
-            found.dropped
-        );
-    }
-    Ok(found.parts)
 }

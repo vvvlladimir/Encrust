@@ -1,7 +1,9 @@
 //! A model mended or repaired where it stands (`docs/design/document.md`).
 
 use core_edit::{Edit, ObjectId};
-use core_geometry::{Mesh, Region, bridge, flip_faces, list_shells, remove_faces};
+use core_geometry::{
+    MendSettings, Mesh, Region, Scalar, bridge, flip_faces, list_shells, remove_faces,
+};
 use core_volume::{Cancel, RepairMethod, RepairSettings, Repaired, VolumeError, repair};
 
 use crate::apply::{Applied, Report};
@@ -120,16 +122,12 @@ pub fn repaired(
 pub(crate) fn apply_repair(
     document: &mut Document,
     id: ObjectId,
-    method: RepairMethod,
+    (method, (seam_mm, shell_mm2)): (RepairMethod, (Option<Scalar>, Option<Scalar>)),
     cancel: Cancel<'_>,
 ) -> Result<Applied, ApplyError> {
     let (_, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
-    let done = repaired(
-        &meshes.source,
-        (method, RepairSettings::default()),
-        cancel,
-        id,
-    )?;
+    let settings = repair_settings(seam_mm, shell_mm2);
+    let done = repaired(&meshes.source, (method, settings), cancel, id)?;
     document.reshape(id, done.mesh);
     Ok(Applied {
         removed: Vec::new(),
@@ -139,6 +137,17 @@ pub(crate) fn apply_repair(
             wrapped: done.wrapped,
         },
     })
+}
+
+/// A repair's lengths as `Edit::Repair` asks them, mm and mm², the window's where unset.
+pub fn repair_settings(seam_mm: Option<Scalar>, shell_mm2: Option<Scalar>) -> RepairSettings {
+    let window = RepairSettings::default().mend;
+    RepairSettings {
+        mend: MendSettings {
+            seam_tolerance_mm: seam_mm.unwrap_or(window.seam_tolerance_mm),
+            smallest_shell_mm2: shell_mm2.unwrap_or(window.smallest_shell_mm2),
+        },
+    }
 }
 
 /// Turns, bridges and drops what `asked` names on the mesh of `id`.

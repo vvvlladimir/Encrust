@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 use core_document::Body;
-use core_engine::{SupportPlan, Trial, orient_for_print};
+use core_engine::{KeepClear, SupportPlan, Trial, orient_for_print};
 use core_geometry::{Mesh, Quat, Region, Transform, Vec3};
 use core_plate::{OrientSettings, Phase, Printed, Watch};
 #[cfg(test)]
@@ -43,6 +43,8 @@ pub struct OrientTask {
     pub support: SupportPlan,
     /// The faces of `mesh` painted as what shows, which a clean surface keeps supports off.
     pub shown: Region,
+    /// Places no support should touch, in the sized mesh's frame, which ranks poses first.
+    pub keep_clear: Option<KeepClear>,
 }
 
 impl OrientTask {
@@ -61,6 +63,7 @@ impl OrientTask {
                 SupportProfile::shipped("medium").expect("the medium preset ships"),
             ),
             shown: Region::default(),
+            keep_clear: None,
         }
     }
 
@@ -78,6 +81,7 @@ impl OrientTask {
             && self.sizing == other.sizing
             && self.support == other.support
             && self.shown == other.shown
+            && self.keep_clear == other.keep_clear
     }
 }
 
@@ -201,6 +205,7 @@ impl OrientTask {
             down_now: object.transform.rotation.inverse() * Vec3::NEG_Z,
             support: core_document::lifted(plan, object.lift_mm),
             shown: object.shown_painted.clone(),
+            keep_clear: None,
         }
     }
 }
@@ -210,7 +215,7 @@ impl OrientTask {
 fn choose(
     printed: &Printed,
     settings: &OrientSettings,
-    support: &SupportPlan,
+    (support, keep_clear): (&SupportPlan, Option<&KeepClear>),
     proof: Option<&Proof>,
     watch: Watch<'_>,
 ) -> Result<Vec<(Pose, bool)>, String> {
@@ -219,7 +224,7 @@ fn choose(
         material: &proof.material,
         support,
         raster_window: worker_threads(),
-        keep_clear: None,
+        keep_clear,
     });
     let chosen = orient_for_print(printed, settings, trial.as_ref(), watch)
         .map_err(|error| error.to_string())?;
@@ -291,7 +296,7 @@ fn turn_of(task: &OrientTask, request: &OrientRequest, watch: Watch<'_>) -> Resu
     let ranked = choose(
         &printed,
         &settings,
-        &task.support,
+        (&task.support, task.keep_clear.as_ref()),
         request.proof.as_ref(),
         watch,
     )?;

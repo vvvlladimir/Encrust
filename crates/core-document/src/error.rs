@@ -64,6 +64,22 @@ pub enum ApplyError {
     /// A drain search on an object with no cavity to drain.
     #[error("object {0:?} has no cavity to drain")]
     NoCavity(ObjectId),
+    /// A hole into the raft asked of an object that stands on none.
+    #[error("object {0:?} stands on no raft to drill")]
+    NoRaft(ObjectId),
+    /// A merge point near no contact of the object's supports.
+    #[error("no support of object {object:?} has a contact near {at_mm}")]
+    NoSupportNear { object: ObjectId, at_mm: Vec3 },
+    /// A merge whose points name one support, where a merge joins two or more.
+    #[error("the points of the merge at {at_mm} name one support of object {object:?}")]
+    OneSupportToMerge { object: ObjectId, at_mm: Vec3 },
+    /// Supports the merge could not join into one tree.
+    #[error("the supports of the merge at {at_mm} cannot be merged: {}", core_engine::merge_refusal(*why))]
+    MergeRefused {
+        object: ObjectId,
+        at_mm: Vec3,
+        why: core_supports::Refused,
+    },
     /// An object with no surface, which stands nowhere on the plate to be arranged.
     #[error("object {0:?} has no footprint on the plate")]
     NoFootprint(ObjectId),

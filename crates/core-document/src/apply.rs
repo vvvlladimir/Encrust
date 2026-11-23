@@ -18,7 +18,7 @@ use crate::plate_contents::{delete, duplicate, mirrored};
 use crate::relief::{ReliefAsked, apply_relief};
 use crate::repair::{MendAsked, Mended, apply_mend, apply_repair};
 use crate::split::{apply_part_off, apply_split};
-use crate::supports::{SupportsAsked, apply_supports};
+use crate::supports::{SupportsAsked, apply_merge, apply_supports};
 
 /// What an edit did, for a front end to name, select and report it.
 #[derive(Debug, Clone, PartialEq)]
@@ -91,6 +91,8 @@ pub enum Report {
         holes: usize,
         /// Pockets of resin still trapped once the search's holes were in; 0 without a search.
         trapped: usize,
+        /// What the search found and chose, plate mm where the object stood; none without one.
+        searched: Option<core_engine::Drained>,
     },
     /// A channel was dug through an object.
     Channelled,
@@ -109,7 +111,15 @@ pub enum Report {
         placed: usize,
         /// Trees grown from the object's contacts, those it already had among them.
         trees: usize,
+        /// Every contact of the object, plate mm.
+        contacts_mm: Vec<Vec3>,
+        /// Tips a tree carries; fewer than the contacts where one found no room.
+        standing: usize,
+        /// The contacts no tree carries, plate mm, each with why.
+        unheld: Vec<(Vec3, core_supports::Unstood)>,
     },
+    /// Supports of an object were joined into one.
+    Merged,
     /// An object was moved, turned or sized where it stands.
     Placed,
     /// The plate's objects were spread over it.
@@ -123,9 +133,65 @@ pub enum Report {
     Oriented {
         /// The turn it now stands at, degrees about X, then Y, then Z of the plate.
         rotate_deg: Vec3,
+        /// Whether the pose sets it on the plate.
+        on_plate: bool,
+        /// The pose's largest section and its overhang, mm².
+        peak_mm2: Scalar,
+        overhang_mm2: Scalar,
+        /// Every pose the search ranked, best first.
+        ranked: Vec<crate::orient::Ranked>,
     },
     /// An object was deleted or copied.
     Contents,
+}
+
+/// Carries out an edit that remakes or builds on an object's surface: a repair, a relief, a
+/// hollow, holes and supports.
+fn apply_to_the_surface(
+    document: &mut Document,
+    edit: &Edit,
+    cancel: Cancel<'_>,
+) -> Result<Applied, ApplyError> {
+    match *edit {
+        Edit::Repair {
+            object,
+            method,
+            seam_tolerance_mm,
+            smallest_shell_mm2,
+        } => {
+            let limits = (seam_tolerance_mm, smallest_shell_mm2);
+            apply_repair(document, object, (method, limits), cancel)
+        }
+        Edit::Mend { object, .. } => {
+            let asked = MendAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
+            apply_mend(document, object, &asked)
+        }
+        Edit::Relief { object, .. } => {
+            let asked = ReliefAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
+            apply_relief(document, object, &asked, cancel)
+        }
+        Edit::Hollow {
+            object,
+            ref settings,
+            ref keep_solid,
+            keep_solid_reach_mm,
+        } => {
+            let kept = (keep_solid.as_slice(), keep_solid_reach_mm);
+            apply_hollow(document, object, (settings, kept), cancel)
+        }
+        Edit::Drain { object, .. } | Edit::Channel { object, .. } | Edit::Plugs { object, .. } => {
+            apply_drains(document, edit, object, cancel)
+        }
+        Edit::Supports { object, .. } => {
+            let asked = SupportsAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
+            apply_supports(document, object, &asked, cancel)
+        }
+        Edit::MergeSupports {
+            object,
+            ref near_mm,
+        } => apply_merge(document, object, near_mm),
+        _ => Err(ApplyError::NoObject(ObjectId::UNSET)),
+    }
 }
 
 /// Carries `edit` out on `document`, which an error leaves as it was; `cancel` stops one that
@@ -167,26 +233,15 @@ pub fn apply(
             let asked = LabelAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
             apply_label(document, object, &asked, cancel)
         }
-        Edit::Repair { object, method } => apply_repair(document, object, method, cancel),
-        Edit::Mend { object, .. } => {
-            let asked = MendAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
-            apply_mend(document, object, &asked)
-        }
-        Edit::Relief { object, .. } => {
-            let asked = ReliefAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
-            apply_relief(document, object, &asked, cancel)
-        }
-        Edit::Hollow {
-            object,
-            ref settings,
-        } => apply_hollow(document, object, settings, cancel),
-        Edit::Drain { object, .. } | Edit::Channel { object, .. } | Edit::Plugs { object, .. } => {
-            apply_drains(document, edit, object, cancel)
-        }
-        Edit::Supports { object, .. } => {
-            let asked = SupportsAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
-            apply_supports(document, object, &asked, cancel)
-        }
+        Edit::Repair { .. }
+        | Edit::Mend { .. }
+        | Edit::Relief { .. }
+        | Edit::Hollow { .. }
+        | Edit::Drain { .. }
+        | Edit::Channel { .. }
+        | Edit::Plugs { .. }
+        | Edit::Supports { .. }
+        | Edit::MergeSupports { .. } => apply_to_the_surface(document, edit, cancel),
         Edit::Arrange {
             low_mm,
             plate_mm,

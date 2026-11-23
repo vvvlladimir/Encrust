@@ -17,6 +17,8 @@ mod shape;
 mod shown;
 mod support_picker;
 mod supports;
+
+pub(crate) use supports::merge as merge_supports;
 mod text;
 
 pub use check::{badge as check_badge, go_to as go_to_risks, tint as risk_tint};

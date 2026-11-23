@@ -40,7 +40,8 @@ fn a_point_over_the_top_face_drills_a_hole_down_into_it() {
         applied.report,
         Report::Drained {
             holes: 1,
-            trapped: 0
+            trapped: 0,
+            searched: None,
         }
     );
     let (state, _) = document.object(CUBE).expect("the cube stays");
@@ -214,6 +215,8 @@ fn hollowed_cube() -> Document {
             open_floor: false,
             solid_under_mm: None,
         },
+        keep_solid: Vec::new(),
+        keep_solid_reach_mm: None,
     };
     apply(&mut document, &walled, Cancel::never()).expect("a 20 mm cube takes a 2 mm wall");
     document
@@ -265,7 +268,7 @@ fn a_search_drains_a_hollow_cube_through_holes_open_on_its_surface() {
         .expect("a hollow cube has a cavity to drain");
 
     assert!(
-        matches!(applied.report, Report::Drained { holes, trapped: 0 } if holes >= 1),
+        matches!(applied.report, Report::Drained { holes, trapped: 0, searched: Some(_) } if holes >= 1),
         "at least one hole and no pocket left trapped, got {:?}",
         applied.report
     );

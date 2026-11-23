@@ -339,8 +339,10 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
     if let Some(id) = one_model {
         ui.add_space(theme::BUTTON_GAP);
         let width = ui.available_width();
-        if compact_button(ui, &tr!("supports-merge-these"), width).clicked() {
-            merge(window, id, &supports);
+        if compact_button(ui, &tr!("supports-merge-these"), width).clicked()
+            && let Err(why) = merge(window, id, &supports)
+        {
+            window.machine.status = Status::Info(merge_refused(why));
         }
     }
     if regroup {
@@ -381,35 +383,29 @@ fn editing(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// Joins the picked supports of model `id` into one tree, or says on the stage why not (ADR 0440).
-fn merge(
+/// Joins the picked supports of model `id` into one tree, or answers why not (ADR 0440).
+pub(crate) fn merge(
     window: &mut Window,
     id: ObjectId,
     picked: &std::collections::BTreeSet<(ObjectId, usize)>,
-) {
+) -> Result<(), core_supports::Refused> {
     let Some(object) = window.doc.scene.get(id) else {
-        return;
+        return Ok(());
     };
     let frozen: Vec<usize> = picked.iter().map(|(_, frozen)| *frozen).collect();
     let table = window.tools.supports.table_for(object);
     let Some(profiles) = core_supports::Profiles::new(&table) else {
-        return;
+        return Ok(());
     };
     let keep_out = object.supports.keep_out(&object.mesh, object.transform);
     let placed = object.support_placed().blocking(keep_out.as_ref());
-    let merged = core_supports::merged(object.supports.frozen(), &frozen, &placed, profiles);
-    match merged {
-        Ok(tree) => {
-            if let Some(object) = window.doc.scene.get_mut(id) {
-                object.supports.replace_frozen(&frozen, tree);
-            }
-            settle_riders(window, picked);
-            window.tools.supports.picked.clear();
-        }
-        Err(why) => {
-            window.machine.status = Status::Info(merge_refused(why));
-        }
+    let tree = core_supports::merged(object.supports.frozen(), &frozen, &placed, profiles)?;
+    if let Some(object) = window.doc.scene.get_mut(id) {
+        object.supports.replace_frozen(&frozen, tree);
     }
+    settle_riders(window, picked);
+    window.tools.supports.picked.clear();
+    Ok(())
 }
 
 /// Why the picked supports could not be merged, as the stage says it.

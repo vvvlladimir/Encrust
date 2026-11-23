@@ -111,6 +111,9 @@ pub(crate) fn apply_supports(
     let report = Report::Supported {
         placed: stood + needs.len(),
         trees: grown.len(),
+        contacts_mm: supports.contacts(transform),
+        standing: supports.standing(),
+        unheld: unheld(&supports, transform),
     };
     document.set_supports(id, (groups, group), (supports.points().to_vec(), grown));
     Ok(Applied {
@@ -120,8 +123,39 @@ pub(crate) fn apply_supports(
     })
 }
 
+/// The contacts of `supports` no tree carries, plate mm, each with why.
+fn unheld(supports: &ModelSupports, transform: Transform) -> Vec<(Vec3, core_supports::Unstood)> {
+    let matrix = transform.to_matrix();
+    (supports.lost().iter())
+        .filter_map(|lost| {
+            let point = supports.points().get(lost.point)?;
+            Some((matrix.transform_point3(point.contact), lost.why))
+        })
+        .collect()
+}
+
+/// The raft under object `id` where it stands, plate mm; none where it stands on no supports.
+pub(crate) fn raft_under(document: &Document, id: ObjectId) -> Option<Arc<Mesh>> {
+    let (state, meshes) = document.object(id)?;
+    let plate = document.support_state();
+    let table = table_of(state, &plate.groups, plate.raft);
+    let surface = meshes.printed();
+    let bvh = Bvh::build(surface);
+    let drains = &state.hollow.drains;
+    let restored = supports_of(
+        &state.supports,
+        drains,
+        &meshes.source,
+        surface,
+        &bvh,
+        state.transform,
+        &table,
+    );
+    restored.raft().cloned()
+}
+
 /// The meshes of the supports under object `id` where it stands, plate mm, columns and raft.
-pub(crate) fn standing_meshes(document: &Document, id: ObjectId) -> Vec<Arc<Mesh>> {
+pub fn standing_meshes(document: &Document, id: ObjectId) -> Vec<Arc<Mesh>> {
     let Some((state, meshes)) = document.object(id) else {
         return Vec::new();
     };
@@ -405,6 +439,11 @@ fn wall_outside(
         inside: false,
     })
 }
+
+mod merge;
+
+pub(crate) use merge::apply_merge;
+pub use merge::support_near;
 
 #[cfg(test)]
 mod tests;

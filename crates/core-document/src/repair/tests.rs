@@ -130,6 +130,8 @@ fn a_cube_with_a_face_removed_is_closed_by_repair() {
     let edit = Edit::Repair {
         object: CUBE,
         method: RepairMethod::Mend(MendMethod::Repair),
+        seam_tolerance_mm: None,
+        smallest_shell_mm2: None,
     };
 
     let applied = apply(&mut document, &edit, Cancel::never()).expect("a hole is mended");
@@ -155,6 +157,8 @@ fn a_repair_asked_to_stop_is_cancelled_and_leaves_the_cube() {
     let edit = Edit::Repair {
         object: CUBE,
         method: RepairMethod::Wrap,
+        seam_tolerance_mm: None,
+        smallest_shell_mm2: None,
     };
 
     let error = apply(&mut document, &edit, Cancel::when(&stopped))
@@ -183,5 +187,22 @@ fn a_reshaped_object_keeps_its_id_and_the_plugs_laid_for_it() {
         project.manifest.objects[2].plug_of,
         Some(1),
         "it still names the cube"
+    );
+}
+
+#[test]
+fn a_repair_takes_the_lengths_asked_and_the_windows_where_unset() {
+    let window = RepairSettings::default().mend;
+
+    let asked = repair_settings(Some(0.25), None).mend;
+
+    assert!(
+        (asked.seam_tolerance_mm - 0.25).abs() < 1e-9,
+        "the seam asked, 0.25 mm"
+    );
+    assert!(
+        (asked.smallest_shell_mm2 - window.smallest_shell_mm2).abs() < 1e-9,
+        "the window's smallest shell, {} mm²",
+        window.smallest_shell_mm2
     );
 }

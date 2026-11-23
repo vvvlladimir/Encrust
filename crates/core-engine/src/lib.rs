@@ -38,11 +38,13 @@ pub use plate::{Model, Plate};
 pub use prepare::{Hollowing, PREPARE_REPAIR, hollowing, needs_repair};
 pub use run::{QUICK_CHECK_BIN, Run};
 pub use stand::{
-    ByHand, Lift, NeedsAsked, ShownAt, Stood, SupportPlan, SupportShapes, ToStand, needs_on,
-    needs_on_both, plan_of, planned_lift, shown_on, stand_at, stand_seated, stand_under,
+    ByHand, Lift, MERGE_NAMING_MM, NeedsAsked, ShownAt, Stood, SupportPlan, SupportShapes, ToStand,
+    merge_refusal, needs_on, needs_on_both, plan_of, planned_lift, shown_on, stand_at,
+    stand_seated, stand_under,
 };
 pub use strengthen::{Strengthened, Underside, WANTED_MARGIN, carried, strengthen};
 pub use trapped::trapped_in;
 pub use trial::{
-    Choice, KeepClear, Printout, Proven, Shows, Trial, Tried, orient_for_print, print_out, prove,
+    Choice, KEEP_CLEAR_RADIUS_MM, KeepClear, Printout, Proven, Shows, Trial, Tried,
+    orient_for_print, print_out, prove,
 };

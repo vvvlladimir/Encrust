@@ -6,14 +6,14 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use core_document::{
-    ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, boolean_of, mirrored, moved,
-    part_settings, sized_to, turned_to,
+    ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, blockers_along, boolean_of, mirrored,
+    moved, part_settings, repair_settings, sized_to, turned_to,
 };
 use core_edit::{Edit, ObjectId, Op};
 use core_engine::project::HollowState;
 use core_geometry::{Mesh, Transform, Vec3};
 use core_volume::PartSettings;
-use core_volume::RepairMethod;
+use core_volume::{RepairMethod, RepairSettings};
 use serde_json::{Value, json};
 
 use crate::job::Method;
@@ -28,7 +28,7 @@ mod supports;
 use arrange::start_arrange;
 use drain::{start_channel, start_drain, start_plugs};
 use orient::{stand_pick, start_orient};
-use supports::{inside_pass_of, start_inside, start_supports};
+use supports::{inside_pass_of, start_inside, start_merge, start_supports};
 
 /// Edits being applied one after another, each a job of the tool that carries it out.
 #[derive(Debug)]
@@ -228,48 +228,40 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
             toward,
         } => start_combine(window, objects, op, toward),
         Edit::Label { object, .. } => start_label(window, edit, object),
-        Edit::Repair { object, method } => start_repair(window, object, method),
+        Edit::Repair {
+            object,
+            method,
+            seam_tolerance_mm,
+            smallest_shell_mm2,
+        } => {
+            let settings = repair_settings(seam_tolerance_mm, smallest_shell_mm2);
+            start_repair(window, object, (method, settings))
+        }
         Edit::Mend { object, .. } => start_mend(window, edit, object),
         Edit::Relief { object, .. } => start_relief(window, edit, object),
         Edit::Hollow {
             object,
             ref settings,
-        } => start_hollow(window, object, settings),
-        Edit::Drain {
+            ref keep_solid,
+            keep_solid_reach_mm,
+        } => start_hollow(
+            window,
             object,
-            ref at_mm,
-            size,
-            kind,
-            auto,
-            vent,
-        } => start_drain(window, object, at_mm, (size, kind), (auto, vent)),
-        Edit::Channel {
-            object,
-            ref points_mm,
-            diameter_mm,
-        } => start_channel(window, object, points_mm, diameter_mm),
-        Edit::Plugs { object, gap_mm, .. } => start_plugs(window, object, gap_mm),
-        Edit::Supports { object, .. } => start_supports(window, edit, object),
+            (settings, (keep_solid, keep_solid_reach_mm)),
+        ),
+        Edit::Drain { .. }
+        | Edit::Channel { .. }
+        | Edit::Plugs { .. }
+        | Edit::Supports { .. }
+        | Edit::MergeSupports { .. } => start_holding(window, edit),
         Edit::Arrange { .. } => start_arrange(window, edit),
         Edit::Orient { .. } => start_orient(window, edit),
-        Edit::Move { object, by_mm } => {
-            place(window, object, |transform, _| Ok(moved(transform, by_mm)))
-        }
-        Edit::Rotate { object, degrees } => place(window, object, |transform, mesh| {
-            Ok(turned_to(transform, mesh, degrees))
-        }),
-        Edit::Scale { object, factors } => place(window, object, |transform, mesh| {
-            sized_to(transform, mesh, factors)
-                .ok_or_else(|| ApplyError::BadScale(object).to_string())
-        }),
-        Edit::Delete { object } => take_off(window, object),
-        Edit::Duplicate { object, offset_mm } => {
-            (window.doc.scene.duplicate(object, offset_mm)).ok_or_else(|| no_object(object))?;
-            Ok(None)
-        }
-        Edit::Mirror { object, axis } => place(window, object, |transform, mesh| {
-            Ok(mirrored(transform, mesh, axis))
-        }),
+        Edit::Move { .. }
+        | Edit::Rotate { .. }
+        | Edit::Scale { .. }
+        | Edit::Delete { .. }
+        | Edit::Duplicate { .. }
+        | Edit::Mirror { .. } => start_placing(window, edit),
     }
 }
 
@@ -327,7 +319,7 @@ fn start_label(
 fn start_repair(
     window: &mut Window,
     object: ObjectId,
-    method: RepairMethod,
+    (method, settings): (RepairMethod, RepairSettings),
 ) -> Result<Option<ObjectId>, String> {
     window
         .doc
@@ -336,6 +328,7 @@ fn start_repair(
         .ok_or_else(|| no_object(object))?;
     let state = RepairState {
         method,
+        settings,
         ..RepairState::default()
     };
     let (repairs, scene) = (&mut window.doc.repairs, &window.doc.scene);
@@ -378,11 +371,17 @@ fn start_relief(
 fn start_hollow(
     window: &mut Window,
     object: ObjectId,
-    settings: &HollowState,
+    (settings, (runs, reach_mm)): (&HollowState, (&[Vec<Vec3>], Option<f32>)),
 ) -> Result<Option<ObjectId>, String> {
     let model = (window.doc.scene.get_mut(object)).ok_or_else(|| no_object(object))?;
     if model.mesh.is_empty() {
         return Err(format!("object {object:?} has no surface to hollow"));
+    }
+    let surface = (&*model.mesh, &*model.bvh);
+    let blockers = blockers_along(surface, model.transform, (runs, reach_mm), object)
+        .map_err(|error| error.to_string())?;
+    for blocker in blockers {
+        model.hollow.place_blocker(blocker);
     }
     model.own.hollow = Some(settings.clone());
     let (scene, hollow) = (&window.doc.scene, &mut window.tools.hollow);
@@ -396,6 +395,57 @@ fn start_hollow(
 
 fn no_object(id: ObjectId) -> String {
     ApplyError::NoObject(id).to_string()
+}
+
+/// Starts an edit that drills into an object or stands supports under it.
+fn start_holding(window: &mut Window, edit: &Edit) -> Result<Option<ObjectId>, String> {
+    match *edit {
+        Edit::Drain {
+            object,
+            ref at_mm,
+            size,
+            kind,
+            auto,
+            vent,
+        } => start_drain(window, object, at_mm, (size, kind), (auto, vent)),
+        Edit::Channel {
+            object,
+            ref points_mm,
+            diameter_mm,
+        } => start_channel(window, object, points_mm, diameter_mm),
+        Edit::Plugs { object, gap_mm, .. } => start_plugs(window, object, gap_mm),
+        Edit::Supports { object, .. } => start_supports(window, edit, object),
+        Edit::MergeSupports {
+            object,
+            ref near_mm,
+        } => start_merge(window, object, near_mm),
+        _ => Ok(None),
+    }
+}
+
+/// Carries out at once an edit that places, copies or takes off an object.
+fn start_placing(window: &mut Window, edit: &Edit) -> Result<Option<ObjectId>, String> {
+    match *edit {
+        Edit::Move { object, by_mm } => {
+            place(window, object, |transform, _| Ok(moved(transform, by_mm)))
+        }
+        Edit::Rotate { object, degrees } => place(window, object, |transform, mesh| {
+            Ok(turned_to(transform, mesh, degrees))
+        }),
+        Edit::Scale { object, factors } => place(window, object, |transform, mesh| {
+            sized_to(transform, mesh, factors)
+                .ok_or_else(|| ApplyError::BadScale(object).to_string())
+        }),
+        Edit::Delete { object } => take_off(window, object),
+        Edit::Duplicate { object, offset_mm } => {
+            (window.doc.scene.duplicate(object, offset_mm)).ok_or_else(|| no_object(object))?;
+            Ok(None)
+        }
+        Edit::Mirror { object, axis } => place(window, object, |transform, mesh| {
+            Ok(mirrored(transform, mesh, axis))
+        }),
+        _ => Ok(None),
+    }
 }
 
 /// Sets the transform of `id` to what `to` makes of it and the object's own mesh.

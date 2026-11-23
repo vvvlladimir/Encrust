@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use core_edit::ObjectId;
 use core_engine::project::{BuiltCavity, HollowState, hollow_of};
-use core_geometry::{Bvh, Mat3, Mesh, Transform};
+use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
-    Cancel, HollowMode, HollowSettings, Hollowed, Shell, VolumeError, carve, cavity_field,
-    plate_down,
+    BLOCKER_REACH_MM, Blocker, BlockerSize, Cancel, HollowMode, HollowSettings, Hollowed, Shell,
+    VolumeError, blocker_under, carve, cavity_field, plate_down, rod_on,
 };
 
 use crate::apply::{Applied, Report};
@@ -27,6 +27,44 @@ pub fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings 
         solid_under_mm: state.solid_under_mm,
         ..HollowSettings::default()
     }
+}
+
+/// The blockers each of `runs` lays on a model standing under `transform`, in its own space: a
+/// ball at the surface nearest each run's first plate point and a rod on to each next, as a
+/// click and shift-clicks lay them; reaching `reach_mm` past the wall, fitted where unset.
+pub fn blockers_along(
+    (mesh, bvh): (&Mesh, &Bvh),
+    transform: Transform,
+    (runs, reach_mm): (&[Vec<Vec3>], Option<Scalar>),
+    object: ObjectId,
+) -> Result<Vec<Blocker>, ApplyError> {
+    let size = BlockerSize {
+        fit: reach_mm.is_none(),
+        reach_mm: reach_mm.unwrap_or(BLOCKER_REACH_MM),
+    };
+    let into_model = transform
+        .inverse_matrix()
+        .ok_or(ApplyError::BadTransform(object))?;
+    let mut placed = Vec::new();
+    for run in runs {
+        let mut last: Option<Blocker> = None;
+        for near in run {
+            let closest = (bvh.closest(into_model.transform_point3(*near)))
+                .ok_or(ApplyError::NoSurface(object))?;
+            let face = mesh
+                .triangle(closest.face)
+                .ok_or(ApplyError::NoSurface(object))?;
+            let normal =
+                (transform.normal_matrix() * face.normal_unnormalized()).normalize_or_zero();
+            let point = transform.to_matrix().transform_point3(closest.point);
+            let ball = blocker_under(mesh, bvh, transform, point, normal, size)
+                .ok_or(ApplyError::NoSurface(object))?;
+            let next = last.map_or(ball, |last| rod_on(&last, &ball));
+            placed.push(next);
+            last = Some(next);
+        }
+    }
+    Ok(placed)
 }
 
 /// A wall that leaves no cavity to hollow a model by.
@@ -79,13 +117,18 @@ pub fn shelled(
 pub(crate) fn apply_hollow(
     document: &mut Document,
     id: ObjectId,
-    settings: &HollowState,
+    (settings, (runs, reach_mm)): (&HollowState, (&[Vec<Vec3>], Option<Scalar>)),
     cancel: Cancel<'_>,
 ) -> Result<Applied, ApplyError> {
     let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
     let transform = state.transform;
-    let asked = hollow_of(&state.hollow, meshes).asking(&settings_of(settings, transform));
     let bvh = Bvh::build(&meshes.source);
+    let mut hollow = hollow_of(&state.hollow, meshes);
+    for blocker in blockers_along((&meshes.source, &bvh), transform, (runs, reach_mm), id)? {
+        hollow.place_blocker(blocker);
+    }
+    let blockers = hollow.blockers().to_vec();
+    let asked = hollow.asking(&settings_of(settings, transform));
     let shell = shelled(
         (&meshes.source, &bvh),
         &asked,
@@ -99,6 +142,7 @@ pub(crate) fn apply_hollow(
         coarsened: shell.coarsened,
     };
     document.set_shell(id, BuiltCavity::of(&shell), shell.mesh, settings.clone());
+    document.set_blockers(id, blockers);
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),

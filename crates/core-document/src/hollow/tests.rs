@@ -24,6 +24,8 @@ fn walled(thickness_mm: Scalar) -> Edit {
             open_floor: false,
             solid_under_mm: None,
         },
+        keep_solid: Vec::new(),
+        keep_solid_reach_mm: None,
     }
 }
 
@@ -100,4 +102,32 @@ fn a_hollowed_plate_written_and_read_back_keeps_its_shell() {
     assert_eq!(signed_volume(shell), before);
     let built = read.manifest.objects[0].hollow.built.as_ref();
     assert!(built.is_some(), "the file records the wall");
+}
+
+#[test]
+fn a_run_kept_solid_lays_a_ball_and_a_rod_on_and_the_object_keeps_them() {
+    let mut document = Document::from_project(cube_of(20.0));
+    let Edit::Hollow { settings, .. } = walled(2.0) else {
+        panic!("a hollow edit");
+    };
+    let run = vec![
+        core_geometry::Vec3::new(5.0, 10.0, 20.0),
+        core_geometry::Vec3::new(15.0, 10.0, 20.0),
+    ];
+    let edit = Edit::Hollow {
+        object: CUBE,
+        settings,
+        keep_solid: vec![run],
+        // Sized, so the blockers leave the cavity standing; fitted ones fill a cube whole.
+        keep_solid_reach_mm: Some(2.0),
+    };
+
+    apply(&mut document, &edit, Cancel::never()).expect("a 20 mm cube has room for a cavity");
+
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    assert_eq!(
+        state.hollow.blockers.len(),
+        2,
+        "a ball at the first point and a rod on to the second"
+    );
 }

@@ -8,7 +8,7 @@ use core_engine::project::{
 use core_geometry::{Mesh, Orientation, Region, Transform, diagnose};
 
 use core_supports::{SupportPoint, SupportTree};
-use core_volume::{Channel, DrainHole};
+use core_volume::{Blocker, Channel, DrainHole};
 
 use crate::piece::{Piece, Role};
 
@@ -24,7 +24,7 @@ pub struct ImportedModel {
 type Added = Vec<(ObjectId, Role)>;
 
 /// The plate as `.encrust` holds it, every object with an id of its own.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Document {
     project: Project,
     /// The id the next object made takes, above every one the document has held.
@@ -61,6 +61,23 @@ impl Document {
             preview: None,
         };
         Self::from_project(project)
+    }
+
+    /// Takes `group` up as the group in hand, in place of the plate's group of its name, as
+    /// the Supports panel takes up a profile chosen; answers its number.
+    pub fn hold_group(&mut self, group: Group) -> u16 {
+        let supports = &mut self.project.manifest.supports;
+        let named =
+            (supports.groups.iter()).position(|held| held.profile.name == group.profile.name);
+        let at = if let Some(at) = named {
+            supports.groups[at] = group;
+            at
+        } else {
+            supports.groups.push(group);
+            supports.groups.len() - 1
+        };
+        supports.active = at as u16;
+        supports.active
     }
 
     /// The plate as a project file holds it, ids and all.
@@ -159,6 +176,13 @@ impl Document {
         self.project.models[index].shell = Some(shell);
     }
 
+    /// Gives object `id` the blockers its wall is kept solid by, in its own space.
+    pub(crate) fn set_blockers(&mut self, id: ObjectId, blockers: Vec<Blocker>) {
+        if let Some(index) = self.index_of(id) {
+            self.project.manifest.objects[index].hollow.blockers = blockers;
+        }
+    }
+
     /// Gives object `id` the drain holes and channels it is cut with; the shell stays as built.
     /// Nothing changes when `id` is not on the plate.
     pub(crate) fn set_cuts(
@@ -196,6 +220,20 @@ impl Document {
         let state = &mut self.project.manifest.objects[index].supports;
         state.points = points;
         state.grown = grown;
+    }
+
+    /// Gives object `id` its support `points`, `frozen` and `grown` trees (its own space).
+    pub(crate) fn set_every_support(
+        &mut self,
+        id: ObjectId,
+        (points, frozen, grown): (Vec<SupportPoint>, Vec<SupportTree>, Vec<SupportTree>),
+    ) {
+        if let Some(index) = self.index_of(id) {
+            let state = &mut self.project.manifest.objects[index].supports;
+            state.points = points;
+            state.frozen = frozen;
+            state.grown = grown;
+        }
     }
 
     /// Gives object `id` the support `points` and `frozen` trees left after a hole drilled

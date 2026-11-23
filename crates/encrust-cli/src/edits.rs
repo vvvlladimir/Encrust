@@ -40,16 +40,7 @@ pub use core_document::Mended as Edited;
 /// Turns, bridges and drops what `args` names on `mesh`: the turns and bridges first, the
 /// drops last, so no number moves under one still to come. `None` where none was named.
 pub fn apply(mesh: &mut Mesh, args: &ImportArgs) -> Result<Option<Edited>> {
-    let asked = MendAsked {
-        flip_faces: args.flip_faces.clone(),
-        drop_faces: args.drop_faces.clone(),
-        drop_shells: args.drop_shells.clone(),
-        bridge: args
-            .bridge
-            .iter()
-            .map(|BridgeEdges(a, b)| [*a, *b])
-            .collect(),
-    };
+    let asked = mend_asked(args);
     if asked.is_empty() {
         return Ok(None);
     }
@@ -59,8 +50,22 @@ pub fn apply(mesh: &mut Mesh, args: &ImportArgs) -> Result<Option<Edited>> {
         .map_err(|error| refused(&error, (faces, shells), args))
 }
 
+/// The changes by hand `args` name.
+pub fn mend_asked(args: &ImportArgs) -> MendAsked {
+    MendAsked {
+        flip_faces: args.flip_faces.clone(),
+        drop_faces: args.drop_faces.clone(),
+        drop_shells: args.drop_shells.clone(),
+        bridge: args
+            .bridge
+            .iter()
+            .map(|BridgeEdges(a, b)| [*a, *b])
+            .collect(),
+    }
+}
+
 /// Why a change by hand was refused, naming the flag the way the command line has it.
-fn refused(
+pub(crate) fn refused(
     error: &ApplyError,
     (faces, shells): (usize, usize),
     args: &ImportArgs,

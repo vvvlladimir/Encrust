@@ -1,14 +1,14 @@
 //! The supports edit as the window carries it out: points stood, then the tool's run, each
 //! through the tool that does it for a hand.
 
-use core_document::ApplyError;
+use core_document::{ApplyError, support_near};
 use core_edit::{AUTO, Edit, ObjectId};
 use core_engine::ShownAt;
 use core_geometry::{Region, Vec3};
 use printer_profiles::SupportProfile;
 
 use super::no_object;
-use crate::panels::Window;
+use crate::panels::{Window, merge_supports};
 use crate::scene::Scene;
 use crate::supports::{Only, Side, SupportTool};
 
@@ -167,4 +167,38 @@ pub(super) fn start_inside(
 ) -> Result<(), String> {
     let clean = window.tools.orient.settings.clean_surface;
     run_on(window, object, (Side::Inside, sized), clean)
+}
+
+/// Joins the supports of `object` whose contacts lie nearest `near_mm` into one at once, as
+/// Merge into one joins those picked.
+pub(super) fn start_merge(
+    window: &mut Window,
+    object: ObjectId,
+    near_mm: &[Vec3],
+) -> Result<Option<ObjectId>, String> {
+    let model = (window.doc.scene.get_mut(object)).ok_or_else(|| no_object(object))?;
+    let at_mm = near_mm.first().copied().unwrap_or_default();
+    let mut trees = Vec::with_capacity(near_mm.len());
+    for near in near_mm {
+        let tree = support_near(model.supports.trees(), *near);
+        let refused = ApplyError::NoSupportNear {
+            object,
+            at_mm: *near,
+        };
+        trees.push(tree.ok_or_else(|| refused.to_string())?);
+    }
+    trees.sort_unstable();
+    trees.dedup();
+    if trees.len() < 2 {
+        return Err(ApplyError::OneSupportToMerge { object, at_mm }.to_string());
+    }
+    let frozen = model.supports.freeze_all(&trees, model.transform);
+    let picked = frozen
+        .into_iter()
+        .flatten()
+        .map(|at| (object, at))
+        .collect();
+    merge_supports(window, object, &picked)
+        .map_err(|why| ApplyError::MergeRefused { object, at_mm, why }.to_string())?;
+    Ok(None)
 }

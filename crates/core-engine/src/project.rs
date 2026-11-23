@@ -144,7 +144,7 @@ pub fn digest(manifest: &Manifest) -> u64 {
 
 /// A project as the window holds it: the manifest, and the geometry of each object in
 /// the same order as [`Manifest::objects`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Project {
     pub manifest: Manifest,
     pub models: Vec<ModelMeshes>,
@@ -170,7 +170,7 @@ impl ModelMeshes {
 }
 
 /// Everything a project holds but its meshes, as `project.json` stores it.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Manifest {
     pub version: u32,
     /// The catalogue id of the printer, which the file names but does not carry: a plate

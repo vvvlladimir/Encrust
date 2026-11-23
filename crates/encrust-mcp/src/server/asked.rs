@@ -54,7 +54,7 @@ pub fn asked_after_check(
     if recipe.pose != earlier.pose {
         let turned = match (&recipe.pose, catalogue_ids(recipe)) {
             (Some(Pose::Rotate { degrees }), _) => rotated(object, *degrees),
-            (Some(pose @ Pose::Search { .. }), Some(ids)) if keeps_nothing_clear(pose) => {
+            (Some(pose @ Pose::Search { .. }), Some(ids)) => {
                 searched(pose, object, (ids, area_mm))?
             }
             (Some(Pose::Search { .. }), _) => rotated(object, chosen_deg?),
@@ -102,11 +102,6 @@ fn catalogue_ids(recipe: &Recipe) -> Option<(&str, &str)> {
     Some((id(&recipe.printer)?, id(&recipe.resin)?))
 }
 
-/// Whether a search keeps no place clear, which an `Orient` edit cannot be told.
-fn keeps_nothing_clear(pose: &Pose) -> bool {
-    matches!(pose, Pose::Search { keep_clear_at_mm, .. } if keep_clear_at_mm.is_empty())
-}
-
 fn aim_of(goal: Goal) -> OrientAim {
     match goal {
         Goal::FewestSupports => OrientAim::FewestSupports,
@@ -126,7 +121,9 @@ fn searched(
         goal,
         max_tilt_deg,
         pick,
-        ..
+        keep_clear_at_mm,
+        keep_clear_radius_mm,
+        keep_clear_seen_deg,
     } = pose
     else {
         return None;
@@ -141,6 +138,11 @@ fn searched(
         low_mm: area_mm.map_or([0.0, 0.0], |(low, _)| low),
         printer: Some(printer.to_owned()),
         resin: Some(resin.to_owned()),
+        keep_clear_mm: keep_clear_at_mm.iter().map(|&at| at.into()).collect(),
+        keep_clear_radius_mm: *keep_clear_radius_mm,
+        // As the command line reads them: seen at this turn, the model centred on the plate.
+        keep_clear_seen_deg: (!keep_clear_at_mm.is_empty())
+            .then(|| keep_clear_seen_deg.unwrap_or_default().into()),
     })
 }
 

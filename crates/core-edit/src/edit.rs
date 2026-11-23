@@ -91,6 +91,12 @@ pub enum Edit {
     Repair {
         object: ObjectId,
         method: RepairMethod,
+        /// Nearer than this, mm, a seam's two edges are one; the window's where unset.
+        #[serde(default)]
+        seam_tolerance_mm: Option<Scalar>,
+        /// Smaller than this, mm², a shell enclosing nothing goes; the window's where unset.
+        #[serde(default)]
+        smallest_shell_mm2: Option<Scalar>,
     },
     /// Turns, bridges and drops what is named on `object`'s mesh: faces from 0, shells from 1,
     /// a bridge as two open edges of two vertices each; drops come last.
@@ -131,10 +137,17 @@ pub enum Edit {
         #[serde(default = "precision_by_default")]
         precision: Scalar,
     },
-    /// Hollows `object` by `settings`, which it keeps as its own; its supports stay.
+    /// Hollows `object` by `settings`, which it keeps as its own, the wall kept solid along
+    /// each of `keep_solid` as the window's Keep solid clicks lay it; its supports stay.
     Hollow {
         object: ObjectId,
         settings: HollowState,
+        /// Each a run of plate points: a blocker at the surface nearest the first, rods on.
+        #[serde(default)]
+        keep_solid: Vec<Vec<Vec3>>,
+        /// How far each blocker reaches past the wall, mm; fitted to the model where unset.
+        #[serde(default)]
+        keep_solid_reach_mm: Option<Scalar>,
     },
     /// Drills holes of `size` and `kind`, `AtDepth` where unset as a click makes them, nearest each of `at_mm`, as `--drain-at` does; with
     /// `auto` a search adds the holes that drain every pocket, and `vent` a vent on each.
@@ -185,7 +198,7 @@ pub enum Edit {
     /// most `max_tilt_deg` if set; `clean_surface` keeps to the fewest supports where it shows.
     /// It stays on the usable area `plate_mm` across from `low_mm`, as `Arrange` takes them,
     /// and its poses are proved on the catalogue's `printer` and `resin`, the standard ones
-    /// where unset.
+    /// where unset, those that leave `keep_clear_mm` clear ranked first.
     Orient {
         object: ObjectId,
         #[serde(default)]
@@ -204,6 +217,15 @@ pub enum Edit {
         printer: Option<String>,
         #[serde(default)]
         resin: Option<String>,
+        /// Places no support should touch, plate mm as the object stands or, with
+        /// `keep_clear_seen_deg`, as it stood turned so and centred on the plate.
+        #[serde(default)]
+        keep_clear_mm: Vec<Vec3>,
+        /// How near a place a contact still touches it, mm; `KEEP_CLEAR_RADIUS_MM` where unset.
+        #[serde(default)]
+        keep_clear_radius_mm: Option<Scalar>,
+        #[serde(default)]
+        keep_clear_seen_deg: Option<Vec3>,
     },
     /// Stands supports under `object` by a shipped preset (the active group's where unset), with
     /// a contact nearest each of `at_mm`, those alone with `only_at`; see `docs/cli.md`.
@@ -222,6 +244,12 @@ pub enum Edit {
         /// Reads the side painted shown in the file, as the window's Clean surface does.
         #[serde(default)]
         clean_surface: bool,
+    },
+    /// Joins the supports of `object` whose contacts lie nearest `near_mm`, two or more, plate
+    /// mm, into one, as the window's Merge into one joins those picked (ADR 0440).
+    MergeSupports {
+        object: ObjectId,
+        near_mm: Vec<Vec3>,
     },
 }
 

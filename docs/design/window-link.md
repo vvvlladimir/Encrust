@@ -85,8 +85,9 @@ label, a split or part cut off, a cut, a hollow, drains — at points or by the 
 preset or sized automatically, under a cavity, off what shows — and points placed by hand, in
 that order. One that asks anything no edit carries yet — walls kept solid at points, holes
 into the supports, a walled hole, a combination — or takes back what an earlier one asked is
-shown by its recipe instead, as below. A pose the search picks is checked by the recipe and
-then handed over as the turn the check chose (`oriented.rotate_deg`). While the window holds a cut it was
+shown by its recipe instead, as below. A pose the search picks is handed over as an `Orient`
+edit on the job's printer, its places kept clear with it; on a printer of a file, as the turn the
+check chose (`oriented.rotate_deg`). While the window holds a cut it was
 handed, the job's model is no longer on its plate whole, and a revision keeping that cut is not
 shown; a cut the user undid there is taken out of the job's next revision.
 

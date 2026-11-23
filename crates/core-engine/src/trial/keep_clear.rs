@@ -7,6 +7,9 @@ use core_geometry::{
 
 use super::Tried;
 
+/// How far from a place kept clear a contact still touches it where none is asked, mm.
+pub const KEEP_CLEAR_RADIUS_MM: Scalar = 4.0;
+
 /// Points on a model no support should touch, in the frame of the mesh the search is given.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct KeepClear {

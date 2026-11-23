@@ -987,7 +987,17 @@ Not now: code.
 ## Status (2026-11-20)
 Done, uncommitted: F1–F3, B1a, B1b, B2, B3, P1–P8 (tests, clippy, hygiene, arch green); D1's page
 `docs/design/cli-on-document.md` and ADR 0472 drafted. The user took every recommendation (2026-11-21):
-the page's "Decided" section; R6d1 done (unshaped models staged as a `Document`). Next: R6d2.
+the page's "Decided" section; R6d1 done (unshaped models staged as a `Document`).
+
+## Status (2026-11-22)
+Done, uncommitted: R6d2-R6d8. The command line stages every model as a `Document` and carries
+each shaping flag out as an edit (`stage/{document,repaired,placed,modelled,finished}.rs`), the
+recipe executor's plate steps through `edits_of` + `apply` (`recipe/{piece,steps,plate}.rs`), the
+old pipeline deleted (`put_down`, `hollow_and_cut`, `stand_under`, `stage/ground.rs`,
+`recipe/drain.rs`). New edits and fields: `Repair` limits, `Orient` keep-clear (window link and
+MCP too), `Hollow` keep-solid, `Drain { kind: Support }`, `MergeSupports`. Open: `inspect` still
+places a model by `pipeline/place.rs`; MCP does not yet map keep-solid, raft holes and merges to
+edits; the orient search shows a spinner, not its bar.
 
 ### Decided by the user (2026-11-19)
 - The orient trial runs everywhere: with no printer named, on the standard printer (card P8).

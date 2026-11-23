@@ -1,37 +1,41 @@
 //! A plate assembled from what the command line was given — one model, several, a plate
 //! file or a project — before it is written or measured.
 
-use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use core_engine::{Cutting, Drained, Model, Plate, SupportPlan};
 use core_format::ExposurePlan;
-use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar, Transform, Vec2, placed_aabb};
+use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar, Vec2, placed_aabb};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::{ImportArgs, JobArgs};
-use crate::hollowing::{HollowArgs, HollowReport, support_holes};
-use crate::modelling::{self, ModelArgs};
+use crate::hollowing::{HollowArgs, HollowReport};
+use crate::modelling::ModelArgs;
 use crate::pipeline::{
-    OrientSummary, Watch, cutting_of, hollow_and_cut, import, overrides_of, warn_if_grey_ignored,
+    OrientSummary, Watch, cutting_of, import, overrides_of, warn_if_grey_ignored,
 };
 use crate::profiles::{self, Chosen};
 use crate::recipe::{self, Prepared, RecipeRun, Saved};
 use crate::report::{FitCheck, ImportReport, describe_fit};
 use crate::sliced_file::now_unix_s;
-use crate::supports::{Printed, SupportReport, stand_under};
-use crate::{meeting, plate_edits, plate_file, project};
+use crate::supports::SupportReport;
+use crate::{meeting, plate_file, project};
 
 mod document;
-mod ground;
+
+pub(crate) use document::{Staging, said};
+pub(crate) use finished::{Finished, usable_area};
+pub(crate) use placed::{shipped_printer, summary_of};
+mod finished;
+mod modelled;
+mod placed;
+mod repaired;
 mod room;
 
-use ground::{check_lift, ground_of};
-pub(crate) use room::{arranged, cleared};
-use room::{check_plugs_clear, spread_pieces, stood_at};
+pub(crate) use room::cleared;
+use room::stood_at;
 
 /// What is done to one model on its way onto the plate.
 #[derive(Debug, Clone)]
@@ -205,9 +209,6 @@ pub fn stage(
     match given {
         Given::Models(paths) => {
             let chosen = profiles::resolve(&job.profile.selection())?;
-            if job.edits.wanted() {
-                return plate_edits::stage_models(paths, arrange, job, &chosen, watch);
-            }
             models(paths, arrange, job, &chosen, watch)
         }
         Given::PlateFile(path) => {
@@ -316,13 +317,13 @@ pub fn plate_of(
     let printer = chosen.printer.as_ref();
     check_adaptive(job, printer)?;
     let asked = recipe::Asked::of(job)?;
-    let (meshes, found) = imported(entries, chosen, watch, asked.is_some())?;
-    let mut pieces = modelling::shaped(meshes, &job.model, watch.talk)?;
+    if asked.is_some() && job.edits.wanted() {
+        bail!("--edits and --project-out take the flags' plate, and a recipe prepares its own");
+    }
+    let (staging, found) = document::shaped(entries, (job, chosen), watch, asked.is_some())?;
+    let pieces = staging.pieces(entries.len());
     check_pieces(&pieces, entries, (&job.model, arrange), asked.is_some())?;
     watch.stop.check()?;
-    if arrange {
-        spread_pieces(&mut pieces, entries, printer)?;
-    }
 
     let drift_mm = chosen.material.compensation.fit_drift_mm();
     let held = (printer, drift_mm);
@@ -334,18 +335,35 @@ pub fn plate_of(
                 layer_height_mm: layer_height,
                 watch,
             };
-            let (parts, models, saved) = recipe::lay(asked, (pieces, found), entries, &ctx)?;
-            (Laid::recipe_left(parts, models, entries), saved)
+            let left = recipe::lay(asked, (staging, found), entries, &ctx)?;
+            let mut staging = left.staging;
+            if arrange {
+                document::arranged(&mut staging, entries, printer, watch)?;
+            }
+            let reported = (left.found, left.finished);
+            let mut laid = staging.laid(reported, (entries, None), printer, watch.talk)?;
+            for (part, said) in laid.parts.iter_mut().zip(left.said) {
+                if let Some((prepared, run)) = said {
+                    part.prepared = prepared;
+                    part.recipe = Some(run);
+                }
+            }
+            (laid, left.saved)
         }
-        None => (document::laid(pieces, found, entries, held, watch)?, None),
+        None => {
+            let edits = (entries, &job.edits);
+            (
+                document::laid(staging, found, edits, (held, arrange), watch)?,
+                None,
+            )
+        }
     };
     let Laid {
         mut parts,
         models,
         owners,
-        plugged,
+        ..
     } = laid;
-    check_plugs_clear(&models, &plugged, printer)?;
     meeting::mark(&mut parts, &models, &owners, watch.talk);
 
     if watch.talk {
@@ -388,25 +406,21 @@ pub(crate) fn staged(
 /// What importing one model reported, and how it was turned.
 pub(crate) type Found = (ImportReport, Option<OrientSummary>);
 
-/// Each entry's model imported and stood where it asks, with what its import reported;
-/// `by_recipe`, left for the recipe's steps to orient and repair.
+/// Each entry's model imported and stood where it asks, with what its import reported, all
+/// it asks after the import left to edits.
 fn imported(
     entries: &[(PathBuf, Shaping)],
     chosen: &Chosen,
     watch: &Watch,
-    by_recipe: bool,
 ) -> Result<(Vec<Mesh>, Vec<Found>)> {
     let mut meshes = Vec::with_capacity(entries.len());
     let mut found = Vec::with_capacity(entries.len());
     for (path, shaping) in entries {
         let mut asked = shaping.import.clone();
-        if by_recipe {
-            // A recipe's orient and repair steps run what --orient and --repair ask.
-            asked.transform.orient = false;
-            asked.repair = None;
-        }
-        let (mut mesh, import, oriented) =
-            import(path, &asked, shaping.supports.as_ref(), chosen, watch)?;
+        repaired::left_to_edits(&mut asked);
+        placed::left_to_edits(&mut asked.transform);
+        let (mut mesh, import) = import(path, &asked, chosen, watch)?;
+        let oriented = None;
         if let Some(position) = shaping.position {
             mesh = stood_at(&mesh, position)?;
         }
@@ -415,95 +429,6 @@ fn imported(
         watch.stop.check()?;
     }
     Ok((meshes, found))
-}
-
-/// Hollows and supports one piece as `shaping` asks, ready to slice, with the plugs for
-/// its holes standing beside it on no supports of their own.
-fn put_down(
-    mut mesh: Mesh,
-    shaping: &Shaping,
-    seated: bool,
-    drift_mm: Scalar,
-    watch: &Watch,
-) -> Result<PutDown> {
-    let ground = ground_of(&mesh, shaping, seated)?;
-    let shelled = hollow_and_cut(
-        &mut mesh,
-        &shaping.hollow,
-        (shaping.import.precision, drift_mm),
-        ground,
-        watch,
-    )?;
-    let printed = Printed::of(shelled.cavity, shelled.report.as_ref());
-    let (hollow, mut cuts) = (shelled.report, shelled.cuts);
-    let drains = shelled.drains;
-    let plugs = shelled
-        .plugs
-        .into_iter()
-        .map(|plug| Model {
-            mesh: Arc::new(plug),
-            transform: Transform::default(),
-            cuts: None,
-            drilled: None,
-            supports: Vec::new(),
-            raft: None,
-        })
-        .collect();
-    watch.stop.check()?;
-    let stood = shaping
-        .supports
-        .as_ref()
-        .map(|plan| {
-            let model = (&mut mesh, printed.clone(), &mut cuts);
-            stand_under(model, plan, core_engine::ANALYSIS_LAYER_MM, seated)
-        })
-        .transpose()?
-        .filter(|(report, _)| !seated || !report.contacts.is_empty());
-    let lifted_mm = stood.as_ref().map_or(0.0, |(report, _)| report.lifted_mm);
-    check_lift(lifted_mm, ground, &shaping.hollow)?;
-    let raft = stood
-        .as_ref()
-        .and_then(|(_, standing)| standing.raft.as_ref());
-    drill_the_raft(raft, &shaping.hollow, &mut cuts)?;
-    let (supports, (columns, raft)) = match stood {
-        Some((report, standing)) => (Some(report), standing.parts()),
-        None => (None, (Vec::new(), None)),
-    };
-    if watch.talk
-        && let Some(report) = &supports
-    {
-        print!("{report}");
-    }
-    watch.stop.check()?;
-    let drilled = printed.drilled(&mesh, cuts.as_ref());
-    let model = Model {
-        mesh: Arc::new(mesh),
-        transform: Transform::default(),
-        cuts: cuts.map(Arc::new),
-        drilled,
-        supports: columns,
-        raft,
-    };
-    Ok(PutDown {
-        model,
-        plugs,
-        hollow,
-        drains,
-        supports,
-    })
-}
-
-/// Adds to `cuts` the holes `--drain-support-at` drills into `raft`, refused with no raft.
-fn drill_the_raft(raft: Option<&Mesh>, hollow: &HollowArgs, cuts: &mut Option<Mesh>) -> Result<()> {
-    if hollow.drain_support_at.is_empty() {
-        return Ok(());
-    }
-    let Some(raft) = raft else {
-        bail!("--drain-support-at drills into the raft, and none stands under the model");
-    };
-    cuts.get_or_insert_default()
-        .append(&support_holes(raft, hollow)?);
-    Ok(())
 }
 
 /// The box `model` and its supports stand in, plate millimetres.
@@ -516,102 +441,11 @@ pub(crate) fn bounds(model: &Model) -> Option<Aabb> {
 }
 
 /// Every model of a plate put down, and which part each model, plug or piece is of.
-struct Laid<'a> {
+pub(crate) struct Laid {
     parts: Vec<Part>,
     models: Vec<Model>,
     /// The part each of `models` belongs to, by its index in `parts`.
     owners: Vec<usize>,
-    /// The plugs of each piece, by their range in `models`, and the file it came from.
-    plugged: Vec<(Range<usize>, &'a Path)>,
-}
-
-/// Hollows, supports and puts down every piece of every entry, with its plugs beside it;
-/// `held` is the printer and the resin's drift, millimetres.
-fn put_down_every<'a>(
-    pieces: Vec<Vec<Mesh>>,
-    found: Vec<Found>,
-    entries: &'a [(PathBuf, Shaping)],
-    (printer, drift_mm): (Option<&PrinterProfile>, Scalar),
-    watch: &Watch,
-) -> Result<Laid<'a>> {
-    let mut laid = Laid {
-        parts: Vec::with_capacity(entries.len()),
-        models: Vec::with_capacity(entries.len()),
-        owners: Vec::with_capacity(entries.len()),
-        plugged: Vec::new(),
-    };
-    for ((meshes, (import, oriented)), (path, shaping)) in
-        pieces.into_iter().zip(found).zip(entries)
-    {
-        // The imports are all reported before the first model is shaped, so on a plate
-        // these lines would otherwise read as the last model's.
-        if watch.talk && entries.len() > 1 && shapes_anything(shaping) {
-            println!("{}", path.display());
-        }
-        let seated = oriented.as_ref().is_some_and(|turn| turn.on_plate);
-        let (mut hollow, mut drains, mut supports) = (None, None, None);
-        let mut stands_in = None;
-        for mesh in meshes {
-            let down = put_down(mesh, shaping, seated, drift_mm, watch)?;
-            stands_in = [stands_in, bounds(&down.model)]
-                .into_iter()
-                .flatten()
-                .reduce(|one, other| one.merged(&other));
-            laid.models.push(down.model);
-            let first = laid.models.len();
-            laid.models.extend(down.plugs);
-            laid.plugged
-                .push((first..laid.models.len(), path.as_path()));
-            laid.owners.resize(laid.models.len(), laid.parts.len());
-            hollow = hollow.or(down.hollow);
-            drains = drains.or(down.drains);
-            supports = supports.or(down.supports);
-        }
-        let standing = standing_of(stands_in, printer, supports.is_some(), watch.talk);
-        laid.parts.push(Part {
-            input: path.clone(),
-            import: Some(import),
-            oriented,
-            hollow,
-            drains,
-            supports,
-            standing,
-            meets: Vec::new(),
-            prepared: None,
-            recipe: None,
-        });
-    }
-    Ok(laid)
-}
-
-impl<'a> Laid<'a> {
-    /// One model of each of `parts`, with the plugs a recipe laid beside it; `entries` are
-    /// the files the parts came from.
-    fn recipe_left(
-        parts: Vec<Part>,
-        left: Vec<recipe::Laid>,
-        entries: &'a [(PathBuf, Shaping)],
-    ) -> Self {
-        let mut laid = Self {
-            parts: Vec::with_capacity(parts.len()),
-            models: Vec::with_capacity(left.len()),
-            owners: Vec::with_capacity(left.len()),
-            plugged: Vec::new(),
-        };
-        for (part, (model, plugs)) in parts.into_iter().zip(left) {
-            laid.models.push(model);
-            let first = laid.models.len();
-            laid.models.extend(plugs);
-            let path = entries.iter().find(|(path, _)| *path == part.input);
-            if let Some((path, _)) = path {
-                laid.plugged
-                    .push((first..laid.models.len(), path.as_path()));
-            }
-            laid.owners.resize(laid.models.len(), laid.parts.len());
-            laid.parts.push(part);
-        }
-        laid
-    }
 }
 
 /// How a model put down in `stands_in` sits on `printer`'s plate, said when supports changed
@@ -627,16 +461,6 @@ pub(crate) fn standing_of(
         println!("On the plate\n  fits           {}\n", describe_fit(&check));
     }
     Some(check)
-}
-
-/// One piece ready to slice, the plugs for its holes, and what hollowing and supporting
-/// it found.
-struct PutDown {
-    model: Model,
-    plugs: Vec<Model>,
-    hollow: Option<HollowReport>,
-    drains: Option<Drained>,
-    supports: Option<SupportReport>,
 }
 
 /// Refuses what the rest of the run cannot take: several pieces of one model to hollow, support

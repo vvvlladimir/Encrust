@@ -1,81 +1,420 @@
-//! Models staged as the window holds them, one `Document` object per piece (ADR 0472).
+//! Models staged as the window holds them, one `Document` object per piece, edited by the
+//! flags folded to edits (ADR 0472, `docs/design/cli-on-document.md`).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use anyhow::Result;
-use core_document::Document;
+use anyhow::{Context, Result};
+use core_document::Report;
+use core_document::{Applied, ApplyError, Document, apply, standing_meshes};
+use core_edit::{Edit, ObjectId};
 use core_engine::plate_models;
-use core_engine::project::Manifest;
-use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar};
-use printer_profiles::PrinterProfile;
+use core_engine::project::{AutoSizing, Group, Manifest, SupportState, save};
+use core_engine::{Model, SupportPlan};
+use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar, Transform, signed_volume, transform_mesh};
+use core_plate::ArrangeSettings;
+use core_volume::Cancel;
+use printer_profiles::{PrinterProfile, SupportProfile};
 
-use super::{Found, Laid, Part, Shaping, bounds, put_down_every, shapes_anything, standing_of};
-use crate::pipeline::Watch;
-use crate::plate_edits::imported_model;
+use super::finished::{self, Finished};
+use super::{
+    Found, Laid, Part, Shaping, bounds, imported, modelled, placed, repaired, standing_of,
+};
+use crate::args::JobArgs;
+use crate::exit::{Cancelled, Stop};
+use crate::pipeline::{Watch, read_again};
+use crate::plate_edits::{EditArgs, imported_model};
+use crate::profiles::Chosen;
 
-/// Every piece of every entry laid on the plate: through a `Document` where no entry is shaped
-/// past import, else hollowed and supported one by one. `held` is the printer and the drift, mm.
-pub(super) fn laid<'a>(
-    pieces: Vec<Vec<Mesh>>,
-    found: Vec<Found>,
-    entries: &'a [(PathBuf, Shaping)],
-    held: (Option<&PrinterProfile>, Scalar),
+/// The printer and resin a project names by catalogue id.
+type Named = (Option<String>, Option<String>);
+
+/// The plate a run edits, and the entry of the command line each object came from.
+pub(crate) struct Staging {
+    document: Document,
+    owners: Vec<(ObjectId, usize)>,
+}
+
+impl Staging {
+    /// An object for each piece of each entry, ids from 1 in the order given, as the window
+    /// gives them.
+    pub(super) fn of(
+        pieces: Vec<Vec<Mesh>>,
+        found: &[Found],
+        (entries, named): (&[(PathBuf, Shaping)], Named),
+    ) -> Self {
+        // The first entry's profile ends in hand, every other's a group of the plate.
+        let held: Vec<&SupportPlan> = (entries.iter().rev())
+            .filter_map(|(_, shaping)| shaping.supports.as_ref())
+            .collect();
+        let mut objects = Vec::new();
+        let mut owners = Vec::new();
+        for (entry, (meshes, (import, _))) in pieces.into_iter().zip(found).enumerate() {
+            for mesh in meshes {
+                objects.push(imported_model(&entries[entry].0, mesh, import));
+                owners.push((ObjectId(owners.len() as u64 + 1), entry));
+            }
+        }
+        let mut manifest = Manifest::new(named.0, named.1);
+        for plan in held {
+            hold(&mut manifest.supports, plan);
+        }
+        let document = Document::of_models(manifest, objects);
+        Self { document, owners }
+    }
+
+    /// The objects of entry `entry`, in plate order.
+    pub(crate) fn ids_of(&self, entry: usize) -> Vec<ObjectId> {
+        (self.owners.iter())
+            .filter(|(_, owner)| *owner == entry)
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
+    /// Where object `id` stands; the identity off the plate.
+    pub(crate) fn transform(&self, id: ObjectId) -> Transform {
+        self.document
+            .object(id)
+            .map(|(state, _)| state.transform)
+            .unwrap_or_default()
+    }
+
+    /// Takes `profile` up as the plate's group in hand, as a front end puts a profile of its
+    /// own on the plate before an edit names it.
+    pub(crate) fn hold_profile(&mut self, profile: SupportProfile) {
+        let group = Group {
+            name: profile.name.clone(),
+            profile,
+        };
+        self.document.hold_group(group);
+    }
+
+    /// Whether object `id` carries a cavity.
+    pub(crate) fn hollowed(&self, id: ObjectId) -> bool {
+        self.document
+            .object(id)
+            .is_some_and(|(_, meshes)| meshes.shell.is_some())
+    }
+
+    /// The models of the plate as a run cuts them, in the order of [`Self::ids`].
+    pub(crate) fn models(&self) -> Vec<Model> {
+        let project = self.document.clone().into_project();
+        plate_models(&project, project.manifest.active_plate)
+    }
+
+    /// Object `id` as a run cuts it, its supports under it.
+    pub(crate) fn model(&self, id: ObjectId) -> Option<Model> {
+        let at = self.owners.iter().position(|(object, _)| *object == id)?;
+        self.models().into_iter().nth(at)
+    }
+
+    /// The box object `id` and its supports stand in, plate mm.
+    pub(crate) fn standing_bounds(&self, id: ObjectId) -> Option<Aabb> {
+        let supports = standing_meshes(&self.document, id);
+        let boxes = supports.iter().filter_map(|mesh| mesh.aabb());
+        let placed = self.mesh(id).and_then(|mesh| mesh.aabb());
+        placed
+            .into_iter()
+            .chain(boxes)
+            .reduce(|one, other| one.merged(&other))
+    }
+
+    /// What object `id` and its supports cover of the plate, as one mesh.
+    pub(crate) fn standing_mesh(&self, id: ObjectId) -> Mesh {
+        let mut mesh = self.mesh(id).unwrap_or_default();
+        for supports in standing_meshes(&self.document, id) {
+            mesh.append(&supports);
+        }
+        mesh
+    }
+
+    /// The resin in the supports under object `id`, millilitres.
+    pub(crate) fn support_ml(&self, id: ObjectId) -> Scalar {
+        let meshes = standing_meshes(&self.document, id);
+        let mm3: Scalar = meshes.iter().map(|mesh| signed_volume(mesh).abs()).sum();
+        mm3 / 1000.0
+    }
+
+    /// The triangles of the supports and raft under object `id`.
+    pub(crate) fn support_faces(&self, id: ObjectId) -> usize {
+        let meshes = standing_meshes(&self.document, id);
+        meshes.iter().map(|mesh| mesh.faces.len()).sum()
+    }
+
+    /// The entry object `id` came from.
+    pub(super) fn entry_of(&self, id: ObjectId) -> Option<usize> {
+        (self.owners.iter())
+            .find(|(object, _)| *object == id)
+            .map(|(_, entry)| *entry)
+    }
+
+    /// Every object, in plate order.
+    pub(crate) fn ids(&self) -> Vec<ObjectId> {
+        self.owners.iter().map(|(id, _)| *id).collect()
+    }
+
+    /// Carries `edit` out on the plate, stopped by `stop`; what it adds takes the place and the
+    /// entry of what it removed, else of `object`.
+    pub(crate) fn apply(
+        &mut self,
+        edit: &Edit,
+        object: ObjectId,
+        stop: &Stop,
+    ) -> Result<Applied, ApplyError> {
+        let asked = || stop.requested();
+        self.apply_with(edit, object, Cancel::when(&asked))
+    }
+
+    /// `apply`, stopped and told how far it has got by `cancel`.
+    pub(crate) fn apply_with(
+        &mut self,
+        edit: &Edit,
+        object: ObjectId,
+        cancel: Cancel<'_>,
+    ) -> Result<Applied, ApplyError> {
+        let applied = apply(&mut self.document, edit, cancel)?;
+        let first = applied.removed.first().copied().unwrap_or(object);
+        let owner = (self.owners.iter())
+            .find(|(id, _)| *id == first)
+            .map_or(0, |(_, entry)| *entry);
+        let at = (self.owners.iter())
+            .position(|(id, _)| applied.removed.contains(id))
+            .unwrap_or(self.owners.len());
+        self.owners.retain(|(id, _)| !applied.removed.contains(id));
+        let at = at.min(self.owners.len());
+        let added = applied.added.iter().map(|(id, _)| (*id, owner));
+        self.owners.splice(at..at, added);
+        Ok(applied)
+    }
+
+    /// Object `id`'s mesh as it prints, standing on the plate.
+    pub(crate) fn mesh(&self, id: ObjectId) -> Option<Mesh> {
+        let (object, meshes) = self.document.object(id)?;
+        Some(transform_mesh(meshes.printed(), object.transform))
+    }
+
+    /// Each entry's objects as meshes standing on the plate, for the steps still run on meshes.
+    pub(super) fn pieces(&self, entries: usize) -> Vec<Vec<Mesh>> {
+        let mut pieces = vec![Vec::new(); entries];
+        for (id, entry) in &self.owners {
+            pieces[*entry].extend(self.mesh(*id));
+        }
+        pieces
+    }
+
+    /// The plate as it stands, with a part for each entry and what was found on it.
+    pub(crate) fn laid(
+        self,
+        (found, finished): (Vec<Found>, Vec<Finished>),
+        (entries, out): (&[(PathBuf, Shaping)], Option<&Path>),
+        printer: Option<&PrinterProfile>,
+        talk: bool,
+    ) -> Result<Laid> {
+        let owners: Vec<usize> = self.owners.iter().map(|(_, entry)| *entry).collect();
+        let project = self.document.into_project();
+        if let Some(path) = out {
+            save(path, &project)
+                .with_context(|| format!("cannot write the project {}", path.display()))?;
+        }
+        let models = plate_models(&project, project.manifest.active_plate);
+        let mut stands_in: Vec<Option<Aabb>> = vec![None; entries.len()];
+        for (model, &entry) in models.iter().zip(&owners) {
+            let merged = [stands_in[entry], bounds(model)].into_iter().flatten();
+            stands_in[entry] = merged.reduce(|one, other| one.merged(&other));
+        }
+        let finished = finished
+            .into_iter()
+            .chain(std::iter::repeat_with(Finished::default));
+        let parts = (found.into_iter().zip(entries).zip(stands_in).zip(finished))
+            .map(
+                |((((import, oriented), (path, _)), stands_in), done)| Part {
+                    input: path.clone(),
+                    import: Some(import),
+                    oriented,
+                    standing: standing_of(stands_in, printer, done.supports.is_some(), talk),
+                    hollow: done.hollow,
+                    drains: done.drains,
+                    supports: done.supports,
+                    meets: Vec::new(),
+                    prepared: None,
+                    recipe: None,
+                },
+            )
+            .collect();
+        Ok(Laid {
+            parts,
+            models,
+            owners,
+        })
+    }
+}
+
+/// Each entry imported, then mended, repaired, placed, pressed and modelled by the edits its
+/// flags fold to; `by_recipe` leaves the orientation search and the repair to the recipe.
+pub(super) fn shaped(
+    entries: &[(PathBuf, Shaping)],
+    (job, chosen): (&JobArgs, &Chosen),
     watch: &Watch,
-) -> Result<Laid<'a>> {
+    by_recipe: bool,
+) -> Result<(Staging, Vec<Found>)> {
+    let (meshes, mut found) = imported(entries, chosen, watch)?;
+    let pieces = meshes.into_iter().map(|mesh| vec![mesh]).collect();
+    let mut staging = Staging::of(pieces, &found, (entries, catalogue_ids(job)));
+    // A recipe's orient and repair steps run what --orient and --repair ask.
+    let owned: Vec<(PathBuf, Shaping)>;
+    let edited = match by_recipe {
+        false => entries,
+        true => {
+            owned = (entries.iter())
+                .map(|(path, shaping)| {
+                    let mut shaping = shaping.clone();
+                    shaping.import.transform.orient = false;
+                    shaping.import.repair = None;
+                    (path.clone(), shaping)
+                })
+                .collect();
+            &owned
+        }
+    };
+    let printer = chosen.printer.as_ref();
+    repaired::repaired(&mut staging, &mut found, edited, watch)?;
+    placed::placed(&mut staging, &mut found, edited, (job, printer), watch)?;
+    repaired::pressed(&mut staging, edited, watch)?;
+    read_again_where_reshaped(&staging, &mut found, edited, printer)?;
+    if watch.talk {
+        for (import, _) in &found {
+            print!("{import}");
+        }
+    }
+    modelled::modelled(&mut staging, &job.model, (watch.talk, watch.stop))?;
+    Ok((staging, found))
+}
+
+/// The plate's supports with `plan` in hand, as the panel holds the profile chosen: the
+/// automatic profile sizing, or its profile as the active group of its name, on its raft.
+fn hold(supports: &mut SupportState, plan: &SupportPlan) {
+    let placing = plan.placing();
+    supports.raft = Some(placing.raft);
+    if let Some(auto) = plan.sizing() {
+        supports.sizing = Some(AutoSizing {
+            on: true,
+            profile: auto.clone(),
+        });
+        return;
+    }
+    let named = (supports.groups.iter()).position(|group| group.profile.name == placing.name);
+    let group = Group {
+        name: placing.name.clone(),
+        profile: placing,
+    };
+    let at = match named {
+        Some(at) => {
+            supports.groups[at] = group;
+            at
+        }
+        None => {
+            supports.groups.push(group);
+            supports.groups.len() - 1
+        }
+    };
+    supports.active = at as u16;
+}
+
+/// The printer and resin the run names by catalogue id, which a project written keeps; none
+/// for one of a file.
+fn catalogue_ids(job: &JobArgs) -> Named {
+    let selection = &job.profile;
+    let printer = selection
+        .printer
+        .clone()
+        .filter(|_| selection.profile.is_none());
+    let resin = selection
+        .resin
+        .clone()
+        .filter(|_| selection.material.is_none());
+    (printer, resin)
+}
+
+/// What import read off each entry's object, read again where an edit before modelling
+/// changed it.
+fn read_again_where_reshaped(
+    staging: &Staging,
+    found: &mut [Found],
+    entries: &[(PathBuf, Shaping)],
+    printer: Option<&PrinterProfile>,
+) -> Result<()> {
+    for (entry, ((import, _), (_, shaping))) in found.iter_mut().zip(entries).enumerate() {
+        let mesh = staging.mesh(ObjectId(entry as u64 + 1));
+        if let Some(mesh) = mesh.filter(|_| repaired::reshaped(&shaping.import)) {
+            read_again(import, &mesh, printer)?;
+        }
+    }
+    Ok(())
+}
+
+/// An edit's error as the command line says it: a stop is the run's own.
+pub(crate) fn said(error: ApplyError) -> anyhow::Error {
+    match error {
+        ApplyError::Cancelled => Cancelled.into(),
+        other => other.into(),
+    }
+}
+
+/// Every entry's object hollowed, drilled, plugged and supported by the edits its flags fold
+/// to, then the plate arranged where asked, last, with the supports; `held`: printer, drift mm.
+pub(super) fn laid(
+    mut staging: Staging,
+    found: Vec<Found>,
+    (entries, edits): (&[(PathBuf, Shaping)], &EditArgs),
+    (held, arrange): ((Option<&PrinterProfile>, Scalar), bool),
+    watch: &Watch,
+) -> Result<Laid> {
     for (_, shaping) in entries {
         shaping.hollow.check_flags()?;
     }
-    // TODO(step-R6d4): hollow, drains and supports as edits; put_down_every goes in R6d8.
-    let shaped =
-        |shaping: &Shaping| shapes_anything(shaping) || !shaping.hollow.drain_support_at.is_empty();
-    if entries.iter().any(|(_, shaping)| shaped(shaping)) {
-        return put_down_every(pieces, found, entries, held, watch);
+    let finished = finished::finished(&mut staging, entries, held, watch)?;
+    if arrange {
+        arranged(&mut staging, entries, held.0, watch)?;
     }
-    Ok(documented(pieces, found, entries, held.0, watch.talk))
+    for (index, edit) in edits.listed()?.iter().enumerate() {
+        let first = staging.ids().first().copied().unwrap_or(ObjectId::UNSET);
+        (staging.apply(edit, first, watch.stop).map_err(said))
+            .with_context(|| format!("edit {} of --edits", index + 1))?;
+    }
+    let out = edits.project_out.as_deref();
+    staging.laid((found, finished), (entries, out), held.0, watch.talk)
 }
 
-fn documented<'a>(
-    pieces: Vec<Vec<Mesh>>,
-    found: Vec<Found>,
-    entries: &'a [(PathBuf, Shaping)],
+/// `--arrange`: every object spread over the usable plate with its supports, as the window's
+/// Arrange packs it; one that finds no room is said and left where it stood.
+pub(super) fn arranged(
+    staging: &mut Staging,
+    entries: &[(PathBuf, Shaping)],
     printer: Option<&PrinterProfile>,
-    talk: bool,
-) -> Laid<'a> {
-    let mut owners = Vec::new();
-    let mut objects = Vec::new();
-    for (entry, (meshes, (import, _))) in pieces.into_iter().zip(&found).enumerate() {
-        for mesh in meshes {
-            objects.push(imported_model(&entries[entry].0, mesh, import));
-            owners.push(entry);
-        }
+    watch: &Watch,
+) -> Result<()> {
+    let printer = printer.context("--arrange needs a printer to know the plate")?;
+    let (low_mm, plate_mm) = finished::usable_area(printer);
+    let edit = Edit::Arrange {
+        low_mm,
+        plate_mm,
+        clearance_mm: ArrangeSettings::default().clearance_mm,
+    };
+    let first = staging.ids().first().copied().unwrap_or(ObjectId::UNSET);
+    let applied = staging
+        .apply(&edit, first, watch.stop)
+        .map_err(said)
+        .context("arranging the plate")?;
+    if let Report::Arranged { left_out, .. } = applied.report
+        && let Some(&one) = left_out.first()
+    {
+        let named = staging
+            .entry_of(one)
+            .map(|entry| entries[entry].0.display().to_string());
+        tracing::warn!(
+            "{} of the plate's models found no room and stand where they were, {} among them",
+            left_out.len(),
+            named.unwrap_or_default()
+        );
     }
-    let project = Document::of_models(Manifest::new(None, None), objects).into_project();
-    let models = plate_models(&project, project.manifest.active_plate);
-    let mut stands_in: Vec<Option<Aabb>> = vec![None; entries.len()];
-    let mut plugged = Vec::with_capacity(models.len());
-    for (index, (model, &entry)) in models.iter().zip(&owners).enumerate() {
-        let merged = [stands_in[entry], bounds(model)].into_iter().flatten();
-        stands_in[entry] = merged.reduce(|one, other| one.merged(&other));
-        plugged.push((index + 1..index + 1, entries[entry].0.as_path()));
-    }
-    let parts = (found.into_iter().zip(entries).zip(stands_in))
-        .map(|(((import, oriented), (path, _)), stands_in)| Part {
-            input: path.clone(),
-            import: Some(import),
-            oriented,
-            hollow: None,
-            drains: None,
-            supports: None,
-            standing: standing_of(stands_in, printer, false, talk),
-            meets: Vec::new(),
-            prepared: None,
-            recipe: None,
-        })
-        .collect();
-    Laid {
-        parts,
-        models,
-        owners,
-        plugged,
-    }
+    Ok(())
 }

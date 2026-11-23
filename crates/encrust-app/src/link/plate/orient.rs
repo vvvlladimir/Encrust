@@ -1,8 +1,9 @@
 //! The orient edit as the window carries it out: the Orient tool's own search on one model,
 //! then the pose asked for stood.
 
-use core_document::{ApplyError, preset_of};
+use core_document::{ApplyError, kept_clear, preset_of};
 use core_edit::{Edit, ObjectId};
+use core_geometry::{Vec2, transform_mesh};
 use core_plate::Asked;
 use printer_profiles::{ProfileError, machine_named};
 
@@ -20,16 +21,17 @@ pub(super) fn start_orient(window: &mut Window, edit: &Edit) -> Result<Option<Ob
         clean_surface,
         ref printer,
         ref resin,
+        ref keep_clear_mm,
+        keep_clear_radius_mm,
+        keep_clear_seen_deg,
         ..
     } = edit
     else {
         return Ok(None);
     };
-    window
-        .doc
-        .scene
-        .get(object)
-        .ok_or_else(|| no_object(object))?;
+    let standing = (window.doc.scene.get(object)).ok_or_else(|| no_object(object))?;
+    let sized = transform_mesh(&standing.mesh, standing.transform.sizing());
+    let placed = standing.transform;
     let wanted = Asked {
         preset: preset_of(goal),
         clean_surface,
@@ -44,10 +46,18 @@ pub(super) fn start_orient(window: &mut Window, edit: &Edit) -> Result<Option<Ob
         proof_machine(&window.machine.slicing).ok_or("no printer to prove the poses on")?
     };
     let machine = Some((&proof.0, &proof.1));
+    let volume = &proof.0.build_volume;
+    let asked_clear = (
+        keep_clear_mm.as_slice(),
+        keep_clear_radius_mm,
+        keep_clear_seen_deg,
+    );
+    let plate_mm = Vec2::new(volume.x, volume.y);
+    let kept = kept_clear(&sized, placed, asked_clear, plate_mm);
     let tool = &mut window.tools.orient;
     tool.forget();
     let asked = (wanted, max_tilt_deg, plans);
-    let started = tool.start_on(&window.doc.scene, &[object], asked, machine);
+    let started = tool.start_on(&window.doc.scene, &[object], asked, machine, kept.as_ref());
     if let Turning::Search(job) = started.map_err(|e| format!("{e:#}"))? {
         tool.job = Some(job);
     }

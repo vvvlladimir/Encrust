@@ -34,7 +34,9 @@ fn repair_with_no_method_is_the_prepare_default() {
         got,
         vec![Edit::Repair {
             object: OBJECT,
-            method: PREPARE_REPAIR
+            method: PREPARE_REPAIR,
+            seam_tolerance_mm: None,
+            smallest_shell_mm2: None,
         }]
     );
 }
@@ -59,6 +61,9 @@ fn orient_settings_land_in_the_edit() {
             low_mm: AREA.0,
             printer: None,
             resin: None,
+            keep_clear_mm: Vec::new(),
+            keep_clear_radius_mm: None,
+            keep_clear_seen_deg: None,
         }]
     );
 }

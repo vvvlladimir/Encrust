@@ -106,19 +106,6 @@ pub(crate) fn read_again(
     Ok(())
 }
 
-/// What a repair a later step asks of `mesh` changed, noted on `import` as `--repair` notes it.
-pub(crate) fn repaired_later(
-    import: &mut ImportReport,
-    mesh: &mut Mesh,
-    (method, args): (core_volume::RepairMethod, &ImportArgs),
-    watch: &Watch,
-) -> Result<()> {
-    let (mended, wrapped) = repaired(mesh, method, args, watch)?;
-    import.mended = Some(mended);
-    import.wrapped = wrapped;
-    Ok(())
-}
-
 /// Runs `method` on `mesh` in place: what it changed, and how a wrap went.
 fn repaired(
     mesh: &mut Mesh,
@@ -150,6 +137,14 @@ fn watched_repair(
     settings: RepairSettings,
     watch: &Watch,
 ) -> Result<core_volume::Repaired> {
+    let done = with_repair_bar(watch, |cancel| {
+        repaired_by(mesh, (method, settings), cancel, ObjectId::UNSET)
+    });
+    done.map_err(repair_refused)
+}
+
+/// `run` given a stop that also draws the repair's share on a bar, where a run talks.
+pub(crate) fn with_repair_bar<T>(watch: &Watch, run: impl FnOnce(Cancel<'_>) -> T) -> T {
     let progress = Progress::default();
     let shown = watch.progress.then(|| bar("% of the repair"));
     let asked = || {
@@ -159,22 +154,21 @@ fn watched_repair(
         }
         watch.stop.requested()
     };
-    let done = repaired_by(
-        mesh,
-        (method, settings),
-        Cancel::when(&asked).reporting(&progress),
-        ObjectId::UNSET,
-    );
+    let done = run(Cancel::when(&asked).reporting(&progress));
     if let Some(shown) = &shown {
         shown.finish_and_clear();
     }
-    match done {
-        Err(ApplyError::Cancelled) => Err(Cancelled.into()),
-        Err(ApplyError::Failed { reason, .. }) => {
-            Err(anyhow::anyhow!(reason).context("could not repair the model"))
+    done
+}
+
+/// Why a repair did not finish, as the command line says it.
+pub(crate) fn repair_refused(error: ApplyError) -> anyhow::Error {
+    match error {
+        ApplyError::Cancelled => Cancelled.into(),
+        ApplyError::Failed { reason, .. } => {
+            anyhow::anyhow!(reason).context("could not repair the model")
         }
-        Err(other) => Err(anyhow::Error::new(other).context("could not repair the model")),
-        Ok(done) => Ok(done),
+        other => anyhow::Error::new(other).context("could not repair the model"),
     }
 }
 

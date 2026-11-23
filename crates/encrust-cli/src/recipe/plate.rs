@@ -1,19 +1,19 @@
-//! The steps a recipe runs once on the whole plate: `check` measures it as the report does,
-//! `arrange` packs it as `--arrange` does, `save` writes it there and then.
+//! The steps a recipe runs once on the whole plate: `check` measures it as the report does and
+//! answers what it finds by edits, `arrange` packs it by one, `save` writes it there and then.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use core_edit::Edit;
 use core_engine::{
     CupVent, DEFAULT_TEMPLATE, Hanging, SupportPlan, Unvented, cup_vents, island_floors,
     island_holds, lever_holds, neck_profile,
 };
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_plate::ArrangeSettings;
-use core_recipe::{Metric, retry, save_folder};
-use core_volume::{DrainHole, HoleKind, HoleSize, ModelHollow};
+use core_recipe::{Metric, StepKind, edits_of, retry, save_folder};
+use core_volume::{HoleKind, HoleSize};
 
-use super::piece::Piece;
 use super::settings::Settings;
 use super::steps::{checked, hold_up};
 use super::{Ctx, Did, Run, Saved};
@@ -23,25 +23,20 @@ use crate::estimate::{Print, measure_plate};
 use crate::pipeline::{Watch, raster_window, slice_staged};
 use crate::profiles::{AUTO, plan_of};
 use crate::slice_report::SliceReport;
-use crate::stage::{Staged, arranged, cleared, staged};
+use crate::stage::{Staged, cleared, said, staged, usable_area};
 use core_recipe::resolved::{flag, number, text};
 
 impl Run<'_> {
-    /// The plate as the pieces stand now, staged to be cut.
-    fn staged(&self) -> Result<Staged> {
-        let mut models = self
-            .pieces
-            .iter()
-            .map(Piece::model)
-            .collect::<Result<Vec<_>>>()?;
-        models.extend(self.pieces.iter().flat_map(Piece::plug_models));
+    /// The plate as the document stands now, staged to be cut.
+    fn staged(&self) -> Staged {
+        let models = self.staging.models();
         let drainage = self
             .pieces
             .iter()
-            .any(|piece| piece.cavity.is_some() || !piece.holes.is_empty());
+            .any(|piece| self.staging.hollowed(piece.id));
         let ctx = self.ctx;
         let machine = (ctx.job, ctx.chosen, ctx.layer_height_mm);
-        Ok(staged((Vec::new(), models), drainage, machine, false))
+        staged((Vec::new(), models), drainage, machine, false)
     }
 
     /// Answers the cups and necks `settings` ask for, then measures, notes and supports the
@@ -63,9 +58,9 @@ impl Run<'_> {
                     .iter()
                     .filter(|owner| owner.is_none_or(|(owner, _)| owner == id))
                     .count();
-                let trapped = self.pieces[id].trapped(self.ctx.watch.stop)?;
+                let trapped = self.pieces[id].trapped(&self.staging, self.ctx.watch.stop)?;
                 let piece = &mut self.pieces[id];
-                checked(piece, islands, peel_n);
+                checked(piece, &self.staging, islands, peel_n);
                 piece.note(Metric::Trapped, trapped as Scalar);
             }
             if !self.retries(index, ids, attempt)? {
@@ -77,7 +72,7 @@ impl Run<'_> {
     }
 
     fn measured(&self) -> Result<(SliceReport, Print)> {
-        let mut staged = self.staged()?;
+        let mut staged = self.staged();
         let window = raster_window(&self.ctx.job.raster);
         let plate = staged.take_plate(None, window).context(
             "a check cuts and measures the plate, which needs a printer: name it with \
@@ -86,26 +81,18 @@ impl Run<'_> {
         measure_plate(plate, staged.drainage, None, &quiet(self.ctx))
     }
 
+    /// Each piece's model as it prints, standing on the plate.
+    fn meshes(&self) -> Vec<Mesh> {
+        let meshes = self.pieces.iter().map(|piece| self.staging.mesh(piece.id));
+        meshes.map(Option::unwrap_or_default).collect()
+    }
+
     /// The piece each island of `floors` hangs from and the point a support there touches,
     /// or `None` for one hanging from none.
     fn owners(&self, floors: &[Vec3], layer_mm: Scalar) -> Vec<Option<(usize, Vec3)>> {
-        let bvhs = self.bvhs();
-        island_holds(floors, layer_mm, &self.hanging(&bvhs))
-    }
-
-    fn bvhs(&self) -> Vec<Bvh> {
-        self.pieces
-            .iter()
-            .map(|piece| Bvh::build(&piece.mesh))
-            .collect()
-    }
-
-    fn hanging<'a>(&'a self, bvhs: &'a [Bvh]) -> Vec<Hanging<'a>> {
-        self.pieces
-            .iter()
-            .zip(bvhs)
-            .map(|(piece, bvh)| (&piece.mesh, bvh, Transform::default()))
-            .collect()
+        let meshes = self.meshes();
+        let bvhs: Vec<Bvh> = meshes.iter().map(Bvh::build).collect();
+        island_holds(floors, layer_mm, &hanging(&meshes, &bvhs))
     }
 
     /// Drills the suction cups and stands supports under the weak necks of `ids` where
@@ -122,10 +109,10 @@ impl Run<'_> {
         }
         let (slice, print) = self.measured()?;
         let risks = print.measured.risks();
-        let bvhs = self.bvhs();
-        let models = self.hanging(&bvhs);
-        let widest_hole_mm = ids
-            .iter()
+        let meshes = self.meshes();
+        let bvhs: Vec<Bvh> = meshes.iter().map(Bvh::build).collect();
+        let models = hanging(&meshes, &bvhs);
+        let widest_hole_mm = (ids.iter())
             .map(|&id| self.pieces[id].shaping.hollow.hole_size().diameter_mm)
             .reduce(Scalar::max);
         let vents = match (cups, widest_hole_mm) {
@@ -145,7 +132,7 @@ impl Run<'_> {
         let mut changed = false;
         for vent in vents {
             match vent {
-                Ok(vent) if ids.contains(&vent.model) => changed |= self.vent(&bvhs, vent),
+                Ok(vent) if ids.contains(&vent.model) => changed |= self.vent(vent)?,
                 Ok(_) => {}
                 Err(Unvented::OnThePlate) => tracing::warn!(
                     "a suction cup stands on the plate: lift the model onto supports or turn it"
@@ -161,42 +148,50 @@ impl Run<'_> {
         Ok((!changed).then_some((slice, print)))
     }
 
-    /// Drills `vent` into its piece along its own axis, walled on a solid one; says whether it
-    /// drilled one.
-    fn vent(&mut self, bvhs: &[Bvh], vent: CupVent) -> bool {
-        let piece = &mut self.pieces[vent.model];
+    /// Drills `vent` into its piece by a `Drain` at its mouth, walled on a solid one; says
+    /// whether it drilled one.
+    fn vent(&mut self, vent: CupVent) -> Result<bool> {
+        let piece = &self.pieces[vent.model];
+        let object = piece.id;
         let size = HoleSize {
             depth_mm: vent.depth_mm,
             ..piece.shaping.hollow.hole_size()
         };
-        let bvh = &bvhs[vent.model];
-        let at = (vent.mouth_mm, vent.outward);
-        let hole = ModelHollow::drain_at(&piece.mesh, bvh, at.0, at.1, size, Transform::default());
-        match hole.filter(|hole| !hole.lies_within(&piece.holes)) {
-            Some(hole) => {
-                piece.holes.push(DrainHole {
-                    kind: match piece.cavity {
-                        Some(_) => HoleKind::AtDepth,
-                        None => HoleKind::Walled,
-                    },
-                    ..hole
-                });
-                true
-            }
-            None => {
-                tracing::warn!("{}: a cup was left undrilled", piece.input.display());
-                false
+        let kind = match self.staging.hollowed(object) {
+            true => HoleKind::AtDepth,
+            false => HoleKind::Walled,
+        };
+        let edit = Edit::Drain {
+            object,
+            at_mm: vec![vent.mouth_mm],
+            size,
+            kind,
+            auto: false,
+            vent: false,
+        };
+        match self.staging.apply(&edit, object, self.ctx.watch.stop) {
+            Ok(applied) => Ok(matches!(
+                applied.report,
+                core_document::Report::Drained { holes, .. } if holes > 0
+            )),
+            Err(core_document::ApplyError::Cancelled) => Err(crate::exit::Cancelled.into()),
+            Err(error) => {
+                tracing::warn!(
+                    "{}: a cup was left undrilled: {error}",
+                    piece.input.display()
+                );
+                Ok(false)
             }
         }
     }
 
-    /// What the supports of `id` stand to: its latest supports step's plan, else `auto`.
+    /// What the supports of `id` stand to: its latest supports step's profile, else `auto`.
     fn own_plan(&self, id: usize) -> Result<SupportPlan> {
         let piece = &self.pieces[id];
-        match piece.plan.clone().or(piece.shaping.supports.clone()) {
-            Some(plan) => Ok(plan),
-            None => plan_of(AUTO),
+        if let Some(plan) = &piece.shaping.supports {
+            return Ok(plan.clone());
         }
+        plan_of(piece.supported_by.as_deref().unwrap_or(AUTO))
     }
 
     /// What the supports under a weak neck of `id` stand to: its own, made thick enough.
@@ -210,14 +205,18 @@ impl Run<'_> {
     fn hold_necks(&mut self, ids: &[usize], holds: &[(usize, Vec3)]) -> Result<bool> {
         let mut stood = false;
         for &id in ids {
-            let found: Vec<Vec3> = holds
-                .iter()
+            let found: Vec<Vec3> = (holds.iter())
                 .filter(|(owner, _)| *owner == id)
                 .map(|(_, at)| *at)
                 .collect();
             if !found.is_empty() {
                 let plan = self.neck_plan(id)?;
-                hold_up(&mut self.pieces[id], &plan, &found)?;
+                hold_up(
+                    (&mut self.pieces[id], &mut self.staging),
+                    &plan,
+                    &found,
+                    self.ctx,
+                )?;
                 stood = true;
             }
         }
@@ -238,9 +237,7 @@ impl Run<'_> {
     /// stands on, as Check's Support every island stands one.
     fn hold_islands(&mut self, ids: &[usize], owners: &[Option<(usize, Vec3)>]) -> Result<()> {
         for &id in ids {
-            let found: Vec<Vec3> = owners
-                .iter()
-                .flatten()
+            let found: Vec<Vec3> = (owners.iter().flatten())
                 .filter(|(owner, _)| *owner == id)
                 .map(|(_, at)| *at)
                 .collect();
@@ -248,31 +245,68 @@ impl Run<'_> {
                 continue;
             }
             let plan = self.own_plan(id)?;
-            hold_up(&mut self.pieces[id], &plan, &found)?;
+            hold_up(
+                (&mut self.pieces[id], &mut self.staging),
+                &plan,
+                &found,
+                self.ctx,
+            )?;
         }
         Ok(())
     }
 
-    /// Packs every piece over the plate as `--arrange` does, `spacing_mm` apart.
+    /// Packs every piece over the plate as `--arrange` does, `spacing_mm` apart, by an
+    /// `Arrange` edit; clearing only what is in the way, which no edit carries yet, by moves.
     pub(super) fn arrange(&mut self, settings: &Settings) -> Result<()> {
+        let printer = self.ctx.chosen.printer.as_ref();
+        let printer = printer.context("an arrange step needs a printer to know the plate")?;
+        let first = self.pieces.first().map(|piece| piece.id);
+        let Some(first) = first else {
+            return Ok(());
+        };
+        let placed = (self.staging.mesh(first).and_then(|mesh| mesh.aabb()))
+            .context("the model has no surface")?;
+        let area = usable_area(printer);
+        let drift_mm = self.ctx.chosen.material.compensation.fit_drift_mm();
+        match edits_of(StepKind::Arrange, settings, first, placed, area, drift_mm) {
+            Ok(edits) => {
+                for edit in edits {
+                    (self.staging.apply(&edit, first, self.ctx.watch.stop)).map_err(said)?;
+                }
+                Ok(())
+            }
+            Err(_) => self.clear_the_way(settings, printer),
+        }
+    }
+
+    /// Moves only what is past the usable plate or meets another, as Check's Move to free
+    /// space does.
+    fn clear_the_way(
+        &mut self,
+        settings: &Settings,
+        printer: &printer_profiles::PrinterProfile,
+    ) -> Result<()> {
         let default = ArrangeSettings::default();
         let asked = ArrangeSettings {
             clearance_mm: number(settings, "spacing_mm").unwrap_or(default.clearance_mm),
             ..default
         };
-        let standing: Vec<Mesh> = self.pieces.iter().map(standing_mesh).collect();
-        let footprints: Vec<(&Mesh, &Path)> = standing
-            .iter()
-            .zip(&self.pieces)
+        let standing: Vec<Mesh> = (self.pieces.iter())
+            .map(|piece| self.staging.standing_mesh(piece.id))
+            .collect();
+        let footprints: Vec<(&Mesh, &Path)> = (standing.iter().zip(&self.pieces))
             .map(|(mesh, piece)| (mesh, piece.input.as_path()))
             .collect();
-        let printer = self.ctx.chosen.printer.as_ref();
-        let moves = match flag(settings, "only_in_the_way").unwrap_or(false) {
-            true => cleared(&footprints, printer, &asked)?,
-            false => arranged(&footprints, printer, &asked)?,
-        };
-        for (piece, moved) in self.pieces.iter_mut().zip(moves) {
-            piece.moved(moved);
+        let moves = cleared(&footprints, Some(printer), &asked)?;
+        for (piece, moved) in self.pieces.iter().zip(moves) {
+            if moved == Transform::default() {
+                continue;
+            }
+            let edit = Edit::Move {
+                object: piece.id,
+                by_mm: moved.translation,
+            };
+            (self.staging.apply(&edit, piece.id, self.ctx.watch.stop)).map_err(said)?;
         }
         Ok(())
     }
@@ -293,7 +327,7 @@ impl Run<'_> {
         std::fs::create_dir_all(&folder)
             .with_context(|| format!("cannot make the folder {}", folder.display()))?;
         let output = folder.join(file);
-        let mut staged = self.staged()?;
+        let mut staged = self.staged();
         let (slice, raster) = slice_staged(&mut staged, &output, ctx.job, &quiet(ctx))?;
         if ctx.watch.talk {
             println!("Saved into {}", output.display());
@@ -318,20 +352,16 @@ impl Run<'_> {
     }
 }
 
+/// Each of `meshes` with its `bvhs`, standing as it prints, as the risks read them.
+fn hanging<'a>(meshes: &'a [Mesh], bvhs: &'a [Bvh]) -> Vec<Hanging<'a>> {
+    (meshes.iter().zip(bvhs))
+        .map(|(mesh, bvh)| (mesh, bvh, Transform::default()))
+        .collect()
+}
+
 /// A run's watch that says nothing: a plate cut inside a step is not the run's report.
 fn quiet<'a>(ctx: &Ctx<'a>) -> Watch<'a> {
     Watch::quiet(ctx.watch.stop)
-}
-
-/// What `piece` covers of the plate with its supports, as one mesh.
-fn standing_mesh(piece: &Piece) -> Mesh {
-    let mut mesh = piece.mesh.clone();
-    if let Some((_, supports)) = &piece.supports {
-        for supports in supports.meshes() {
-            mesh.append(supports);
-        }
-    }
-    mesh
 }
 
 /// The folder a save step names, `~` its user's home; the home without one.

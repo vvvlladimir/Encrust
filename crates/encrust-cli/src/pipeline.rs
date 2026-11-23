@@ -1,12 +1,11 @@
 //! The stages one model goes through onto the plate, and the cut of a staged plate into a file.
 //! The single run, the batch and a multi-model plate share it; `stage` assembles a plate.
 
-use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
-use core_engine::{Cutting, Drained, SupportPlan, bake, cut};
+use core_engine::{Cutting, bake, cut};
 use core_geometry::{Mesh, Scalar, weld};
 use core_mesh_io::{Loaded, loader_for_extension};
 use core_pipeline::{PanelOverrides, Tolerance, raster_settings};
@@ -15,7 +14,6 @@ use printer_profiles::{Compensation, EdgeSmoothing, MaterialProfile, PrinterProf
 
 use crate::args::{ImportArgs, JobArgs, RasterArgs};
 use crate::exit::Stop;
-use crate::hollowing::{self, AutoReport, Ground, HollowArgs, HollowReport, Placed, auto_drains};
 use crate::png_stack::write_stack;
 use crate::profiles::Chosen;
 use crate::raster_report::RasterReport;
@@ -30,12 +28,10 @@ mod place;
 mod relief;
 
 use checked::checked;
-pub(crate) use checked::{read_again, repaired_later};
+pub(crate) use checked::{read_again, repair_refused, with_repair_bar};
 use inspect::talk_mapping;
 pub use inspect::{Inspect, inspect};
 pub use place::{OrientChoice, OrientSummary, orient_settings, rotate_degrees};
-use place::{centred, place};
-pub(crate) use place::{orientation, turn_in_place};
 use relief::press_relief;
 
 /// How a run talks while it works, and what can stop it.
@@ -98,15 +94,14 @@ pub fn slice_one(
     })
 }
 
-/// Loads, welds, places and repairs the model, and says what import found. `supports` is
-/// what it will stand on, if anything, which is what an orientation is judged on.
+/// Loads, welds and checks the model and says what import found; all a run asks after that,
+/// from a repair to a turn, is an edit of the plate (ADR 0472).
 pub fn import(
     input: &Path,
     args: &ImportArgs,
-    supports: Option<&SupportPlan>,
     chosen: &Chosen,
     watch: &Watch,
-) -> Result<(Mesh, ImportReport, Option<OrientSummary>)> {
+) -> Result<(Mesh, ImportReport)> {
     let talk = watch.talk;
     let profile = chosen.printer.as_ref();
     let loaded = load(input)?;
@@ -114,138 +109,10 @@ pub fn import(
         talk_mapping(&loaded);
     }
     let welded = weld(&loaded.mesh, args.weld_tolerance);
-    let (mesh, oriented) = place(welded.mesh.clone(), args, supports, chosen, watch)?;
-    if talk && let Some(summary) = &oriented {
-        println!(
-            "Oriented: {}, {:.1} mm2 largest section, {:.1} mm2 overhang{}\n",
-            summary.describe(),
-            summary.peak_mm2,
-            summary.overhang_mm2,
-            if summary.on_plate {
-                ", set on the plate"
-            } else {
-                ""
-            }
-        );
-    }
-
-    // After placement, so depth in mm is the plate's; before the orientation fix, which rewinds
-    // the faces the map is indexed by.
-    let mut mesh = press_relief(mesh, &welded, &loaded, args, talk)?;
-    if args.transform.center {
-        mesh = centred(mesh, profile)?;
-    }
+    // Before the orientation fix, which rewinds the faces the file's texture map is indexed by.
+    let mut mesh = press_relief(welded.mesh.clone(), &welded, &loaded, args, talk)?;
     let import = checked(&mut mesh, (input, welded), args, profile, false, watch)?;
-    if talk {
-        print!("{import}");
-    }
-    Ok((mesh, import, oriented))
-}
-
-/// What hollowing and drilling made of one model besides the model itself.
-pub struct Shelled {
-    pub report: Option<HollowReport>,
-    /// Which faces of the shell bound its cavity, when the model was hollowed.
-    pub cavity: Option<Range<usize>>,
-    /// The bodies the holes and channels cut, which only subtract, so they are no part of
-    /// what the stack has to be tall enough for (ADR 0199).
-    pub cuts: Option<Mesh>,
-    /// A plug for each hole, laid on the plate beside the model (ADR 0313).
-    pub plugs: Vec<Mesh>,
-    /// What `--drain-at auto` found and drilled (ADR 0401).
-    pub drains: Option<Drained>,
-}
-
-/// Shells the model when asked, then meshes the bodies its holes and channels cut, and the plugs.
-/// `drift_mm` is what the resin leaves a fit wider by; see `Compensation::fit_drift_mm`.
-pub fn hollow_and_cut(
-    mesh: &mut Mesh,
-    args: &HollowArgs,
-    (precision, drift_mm): (Scalar, Scalar),
-    ground: Ground,
-    watch: &Watch,
-) -> Result<Shelled> {
-    let talk = watch.talk;
-    args.check_flags()?;
-    // Where the cuts land is read off the model as it was imported; what they are cut
-    // into may be the shell. See ADR 0075.
-    let mut placed = args
-        .cutting()
-        .then(|| hollowing::placed(mesh, args, ground.lifted_mm))
-        .transpose()?;
-
-    let mut hollow = None;
-    let mut shell = None;
-    let mut cavity = None;
-    if args.wanted() {
-        let uncut = Placed::default();
-        let cut = placed.as_ref().unwrap_or(&uncut);
-        let (shelled, faces, report) = hollowing::run(mesh, cut, args, precision, watch.stop)?;
-        if talk {
-            print!("{report}");
-        }
-        shell = Some(shelled);
-        cavity = Some(faces);
-        hollow = Some(report);
-    }
-    let wall = hollow.as_ref().map(HollowReport::wall);
-    let printed = shell.as_ref().unwrap_or(&*mesh);
-    let drains = drill_auto(printed, placed.as_mut(), args, (wall, ground), talk)?;
-    watch.stop.check()?;
-    // A plug is the solid a hole takes out as it is cut, so it is read off the model before
-    // the model is the shell.
-    let plugs = match &placed {
-        Some((holes, _)) if args.plugs => {
-            let cut = hollowing::pierced(holes, wall);
-            hollowing::plugs_beside(mesh, &cut, args, drift_mm)?
-        }
-        _ => Vec::new(),
-    };
-    if talk && !plugs.is_empty() {
-        println!(
-            "  plugs         {} beside the model, {:.2} mm narrower a side\n",
-            plugs.len(),
-            args.plug_gap_mm - drift_mm
-        );
-    }
-    if let Some(shell) = shell {
-        *mesh = shell;
-    }
-    let mut bodies = None;
-    if let Some(placed) = placed {
-        let (cuts, meshed) = hollowing::cut(placed, wall)?;
-        if talk {
-            print!("{cuts}");
-        }
-        bodies = Some(meshed);
-    }
-    Ok(Shelled {
-        report: hollow,
-        cavity,
-        cuts: bodies,
-        plugs,
-        drains,
-    })
-}
-
-/// `--drain-at auto` over the model as it prints, its holes added to those `placed` cuts;
-/// `None` when it was not asked for.
-fn drill_auto(
-    printed: &Mesh,
-    placed: Option<&mut Placed>,
-    args: &HollowArgs,
-    (wall, ground): (Option<(Scalar, Scalar)>, Ground),
-    talk: bool,
-) -> Result<Option<Drained>> {
-    let Some((holes, channels)) = placed.filter(|_| args.auto()) else {
-        return Ok(None);
-    };
-    let drained = auto_drains(printed, (holes, channels), args, wall, ground)?;
-    holes.extend(drained.drain_holes());
-    if talk {
-        print!("{}", AutoReport(&drained, ground.lifted_mm));
-    }
-    Ok(Some(drained))
+    Ok((mesh, import))
 }
 
 /// How the stack is cut, and what the resin's shrinkage does to it on the way in.

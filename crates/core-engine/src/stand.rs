@@ -19,8 +19,8 @@ mod needs;
 
 use lift::lift_of;
 pub use lift::{Lift, planned_lift};
-pub(crate) use merge::merge_refusal;
 use merge::merged_near;
+pub use merge::{MERGE_NAMING_MM, merge_refusal};
 use needs::both_sides;
 pub use needs::{NeedsAsked, needs_on, needs_on_both, plan_of};
 

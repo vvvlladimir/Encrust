@@ -31,6 +31,9 @@ fn orient(goal: OrientAim, pick: usize) -> Edit {
         low_mm: [0.0, 0.0],
         printer: None,
         resin: None,
+        keep_clear_mm: Vec::new(),
+        keep_clear_radius_mm: None,
+        keep_clear_seen_deg: None,
     }
 }
 
@@ -255,6 +258,9 @@ fn an_orient_that_overhangs_the_area_slides_onto_it() {
         low_mm: [0.0, 0.0],
         printer: None,
         resin: None,
+        keep_clear_mm: Vec::new(),
+        keep_clear_radius_mm: None,
+        keep_clear_seen_deg: None,
     };
 
     apply(&mut document, &edit, Cancel::never()).expect("a bar can be oriented");
@@ -277,6 +283,9 @@ fn orient_on(printer: Option<&str>, resin: Option<&str>) -> Edit {
         low_mm: [0.0, 0.0],
         printer: printer.map(str::to_owned),
         resin: resin.map(str::to_owned),
+        keep_clear_mm: Vec::new(),
+        keep_clear_radius_mm: None,
+        keep_clear_seen_deg: None,
     }
 }
 
@@ -342,6 +351,7 @@ fn asked_of(printer: Option<&str>) -> OrientAsked {
         area_mm: None,
         printer: printer.map(str::to_owned),
         resin: None,
+        keep_clear: (Vec::new(), None, None),
     }
 }
 
@@ -416,4 +426,30 @@ fn a_body_whose_centre_of_mass_is_off_its_box_middle_keeps_the_box_middle() {
         "the box middle stays at (50, 50), got {middle}"
     );
     assert!(high.z - low.z < 10.0 + HEIGHT_TOL_MM, "the prism lies down");
+}
+
+#[test]
+fn a_place_kept_clear_on_a_moved_object_is_read_in_its_own_frame() {
+    let cube = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(10.0));
+    let standing = Transform::from_translation(Vec3::new(20.0, 0.0, 0.0));
+    let points = [Vec3::new(25.0, 5.0, 10.0)];
+
+    let kept = kept_clear(
+        &cube,
+        standing,
+        (&points, None, None),
+        Vec2::new(100.0, 100.0),
+    )
+    .expect("a place asked is kept clear");
+
+    assert!(
+        kept.at_mm[0].abs_diff_eq(Vec3::new(5.0, 5.0, 10.0), 1e-5),
+        "the top middle of the cube, (5, 5, 10), got {:?}",
+        kept.at_mm[0]
+    );
+    assert!(
+        (kept.radius_mm - core_engine::KEEP_CLEAR_RADIUS_MM).abs() < 1e-9,
+        "the default reach, {} mm",
+        core_engine::KEEP_CLEAR_RADIUS_MM
+    );
 }
