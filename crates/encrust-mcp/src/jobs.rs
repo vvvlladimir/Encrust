@@ -322,11 +322,12 @@ fn slug(stem: &str) -> String {
     }
 }
 
-/// The file the steps of revision `number` are kept in.
+/// The file the window's object of revision `number`'s cut is kept in, to follow its undo.
 fn window_name(number: u32) -> String {
     format!("{number}.window.json")
 }
 
+/// The file the steps of revision `number` are kept in.
 fn steps_name(number: u32) -> String {
     format!("{number}.recipe.toml")
 }

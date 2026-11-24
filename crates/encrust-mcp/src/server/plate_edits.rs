@@ -9,7 +9,7 @@ use super::asked::{Area, asked_after_check};
 use crate::jobs::Revision;
 use crate::recipe::{Cut, Recipe};
 
-/// How many times edits are built again on a plate that moved on before the client is told.
+/// How many times edits are handed again to a window whose plate moved on meanwhile.
 const REBUILDS: usize = 1;
 
 /// What the client is told when the cut kept was undone in the window.
@@ -20,8 +20,11 @@ const CUT_UNDONE: &str = "the cut was undone in the window, so this revision is 
 const NOTHING_ASKED: &str = "the revision asks nothing of the plate the window holds";
 
 /// What the window says of a revision whose cut it already holds.
-const CUT_HELD: &str = "the window holds the plate the cut left; the other steps of a revision \
-    reach it as edits once each is one (ADR 0466)";
+const CUT_HELD: &str = "the window holds the plate the cut left, and the revision asks nothing \
+    more of it";
+
+/// What the client is told when the window's plate moved on each time the edits were handed.
+const GAVE_UP: &str = "the window's plate changed each time the edits were handed over";
 
 fn cut_of(recipe: &Recipe) -> Option<&Cut> {
     recipe.modelling.as_ref()?.cut.as_ref()
@@ -56,7 +59,10 @@ impl Server {
             .and_then(|number| self.jobs.open(&revision.job, Some(number)).ok())?;
         let held = self.jobs.window_cut(&earlier.job, earlier.number);
         if let Some(held) = held.filter(|_| cut_of(&revision.recipe) == cut_of(&earlier.recipe)) {
-            let _ = (self.jobs).keep_window_cut(&revision.job, revision.number, held);
+            unkept(
+                "the window's cut",
+                (self.jobs).keep_window_cut(&revision.job, revision.number, held),
+            );
             return Some(json!({"shown": false, "why_not": CUT_HELD}));
         }
         let chosen = (
@@ -68,27 +74,59 @@ impl Server {
         if asked.is_empty() {
             return Some(json!({"shown": false, "why_not": NOTHING_ASKED}));
         }
+        let edits_on =
+            |object| asked_after_check(&revision.recipe, &earlier.recipe, object, chosen);
+        self.handed_to_window(revision, None, edits_on).await
+    }
+}
+
+impl Server {
+    /// Hands the edits `edits_on` builds for the job's object to the open window, on the plate
+    /// at version `at` first where given, built again on the plate it then holds where it moved
+    /// on; a cut that lands is noted, so its undo is followed.
+    pub(super) async fn handed_to_window(
+        &self,
+        revision: &Revision,
+        mut at: Option<(u64, ObjectId)>,
+        edits_on: impl Fn(ObjectId) -> Option<Vec<Edit>>,
+    ) -> Option<Value> {
         for _ in 0..=REBUILDS {
-            let plate = self.window.plate(&revision.job).await?;
-            let object = plate.job_object?;
-            let edits = asked_after_check(&revision.recipe, &earlier.recipe, object, chosen)?;
-            let _ = self.jobs.keep_edits(&revision.job, revision.number, &edits);
-            let answer = (self.window)
-                .apply(&revision.job, &edits, plate.version)
-                .await?;
+            let (version, object) = if let Some(at) = at.take() {
+                at
+            } else {
+                let plate = self.window.plate(&revision.job).await?;
+                (plate.version, plate.job_object?)
+            };
+            let edits = edits_on(object)?;
+            unkept(
+                "the edits",
+                self.jobs.keep_edits(&revision.job, revision.number, &edits),
+            );
+            let answer = self.window.apply(&revision.job, &edits, version).await?;
             if answer["stale"] == true {
                 continue;
             }
-            let cut = edits.iter().any(|edit| matches!(edit, Edit::Cut { .. }));
-            if cut && answer["applied"] == true {
-                let _ = self
+            let cut = edits.iter().find_map(|edit| match edit {
+                Edit::Cut { object, .. } => Some(*object),
+                _ => None,
+            });
+            if let Some(cut) = cut.filter(|_| answer["applied"] == true) {
+                let kept = self
                     .jobs
-                    .keep_window_cut(&revision.job, revision.number, object);
+                    .keep_window_cut(&revision.job, revision.number, cut);
+                unkept("the window's cut", kept);
             }
             return Some(answer);
         }
-        Some(json!({"applied": false,
-                    "why_not": "the window's plate changed each time the edits were built on it"}))
+        Some(json!({"applied": false, "why_not": GAVE_UP}))
+    }
+}
+
+/// Says on stderr what a revision could not keep beside it: the reply stands, but what the
+/// window does with it is followed no further.
+pub(super) fn unkept(what: &str, kept: anyhow::Result<()>) {
+    if let Err(error) = kept {
+        eprintln!("encrust-mcp: {what} not kept: {error:#}");
     }
 }
 

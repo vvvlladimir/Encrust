@@ -1,14 +1,12 @@
 use crate::args::ImportArgs;
 use anyhow::{Context, Result};
-use core_document::{ApplyError, ReliefAsked, Relieved, relieved};
-use core_edit::ObjectId;
 use core_geometry::{Bvh, Heightmap, Mesh, UvMap, Welded};
 use core_mesh_io::Loaded;
-use core_volume::{AngleMask, Cancel, ReliefSettings, Tiling, press};
+use core_volume::{AngleMask, ReliefSettings, press};
 use std::time::Instant;
 
-/// Presses `--relief-image` or the file's own texture into the welded mesh, where
-/// `--relief` asked for it.
+/// Presses the file's own texture into the welded mesh where `--relief` asked for it; a
+/// `--relief-image` is an edit once the model is placed.
 pub(super) fn press_relief(
     mesh: Mesh,
     welded: &Welded,
@@ -34,33 +32,10 @@ pub(super) fn press_relief(
         ..ReliefSettings::default()
     };
     let started = Instant::now();
-    let (relief, source) = match &args.relief_image {
-        Some(path) => {
-            let asked = ReliefAsked {
-                image: path.clone(),
-                tiling: Tiling {
-                    tile_mm: args.relief_tile,
-                    angle_deg: args.relief_angle,
-                },
-                settings,
-            };
-            let relief =
-                relieved(&mesh, &asked, None, Cancel::never(), ObjectId::UNSET).map_err(refused)?;
-            let source = format!("{} tiled every {} mm", path.display(), asked.tiling.tile_mm);
-            (relief, source)
-        }
-        None => {
-            let (uvs, heights) = texture_of(welded, loaded)?;
-            let relief = press(&mesh, &Bvh::build(&mesh), &uvs, &heights, &settings)
-                .context("pressing the texture into the model")?;
-            let relief = Relieved {
-                mesh: relief.mesh,
-                voxel_mm: relief.voxel_mm,
-                coarsened: relief.coarsened,
-            };
-            (relief, format!("{} image(s)", heights.len()))
-        }
-    };
+    let (uvs, heights) = texture_of(welded, loaded)?;
+    let relief = press(&mesh, &Bvh::build(&mesh), &uvs, &heights, &settings)
+        .context("pressing the texture into the model")?;
+    let source = format!("{} image(s)", heights.len());
 
     if talk {
         let lattice = match relief.coarsened {
@@ -102,14 +77,4 @@ pub(super) fn texture_of(welded: &Welded, loaded: &Loaded) -> Result<(UvMap, Vec
         })
         .collect::<Result<Vec<_>>>()?;
     Ok((uvs, heights))
-}
-
-/// Why a picture could not be pressed, without the object id a command line has none of.
-fn refused(error: ApplyError) -> anyhow::Error {
-    match error {
-        ApplyError::Failed { reason, .. } => {
-            anyhow::anyhow!("pressing the picture into the model: {reason}")
-        }
-        other => anyhow::anyhow!("{other}"),
-    }
 }

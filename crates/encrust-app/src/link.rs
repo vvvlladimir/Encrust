@@ -97,14 +97,18 @@ impl Link {
     fn answer(&mut self, line: Line, reply: Sender<Value>, follow: bool, window: &mut Window) {
         let refused = |why: &str| serde_json::to_value(Reply::refused(why.to_owned()));
         match line {
-            Line::Revision(shown) if shown.request.open || follow => {
-                self.take(shown);
-                let _ = reply.send(serde_json::to_value(Reply::taken()).unwrap_or_default());
+            Line::Revision(shown) => {
+                let answer = if shown.request.open || follow {
+                    self.take(shown);
+                    serde_json::to_value(Reply::taken()).unwrap_or_default()
+                } else {
+                    refused(NOT_FOLLOWING).unwrap_or_default()
+                };
+                let _ = reply.send(answer);
             }
             _ if !follow => {
                 let _ = reply.send(refused(NOT_FOLLOWING).unwrap_or_default());
             }
-            Line::Revision(_) => {}
             Line::Plate { job } => {
                 let object = self.job_object(&job, window);
                 plate::hand_plate(&self.jobs, (&job, object), window, reply);

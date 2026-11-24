@@ -103,6 +103,18 @@ pub fn plate_models(project: &Project, plate: u32) -> Vec<Model> {
         .collect()
 }
 
+/// Object `index` of `project` as a run cuts it, its supports under it.
+pub fn object_model(project: &Project, index: usize) -> Option<Model> {
+    let manifest = &project.manifest;
+    let (object, meshes) = (manifest.objects.get(index)?, project.models.get(index)?);
+    Some(model(
+        object,
+        meshes,
+        &support_table(manifest),
+        manifest.supports.raft,
+    ))
+}
+
 /// The profile of every support group, the first of which everything falls back to.
 fn support_table(manifest: &Manifest) -> Vec<SupportProfile> {
     let table: Vec<SupportProfile> = manifest

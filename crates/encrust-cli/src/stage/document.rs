@@ -8,7 +8,7 @@ use core_document::Report;
 use core_document::{Applied, ApplyError, Document, apply, standing_meshes};
 use core_edit::{Edit, ObjectId};
 use core_engine::plate_models;
-use core_engine::project::{AutoSizing, Group, Manifest, SupportState, save};
+use core_engine::project::{AutoSizing, Group, Manifest, SupportState};
 use core_engine::{Model, SupportPlan};
 use core_geometry::{
     Aabb, BoundingVolume, Mesh, Scalar, Transform, list_shells, signed_volume, transform_mesh,
@@ -24,7 +24,7 @@ use super::{
 use crate::args::{JobArgs, ProfileArgs};
 use crate::exit::{Cancelled, Stop};
 use crate::pipeline::{Watch, read_again};
-use crate::plate_edits::{EditArgs, imported_model};
+use crate::plate_edits::{EditArgs, each_edit, imported_model, write_project};
 use crate::profiles::Chosen;
 
 /// The printer and resin a project names by catalogue id.
@@ -72,6 +72,14 @@ impl Staging {
             .collect()
     }
 
+    /// The one object entry `entry` stands as before modelling makes more of it.
+    pub(crate) fn object_of(&self, entry: usize) -> Result<ObjectId> {
+        (self.owners.iter())
+            .find(|(_, owner)| *owner == entry)
+            .map(|(id, _)| *id)
+            .with_context(|| format!("model {} has no object on the plate", entry + 1))
+    }
+
     /// Where object `id` stands; the identity off the plate.
     pub(crate) fn transform(&self, id: ObjectId) -> Transform {
         self.document
@@ -105,8 +113,7 @@ impl Staging {
 
     /// Object `id` as a run cuts it, its supports under it.
     pub(crate) fn model(&self, id: ObjectId) -> Option<Model> {
-        let at = self.owners.iter().position(|(object, _)| *object == id)?;
-        self.models().into_iter().nth(at)
+        self.document.model(id)
     }
 
     /// The box object `id` and its supports stand in, plate mm.
@@ -208,8 +215,7 @@ impl Staging {
         let owners: Vec<usize> = self.owners.iter().map(|(_, entry)| *entry).collect();
         let project = self.document.into_project();
         if let Some(path) = out {
-            save(path, &project)
-                .with_context(|| format!("cannot write the project {}", path.display()))?;
+            write_project(path, &project)?;
         }
         let models = plate_models(&project, project.manifest.active_plate);
         let mut stands_in: Vec<Option<Aabb>> = vec![None; entries.len()];
@@ -359,7 +365,7 @@ fn read_again_where_reshaped(
     printer: Option<&PrinterProfile>,
 ) -> Result<()> {
     for (entry, ((import, _), (_, shaping))) in found.iter_mut().zip(entries).enumerate() {
-        let mesh = staging.mesh(ObjectId(entry as u64 + 1));
+        let mesh = staging.mesh(staging.object_of(entry)?);
         if let Some(mesh) = mesh.filter(|_| repaired::reshaped(&shaping.import)) {
             read_again(import, &mesh, printer)?;
         }
@@ -391,12 +397,12 @@ pub(super) fn laid(
     if arrange {
         arranged(&mut staging, entries, held.0, watch)?;
     }
-    for (index, edit) in edits.listed()?.iter().enumerate() {
+    each_edit(&edits.listed()?, |edit| {
         let first = staging.ids().first().copied().unwrap_or(ObjectId::UNSET);
         let object = edit.object().unwrap_or(first);
-        (staging.apply(edit, object, watch.stop).map_err(said))
-            .with_context(|| format!("edit {} of --edits", index + 1))?;
-    }
+        staging.apply(edit, object, watch.stop).map_err(said)?;
+        Ok(())
+    })?;
     let out = edits.project_out.as_deref();
     staging.laid((found, finished), (entries, out), held.0, watch.talk)
 }

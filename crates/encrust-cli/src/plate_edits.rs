@@ -15,12 +15,12 @@ use crate::report::ImportReport;
 /// The edits a run makes to a project's plate, and where the plate they leave is written.
 #[derive(Debug, Clone, Default, clap::Args)]
 pub struct EditArgs {
-    /// Edit the project's plate by the JSON list of edits in FILE, in order, before the run:
-    /// what the window's tools and a chat client do (`docs/design/document.md`).
+    /// Edit the plate, a project's or the models' after their flags, by the JSON list of edits
+    /// in FILE, in order: what the window's tools and a chat client do (`docs/design/document.md`).
     #[arg(long, value_name = "FILE")]
     pub edits: Option<PathBuf>,
 
-    /// Write the project's plate as the edits leave it to FILE, an `.encrust` project.
+    /// Write the plate as the run's edits leave it to FILE, an `.encrust` project.
     #[arg(long, value_name = "FILE")]
     pub project_out: Option<PathBuf>,
 }
@@ -41,22 +41,20 @@ impl EditArgs {
 
     /// `project` with `--edits` carried out on it, written to `--project-out` where asked.
     pub fn applied(&self, project: Project) -> Result<Project> {
-        let edits = self.listed()?;
         let mut document = Document::from_project(project);
-        for (index, edit) in edits.iter().enumerate() {
-            apply(&mut document, edit, Cancel::never())
-                .with_context(|| format!("edit {} of --edits", index + 1))?;
-        }
+        each_edit(&self.listed()?, |edit| {
+            apply(&mut document, edit, Cancel::never())?;
+            Ok(())
+        })?;
         let project = document.into_project();
         if let Some(path) = &self.project_out {
-            save(path, &project)
-                .with_context(|| format!("cannot write the project {}", path.display()))?;
+            write_project(path, &project)?;
         }
         Ok(project)
     }
 
     /// Refuses the flags for a plate file, which its own keys shape.
-    pub fn refuse_for_models(&self) -> Result<()> {
+    pub fn refuse_for_plate_file(&self) -> Result<()> {
         if self.wanted() {
             bail!(
                 "--edits and --project-out take a project or models; a plate file is shaped by its keys"
@@ -96,4 +94,20 @@ fn read(path: &Path) -> Result<Vec<Edit>> {
         .with_context(|| format!("cannot read the edits {}", path.display()))?;
     serde_json::from_str(&text)
         .with_context(|| format!("{} is not a JSON list of edits", path.display()))
+}
+
+/// Carries out each of `edits` in order by `apply_one`, an error naming its place in `--edits`.
+pub(crate) fn each_edit(
+    edits: &[Edit],
+    mut apply_one: impl FnMut(&Edit) -> Result<()>,
+) -> Result<()> {
+    for (index, edit) in edits.iter().enumerate() {
+        apply_one(edit).with_context(|| format!("edit {} of --edits", index + 1))?;
+    }
+    Ok(())
+}
+
+/// Writes `project` to `path`, as `--project-out` asks.
+pub(crate) fn write_project(path: &Path, project: &Project) -> Result<()> {
+    save(path, project).with_context(|| format!("cannot write the project {}", path.display()))
 }

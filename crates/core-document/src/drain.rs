@@ -10,6 +10,7 @@ use core_volume::{Cancel, Channel, DrainHole, HoleKind, HoleSize, ModelHollow, d
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
+use crate::surface::surface_near;
 
 mod auto;
 mod plugs;
@@ -40,14 +41,7 @@ pub fn hole_near(
     let inverse = transform
         .inverse_matrix()
         .ok_or(ApplyError::BadTransform(object))?;
-    let closest = bvh
-        .closest(inverse.transform_point3(near - up))
-        .ok_or(ApplyError::NoSurface(object))?;
-    let face = mesh
-        .triangle(closest.face)
-        .ok_or(ApplyError::NoSurface(object))?;
-    let normal = (transform.normal_matrix() * face.normal_unnormalized()).normalize_or_zero();
-    let point = transform.to_matrix().transform_point3(closest.point);
+    let (point, normal) = surface_near((mesh, bvh), (transform, inverse), near - up, object)?;
     let hole = ModelHollow::drain_at(mesh, bvh, point, normal, size, transform)
         .ok_or(ApplyError::NoSurface(object))?;
     if off_a_face(near, (point, -normal), up) {

@@ -8,8 +8,10 @@ use thiserror::Error;
 /// Why an edit was not carried out; the document is left as it was.
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum ApplyError {
+    /// An edit names an object the plate does not hold.
     #[error("no object {0:?} on the plate")]
     NoObject(ObjectId),
+    /// A cut whose plane does not cross the object.
     #[error("the cut plane misses object {0:?}")]
     Missed(ObjectId),
     /// The object's drain holes cannot be taken out exactly, so its halves would lose them.
@@ -68,6 +70,9 @@ pub enum ApplyError {
     /// A hole into the raft asked of an object that stands on none.
     #[error("object {0:?} stands on no raft to drill")]
     NoRaft(ObjectId),
+    /// Supports asked of an object on a plate with no support group to grow them by.
+    #[error("the plate has no support group to grow the supports of object {0:?} by")]
+    NoGroup(ObjectId),
     /// A merge point near no contact of the object's supports.
     #[error("no support of object {object:?} has a contact near {at_mm}")]
     NoSupportNear { object: ObjectId, at_mm: Vec3 },

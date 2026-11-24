@@ -42,20 +42,8 @@ fn trees_on_the_plate(document: &Document) -> Vec<SupportTree> {
     let (state, meshes) = document.object(CUBE).expect("the cube stays");
     let plate = document.support_state();
     let table = table_of(state, &plate.groups, plate.raft);
-    let surface = meshes.printed();
-    let bvh = Arc::new(Bvh::build(surface));
-    let (source, drains) = (&meshes.source, &state.hollow.drains);
-    supports_of(
-        &state.supports,
-        drains,
-        source,
-        surface,
-        &bvh,
-        state.transform,
-        &table,
-    )
-    .trees()
-    .to_vec()
+    let bvh = Bvh::build(meshes.printed());
+    kept_supports(state, meshes, &bvh, &table).trees().to_vec()
 }
 
 /// A 40 x 10 x 2 mm slab 20 mm over the plate held up at both ends alone, as the engine's own
@@ -97,6 +85,21 @@ fn two_supports_named_by_their_contacts_become_one_tree_carrying_both() {
         "one tree carries both {one} and {other}"
     );
     assert_eq!(trees.len(), 1, "the two supports are one");
+}
+
+#[test]
+fn a_plate_with_no_support_group_has_nothing_to_merge_by() {
+    let mut project = cube();
+    project.manifest.supports.groups.clear();
+    let mut document = Document::from_project(project);
+
+    let near = vec![Vec3::new(-2.0, 0.0, 0.0), Vec3::new(2.0, 0.0, 0.0)];
+    let refused = apply(&mut document, &merge(near), Cancel::never());
+
+    assert!(
+        matches!(refused, Err(ApplyError::NoGroup(CUBE))),
+        "no group to grow by, got {refused:?}"
+    );
 }
 
 #[test]

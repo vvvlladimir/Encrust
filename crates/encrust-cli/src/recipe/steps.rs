@@ -3,7 +3,7 @@
 
 use std::time::Instant;
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use core_document::{ApplyError, Report};
 use core_edit::{AUTO, Edit};
 use core_engine::{Hollowing, SupportPlan};
@@ -18,8 +18,7 @@ use super::{Ctx, Did};
 use crate::hollowing::{AutoReport, HollowReport};
 use crate::pipeline::{OrientSummary, read_again};
 use crate::profiles::plan_of;
-use crate::stage::{Staging, said, shipped_printer, summary_of, usable_area};
-use crate::supports::SupportReport;
+use crate::stage::{self, Staging, said, shipped_printer, summary_of, support_report, usable_area};
 use core_recipe::resolved::text;
 
 /// A turn smaller than this, degrees, leaves the model as the user stood it.
@@ -47,7 +46,7 @@ pub(super) fn run(
         .map_or_else(|| whole_plate(placed), usable_area);
     let drift_mm = ctx.chosen.material.compensation.fit_drift_mm();
     let edits = edits_of(kind, settings, piece.id, placed, area, drift_mm)
-        .map_err(|error| anyhow!("{error}"))?;
+        .context("the recipe's step names no edit")?;
     let mut did = Did::default();
     for edit in edits {
         let edit = typed(edit, piece, (staging, ctx));
@@ -203,7 +202,7 @@ fn noted(
             unheld,
             ..
         } => {
-            let report = supported(piece, staging, (trees, contacts_mm, standing, unheld));
+            let report = support_report(staging, piece.id, (trees, contacts_mm, standing, unheld));
             if talk {
                 print!("{report}");
             }
@@ -282,43 +281,20 @@ fn hollow_report(
     edit: &Edit,
     staging: &Staging,
     piece: &Piece,
-    (faces, (cavity_mm3, voxel_mm, coarsened)): (usize, (Scalar, Scalar, bool)),
+    (faces, lattice): (usize, (Scalar, Scalar, bool)),
     started: Instant,
 ) -> Option<HollowReport> {
     let Edit::Hollow { settings, .. } = edit else {
         return None;
     };
-    let mesh = staging.mesh(piece.id)?;
-    let transform = staging.transform(piece.id);
-    let lattice = (cavity_mm3, voxel_mm, coarsened);
-    Some(HollowReport::of(
-        (settings, transform),
-        (faces, mesh.faces.len()),
-        lattice,
-        started.elapsed(),
+    staging.mesh(piece.id)?;
+    Some(stage::hollow_report(
+        staging,
+        piece.id,
+        settings,
+        (faces, lattice),
+        started,
     ))
-}
-
-fn supported(
-    piece: &Piece,
-    staging: &Staging,
-    (trees, contacts, standing, unheld): (
-        usize,
-        Vec<Vec3>,
-        usize,
-        Vec<(Vec3, core_supports::Unstood)>,
-    ),
-) -> SupportReport {
-    let lowest =
-        (staging.mesh(piece.id).and_then(|mesh| mesh.aabb())).map_or(0.0, |box_mm| box_mm.mins.z);
-    SupportReport {
-        lifted_mm: lowest.max(0.0),
-        contacts,
-        standing,
-        unheld,
-        trees,
-        faces: staging.support_faces(piece.id),
-    }
 }
 
 /// The name `--prepare`'s report gives the supports built to `profile`.
@@ -358,11 +334,8 @@ pub(super) fn hold_up(
         ..
     } = applied.report
     {
-        piece.supports = Some(supported(
-            piece,
-            staging,
-            (trees, contacts_mm, standing, unheld),
-        ));
+        let parts = (trees, contacts_mm, standing, unheld);
+        piece.supports = Some(support_report(staging, piece.id, parts));
     }
     Ok(())
 }

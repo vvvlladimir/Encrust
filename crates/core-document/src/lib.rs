@@ -20,6 +20,7 @@ mod relief;
 mod repair;
 mod split;
 mod supports;
+mod surface;
 
 pub use apply::{Applied, Report, apply};
 pub use arrange::{NoFootprint, Spread, Standing, spread, standing_rect, turn_to_fit, turned_by};

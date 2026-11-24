@@ -24,13 +24,11 @@ impl FitCheck {
     /// How `bounds`, plate millimetres, sit on `profile`'s plate.
     pub fn of(bounds: &Aabb, profile: &PrinterProfile) -> Self {
         let volume = &profile.build_volume;
-        let [low, high] = profile
-            .plate_inset
-            .unwrap_or_default()
-            .area_mm(volume.x, volume.y);
+        let [low, high] = profile.usable_area_mm();
+        let size = [high[0] - low[0], high[1] - low[1]];
         Self {
             printer: profile.name.clone(),
-            usable_mm: [low, [high[0] - low[0], high[1] - low[1]]],
+            usable_mm: [low, size],
             fit: PlateFit::of(
                 bounds,
                 Vec3::new(volume.x, volume.y, volume.z),

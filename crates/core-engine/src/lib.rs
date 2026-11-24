@@ -32,7 +32,7 @@ pub use held::{
     CupVent, Hanging, Unvented, cup_vents, held_by_shape, island_floors, island_holds, lever_holds,
     neck_profile,
 };
-pub use open::{Machine, Opening, open_plate, plate_models};
+pub use open::{Machine, Opening, object_model, open_plate, plate_models};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
 pub use prepare::{Hollowing, PREPARE_REPAIR, hollowing, needs_repair};

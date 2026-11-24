@@ -233,6 +233,12 @@ impl Default for PrinterProfile {
 }
 
 impl PrinterProfile {
+    /// The low and high corners of the plate its inset leaves, mm.
+    pub fn usable_area_mm(&self) -> [[f32; 2]; 2] {
+        let volume = &self.build_volume;
+        (self.plate_inset.unwrap_or_default()).area_mm(volume.x, volume.y)
+    }
+
     /// The machine name to write into a sliced file: what the firmware matches, which is
     /// the profile's own name unless it states otherwise.
     pub fn machine_name(&self) -> &str {

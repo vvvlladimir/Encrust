@@ -15,7 +15,8 @@ use serde_json::{Value, json};
 use super::line::{Line, read as read_line};
 use super::request::{Reply, SCHEMA};
 
-/// The longest line read from a connection, bytes: a recipe is a few hundred.
+/// The longest line read from a connection, bytes: a plate's path and its edits take a few
+/// thousand.
 const MOST_BYTES: u64 = 1 << 20;
 /// How long a connection may take to send its line.
 const READ_WAIT: Duration = Duration::from_secs(5);

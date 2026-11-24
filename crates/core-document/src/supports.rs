@@ -73,20 +73,14 @@ pub(crate) fn apply_supports(
     let plan = plan_for(
         asked,
         (plate.sizing.as_ref(), &groups),
-        &table[usize::from(group)],
+        table
+            .get(usize::from(group))
+            .ok_or(ApplyError::NoGroup(id))?,
     )?;
 
     let surface = meshes.printed();
     let bvh = Arc::new(Bvh::build(surface));
-    let mut supports = supports_of(
-        &state.supports,
-        &state.hollow.drains,
-        &meshes.source,
-        surface,
-        &bvh,
-        transform,
-        &table,
-    );
+    let mut supports = kept_supports(state, meshes, &bvh, &table);
     let placed = transform_mesh(surface, transform);
     let placed_bvh = Bvh::build(&placed);
     let on = PlacedModel {
@@ -124,6 +118,25 @@ pub(crate) fn apply_supports(
     })
 }
 
+/// The supports `state` keeps, restored on the printed surface of `meshes` where it stands.
+pub(crate) fn kept_supports(
+    state: &ObjectState,
+    meshes: &ModelMeshes,
+    bvh: &Bvh,
+    table: &[SupportProfile],
+) -> ModelSupports {
+    let (source, drains) = (&meshes.source, &state.hollow.drains);
+    supports_of(
+        &state.supports,
+        drains,
+        source,
+        meshes.printed(),
+        bvh,
+        state.transform,
+        table,
+    )
+}
+
 /// The contacts of `supports` no tree carries, plate mm, each with why.
 fn unheld(supports: &ModelSupports, transform: Transform) -> Vec<(Vec3, core_supports::Unstood)> {
     let matrix = transform.to_matrix();
@@ -140,19 +153,8 @@ pub(crate) fn raft_under(document: &Document, id: ObjectId) -> Option<Arc<Mesh>>
     let (state, meshes) = document.object(id)?;
     let plate = document.support_state();
     let table = table_of(state, &plate.groups, plate.raft);
-    let surface = meshes.printed();
-    let bvh = Bvh::build(surface);
-    let drains = &state.hollow.drains;
-    let restored = supports_of(
-        &state.supports,
-        drains,
-        &meshes.source,
-        surface,
-        &bvh,
-        state.transform,
-        &table,
-    );
-    restored.raft().cloned()
+    let bvh = Bvh::build(meshes.printed());
+    kept_supports(state, meshes, &bvh, &table).raft().cloned()
 }
 
 /// The meshes of the supports under object `id` where it stands, plate mm, columns and raft.
@@ -165,22 +167,11 @@ pub fn standing_meshes(document: &Document, id: ObjectId) -> Vec<Arc<Mesh>> {
     }
     let plate = document.support_state();
     let table = table_of(state, &plate.groups, plate.raft);
-    let surface = meshes.printed();
-    let bvh = Bvh::build(surface);
-    let drains = &state.hollow.drains;
-    let (source, transform) = (&meshes.source, state.transform);
-    supports_of(
-        &state.supports,
-        drains,
-        source,
-        surface,
-        &bvh,
-        transform,
-        &table,
-    )
-    .every_mesh()
-    .cloned()
-    .collect()
+    let bvh = Bvh::build(meshes.printed());
+    kept_supports(state, meshes, &bvh, &table)
+        .every_mesh()
+        .cloned()
+        .collect()
 }
 
 /// The plan an orientation of `state` weighs: the plate's kept sizing, sized, where it is on,

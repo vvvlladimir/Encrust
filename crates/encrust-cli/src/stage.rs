@@ -26,7 +26,7 @@ use crate::{meeting, plate_file, project};
 mod document;
 
 pub(crate) use document::{Staging, placed_by_edits, said};
-pub(crate) use finished::{Finished, usable_area};
+pub(crate) use finished::{Finished, hollow_report, support_report, usable_area};
 pub(crate) use placed::{shipped_printer, summary_of};
 mod finished;
 mod modelled;
@@ -223,7 +223,7 @@ pub fn stage(
             models(paths, arrange, job, &chosen, watch)
         }
         Given::PlateFile(path) => {
-            job.edits.refuse_for_models()?;
+            job.edits.refuse_for_plate_file()?;
             plate_file::stage(path, arrange, job, watch)
         }
         Given::Project(path) => {

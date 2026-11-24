@@ -5,18 +5,15 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use core_edit::{Edit, ObjectId};
-use serde_json::{Value, json};
+use serde_json::json;
 
 use super::Server;
 use super::asked::{Area, asked_after_check};
-use super::plate_edits::{fit_drift_of, usable_area_of};
+use super::plate_edits::{fit_drift_of, unkept, usable_area_of};
 use super::reply::{Reply, not_applied, revised};
 use crate::jobs::Revision;
 use crate::recipe::Recipe;
 use crate::server::Context;
-
-/// How many times edits are handed again to a window whose plate moved on meanwhile.
-const REBUILDS: usize = 1;
 
 /// The plate a revision's edits are made on.
 struct Base {
@@ -103,40 +100,22 @@ impl Server {
         let revision = self
             .jobs
             .commit(&latest.job, (recipe, None), &outcome.report)?;
-        let _ = self.jobs.keep_edits(&revision.job, revision.number, edits);
-        let _ = self
+        unkept(
+            "the edits",
+            self.jobs.keep_edits(&revision.job, revision.number, edits),
+        );
+        let kept = self
             .jobs
             .keep_plate(&revision.job, revision.number, &written);
+        unkept("the plate", kept);
         let mut reply = revised(&revision, &outcome, note);
-        if base.version.is_some() {
-            reply.body["window"] = self.applied_in_window(&revision, edits, base).await;
+        if let Some(version) = base.version {
+            let at = Some((version, base.object));
+            let answer = self.handed_to_window(&revision, at, |_| Some(edits.to_vec()));
+            reply.body["window"] = answer.await.unwrap_or_else(
+                || json!({"applied": false, "why_not": "the window did not answer"}),
+            );
         }
         Ok(reply)
-    }
-
-    /// Hands the edits checked to the window they were built on, again on its plate as it then
-    /// stands where it moved on meanwhile.
-    async fn applied_in_window(&self, revision: &Revision, edits: &[Edit], base: &Base) -> Value {
-        let mut version = base.version;
-        for _ in 0..=REBUILDS {
-            let Some(at) = version else { break };
-            let Some(answer) = self.window.apply(&revision.job, edits, at).await else {
-                break;
-            };
-            if answer["stale"] != true {
-                if answer["applied"] == true && edits.iter().any(|e| matches!(e, Edit::Cut { .. }))
-                {
-                    let _ =
-                        (self.jobs).keep_window_cut(&revision.job, revision.number, base.object);
-                }
-                return answer;
-            }
-            version = self
-                .window
-                .plate(&revision.job)
-                .await
-                .map(|plate| plate.version);
-        }
-        json!({"applied": false, "why_not": "the window's plate changed each time the edits were handed over"})
     }
 }

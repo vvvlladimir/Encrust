@@ -32,6 +32,7 @@ pub struct Applied {
 /// What an edit has to say beyond the objects it changed.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Report {
+    /// An object was cut in two.
     Cut {
         /// Cut loops that did not close, and were left uncapped.
         open_loops: usize,

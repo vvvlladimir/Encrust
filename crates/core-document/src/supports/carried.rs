@@ -1,8 +1,7 @@
 use core_edit::ObjectId;
-use core_engine::project::supports_of;
 use core_geometry::{Bvh, Transform};
 
-use super::table_of;
+use super::{kept_supports, table_of};
 use crate::document::Document;
 
 /// Stands object `id` at `transform` with its supports carried there as the window's are: frozen
@@ -21,17 +20,8 @@ pub(crate) fn stand_at(document: &mut Document, id: ObjectId, transform: Transfo
         let table = table_of(state, &plate.groups, plate.raft);
         let surface = meshes.printed();
         let bvh = Bvh::build(surface);
-        let (source, drains) = (&meshes.source, &state.hollow.drains);
-        let mut supports = supports_of(
-            &state.supports,
-            drains,
-            source,
-            surface,
-            &bvh,
-            state.transform,
-            &table,
-        );
-        supports.refresh_on(source, surface, &bvh, transform, &table);
+        let mut supports = kept_supports(state, meshes, &bvh, &table);
+        supports.refresh_on(&meshes.source, surface, &bvh, transform, &table);
         let grown = supports.grown(transform);
         (
             supports.points().to_vec(),

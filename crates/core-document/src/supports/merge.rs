@@ -5,11 +5,10 @@ use std::sync::Arc;
 
 use core_edit::ObjectId;
 use core_engine::MERGE_NAMING_MM;
-use core_engine::project::supports_of;
 use core_geometry::{Bvh, Vec3};
 use core_supports::{Placed, Profiles, SupportTree, merged};
 
-use super::table_of;
+use super::{kept_supports, table_of};
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
@@ -24,20 +23,11 @@ pub(crate) fn apply_merge(
     let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
     let plate = document.support_state();
     let table = table_of(state, &plate.groups, plate.raft);
-    let profiles = Profiles::new(&table).ok_or(ApplyError::NoObject(id))?;
-    let surface = meshes.printed();
+    let profiles = Profiles::new(&table).ok_or(ApplyError::NoGroup(id))?;
+    let (source, surface) = (&meshes.source, meshes.printed());
     let bvh = Arc::new(Bvh::build(surface));
     let transform = state.transform;
-    let (source, drains) = (&meshes.source, &state.hollow.drains);
-    let mut supports = supports_of(
-        &state.supports,
-        drains,
-        source,
-        surface,
-        &bvh,
-        transform,
-        &table,
-    );
+    let mut supports = kept_supports(state, meshes, &bvh, &table);
     let at = near_mm.first().copied().unwrap_or_default();
     let mut picked = (near_mm.iter())
         .map(|near| {

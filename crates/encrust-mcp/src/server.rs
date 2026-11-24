@@ -548,7 +548,8 @@ impl Server {
     /// Keeps the plate a check wrote as the revision's, which the window is shown.
     fn keep_plate(&self, revision: &Revision, plate: Option<PathBuf>) {
         if let Some(plate) = plate {
-            let _ = (self.jobs).keep_plate(&revision.job, revision.number, &plate);
+            let kept = (self.jobs).keep_plate(&revision.job, revision.number, &plate);
+            plate_edits::unkept("the plate", kept);
         }
     }
 

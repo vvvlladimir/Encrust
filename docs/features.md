@@ -1123,8 +1123,7 @@ plate: a repair, faces mended, a picture pressed in, a scale, a turn typed, a la
 a cut, a hollow, a hole drilled at a point or supports an agent makes lands there as an edit
 of the model on it, one undo each, and the agent's next step is checked on the plate as you
 left it, so what you changed or undid there is part of it. A pose the search picked lands as
-the turn it chose; the engine's drain search and plugs still reach it by the recipe, and the
-answer names what was left out. It asks what the print is for and can prepare it by
+the turn it chose, and the drain search and plugs land as edits too. It asks what the print is for and can prepare it by
 another recipe, such as Miniatures; it can be told which side of the model is looked at, so
 the supports there are sparser and lighter. A way of preparing that worked, or one you
 describe in words, it keeps as a recipe of your own, which the window's Prepare for print then

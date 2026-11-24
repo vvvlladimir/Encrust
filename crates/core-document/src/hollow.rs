@@ -13,6 +13,7 @@ use core_volume::{
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
+use crate::surface::surface_near;
 
 /// The run settings a panel's numbers ask for, on a model standing under `transform`. An
 /// open floor faces the plate it stands on, so turning such a model makes its shell stale.
@@ -48,14 +49,8 @@ pub fn blockers_along(
     for run in runs {
         let mut last: Option<Blocker> = None;
         for near in run {
-            let closest = (bvh.closest(into_model.transform_point3(*near)))
-                .ok_or(ApplyError::NoSurface(object))?;
-            let face = mesh
-                .triangle(closest.face)
-                .ok_or(ApplyError::NoSurface(object))?;
-            let normal =
-                (transform.normal_matrix() * face.normal_unnormalized()).normalize_or_zero();
-            let point = transform.to_matrix().transform_point3(closest.point);
+            let (point, normal) =
+                surface_near((mesh, bvh), (transform, into_model), *near, object)?;
             let ball = blocker_under(mesh, bvh, transform, point, normal, size)
                 .ok_or(ApplyError::NoSurface(object))?;
             let next = last.map_or(ball, |last| rod_on(&last, &ball));

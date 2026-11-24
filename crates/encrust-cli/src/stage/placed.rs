@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, anyhow};
 use core_document::{ApplyError, Report, degrees_of, euler_degrees};
 use core_edit::{Edit, ObjectId, OrientAim};
-use core_geometry::{Quat, Vec3};
+use core_geometry::{Quat, Vec3, center_over_plate, drop_to_plate, lift_over_plate};
 use printer_profiles::{Catalogue, PrinterProfile};
 
 use super::document::{Staging, said};
@@ -33,7 +33,7 @@ pub(super) fn placed(
     watch: &Watch,
 ) -> Result<()> {
     for (entry, ((_, oriented), (_, shaping))) in found.iter_mut().zip(entries).enumerate() {
-        let id = ObjectId(entry as u64 + 1);
+        let id = staging.object_of(entry)?;
         let transform = &shaping.import.transform;
         if let Some(factors) = transform.scale {
             let edit = Edit::Scale {
@@ -76,7 +76,7 @@ pub(super) fn placed(
 fn lift(staging: &mut Staging, object: ObjectId, lift_mm: f32, watch: &Watch) -> Result<()> {
     let bounds =
         (staging.mesh(object).and_then(|mesh| mesh.aabb())).context("mesh has no vertices")?;
-    let by_mm = Vec3::new(0.0, 0.0, lift_mm - bounds.mins.z);
+    let by_mm = lift_over_plate(&bounds, lift_mm);
     let edit = Edit::Move { object, by_mm };
     staging.apply(&edit, object, watch.stop).map_err(said)?;
     Ok(())
@@ -242,12 +242,10 @@ pub(super) fn centre(
 ) -> Result<()> {
     let bounds =
         (staging.mesh(object).and_then(|mesh| mesh.aabb())).context("mesh has no vertices")?;
-    let plate = printer.map_or(Vec3::ZERO, |printer| {
-        let volume = &printer.build_volume;
-        Vec3::new(volume.x, volume.y, 0.0) / 2.0
+    let (plate_x, plate_y) = printer.map_or((0.0, 0.0), |printer| {
+        (printer.build_volume.x, printer.build_volume.y)
     });
-    let middle = (bounds.mins + bounds.maxs) / 2.0;
-    let by_mm = Vec3::new(plate.x - middle.x, plate.y - middle.y, -bounds.mins.z);
+    let by_mm = center_over_plate(&bounds, plate_x, plate_y) + drop_to_plate(&bounds);
     let edit = Edit::Move { object, by_mm };
     staging.apply(&edit, object, watch.stop).map_err(said)?;
     Ok(())

@@ -32,8 +32,8 @@ writes one line of JSON and reads one back:
 
 `printer` and `resin` are catalogue ids or TOML paths, as the job holds them. The window's
 link thread reads the plate; a line with another token or schema, or a plate that does not
-read, is refused and never reaches the plate. The window answers on its next frame, at most
-10 s later, and the tool's answer carries it as `window`:
+read, is refused and never reaches the plate. The window answers on its next frame, the
+server waiting 15 s for it, and the tool's answer carries it as `window`:
 
 ```json
 {"shown": true}
@@ -69,8 +69,8 @@ builds its edits on that file and hands them back with the version:
 ```
 
 Edits on a plate still at `base_version` run one after another as the tools' own jobs, each an
-undo entry, and are answered once all have landed, within 60 s; one that does not land stops
-the rest and is answered with why. A plate that moved on is answered `stale` with its version,
+undo entry, and are answered once all have landed, within 10 min (the server waits 11); one
+that does not land stops the rest and is answered with why. A plate that moved on is answered `stale` with its version,
 and nothing is applied: the server asks for the plate again. A window not following its
 agents refuses both lines, and edits while others are still being applied are refused.
 

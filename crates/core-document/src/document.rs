@@ -5,6 +5,7 @@ use core_engine::project::{
     BuiltCavity, Group, HollowState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
     ObjectSupportState, Project, Summary, SupportState, assign_ids,
 };
+use core_engine::{Model, object_model};
 use core_geometry::{Mesh, Orientation, Region, Transform, diagnose};
 
 use core_supports::{SupportPoint, SupportTree};
@@ -83,6 +84,11 @@ impl Document {
     /// The plate as a project file holds it, ids and all.
     pub fn into_project(self) -> Project {
         self.project
+    }
+
+    /// Object `id` as a run cuts it, its supports under it; `None` off the plate.
+    pub fn model(&self, id: ObjectId) -> Option<Model> {
+        object_model(&self.project, self.index_of(id)?)
     }
 
     /// The object `id` names, with its meshes, if it is on the plate.
@@ -164,9 +170,8 @@ impl Document {
         };
     }
 
-    /// Stands `shell` on object `id`, built as `built` records and asked for by `settings`,
-    /// which the object keeps as its own; supports stay. Nothing changes when `id` is not on
-    /// the plate.
+    /// Stands `shell` on object `id`, built as `built` records and asked for by `settings`, which
+    /// it keeps as its own; supports stay, and nothing changes off the plate.
     pub(crate) fn set_shell(
         &mut self,
         id: ObjectId,

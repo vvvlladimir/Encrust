@@ -36,7 +36,7 @@ pub(super) fn repaired(
     watch: &Watch,
 ) -> Result<()> {
     for (entry, ((import, _), (_, shaping))) in found.iter_mut().zip(entries).enumerate() {
-        let id = ObjectId(entry as u64 + 1);
+        let id = staging.object_of(entry)?;
         mend(staging, id, &shaping.import, import, watch)?;
         repair(staging, id, &shaping.import, import, watch)?;
     }
@@ -50,7 +50,8 @@ pub(super) fn pressed(
     watch: &Watch,
 ) -> Result<()> {
     for (entry, (_, shaping)) in entries.iter().enumerate() {
-        relief(staging, ObjectId(entry as u64 + 1), &shaping.import, watch)?;
+        let id = staging.object_of(entry)?;
+        relief(staging, id, &shaping.import, watch)?;
     }
     Ok(())
 }

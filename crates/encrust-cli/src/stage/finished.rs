@@ -7,8 +7,10 @@ use std::time::Instant;
 use anyhow::{Context, Result, anyhow, bail};
 use core_document::{ApplyError, Report};
 use core_edit::{AUTO, Edit, ObjectId};
+use core_engine::project::HollowState;
 use core_engine::{Drained, SupportPlan};
 use core_geometry::{Scalar, Vec3};
+use core_supports::Unstood;
 use core_volume::HoleKind;
 use printer_profiles::PrinterProfile;
 
@@ -100,14 +102,8 @@ fn hollowed(
         }
         Err(other) => return Err(said(other).context("hollowing the model")),
     };
-    let faces_after = staging.mesh(id).map_or(0, |mesh| mesh.faces.len());
-    let transform = staging.transform(id);
-    let report = HollowReport::of(
-        (&state, transform),
-        (faces_before, faces_after),
-        (cavity_mm3, voxel_mm, coarsened),
-        started.elapsed(),
-    );
+    let lattice = (cavity_mm3, voxel_mm, coarsened);
+    let report = hollow_report(staging, id, &state, (faces_before, lattice), started);
     if watch.talk {
         print!("{report}");
     }
@@ -246,10 +242,46 @@ fn plugged(
     Ok(())
 }
 
+/// The report of object `id` hollowed by `settings`, as `--hollow` says it; `lattice` is the
+/// cavity mm³, the voxel mm and whether it was coarsened.
+pub(crate) fn hollow_report(
+    staging: &Staging,
+    id: ObjectId,
+    settings: &HollowState,
+    (faces_before, lattice): (usize, (Scalar, Scalar, bool)),
+    started: Instant,
+) -> HollowReport {
+    let faces_after = staging.mesh(id).map_or(0, |mesh| mesh.faces.len());
+    let transform = staging.transform(id);
+    HollowReport::of(
+        (settings, transform),
+        (faces_before, faces_after),
+        lattice,
+        started.elapsed(),
+    )
+}
+
+/// The report of the supports grown under object `id`, as `--supports` says it.
+pub(crate) fn support_report(
+    staging: &Staging,
+    id: ObjectId,
+    (trees, contacts, standing, unheld): (usize, Vec<Vec3>, usize, Vec<(Vec3, Unstood)>),
+) -> SupportReport {
+    let lowest =
+        (staging.mesh(id).and_then(|mesh| mesh.aabb())).map_or(0.0, |box_mm| box_mm.mins.z);
+    SupportReport {
+        lifted_mm: lowest.max(0.0),
+        contacts,
+        standing,
+        unheld,
+        trees,
+        faces: staging.support_faces(id),
+    }
+}
+
 /// The usable plate of `printer`, its inset taken off: its low corner and its size, mm.
 pub(crate) fn usable_area(printer: &PrinterProfile) -> ([Scalar; 2], [Scalar; 2]) {
-    let volume = &printer.build_volume;
-    let [low, high] = (printer.plate_inset.unwrap_or_default()).area_mm(volume.x, volume.y);
+    let [low, high] = printer.usable_area_mm();
     (low, [high[0] - low[0], high[1] - low[1]])
 }
 
@@ -286,18 +318,7 @@ fn supported(
     else {
         return Err(anyhow!("the supports run answered no supports"));
     };
-    let lifted_mm = staging
-        .mesh(id)
-        .and_then(|mesh| mesh.aabb())
-        .map_or(0.0, |box_mm| box_mm.mins.z.max(0.0));
-    let report = SupportReport {
-        lifted_mm,
-        contacts: contacts_mm,
-        standing,
-        unheld,
-        trees,
-        faces: staging.support_faces(id),
-    };
+    let report = support_report(staging, id, (trees, contacts_mm, standing, unheld));
     if watch.talk {
         print!("{report}");
     }

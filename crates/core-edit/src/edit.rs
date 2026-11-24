@@ -56,34 +56,36 @@ pub enum Edit {
     /// Cuts the part of `object` at plate point `at_mm` off where it joins the rest.
     PartOff { object: ObjectId, at_mm: Vec3 },
     /// Replaces `objects` by the one `op` makes of them, the first being what a difference
-    /// keeps. With `toward` set the cut is exact and takes only the side of the first the
-    /// others stand on it from; unset, it is exact where every object is a solid and sampled
-    /// where one is not.
+    /// keeps; exact where every object is a solid, sampled where one is not.
     Combine {
         objects: Vec<ObjectId>,
         op: Boolean,
+        /// Set, the cut is exact and takes only the side of the first the others stand on it
+        /// from.
         #[serde(default)]
         toward: Option<Vec3>,
     },
-    /// Writes `text` on `object` at the surface nearest plate point `at_mm`, its capitals
-    /// `height_mm` tall and its letters `depth_mm` out of the surface or, unless `raised`, into
-    /// it; unset, the size is the window's Text tool's. With `follow_surface` each letter bends
-    /// onto the surface under it; `angle_deg` turns the line about the normal, anticlockwise.
-    /// `font` is a font file, the bundled IBM Plex Sans where unset.
+    /// Writes `text` on `object` at the surface nearest plate point `at_mm`, raised out of it
+    /// or sunk into it; an unset size is the window's Text tool's.
     Label {
         object: ObjectId,
         text: String,
         at_mm: Vec3,
+        /// How tall the capitals stand, mm.
         #[serde(default)]
         height_mm: Option<Scalar>,
+        /// How far the letters stand out of the surface or, unless `raised`, into it, mm.
         #[serde(default)]
         depth_mm: Option<Scalar>,
         #[serde(default = "on_by_default")]
         raised: bool,
+        /// Each letter bends onto the surface under it.
         #[serde(default)]
         follow_surface: bool,
+        /// The line's turn about the normal, anticlockwise, degrees.
         #[serde(default)]
         angle_deg: Scalar,
+        /// A font file; the bundled IBM Plex Sans where unset.
         #[serde(default)]
         font: Option<PathBuf>,
     },
@@ -113,10 +115,7 @@ pub enum Edit {
         bridge: Vec<[[u32; 2]; 2]>,
     },
     /// Presses the picture at `image`, tiled `tile_mm` wide and turned `angle_deg`, into
-    /// `object` `depth_mm` deep, as the CLI's `--relief` flags do; `hold_bottom_deg` and
-    /// `hold_top_deg` leave the faces that near down or up unmoved, `smoothing_px` blurs the
-    /// picture first and `precision` is the lattice's, 0 to 1. Only the object's painted
-    /// faces move where any are painted.
+    /// `object` `depth_mm` deep, as `--relief` does; only its painted faces move where any are.
     Relief {
         object: ObjectId,
         depth_mm: Scalar,
@@ -129,12 +128,16 @@ pub enum Edit {
         invert: bool,
         #[serde(default)]
         symmetric: bool,
+        /// How far the picture is blurred first, px.
         #[serde(default)]
         smoothing_px: Scalar,
+        /// Faces within this of facing down stay unmoved, degrees.
         #[serde(default)]
         hold_bottom_deg: Scalar,
+        /// Faces within this of facing up stay unmoved, degrees.
         #[serde(default)]
         hold_top_deg: Scalar,
+        /// The lattice's precision, 0 to 1.
         #[serde(default = "precision_by_default")]
         precision: Scalar,
     },
@@ -150,8 +153,8 @@ pub enum Edit {
         #[serde(default)]
         keep_solid_reach_mm: Option<Scalar>,
     },
-    /// Drills holes of `size` and `kind`, `AtDepth` where unset as a click makes them, nearest each of `at_mm`, as `--drain-at` does; with
-    /// `auto` a search adds the holes that drain every pocket, and `vent` a vent on each.
+    /// Drills holes of `size` and `kind` (`AtDepth` where unset) nearest each of `at_mm`, as
+    /// `--drain-at` does; `auto` adds those that drain every pocket, `vent` a vent on each.
     Drain {
         object: ObjectId,
         #[serde(default)]
@@ -173,12 +176,11 @@ pub enum Edit {
         #[serde(default = "channel_diameter_mm")]
         diameter_mm: Scalar,
     },
-    /// Lays a plug for each of the drain holes of `object` as new objects beside it, each
-    /// `gap_mm` narrower a side than its hole: the final gap, in plate mm. With a usable area
-    /// `plate_mm` across from `low_mm`, as `Arrange` takes them, each stands at the nearest
-    /// free spot in it; without, in a row past the object.
+    /// Lays a plug for each drain hole of `object` as new objects, at the nearest free spot of
+    /// the usable area `plate_mm` across from `low_mm` where set, else in a row past it.
     Plugs {
         object: ObjectId,
+        /// How much narrower a side each plug is than its hole: the final gap, mm.
         #[serde(default = "plug_gap_mm")]
         gap_mm: Scalar,
         #[serde(default)]
@@ -186,26 +188,25 @@ pub enum Edit {
         #[serde(default)]
         low_mm: [Scalar; 2],
     },
-    /// Spreads every printable object of the active plate, with its supports, over the usable
-    /// area of a plate, `plate_mm` across from its corner `low_mm` (the plate less its inset),
-    /// `clearance_mm` apart, turning one no slide fits as the window does.
+    /// Spreads every printable object of the active plate, with its supports, `clearance_mm`
+    /// apart over the usable area, turning one no slide fits as the window does.
     Arrange {
+        /// The usable area's corner: the plate less its inset, mm.
         #[serde(default)]
         low_mm: [Scalar; 2],
+        /// The usable area's size from `low_mm`, mm.
         plate_mm: [Scalar; 2],
         clearance_mm: Scalar,
     },
-    /// Stands `object` the way it prints best for `goal`, the `pick`th best from 0, tilted at
-    /// most `max_tilt_deg` if set; `clean_surface` keeps to the fewest supports where it shows.
-    /// It stays on the usable area `plate_mm` across from `low_mm`, as `Arrange` takes them,
-    /// and its poses are proved on the catalogue's `printer` and `resin`, the standard ones
-    /// where unset, those that leave `keep_clear_mm` clear ranked first.
+    /// Stands `object` the way it prints best for `goal`, the `pick`th best from 0, on the
+    /// usable area `plate_mm` across from `low_mm` as `Arrange` takes them.
     Orient {
         object: ObjectId,
         #[serde(default)]
         goal: OrientAim,
         #[serde(default)]
         max_tilt_deg: Option<Scalar>,
+        /// Keep to the fewest supports where the model shows.
         #[serde(default)]
         clean_surface: bool,
         #[serde(default)]
@@ -214,12 +215,14 @@ pub enum Edit {
         plate_mm: Option<[Scalar; 2]>,
         #[serde(default)]
         low_mm: [Scalar; 2],
+        /// The catalogue id of the printer the poses are proved on; the standard one where unset.
         #[serde(default)]
         printer: Option<String>,
+        /// The catalogue id of the resin the poses are proved with; the stock numbers where unset.
         #[serde(default)]
         resin: Option<String>,
-        /// Places no support should touch, plate mm as the object stands or, with
-        /// `keep_clear_seen_deg`, as it stood turned so and centred on the plate.
+        /// Places no support should touch, poses leaving them clear ranked first; plate mm as
+        /// the object stands or, with `keep_clear_seen_deg`, as it stood turned so and centred.
         #[serde(default)]
         keep_clear_mm: Vec<Vec3>,
         /// How near a place a contact still touches it, mm; `KEEP_CLEAR_RADIUS_MM` where unset.
@@ -319,8 +322,11 @@ pub enum OrientAim {
     /// Every goal weighed against the others.
     #[default]
     Auto,
+    /// The pose that needs the fewest supports.
     FewestSupports,
+    /// The smallest cross-section pulled off the film at any layer.
     LeastPeel,
+    /// The shortest stack, model and lift.
     ShortestPrint,
 }
 

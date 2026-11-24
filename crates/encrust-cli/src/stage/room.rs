@@ -23,8 +23,7 @@ pub(super) fn stood_at(mesh: &Mesh, position: Vec2) -> Result<Mesh> {
 
 /// What of `printer`'s plate its inset leaves.
 fn plate_area(printer: &PrinterProfile) -> PlateArea {
-    let inset = printer.plate_inset.unwrap_or_default();
-    let [low, high] = inset.area_mm(printer.build_volume.x, printer.build_volume.y);
+    let [low, high] = printer.usable_area_mm();
     PlateArea {
         low_mm: Vec2::from_array(low),
         high_mm: Vec2::from_array(high),
