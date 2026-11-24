@@ -1,5 +1,5 @@
 use super::*;
-use crate::recipe::{Cut, Drains, HoleKind, Hollow, Mend, Supports};
+use crate::recipe::{Cut, Drains, HoleKind, Hollow, Mend, Relief, Supports};
 
 const MODEL: ObjectId = ObjectId(3);
 
@@ -415,6 +415,7 @@ fn a_pose_the_search_picked_is_an_orient_proved_on_the_jobs_printer_and_resin() 
             keep_clear_mm: Vec::new(),
             keep_clear_radius_mm: None,
             keep_clear_seen_deg: None,
+            lift_mm: None,
         }]
     );
 }
@@ -494,5 +495,62 @@ fn a_plug_gap_is_the_typed_gap_less_the_resins_fit_drift() {
         asked_after_check(&drains(None), &bare(), MODEL, (None, None, None)),
         None,
         "without the resin's drift a plug is no edit"
+    );
+}
+
+fn pressed() -> Relief {
+    Relief {
+        depth_mm: 0.5,
+        image: Some("/pictures/bark.png".into()),
+        tile_mm: None,
+        tile_angle_deg: None,
+        invert: false,
+        symmetric: false,
+        smooth_px: None,
+        hold_bottom_deg: None,
+        hold_top_deg: None,
+    }
+}
+
+#[test]
+fn a_relief_and_a_turn_asked_at_once_are_pressed_on_the_turned_model() {
+    let recipe = Recipe {
+        relief: Some(pressed()),
+        pose: Some(Pose::Rotate {
+            degrees: [90.0, 0.0, 0.0],
+        }),
+        modelling: Some(Modelling {
+            scale: Some([2.0, 2.0, 2.0]),
+            ..Modelling::default()
+        }),
+        ..bare()
+    };
+    let asked = asked_edits(&recipe, &bare(), MODEL).expect("each is an edit");
+    assert!(
+        matches!(
+            asked.as_slice(),
+            [Edit::Scale { .. }, Edit::Rotate { .. }, Edit::Relief { .. }]
+        ),
+        "scaled, turned, then pressed, as the command line does: {asked:?}"
+    );
+}
+
+#[test]
+fn a_relief_is_pressed_on_the_lattice_the_hollow_asks() {
+    let recipe = Recipe {
+        relief: Some(pressed()),
+        hollow: Some(Hollow {
+            wall_mm: 2.0,
+            precision: Some(0.8),
+            ..Hollow::default()
+        }),
+        ..bare()
+    };
+    let asked = asked_edits(&recipe, &bare(), MODEL).expect("each is an edit");
+    assert!(
+        asked.iter().any(
+            |edit| matches!(edit, Edit::Relief { precision, .. } if (precision - 0.8).abs() < 1e-6)
+        ),
+        "--precision 0.8 is the relief's lattice too: {asked:?}"
     );
 }

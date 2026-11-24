@@ -117,6 +117,31 @@ fn supports_reaching_off_the_plate_are_reported_though_the_model_fits() {
 }
 
 #[test]
+fn a_cube_on_the_plate_lifted_3_mm_is_stood_on_supports_there() {
+    let path = write_box_stl("lifted-cube", 10.0, 12, 0);
+    let output = estimate(&[
+        path.to_str().unwrap(),
+        "--supports",
+        "medium",
+        "--lift",
+        "3",
+        "--json",
+    ]);
+    let report = json(&output);
+    let supports = &report["models"][0]["supports"];
+
+    let lifted_mm = supports["lifted_mm"].as_f64().expect("a lift");
+    assert!(
+        (lifted_mm - 3.0).abs() < 1e-4,
+        "the cube stands 3 mm up, got {lifted_mm}"
+    );
+    assert!(
+        supports["trunks"].as_u64().is_some_and(|trunks| trunks > 0),
+        "its floor is held up: {supports}"
+    );
+}
+
+#[test]
 fn a_model_larger_than_the_machine_is_reported() {
     let path = write_box_stl("oversized", 200.0, 12, 0);
     let output = estimate(&[

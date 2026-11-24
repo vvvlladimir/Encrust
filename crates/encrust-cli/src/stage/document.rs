@@ -154,8 +154,8 @@ impl Staging {
         self.owners.iter().map(|(id, _)| *id).collect()
     }
 
-    /// Carries `edit` out on the plate, stopped by `stop`; what it adds takes the place and the
-    /// entry of what it removed, else of `object`.
+    /// Carries `edit` out on the plate, stopped by `stop`; what it adds takes the entry of what
+    /// it removed, else of `object`, and stands where the document put it.
     pub(crate) fn apply(
         &mut self,
         edit: &Edit,
@@ -175,16 +175,10 @@ impl Staging {
     ) -> Result<Applied, ApplyError> {
         let applied = apply(&mut self.document, edit, cancel)?;
         let first = applied.removed.first().copied().unwrap_or(object);
-        let owner = (self.owners.iter())
-            .find(|(id, _)| *id == first)
-            .map_or(0, |(_, entry)| *entry);
-        let at = (self.owners.iter())
-            .position(|(id, _)| applied.removed.contains(id))
-            .unwrap_or(self.owners.len());
-        self.owners.retain(|(id, _)| !applied.removed.contains(id));
-        let at = at.min(self.owners.len());
-        let added = applied.added.iter().map(|(id, _)| (*id, owner));
-        self.owners.splice(at..at, added);
+        let owner = self.entry_of(first).unwrap_or(0);
+        self.owners = (self.document.ids().into_iter())
+            .map(|id| (id, self.entry_of(id).unwrap_or(owner)))
+            .collect();
         Ok(applied)
     }
 
@@ -399,7 +393,8 @@ pub(super) fn laid(
     }
     for (index, edit) in edits.listed()?.iter().enumerate() {
         let first = staging.ids().first().copied().unwrap_or(ObjectId::UNSET);
-        (staging.apply(edit, first, watch.stop).map_err(said))
+        let object = edit.object().unwrap_or(first);
+        (staging.apply(edit, object, watch.stop).map_err(said))
             .with_context(|| format!("edit {} of --edits", index + 1))?;
     }
     let out = edits.project_out.as_deref();

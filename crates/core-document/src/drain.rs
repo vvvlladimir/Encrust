@@ -17,7 +17,7 @@ mod raft;
 
 pub use auto::{SearchAsked, drains_proven, plate_under};
 use plugs::apply_plugs;
-pub use plugs::{plugs_cut, spaced_plugs};
+pub use plugs::spaced_plugs;
 use raft::raft_holes;
 
 /// Past this, the point is off an edge or corner rather than over the face the hole is
@@ -119,9 +119,8 @@ pub(crate) struct Searching {
     pub vent: bool,
 }
 
-/// Drills a hole of `size` and `kind` into the surface of object `id` nearest each of `at_mm`,
-/// then the holes the engine's search proves drain its cavity where `searching.auto`, which the
-/// object keeps with its cavity numbers; the shell is not rebuilt.
+/// Drills holes into object `id` at the surface nearest each of `at_mm`, then, where asked,
+/// those the engine's search proves drain its cavity; the shell is not rebuilt.
 pub(crate) fn apply_drain(
     document: &mut Document,
     id: ObjectId,

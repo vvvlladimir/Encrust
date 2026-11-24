@@ -347,21 +347,7 @@ pub fn plate_of(
                 layer_height_mm: layer_height,
                 watch,
             };
-            let left = recipe::lay(asked, (staging, found), entries, &ctx)?;
-            let mut staging = left.staging;
-            if arrange {
-                document::arranged(&mut staging, entries, printer, watch)?;
-            }
-            let reported = (left.found, left.finished);
-            let out = job.edits.project_out.as_deref();
-            let mut laid = staging.laid(reported, (entries, out), printer, watch.talk)?;
-            for (part, said) in laid.parts.iter_mut().zip(left.said) {
-                if let Some((prepared, run)) = said {
-                    part.prepared = prepared;
-                    part.recipe = Some(run);
-                }
-            }
-            (laid, left.saved)
+            laid_by_recipe(asked, (staging, found), (entries, arrange), &ctx)?
         }
         None => {
             let edits = (entries, &job.edits);
@@ -391,6 +377,32 @@ pub fn plate_of(
     let mut staged = staged((parts, models), drainage, machine, watch.talk);
     staged.saved = saved;
     Ok(staged)
+}
+
+/// Every entry's object taken through the recipe `asked`, the plate arranged where asked, and
+/// what the recipe said of each part.
+fn laid_by_recipe(
+    asked: &recipe::Asked,
+    (staging, found): (Staging, Vec<Found>),
+    (entries, arrange): (&[(PathBuf, Shaping)], bool),
+    ctx: &recipe::Ctx,
+) -> Result<(Laid, Option<Saved>)> {
+    let printer = ctx.chosen.printer.as_ref();
+    let left = recipe::lay(asked, (staging, found), entries, ctx)?;
+    let mut staging = left.staging;
+    if arrange {
+        document::arranged(&mut staging, entries, printer, ctx.watch)?;
+    }
+    let reported = (left.found, left.finished);
+    let out = ctx.job.edits.project_out.as_deref();
+    let mut laid = staging.laid(reported, (entries, out), printer, ctx.watch.talk)?;
+    for (part, said) in laid.parts.iter_mut().zip(left.said) {
+        if let Some((prepared, run)) = said {
+            part.prepared = prepared;
+            part.recipe = Some(run);
+        }
+    }
+    Ok((laid, left.saved))
 }
 
 /// `models` staged to be cut for `parts` on the machine and at the layer height a run asks,

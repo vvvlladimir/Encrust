@@ -206,9 +206,8 @@ impl CutTool {
         self.start_split_asked(scene, id, self.state.parts, at)
     }
 
-    /// Starts the split of one model into `settings`' parts, or the cutting off of the part at
-    /// plate point `at`, whatever the panel is set to: what an edit handed over the window
-    /// link asks (ADR 0466).
+    /// Starts the split of one model into `settings`' parts, or the part at plate point `at` cut
+    /// off, whatever the panel is set to, as an edit over the window link asks (ADR 0466).
     pub fn start_split_asked(
         &mut self,
         scene: &Scene,

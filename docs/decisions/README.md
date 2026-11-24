@@ -572,3 +572,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0471](0471-model-analysis-at-one-step.md) | Model analysis runs at one step, and an edit knows no printer or resin | Accepted |
 | [0472](0472-the-command-line-runs-on-the-document.md) | The command line runs on the document | Accepted |
 | [0473](0473-a-revision-is-shown-by-the-plate-its-check-wrote.md) | A revision is shown by the plate its check wrote | Accepted |
+| [0474](0474-a-lift-is-a-placement-on-every-front-end.md) | A lift is a placement on every front end | Proposed |

@@ -143,13 +143,18 @@ impl History {
     /// Puts one entry on the stack, dropping the oldest when it is full, and with it the
     /// branch an undo had opened.
     fn record(&mut self, step: Step) {
-        self.plate_version += u64::from(step.scene().is_some());
+        self.plate_changed(step.scene().is_some());
         self.past.push_back((self.next, step));
         self.next += 1;
         if self.past.len() > DEPTH {
             self.past.pop_front();
         }
         self.future.clear();
+    }
+
+    /// Raises the plate's version where `changed`, so a plate a server built on reads as gone.
+    fn plate_changed(&mut self, changed: bool) {
+        self.plate_version += u64::from(changed);
     }
 
     /// The plate's version: raised by every recorded change of the plate, its undo and redo.
@@ -177,7 +182,7 @@ impl History {
         let before = fingerprint(scene);
         if self.held {
             let answer = change(scene);
-            self.plate_version += u64::from(fingerprint(scene) != before);
+            self.plate_changed(fingerprint(scene) != before);
             return answer;
         }
         let caught_up = before == self.fingerprint;
@@ -186,7 +191,7 @@ impl History {
         }
         let answer = change(scene);
         // What lands joins an edit already counted, yet the plate a server built on is gone.
-        self.plate_version += u64::from(fingerprint(scene) != before);
+        self.plate_changed(fingerprint(scene) != before);
         if caught_up {
             self.settle(scene);
         }
@@ -240,7 +245,7 @@ impl History {
         let Some((id, previous)) = self.past.pop_back() else {
             return false;
         };
-        self.plate_version += u64::from(previous.scene().is_some());
+        self.plate_changed(previous.scene().is_some());
         let held = self.put_back(previous, scene, tools, slicing);
         self.follow_up(scene, tools);
         self.future.push((id, held));
@@ -255,7 +260,7 @@ impl History {
         let Some((id, next)) = self.future.pop() else {
             return false;
         };
-        self.plate_version += u64::from(next.scene().is_some());
+        self.plate_changed(next.scene().is_some());
         let held = self.put_back(next, scene, tools, slicing);
         self.follow_up(scene, tools);
         self.past.push_back((id, held));

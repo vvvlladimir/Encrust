@@ -264,3 +264,29 @@ fn a_model_sliced_plain_draws_the_layers_its_written_project_draws() {
         );
     }
 }
+
+#[test]
+fn a_copy_made_by_an_edit_counts_as_its_models_and_the_next_model_keeps_its_own() {
+    let first = write_box_stl("copied-first", 10.0, 12, 0);
+    let second = write_box_stl("copied-second", 10.0, 12, 0);
+    let edits = edits_file(
+        "copied.json",
+        r#"[{"edit": "duplicate", "object": 1, "offset_mm": [40.0, 0.0, 0.0]}]"#,
+    );
+
+    let output = estimate(&[
+        first.to_str().expect("a UTF-8 path"),
+        second.to_str().expect("a UTF-8 path"),
+        "--edits",
+        edits.to_str().expect("a UTF-8 path"),
+        "--json",
+    ]);
+
+    let report = json(&output);
+    let meets = &report["models"][1]["meets"];
+    assert_eq!(
+        meets[0].as_str(),
+        first.to_str(),
+        "the second cube still stands in the first, its copy 40 mm off: {meets}"
+    );
+}

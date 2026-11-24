@@ -23,18 +23,16 @@ mod supports;
 
 pub use apply::{Applied, Report, apply};
 pub use arrange::{NoFootprint, Spread, Standing, spread, standing_rect, turn_to_fit, turned_by};
-pub use combine::{boolean_of, combined};
+pub use combine::combined;
 pub use cut::{CutAsked, CutModel, axis_normal, cut, pieces};
 pub use document::{Document, ImportedModel};
-pub use drain::{
-    SearchAsked, channel_in, drains_proven, hole_near, plate_under, plugs_cut, spaced_plugs,
-};
+pub use drain::{SearchAsked, channel_in, drains_proven, hole_near, plate_under, spaced_plugs};
 pub use error::ApplyError;
 pub use hollow::{NoRoom, blockers_along, settings_of, shell_from, shelled};
 pub use label::{LabelAsked, Lettering, label_prisms, labelled};
 pub use orient::{
-    Body, Ranked, default_plan, kept_clear, lifted, orient_plan, placed_by, preset_named,
-    preset_of, supported_settings, vents_of,
+    Body, Ranked, kept_clear, lifted, orient_plan, placed_by, preset_of, supported_settings,
+    vents_of,
 };
 pub use piece::{Piece, Role};
 pub use placement::{

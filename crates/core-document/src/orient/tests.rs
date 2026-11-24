@@ -34,6 +34,7 @@ fn orient(goal: OrientAim, pick: usize) -> Edit {
         keep_clear_mm: Vec::new(),
         keep_clear_radius_mm: None,
         keep_clear_seen_deg: None,
+        lift_mm: None,
     }
 }
 
@@ -281,6 +282,7 @@ fn an_orient_that_overhangs_the_area_slides_onto_it() {
         keep_clear_mm: Vec::new(),
         keep_clear_radius_mm: None,
         keep_clear_seen_deg: None,
+        lift_mm: None,
     };
 
     apply(&mut document, &edit, Cancel::never()).expect("a bar can be oriented");
@@ -306,6 +308,7 @@ fn orient_on(printer: Option<&str>, resin: Option<&str>) -> Edit {
         keep_clear_mm: Vec::new(),
         keep_clear_radius_mm: None,
         keep_clear_seen_deg: None,
+        lift_mm: None,
     }
 }
 
@@ -372,7 +375,25 @@ fn asked_of(printer: Option<&str>) -> OrientAsked {
         printer: printer.map(str::to_owned),
         resin: None,
         keep_clear: (Vec::new(), None, None),
+        lift_mm: None,
     }
+}
+
+#[test]
+fn an_orient_asked_a_lift_stands_its_poses_on_supports_at_that_lift() {
+    let document = Document::from_project(cube());
+    let asked = OrientAsked {
+        lift_mm: Some(3.0),
+        ..asked_of(None)
+    };
+
+    let (_, lift_mm) =
+        ranked_poses(&document, ObjectId(1), &asked, Cancel::never()).expect("a cube has poses");
+
+    assert!(
+        (lift_mm - 3.0).abs() < 1e-6,
+        "the 3 mm asked, not the profile's, got {lift_mm}"
+    );
 }
 
 #[test]

@@ -18,7 +18,7 @@ use crate::plate_contents::{delete, duplicate, mirrored};
 use crate::relief::{ReliefAsked, apply_relief};
 use crate::repair::{MendAsked, Mended, apply_mend, apply_repair};
 use crate::split::{apply_part_off, apply_split};
-use crate::supports::{SupportsAsked, apply_merge, apply_supports};
+use crate::supports::{SupportsAsked, apply_merge, apply_supports, stand_at};
 
 /// What an edit did, for a front end to name, select and report it.
 #[derive(Debug, Clone, PartialEq)]
@@ -190,13 +190,15 @@ fn apply_to_the_surface(
             object,
             ref near_mm,
         } => apply_merge(document, object, near_mm),
-        _ => Err(ApplyError::NoObject(ObjectId::UNSET)),
+        _ => Err(ApplyError::NoObject(
+            edit.object().unwrap_or(ObjectId::UNSET),
+        )),
     }
 }
 
-/// Carries `edit` out on `document`, which an error leaves as it was; `cancel` stops one that
-/// takes long enough to be given up on.
-pub fn apply(
+/// Carries out an edit that makes new objects of others: a cut, a split, a part-off, a
+/// combination or a label.
+fn apply_modelling(
     document: &mut Document,
     edit: &Edit,
     cancel: Cancel<'_>,
@@ -233,6 +235,25 @@ pub fn apply(
             let asked = LabelAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
             apply_label(document, object, &asked, cancel)
         }
+        _ => Err(ApplyError::NoObject(
+            edit.object().unwrap_or(ObjectId::UNSET),
+        )),
+    }
+}
+
+/// Carries `edit` out on `document`, which an error leaves as it was; `cancel` stops one that
+/// takes long enough to be given up on.
+pub fn apply(
+    document: &mut Document,
+    edit: &Edit,
+    cancel: Cancel<'_>,
+) -> Result<Applied, ApplyError> {
+    match *edit {
+        Edit::Cut { .. }
+        | Edit::Split { .. }
+        | Edit::PartOff { .. }
+        | Edit::Combine { .. }
+        | Edit::Label { .. } => apply_modelling(document, edit, cancel),
         Edit::Repair { .. }
         | Edit::Mend { .. }
         | Edit::Relief { .. }
@@ -285,7 +306,7 @@ fn place(
 ) -> Result<Applied, ApplyError> {
     let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
     let transform = to(state.transform, &meshes.source)?;
-    document.set_transform(id, transform);
+    stand_at(document, id, transform);
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),

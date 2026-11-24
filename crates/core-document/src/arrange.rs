@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
-use crate::supports::standing_meshes;
+use crate::supports::{stand_at, standing_meshes};
 
 /// A model with the supports and raft standing under it, as packing sees them.
 #[derive(Debug, Clone)]
@@ -165,7 +165,7 @@ pub(crate) fn apply_arrange(
         .map_err(|NoFootprint(index)| ApplyError::NoFootprint(ids[index]))?;
     drop(standing);
     for (id, transform) in ids.iter().zip(transforms) {
-        document.set_transform(*id, transform);
+        stand_at(document, *id, transform);
     }
     Ok(Applied {
         removed: Vec::new(),

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use core_edit::ObjectId;
 use core_engine::project::{Project, load};
-use core_geometry::{Transform, Vec3, cuboid};
+use core_geometry::{Mesh, Transform, Vec3, cuboid};
 
 /// A project of version 4, before ids, holding one model named "cube".
 const CUBE: &str = concat!(
@@ -30,6 +30,14 @@ pub fn cube_of(side_mm: f32) -> Project {
     let object = &mut project.manifest.objects[0];
     object.transform = Transform::default();
     object.hollow.built = None;
+    project
+}
+
+/// [`cube`]'s plate round a single triangle, a sheet that encloses nothing.
+pub fn sheet() -> Project {
+    let mut project = cube();
+    let triangle = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
+    project.models[0].source = Arc::new(triangle);
     project
 }
 

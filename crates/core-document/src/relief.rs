@@ -14,7 +14,7 @@ use core_volume::{
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
-use crate::hollow::hollowed_again;
+use crate::hollow::rehollowed;
 use core_engine::project::hollow_of;
 
 /// What a relief asks: the picture, where it is tiled and how it is pressed.
@@ -90,9 +90,8 @@ pub fn read_picture(path: &Path) -> Result<Heightmap, ApplyError> {
         .map_err(|error| bad(error.to_string()))
 }
 
-/// `picture` tiled and pressed into `mesh`: over a field where nothing is `painted`, which
-/// stands on `basis` where it fits and answers the one it stood on, or by moving the painted
-/// faces alone, which keeps a basis for no other press.
+/// `picture` tiled and pressed into `mesh`, its `painted` faces alone where any are, and the
+/// field `basis` it stood on for the next press; see `docs/design/document.md`.
 pub fn press_picture(
     mesh: &Mesh,
     bvh: &Bvh,
@@ -123,13 +122,7 @@ pub fn relieved(
     let picture = (&image, asked.tiling);
     let bvh = Bvh::build(mesh);
     let (relief, _) = press_picture(mesh, &bvh, picture, &asked.settings, painted, None, cancel)
-        .map_err(|error| match error {
-            VolumeError::Cancelled => ApplyError::Cancelled,
-            other => ApplyError::Failed {
-                object,
-                reason: other.to_string(),
-            },
-        })?;
+        .map_err(|error| ApplyError::of_volume(object, error))?;
     Ok(Relieved {
         mesh: relief.mesh,
         voxel_mm: relief.voxel_mm,
@@ -153,16 +146,16 @@ pub(crate) fn apply_relief(
     asked.settings.mask.up = transform.rotation.inverse() * Vec3::Z;
     let painted = Some(&state.relief_painted).filter(|region| !region.is_empty());
     let done = relieved(&sized, &asked, painted, cancel, id)?;
+    let stood = core_geometry::Transform {
+        scale: Vec3::ONE,
+        stretch: Mat3::IDENTITY,
+        ..transform
+    };
+    let carried = (&hollow, transform.sizing().linear());
+    let hollowed = rehollowed(&done.mesh, carried, stood, cancel, id)?;
     document.reshape(id, done.mesh);
-    document.set_transform(
-        id,
-        core_geometry::Transform {
-            scale: Vec3::ONE,
-            stretch: Mat3::IDENTITY,
-            ..transform
-        },
-    );
-    hollowed_again(document, id, (&hollow, transform.sizing().linear()), cancel)?;
+    document.set_transform(id, stood);
+    hollowed.lay_on(document, id);
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),

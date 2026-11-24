@@ -127,7 +127,8 @@ whole-surface fill is Cmd-Shift-click.
 - **Lay on face:** click a face and the model lies on it.
 - Put a model back in the middle of the plate, back on the plate, or lift it off by a set
   height, typed or a millimetre a press of − or +. Auto-orient keeps that height for a pose
-  on supports; nought, or **On the plate**, hands it back to the support profile's lift.
+  on supports; nought, or **On the plate**, hands it back to the support profile's lift. On
+  the command line, `--lift`.
 
 **Prepare for print:** from its row over the plate card — the recipe and the run — and in
 the Edit menu, for the picked models or the whole plate, it runs the steps of the recipe

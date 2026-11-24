@@ -1,4 +1,5 @@
-//! Supports stood under a model by the shipped preset it is asked for (`docs/design/document.md`).
+//! Supports stood under a model by a plate group, a shipped preset or `auto`
+//! (`docs/design/document.md`).
 
 use std::sync::Arc;
 
@@ -440,8 +441,10 @@ fn wall_outside(
     })
 }
 
+mod carried;
 mod merge;
 
+pub(crate) use carried::stand_at;
 pub(crate) use merge::apply_merge;
 pub use merge::support_near;
 

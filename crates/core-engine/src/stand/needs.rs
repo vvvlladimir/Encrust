@@ -44,9 +44,8 @@ pub fn needs_on(
     Ok(needs)
 }
 
-/// Where the model needs holding up on its outside and, with `inside`, on its cavity, as
-/// `sides(false)` and `sides(true)` ask each: both sides placed, the outside strengthened
-/// with the cavity's tips held, then the cavity with the outside's strengthened ones.
+/// Where the model needs holding up on its outside and, with `inside`, on its cavity, each side
+/// as `sides` asks it and held against the other's tips.
 pub fn needs_on_both<'a>(
     sides: &dyn Fn(bool) -> NeedsAsked<'a>,
     inside: bool,

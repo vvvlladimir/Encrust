@@ -64,6 +64,7 @@ fn orient_settings_land_in_the_edit() {
             keep_clear_mm: Vec::new(),
             keep_clear_radius_mm: None,
             keep_clear_seen_deg: None,
+            lift_mm: None,
         }]
     );
 }

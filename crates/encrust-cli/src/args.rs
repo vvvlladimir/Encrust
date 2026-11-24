@@ -4,6 +4,7 @@ use std::num::NonZeroU8;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
+use core_edit::defaults::{SHOWN_RADIUS_MM, lattice_precision};
 use core_engine::{ByHand, ShownAt, SupportPlan};
 use core_format::ExposureRange;
 use core_geometry::{
@@ -166,7 +167,7 @@ pub struct ImportArgs {
 
     /// How fine the lattice --relief and --hollow are cut on, 0 to 1. Not the layer height:
     /// the outside of the model never passes through the lattice.
-    #[arg(long, value_name = "0..1", default_value_t = 0.5)]
+    #[arg(long, value_name = "0..1", default_value_t = lattice_precision())]
     pub precision: Scalar,
 }
 
@@ -184,6 +185,11 @@ pub struct TransformArgs {
     /// Centre the model on the plate and sit it on z = 0.
     #[arg(long)]
     pub center: bool,
+
+    /// Stand the model this high off the plate once placed, mm, room for supports under it;
+    /// an --orient on supports stands its poses at it too.
+    #[arg(long, value_name = "MM")]
+    pub lift: Option<f32>,
 
     /// Turn the model the way it prints best, at its --scale and before anything else.
     #[arg(long)]
@@ -325,9 +331,6 @@ pub struct SupportArgs {
     #[arg(long, value_name = "X,Y,Z[:R]", value_parser = shown_at, allow_hyphen_values = true)]
     pub shown_at: Vec<ShownAt>,
 }
-
-/// The brush's radius where `--shown-at` gives none, mm.
-const SHOWN_RADIUS_MM: Scalar = 4.0;
 
 /// `T` as its flags leave it when none is typed.
 pub(crate) fn untyped<T: clap::Args + clap::FromArgMatches>() -> Result<T> {

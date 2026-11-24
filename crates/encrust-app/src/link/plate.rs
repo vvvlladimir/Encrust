@@ -6,8 +6,8 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use core_document::{
-    ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, blockers_along, boolean_of, mirrored,
-    moved, part_settings, repair_settings, sized_to, turned_to,
+    ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, blockers_along, mirrored, moved,
+    part_settings, repair_settings, sized_to, turned_to,
 };
 use core_edit::{Edit, ObjectId, Op};
 use core_engine::project::HollowState;
@@ -44,15 +44,20 @@ pub struct Applying {
     /// The object whose orient search, once landed, is stepped to the pose asked for, and its
     /// number from 0.
     picking: Option<(ObjectId, usize)>,
+    /// Where each object stood once the last edit started, but those it may move itself: one
+    /// moved since was moved by the user, and the edits left were built on another plate.
+    placed: Vec<(ObjectId, Transform)>,
 }
+
+/// Why the edits left stop once the user changed the plate under them.
+const CHANGED_UNDER: &str = "the plate was changed in the window while the edits were applied";
 
 fn refused(why: String) -> Value {
     json!({"applied": false, "why_not": why})
 }
 
-/// Writes the plate as it stands into `job`'s folder under `jobs` off the drawing thread,
-/// and answers with its path, the plate's version, the ids on it and `job_object`, the
-/// job's model where it stands on the plate whole.
+/// Writes the plate into `job`'s folder under `jobs` off the drawing thread, answering its path,
+/// version and ids, and `job_object`, the job's model where it stands on the plate whole.
 pub fn hand_plate(
     jobs: &Path,
     (job, job_object): (&str, Option<ObjectId>),
@@ -108,6 +113,7 @@ pub fn start(
         under_way: None,
         inside: None,
         picking: None,
+        placed: placed(window, None),
     })
 }
 
@@ -117,6 +123,9 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     let Some(work) = applying.as_mut() else {
         return false;
     };
+    if moved_by_hand(&work.placed, window) {
+        return finish(applying, refused(CHANGED_UNDER.to_owned()));
+    }
     if tool_is_busy(window) {
         return true;
     }
@@ -163,10 +172,39 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
                 Edit::Orient { object, pick, .. } => Some((object, pick)),
                 _ => None,
             };
+            work.placed = placed(window, Some(&edit));
             true
         }
         Err(why) => finish(applying, refused(why)),
     }
+}
+
+/// Where each object stands, but those `edit` may move as it lands.
+fn placed(window: &Window, edit: Option<&Edit>) -> Vec<(ObjectId, Transform)> {
+    let moving = match edit {
+        Some(Edit::Arrange { .. }) => return Vec::new(),
+        Some(
+            Edit::Orient { object, .. }
+            | Edit::Relief { object, .. }
+            | Edit::Supports { object, .. },
+        ) => Some(*object),
+        _ => None,
+    };
+    (window.doc.scene.objects().iter())
+        .filter(|object| Some(object.id) != moving)
+        .map(|object| (object.id, object.transform))
+        .collect()
+}
+
+/// Whether an object in `placed` stands anywhere else now; one gone was taken by an edit.
+fn moved_by_hand(placed: &[(ObjectId, Transform)], window: &Window) -> bool {
+    (placed.iter()).any(|(id, at)| {
+        window
+            .doc
+            .scene
+            .get(*id)
+            .is_some_and(|object| object.transform != *at)
+    })
 }
 
 fn tool_is_busy(window: &Window) -> bool {
@@ -275,7 +313,7 @@ fn start_combine(
 ) -> Result<Option<ObjectId>, String> {
     let method = toward.map_or(Method::Sampled, Method::ExactToward);
     (window.tools.boolean)
-        .start_asked(&window.doc.scene, objects, (boolean_of(op), method))
+        .start_asked(&window.doc.scene, objects, (op, method))
         .map_err(|error| format!("{error:#}"))?;
     Ok(objects.first().copied())
 }

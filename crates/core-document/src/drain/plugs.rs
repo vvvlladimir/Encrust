@@ -20,7 +20,7 @@ use crate::supports::standing_meshes;
 
 /// A plug for each of `holes`, as they are cut, out of the solid `mesh`: `wall_mm` long where
 /// there is a wall, `gap_mm` narrower a side.
-pub fn plugs_cut(
+pub(crate) fn plugs_cut(
     mesh: &Mesh,
     holes: &[DrainHole],
     (wall_mm, gap_mm): (Option<Scalar>, Scalar),
@@ -38,9 +38,8 @@ pub fn plugs_cut(
     )
 }
 
-/// Moves each of `plugs`, numbered and in plate mm, to the nearest spot `PLUG_SPACING_MM`
-/// clear of `taken` and of one another, in the area `size_mm` across from its corner `low_mm`.
-/// Answers them moved and how many fit nowhere, left where they were.
+/// `plugs`, plate mm, each moved to the nearest spot clear of `taken` and of one another in the
+/// area `size_mm` across from `low_mm`, and how many fit nowhere, left where they were.
 pub fn spaced_plugs(
     plugs: impl IntoIterator<Item = (usize, Mesh)>,
     taken: &[Rect],
@@ -102,16 +101,14 @@ fn footprints(document: &Document) -> Vec<Rect> {
     covered
 }
 
-/// Lays a plug for each hole of object `id`, `gap_mm` narrower a side than the hole, in place
-/// of the plugs laid before: in a row past its right-hand side, or with an `area_mm` (its
-/// corner and size) each at the nearest spot clear of the plate.
-pub(crate) fn apply_plugs(
-    document: &mut Document,
+/// The plugs of object `id`'s holes, `gap_mm` narrower a side, each numbered after its hole and
+/// laid in a row past the object, and how many came out closed.
+fn numbered_plugs(
+    document: &Document,
     id: ObjectId,
     gap_mm: Scalar,
-    area_mm: Option<([Scalar; 2], [Scalar; 2])>,
     cancel: Cancel<'_>,
-) -> Result<Applied, ApplyError> {
+) -> Result<(Vec<(usize, Mesh)>, usize), ApplyError> {
     let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
     let transform = state.transform;
     let hollow = hollow_of(&state.hollow, meshes);
@@ -119,16 +116,8 @@ pub(crate) fn apply_plugs(
     let wall_mm =
         (hollow.asked()).and_then(|asked| plug_wall_mm(asked.mode, asked.thickness_mm / least));
     let holes = hollow.cut().0;
-    let made =
-        plugs_cut(&meshes.source, holes, (wall_mm, gap_mm / least), cancel).map_err(|error| {
-            match error {
-                VolumeError::Cancelled => ApplyError::Cancelled,
-                other => ApplyError::Failed {
-                    object: id,
-                    reason: other.to_string(),
-                },
-            }
-        })?;
+    let made = plugs_cut(&meshes.source, holes, (wall_mm, gap_mm / least), cancel)
+        .map_err(|error| ApplyError::of_volume(id, error))?;
     let beside =
         (transform_mesh(meshes.printed(), transform).aabb()).ok_or(ApplyError::NoSurface(id))?;
     // `laid_beside` leaves out an empty plug, so each is numbered after its own hole.
@@ -137,7 +126,19 @@ pub(crate) fn apply_plugs(
         .filter(|(_, plug)| !plug.is_empty())
         .map(|(number, _)| number);
     let laid = laid_beside(&made.meshes, holes, transform, beside);
-    let numbered: Vec<(usize, Mesh)> = numbers.zip(laid).collect();
+    Ok((numbers.zip(laid).collect(), made.closed))
+}
+
+/// Lays a plug `gap_mm` narrower a side than each hole of object `id` in place of those laid
+/// before: in a row past it, or at the nearest clear spot of `area_mm` (corner, size).
+pub(crate) fn apply_plugs(
+    document: &mut Document,
+    id: ObjectId,
+    gap_mm: Scalar,
+    area_mm: Option<([Scalar; 2], [Scalar; 2])>,
+    cancel: Cancel<'_>,
+) -> Result<Applied, ApplyError> {
+    let (numbered, closed) = numbered_plugs(document, id, gap_mm, cancel)?;
     let (removed, _) = document
         .lay_plugs(id, Vec::new())
         .ok_or(ApplyError::NoObject(id))?;
@@ -161,7 +162,7 @@ pub(crate) fn apply_plugs(
         added,
         report: Report::Plugged {
             plugs,
-            closed: made.closed,
+            closed,
             crowded,
         },
     })

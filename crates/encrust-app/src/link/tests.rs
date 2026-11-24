@@ -258,6 +258,32 @@ fn the_next_revision_stands_in_place_of_the_last() {
 }
 
 #[test]
+fn the_next_revision_takes_the_plugs_laid_for_the_last_off_with_it() {
+    let file = scratch("again-plugs");
+    let mut bench = Bench::new(file.clone());
+    bench.hand_over(&file, line(&file, 1, &revision_plate(&file, 1, 0.0)));
+    bench.run_to_end();
+    let shown = bench.doc.scene.objects()[0].id;
+    let plug = (bench.doc.scene.duplicate(shown, Vec3::new(40.0, 0.0, 0.0)))
+        .expect("the revision's box copies");
+    bench
+        .doc
+        .scene
+        .get_mut(plug)
+        .expect("the copy is there")
+        .plug_of = Some(shown);
+
+    bench.hand_over(&file, line(&file, 2, &revision_plate(&file, 2, 20.0)));
+    bench.run_to_end();
+
+    assert_eq!(
+        bench.lows_x(),
+        [20.0],
+        "revision 2 alone, the plug laid for revision 1 gone with it"
+    );
+}
+
+#[test]
 fn a_revision_handed_over_while_not_following_is_listed_only_unless_marked_open() {
     let file = scratch("not-following");
     let mut bench = Bench::new(file.clone());

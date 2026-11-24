@@ -44,10 +44,8 @@ impl Server {
         Some(CUT_UNDONE)
     }
 
-    /// Hands what `revision` asks of the plate beyond the revision before to the open window
-    /// as edits of the job's model there; `None` leaves the revision to be shown as ADR 0459
-    /// runs it: the first, one the window has not read the model for, or one asking what no
-    /// edit carries yet.
+    /// Hands what `revision` asks beyond the one before to the open window as edits of the job's
+    /// model; `None` for one no edit carries, shown by its check's plate instead (ADR 0473).
     pub(super) async fn edits_in_window(
         &self,
         revision: &Revision,

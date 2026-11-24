@@ -15,10 +15,8 @@ pub struct Only<'a> {
 }
 
 impl SupportTool {
-    /// Starts placement over everything visible, by the group in hand or the automatic profile;
-    /// for the inside, only cavities, and what stood in them goes when it lands (ADR 0332).
-    /// The faces painted to be seen are held sparser while `clean` (ADR 0425). What stands in
-    /// the groups it grows is grown again, not added to: it goes when the run lands.
+    /// Starts placement over everything visible by the group in hand or the automatic profile,
+    /// the inside's cavities alone; what stood where it grows goes when it lands (ADR 0332, 0425).
     pub fn start(
         &mut self,
         scene: &mut Scene,

@@ -3,7 +3,8 @@ use core_engine::project::{Axis, HollowState, Keep, ObjectId};
 use core_geometry::{Scalar, Vec3};
 use core_joint::Joints;
 use core_volume::{
-    CHANNEL_DIAMETER_MM, HoleKind, HoleSize, PLUG_GAP_MM, ReliefSettings, RepairMethod, Tiling,
+    Boolean, CHANNEL_DIAMETER_MM, HoleKind, HoleSize, PLUG_GAP_MM, ReliefSettings, RepairMethod,
+    Tiling,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -60,7 +61,7 @@ pub enum Edit {
     /// where one is not.
     Combine {
         objects: Vec<ObjectId>,
-        op: Op,
+        op: Boolean,
         #[serde(default)]
         toward: Option<Vec3>,
     },
@@ -77,7 +78,7 @@ pub enum Edit {
         height_mm: Option<Scalar>,
         #[serde(default)]
         depth_mm: Option<Scalar>,
-        #[serde(default = "raised_by_default")]
+        #[serde(default = "on_by_default")]
         raised: bool,
         #[serde(default)]
         follow_surface: bool,
@@ -161,7 +162,7 @@ pub enum Edit {
         kind: HoleKind,
         #[serde(default)]
         auto: bool,
-        #[serde(default = "yes")]
+        #[serde(default = "on_by_default")]
         vent: bool,
     },
     /// Digs a drainage channel of `diameter_mm` along `points_mm` through `object`, as
@@ -226,6 +227,10 @@ pub enum Edit {
         keep_clear_radius_mm: Option<Scalar>,
         #[serde(default)]
         keep_clear_seen_deg: Option<Vec3>,
+        /// How high a pose on supports stands off the plate, mm, as the window's Lift keeps it;
+        /// the support profile's where unset.
+        #[serde(default)]
+        lift_mm: Option<Scalar>,
     },
     /// Stands supports under `object` by a shipped preset (the active group's where unset), with
     /// a contact nearest each of `at_mm`, those alone with `only_at`; see `docs/cli.md`.
@@ -253,6 +258,36 @@ pub enum Edit {
     },
 }
 
+impl Edit {
+    /// The object the edit acts on, a combination's first; `None` for an arrange of the plate.
+    pub fn object(&self) -> Option<ObjectId> {
+        match self {
+            Self::Combine { objects, .. } => objects.first().copied(),
+            Self::Arrange { .. } => None,
+            Self::Cut { object, .. }
+            | Self::Move { object, .. }
+            | Self::Rotate { object, .. }
+            | Self::Scale { object, .. }
+            | Self::Delete { object }
+            | Self::Duplicate { object, .. }
+            | Self::Mirror { object, .. }
+            | Self::Split { object, .. }
+            | Self::PartOff { object, .. }
+            | Self::Label { object, .. }
+            | Self::Repair { object, .. }
+            | Self::Mend { object, .. }
+            | Self::Relief { object, .. }
+            | Self::Hollow { object, .. }
+            | Self::Drain { object, .. }
+            | Self::Channel { object, .. }
+            | Self::Plugs { object, .. }
+            | Self::Orient { object, .. }
+            | Self::Supports { object, .. }
+            | Self::MergeSupports { object, .. } => Some(*object),
+        }
+    }
+}
+
 fn tile_mm_by_default() -> Scalar {
     Tiling::default().tile_mm
 }
@@ -261,16 +296,12 @@ fn precision_by_default() -> Scalar {
     ReliefSettings::default().precision
 }
 
-fn raised_by_default() -> bool {
+fn on_by_default() -> bool {
     true
 }
 
 fn at_depth() -> HoleKind {
     HoleKind::AtDepth
-}
-
-fn yes() -> bool {
-    true
 }
 
 fn channel_diameter_mm() -> Scalar {
@@ -279,16 +310,6 @@ fn channel_diameter_mm() -> Scalar {
 
 fn plug_gap_mm() -> Scalar {
     PLUG_GAP_MM
-}
-
-/// How `Edit::Combine` joins its objects.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Op {
-    Union,
-    /// The first object less every other.
-    Difference,
-    Intersection,
 }
 
 /// What an `Edit::Orient` stands a model for.

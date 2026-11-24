@@ -1,21 +1,14 @@
 //! The hollow, holes and supports a revision asks beyond the one before, in the command line's
 //! order: walled holes, the hollow, other holes, channels, plugs, supports, merges, raft holes.
 
+use core_edit::defaults::{
+    SHOWN_RADIUS_MM, drain_depth_mm, infill_cell_and_density, lattice_precision,
+};
 use core_edit::{Edit, ObjectId, PLUG_GAP_MM};
 use serde_json::{Value, json};
 
 use super::edit_of;
 use crate::recipe::{Drains, HoleKind, Hollow, Recipe, Supports};
-
-/// What `--precision` is when not typed.
-const PRECISION: f32 = 0.5;
-/// What `--infill-cell` and `--infill-density` are when not typed.
-const INFILL_CELL_MM: f32 = 8.0;
-const INFILL_DENSITY: f32 = 0.25;
-/// The radius `--shown-radius` brushes what shows at when not typed, mm.
-const SHOWN_RADIUS_MM: f32 = 4.0;
-/// How far past the surface `--drain` reaches when not typed, mm.
-const DRAIN_DEPTH_MM: f32 = 3.0;
 
 /// The edits finishing `object` that `recipe` asks beyond `earlier`, `None` where one is no
 /// edit yet.
@@ -55,12 +48,12 @@ fn hollow(hollow: &Hollow, object: ObjectId) -> Option<Edit> {
         "edit": "hollow", "object": object, "settings": {
             "thickness_mm": hollow.wall_mm,
             "mode": hollow.mode.map_or(json!("internal"), |mode| json!(mode)),
-            "precision": hollow.precision.unwrap_or(PRECISION),
+            "precision": hollow.precision.unwrap_or_else(lattice_precision),
             "infill_on": pattern.is_some(),
             "infill": {
                 "pattern": pattern.unwrap_or(json!("hive")),
-                "cell_mm": hollow.infill_cell_mm.unwrap_or(INFILL_CELL_MM),
-                "density": hollow.infill_density.unwrap_or(INFILL_DENSITY),
+                "cell_mm": hollow.infill_cell_mm.unwrap_or(infill_cell_and_density().0),
+                "density": hollow.infill_density.unwrap_or(infill_cell_and_density().1),
             },
             "open_floor": hollow.open_floor,
         },
@@ -170,7 +163,7 @@ fn holes(
         "auto": search, "vent": search && drains.vent,
         "size": {
             "diameter_mm": drains.diameter_mm,
-            "depth_mm": drains.depth_mm.unwrap_or(DRAIN_DEPTH_MM),
+            "depth_mm": drains.depth_mm.unwrap_or_else(drain_depth_mm),
             "taper": drains.taper.unwrap_or(1.0),
             "shape": shape,
             "turn_deg": drains.turn_deg.unwrap_or(0.0),

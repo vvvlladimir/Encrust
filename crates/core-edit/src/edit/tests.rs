@@ -88,7 +88,7 @@ fn a_combine_written_by_hand_reads_with_no_direction() {
         edit,
         Edit::Combine {
             objects: vec![ObjectId(2), ObjectId(5)],
-            op: Op::Difference,
+            op: Boolean::Difference,
             toward: None,
         }
     );
@@ -392,6 +392,7 @@ fn an_orient_written_by_hand_defaults_to_auto_and_the_first_pose() {
             keep_clear_mm: Vec::new(),
             keep_clear_radius_mm: None,
             keep_clear_seen_deg: None,
+            lift_mm: None,
         }
     );
 }

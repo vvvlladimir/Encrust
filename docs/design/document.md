@@ -52,20 +52,21 @@ that misses the object is `ApplyError::Missed`. The window runs the two steps on
 
 `Move { object, by_mm }` adds to the translation. `Rotate { object, degrees }` sets the turn
 (X, then Y, then Z of the plate, as `--rotate`) and `Scale { object, factors }` sets the
-scale, each about the object's centre of mass and then standing it on the plate; a factor not
-finite or above zero is `ApplyError::BadScale`. None of them adds or removes an object
-(`Report::Placed`). The window sets the transform at once through the same `placement`
+scale, a mirror kept, each about the object's centre of mass and then standing it on the plate;
+a factor not finite or above zero is `ApplyError::BadScale`. None of them adds or removes an
+object (`Report::Placed`). A placement that moves an object drops its grown trees to grow again
+where it stands and carries its frozen ones there as the window does (`supports::stand_at`). The window sets the transform at once through the same `placement`
 functions.
 
 `Orient { object, goal, max_tilt_deg, clean_surface, pick, plate_mm, low_mm, printer, resin, keep_clear_mm,
-keep_clear_radius_mm, keep_clear_seen_deg }` runs `--orient`'s search on the
+keep_clear_radius_mm, keep_clear_seen_deg, lift_mm }` runs `--orient`'s search on the
 object as it stands (outer, shell, cuts, drain vents, what shows), judged on the plate's active
 support group and its best few printed on the shipped catalogue's `printer` and `resin`, the standard
 `elegoo-saturn-4-ultra` and the stock resin numbers where unset (`printer_profiles::standard_machine`; an id
 the catalogue lacks is `ApplyError::NoPrinter` or `NoResin`, one it cannot read `BadCatalogue`), and stands the `pick`th pose, from 0
 (`Report::Oriented { rotate_deg }`): turned keeping the middle of its box over the same spot, slid onto the
 usable area `plate_mm` across from `low_mm` where it hangs off (none where unset), dropped onto the plate and lifted
-by the profile's lift where the pose is not set on it (`placement::stood_turned`). Past the last pose is `ApplyError::NoChoice`. `goal`
+by `lift_mm`, else the profile's lift, where the pose is not set on it (`placement::stood_turned`). Past the last pose is `ApplyError::NoChoice`. `goal`
 is `auto`, `fewest-supports`, `least-peel` or `shortest-print` (`OrientAim`, the one table of
 the words, which a recipe's orient step reads too). A recipe's orient step is this edit
 (`core-recipe`'s `edits_of`), its `pick` the first. The window
@@ -115,7 +116,8 @@ stamp's own `NothingLeft`, `NotSolid` and `Failed`.
 drop_shells, bridge }` runs `mended`, which `--flip-faces` and its kin call too: turns and bridges
 first, drops last. Both end in `Document::reshape`, which replaces the source and takes off what
 was built on the old surface (supports, cavity, painted regions; plugs stay, as the window keeps
-them); the object keeps its id (`Report::Repaired`, `Report::Mended`). Errors: a face past the
+them), but a repair that would leave the model worse and wraps nothing keeps it as it came, as
+the window's does; the object keeps its id (`Report::Repaired`, `Report::Mended`). Errors: a face past the
 last `NoSuchFace` (from 0), a shell `NoSuchShell` (from 1), a bridge the mesh refuses `Failed`,
 `Cancelled`. The window runs a repair as its Repair tool's job and a mend as one job of the Faces mode.
 
@@ -127,7 +129,7 @@ The press is at the size the object prints at, so its scale and stretch go into 
 `Document::reshape` replaces (`Report::Relieved`); the faces painted for relief limit it where
 any are. A picture that does not read is `BadPicture { path, reason }`, else `Cancelled` or
 `Failed`. A hollow model keeps its blockers, holes and channels, carried onto the pressed surface, and is
-hollowed again by the settings its shell was built to (`hollowed_again`), as the window's Relief tool does. A file's own texture is not an edit: a `.encrust` keeps none. The window's Relief tool
+hollowed again by the settings its shell was built to (`rehollowed`), as the window's Relief tool does, before anything on the object changes. A file's own texture is not an edit: a `.encrust` keeps none. The window's Relief tool
 runs the edit as its own job, `press_picture` being the call both make.
 
 `Hollow { object, settings: HollowState, keep_solid, keep_solid_reach_mm }` hollows the object by the

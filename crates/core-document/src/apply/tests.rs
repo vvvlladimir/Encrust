@@ -302,6 +302,28 @@ fn a_scale_of_zero_is_refused_and_leaves_the_transform() {
 }
 
 #[test]
+fn a_mirrored_cube_scaled_stays_mirrored() {
+    let mut document = Document::from_project(cube());
+    let mirror = Edit::Mirror {
+        object: CUBE,
+        axis: Axis::X,
+    };
+    apply(&mut document, &mirror, Cancel::never()).expect("a cube mirrors");
+
+    let scale = Edit::Scale {
+        object: CUBE,
+        factors: Vec3::splat(2.0),
+    };
+    apply(&mut document, &scale, Cancel::never()).expect("a mirrored cube scales");
+
+    let scale = document.object(CUBE).expect("there").0.transform.scale;
+    assert!(
+        (scale - Vec3::new(-2.0, 2.0, 2.0)).abs().max_element() < 1e-6,
+        "twice the size, still mirrored along X: (-2, 2, 2) expected, got {scale}"
+    );
+}
+
+#[test]
 fn a_placement_naming_no_object_is_refused() {
     let mut document = Document::from_project(cube());
     let edit = Edit::Move {

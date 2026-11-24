@@ -16,10 +16,8 @@ use crate::resolved::{ResolvedSettings, flag, number, points, text};
 #[error("the {} step is not an edit of a plate", .0.name())]
 pub struct NotAnEdit(pub StepKind);
 
-/// The edits step `kind` makes of `object` with `settings`, a key left out taking its default.
-/// `placed` is the object's box in plate mm; `area_mm` is the usable area of the plate, its
-/// corner and its size; `plug_drift_mm` is what the resin's fit drifts by, which a plug gap
-/// written here has taken off, so the gap in the edit is the final one.
+/// The edits step `kind` makes of `object` with `settings`, a key left out at its default, on
+/// the plate's usable `area_mm`; a plug gap has the resin's `plug_drift_mm` taken off.
 pub fn edits_of(
     kind: StepKind,
     settings: &ResolvedSettings,
@@ -48,6 +46,7 @@ pub fn edits_of(
             keep_clear_mm: Vec::new(),
             keep_clear_radius_mm: None,
             keep_clear_seen_deg: None,
+            lift_mm: None,
         }],
         StepKind::Hollow => vec![Edit::Hollow {
             object,

@@ -472,3 +472,63 @@ fn a_name_neither_on_the_plate_nor_shipped_is_refused_with_groups_present() {
 
     assert_eq!(error, ApplyError::NoProfile("yours".to_owned()));
 }
+
+#[test]
+fn a_supported_cube_scaled_keeps_its_points_and_grows_its_trees_again() {
+    let mut document = lifted_cube(5.0);
+    apply(
+        &mut document,
+        &supports(Some("medium"), Vec::new(), false),
+        Cancel::never(),
+    )
+    .expect("a lifted cube is supported");
+
+    let scale = Edit::Scale {
+        object: CUBE,
+        factors: Vec3::splat(2.0),
+    };
+    apply(&mut document, &scale, Cancel::never()).expect("the cube scales");
+
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    assert!(
+        state.supports.grown.is_empty(),
+        "trees grown at scale 1 are dropped to grow again at scale 2"
+    );
+    assert!(
+        !state.supports.points.is_empty(),
+        "the contact points stay, to grow from"
+    );
+}
+
+#[test]
+fn frozen_trees_on_a_cube_tipped_over_thaw_to_grow_again() {
+    let mut document = lifted_cube(5.0);
+    apply(
+        &mut document,
+        &supports(Some("medium"), Vec::new(), false),
+        Cancel::never(),
+    )
+    .expect("a lifted cube is supported");
+    let mut project = document.into_project();
+    let held = &mut project.manifest.objects[0].supports;
+    held.frozen = std::mem::take(&mut held.grown);
+    held.points.clear();
+    let mut document = Document::from_project(project);
+
+    let tip = Edit::Rotate {
+        object: CUBE,
+        degrees: Vec3::new(90.0, 0.0, 0.0),
+    };
+    apply(&mut document, &tip, Cancel::never()).expect("the cube turns");
+
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    assert!(
+        state.supports.frozen.is_empty(),
+        "a tilt thaws every frozen tree, {} left",
+        state.supports.frozen.len()
+    );
+    assert!(
+        !state.supports.points.is_empty(),
+        "the thawed trees' tips are points to grow from"
+    );
+}

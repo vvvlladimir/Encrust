@@ -1,5 +1,5 @@
 //! The placing flags as edits of each entry's object: the scale, the orientation search, a
-//! turn and centring, in that order (ADR 0472).
+//! turn, centring and the lift, in that order (ADR 0472).
 
 use std::path::PathBuf;
 
@@ -10,6 +10,7 @@ use core_geometry::{Quat, Vec3};
 use printer_profiles::{Catalogue, PrinterProfile};
 
 use super::document::{Staging, said};
+use super::finished::usable_area;
 use super::{Found, Shaping};
 use crate::args::{Goal, ProfileArgs, TransformArgs};
 use crate::pipeline::{OrientChoice, OrientSummary, Watch, with_bar};
@@ -64,7 +65,20 @@ pub(super) fn placed(
         if transform.center {
             centre(staging, id, printer, watch)?;
         }
+        if let Some(lift_mm) = transform.lift {
+            lift(staging, id, lift_mm, watch)?;
+        }
     }
+    Ok(())
+}
+
+/// Stands the object `lift_mm` off the plate, as the window's Lift off the plate does.
+fn lift(staging: &mut Staging, object: ObjectId, lift_mm: f32, watch: &Watch) -> Result<()> {
+    let bounds =
+        (staging.mesh(object).and_then(|mesh| mesh.aabb())).context("mesh has no vertices")?;
+    let by_mm = Vec3::new(0.0, 0.0, lift_mm - bounds.mins.z);
+    let edit = Edit::Move { object, by_mm };
+    staging.apply(&edit, object, watch.stop).map_err(said)?;
     Ok(())
 }
 
@@ -100,11 +114,7 @@ fn orient_edit(
     (transform, profile): (&TransformArgs, &ProfileArgs),
     printer: Option<&PrinterProfile>,
 ) -> Edit {
-    let area = printer.map(|printer| {
-        let volume = &printer.build_volume;
-        let [low, high] = (printer.plate_inset.unwrap_or_default()).area_mm(volume.x, volume.y);
-        (low, [high[0] - low[0], high[1] - low[1]])
-    });
+    let area = printer.map(usable_area);
     let keep_clear = !transform.orient_keep_clear.is_empty();
     Edit::Orient {
         object,
@@ -120,6 +130,7 @@ fn orient_edit(
         keep_clear_radius_mm: Some(transform.orient_keep_clear_radius),
         keep_clear_seen_deg: keep_clear
             .then(|| transform.orient_keep_clear_turn.unwrap_or(Vec3::ZERO)),
+        lift_mm: transform.lift,
     }
 }
 

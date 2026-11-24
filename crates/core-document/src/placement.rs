@@ -90,14 +90,14 @@ pub fn degrees_of(rotation: Quat) -> Vec3 {
     Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees()).round() + 0.0
 }
 
-/// `transform` with its scale set to `factors`, about the centre of mass of `mesh` and the
-/// object stood on the plate; `None` for a factor that is not finite or not above zero.
+/// `transform` with its scale set to `factors`, a mirror kept, about the centre of mass of `mesh`
+/// and the object stood on the plate; `None` for a factor not finite or not above zero.
 pub fn sized_to(transform: Transform, mesh: &Mesh, factors: Vec3) -> Option<Transform> {
     if !factors.to_array().iter().all(|f| f.is_finite() && *f > 0.0) {
         return None;
     }
     let sized = Transform {
-        scale: factors,
+        scale: factors * transform.scale.signum(),
         ..transform
     };
     Some(settled(transform, sized, mesh))

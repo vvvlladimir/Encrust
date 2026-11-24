@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::Ordering::Relaxed;
 
 use core_edit::Edit;
 use core_geometry::{Scalar, signed_volume};
@@ -108,8 +110,7 @@ fn a_stopped_relief_is_cancelled() {
     assert_eq!(error, ApplyError::Cancelled);
 }
 
-#[test]
-fn a_hollow_cube_pressed_is_hollowed_again_keeping_its_holes() {
+fn hollow_cube() -> Document {
     let mut document = Document::from_project(cube());
     let walled = Edit::Hollow {
         object: CUBE,
@@ -126,6 +127,49 @@ fn a_hollow_cube_pressed_is_hollowed_again_keeping_its_holes() {
         keep_solid_reach_mm: None,
     };
     apply(&mut document, &walled, Cancel::never()).expect("the cube has room for a 2 mm wall");
+    document
+}
+
+#[test]
+fn a_relief_stopped_while_hollowing_again_leaves_the_cube_as_it_was() {
+    let mut document = hollow_cube();
+    let (state, meshes) = document.object(CUBE).expect("the cube is there");
+    let (transform, source) = (state.transform, Arc::clone(&meshes.source));
+    let picture = checker_picture("stopped-again");
+    let progress = core_volume::Progress::default();
+    let pressed = std::sync::atomic::AtomicBool::new(false);
+    let at_the_hollow = || match progress.read() {
+        Some((core_volume::Step::Preparing, ..)) => pressed.load(Relaxed),
+        Some(_) => {
+            pressed.store(true, Relaxed);
+            false
+        }
+        None => false,
+    };
+
+    let error = apply(
+        &mut document,
+        &relief_of(picture.clone()),
+        Cancel::when(&at_the_hollow).reporting(&progress),
+    )
+    .expect_err("the run is stopped once the hollow is built again");
+    std::fs::remove_file(&picture).expect("the picture is there to remove");
+
+    assert_eq!(error, ApplyError::Cancelled);
+    let (after, meshes) = document.object(CUBE).expect("the cube stays");
+    assert!(
+        Arc::ptr_eq(&meshes.source, &source) && after.transform == transform,
+        "a stopped relief leaves the cube's surface and place as they were"
+    );
+    assert!(
+        after.hollow.built.is_some() && meshes.shell.is_some(),
+        "the cube keeps its shell"
+    );
+}
+
+#[test]
+fn a_hollow_cube_pressed_is_hollowed_again_keeping_its_holes() {
+    let mut document = hollow_cube();
     let drilled = Edit::Drain {
         object: CUBE,
         at_mm: vec![core_geometry::Vec3::new(

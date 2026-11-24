@@ -339,6 +339,47 @@ fn an_auto_drain_searches_a_hollow_cube_and_keeps_the_id() {
 }
 
 #[test]
+fn edits_left_when_the_user_moves_the_model_under_a_running_hollow_are_refused() {
+    let file = scratch("moved-under");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let state = HollowState {
+        thickness_mm: 1.0,
+        ..bench.tools.hollow.state.clone()
+    };
+    let both = json!({"base_version": version,
+        "apply": [{"edit": "hollow", "object": cube.0, "settings": state},
+                  {"edit": "drain", "object": cube.0, "auto": true}]});
+    let line = asking(&file, both);
+    let server = {
+        let file = file.clone();
+        std::thread::spawn(move || send(&file, &line))
+    };
+    let mut moved = false;
+    while !server.is_finished() {
+        bench.frame();
+        if !moved && bench.tools.hollow.job.is_some() {
+            let object = bench.doc.scene.get_mut(cube).expect("the cube is there");
+            object.transform.translation.x += 5.0;
+            moved = true;
+        }
+        std::thread::yield_now();
+    }
+    let reply = server.join().expect("the server's thread ends");
+    bench.run_to_end();
+
+    assert!(moved, "the hollow ran for a frame at least");
+    assert_eq!(reply["applied"], false, "{reply}");
+    assert!(
+        reply["why_not"]
+            .as_str()
+            .is_some_and(|why| why.contains("changed")),
+        "{reply}"
+    );
+}
+
+#[test]
 fn an_auto_drain_on_a_solid_cube_is_refused_for_want_of_a_cavity() {
     let file = scratch("drain-solid");
     let mut bench = Bench::new(file.clone());
@@ -935,6 +976,23 @@ fn an_orient_with_no_printer_stands_the_bar_as_the_panel_does_on_the_standard_pr
         linked.rotation,
         panel.rotation
     );
+}
+
+#[test]
+fn an_orient_asking_a_lift_keeps_it_as_the_lift_row_does() {
+    let file = scratch("orient-lift");
+    let mut bench = Bench::new(file.clone());
+    let bar = with_bar(&mut bench);
+    let version = bench.doc.history.plate_version();
+    let ask = json!({"base_version": version,
+        "apply": [{"edit": "orient", "object": bar.0, "lift_mm": 4.0}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, ask));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let kept = bench.doc.scene.get(bar).and_then(|object| object.lift_mm);
+    assert_eq!(kept, Some(4.0), "the 4 mm asked is the bar's lift");
 }
 
 #[test]

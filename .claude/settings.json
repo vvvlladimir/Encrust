@@ -13,17 +13,11 @@
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
-      "Bash(git show:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push origin claude/modest-goodall-g47ebw:*)",
-      "Bash(git push -u origin claude/modest-goodall-g47ebw:*)",
-      "Bash(git push -q origin claude/modest-goodall-g47ebw:*)"
+      "Bash(git show:*)"
     ],
     "ask": [
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
-      "Bash(git push origin main:*)"
+      "Bash(git push:*)",
+      "Bash(git commit:*)"
     ],
     "additionalDirectories": []
   },

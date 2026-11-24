@@ -94,6 +94,13 @@ impl Document {
         ))
     }
 
+    /// Every object's id, in plate order.
+    pub fn ids(&self) -> Vec<ObjectId> {
+        (self.project.manifest.objects.iter())
+            .map(|object| object.id)
+            .collect()
+    }
+
     /// Every object of the active plate that is not hidden, in plate order.
     pub(crate) fn printable(&self) -> Vec<ObjectId> {
         let active = self.project.manifest.active_plate;
@@ -318,6 +325,13 @@ impl Document {
         let copy = state.id;
         self.put_at(index + 1, state, meshes);
         Some(copy)
+    }
+
+    /// Records which way object `id`'s faces now turn, as a repair that turned them found.
+    pub(crate) fn set_orientation(&mut self, id: ObjectId, orientation: Orientation) {
+        if let Some(index) = self.index_of(id) {
+            self.project.manifest.objects[index].summary.orientation = orientation;
+        }
     }
 
     /// Stands object `id` at `transform`; nothing changes when it is not on the plate.

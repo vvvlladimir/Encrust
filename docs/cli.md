@@ -82,7 +82,7 @@ model of a batch share one report shape; `slice` of a plate prints one entry per
 resin, weight, cost and the risks — when there is a printer to draw the masks for.
 
 Every finding the report counts it also locates, in plate millimetres from the plate's front
-left corner as the model prints, after placement and the lift its supports give it — the frame
+left corner as the model prints, after placement and any `--lift` — the frame
 `--drain-at` and `--channel` take — so a script can feed a point straight back (ADR 0400).
 `cured.risks`, wherever `cured` appears, lists each risk in print order: `kind` (`island`, `floating`, `lever`, `peel`, `suction-cup` or `thin`), `layer` counted from one,
 `at_mm` `[x, y, z]` with z the bottom of that layer, and the kind's own readings — `area_mm2`;
@@ -236,9 +236,9 @@ encrust slice bust.stl --printer elegoo-mars-4-ultra --resin my-grey \
 A hole into the surface nearest a point, cut with or without a cavity behind it, and the
 check that says whether any resin is still stuck. `--check-drainage` asks for it alone. The
 point is in plate millimetres from the plate's front left corner, where the model stands once
-placed (`--center`, `--rotate`, `--orient`), as the window's Drain tool takes a click: supports
-grow under the model where it stands and lift nothing first, so a model on the plate gets
-none under its floor (ADR 0472). It is the frame the report gives `slicing.trapped` in, so a
+placed (`--center`, `--rotate`, `--orient`, `--lift`), as the window's Drain tool takes a click:
+supports grow under the model where it stands and lift nothing first, so a model on the plate
+gets none under its floor (ADR 0472). It is the frame the report gives `slicing.trapped` in, so a
 pocket's `at_mm` can be fed straight back. `encrust inspect model.stl --center --printer …`
 prints the bounds to pick it out of:
 
@@ -393,16 +393,16 @@ encrust slice model.stl \
   --center -o model.goo
 
 encrust slice model.stl \
-  --printer elegoo-mars-4-ultra --supports medium --center -o model.goo
+  --printer elegoo-mars-4-ultra --supports medium --center --lift 3 -o model.goo
 
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 --supports auto --support-cavity -o model.goo
 ```
 
-A model is stood off the plate by the profile's own `z_lift_mm`, and by its raft's
-thickness on top when it has one, before anything is put under it, the way the window's **Lift off the plate** does it: a part sitting on the plate has no
-room for a support. One already standing that high is left where it is, and a profile with
-`z_lift_mm = 0` lifts nothing. The report says how far it moved.
+Supports grow under the model where it stands, as the window's do: a model on the plate gets
+none under its floor. `--lift MM` stands it that high first, last of the placing flags, as the
+window's **Lift off the plate** does; an `--orient` on supports stands its poses at it too. The
+report's `supports.lifted_mm` says how high it stands.
 
 `--merge-supports X,Y,Z;X,Y,Z` joins the supports whose contacts lie within half a millimetre
 of those points into one tree on one trunk, as the window's **Merge into one** does, and grows

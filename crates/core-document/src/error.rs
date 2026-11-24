@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use core_edit::ObjectId;
 use core_geometry::Vec3;
+use core_volume::VolumeError;
 use thiserror::Error;
 
 /// Why an edit was not carried out; the document is left as it was.
@@ -86,8 +87,7 @@ pub enum ApplyError {
     /// An object whose transform cannot be inverted, so no plate point maps onto it.
     #[error("object {0:?} has a transform that cannot be inverted")]
     BadTransform(ObjectId),
-    /// A support profile that is not one this build ships, `auto` among them: its sizing is the
-    /// window's catalogue's, not the document's.
+    /// A support profile named that is neither one of the plate's groups nor a shipped preset.
     #[error("no shipped support profile is named {0:?}")]
     NoProfile(String),
     /// A printer the catalogue does not list, named by an orient to prove its poses on.
@@ -112,4 +112,17 @@ pub enum ApplyError {
     /// A split, part-off, combination, repair, bridge or relief failed in the geometry; `reason` is the geometry's own message.
     #[error("the edit of object {object:?} failed: {reason}")]
     Failed { object: ObjectId, reason: String },
+}
+
+impl ApplyError {
+    /// What a geometry run's `error` on `object` is to an edit: stopped, or failed with its reason.
+    pub(crate) fn of_volume(object: ObjectId, error: VolumeError) -> Self {
+        match error {
+            VolumeError::Cancelled => Self::Cancelled,
+            other => Self::Failed {
+                object,
+                reason: other.to_string(),
+            },
+        }
+    }
 }

@@ -1,6 +1,5 @@
-//! The window as `encrust-mcp`'s viewport: each revision a chat client's job keeps stands on
-//! the open plate as the plate its check wrote, in place of the job's last, one undo entry a
-//! revision (ADR 0473, `docs/design/window-link.md`).
+//! The window as `encrust-mcp`'s viewport: a job's revision stands on the open plate as the plate
+//! its check wrote, in place of its last, one undo each (ADR 0473, `docs/design/window-link.md`).
 
 mod line;
 mod listen;
@@ -198,6 +197,7 @@ impl Link {
             return;
         }
         for id in followed.objects.drain(..) {
+            window.doc.scene.remove_plugs_of(id);
             window.doc.scene.remove(id);
         }
         let (scene, supports) = (&mut window.doc.scene, &mut window.tools.supports);

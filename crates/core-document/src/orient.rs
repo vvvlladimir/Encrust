@@ -12,14 +12,15 @@ use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3, transform_mesh};
 use core_plate::{OrientGoal, OrientPreset, OrientSettings, Phase, PlateError, Printed, Watch};
 use core_volume::{Cancel, ModelHollow, Step};
 use printer_profiles::{
-    Catalogue, MaterialProfile, PrinterProfile, ProfileError, Raft, SupportProfile, machine_named,
+    BuildVolume, Catalogue, MaterialProfile, PrinterProfile, ProfileError, Raft, SupportProfile,
+    machine_named,
 };
 
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
 use crate::placement::{Footing, degrees_of, euler_degrees, stood_turned};
-use crate::supports::orient_plan_of;
+use crate::supports::{orient_plan_of, stand_at};
 
 /// The pieces a search's share is counted in, so a bar moves in steps of a thousandth.
 const SHARE_PIECES: usize = 1000;
@@ -36,6 +37,7 @@ pub(crate) struct OrientAsked {
     pub resin: Option<String>,
     /// Places kept clear, plate mm; how near still touches, mm; the turn they were seen at.
     pub keep_clear: (Vec<Vec3>, Option<Scalar>, Option<Vec3>),
+    pub lift_mm: Option<Scalar>,
 }
 
 impl OrientAsked {
@@ -53,6 +55,7 @@ impl OrientAsked {
             keep_clear_mm,
             keep_clear_radius_mm,
             keep_clear_seen_deg,
+            lift_mm,
             ..
         } = edit
         else {
@@ -71,13 +74,9 @@ impl OrientAsked {
                 *keep_clear_radius_mm,
                 *keep_clear_seen_deg,
             ),
+            lift_mm: *lift_mm,
         })
     }
-}
-
-/// The preset an orient step's goal `word` names; any other word is `auto`.
-pub fn preset_named(word: &str) -> OrientPreset {
-    preset_of(OrientAim::named(word))
 }
 
 /// The search preset `aim` names.
@@ -242,9 +241,26 @@ pub fn kept_clear(
 
 /// The plan an orient weighs where the plate has no support group: the stock profile, as the
 /// window's default group builds it.
-pub fn default_plan() -> SupportPlan {
+pub(crate) fn default_plan() -> SupportPlan {
     let stock = SupportProfile::default();
     orient_plan(None, &stock, stock.raft)
+}
+
+/// The search `asked` of a model standing at `transform`, weighing `plan`'s supports, in `volume`.
+fn searched_by(
+    asked: &OrientAsked,
+    plan: &SupportPlan,
+    transform: Transform,
+    volume: &BuildVolume,
+) -> OrientSettings {
+    OrientSettings {
+        preset: preset_of(asked.goal),
+        clean_surface: asked.clean_surface,
+        max_tilt_deg: asked.max_tilt_deg,
+        down_now: transform.rotation.inverse() * Vec3::NEG_Z,
+        build_volume_mm: Some(Vec3::new(volume.x, volume.y, volume.z)),
+        ..placed_by(supported_base(), plan)
+    }
 }
 
 /// Every pose the search ranks for object `id`, best first, proved on the machine `asked` names,
@@ -258,18 +274,13 @@ pub(crate) fn ranked_poses(
     let named = (asked.printer.as_deref(), asked.resin.as_deref());
     let (printer, material) = machine_in(Catalogue::bundled(), named)?;
     let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
-    let plan = orient_plan_of(document, state)?.unwrap_or_else(default_plan);
+    let plan = lifted(
+        orient_plan_of(document, state)?.unwrap_or_else(default_plan),
+        asked.lift_mm,
+    );
     let z_lift_mm = plan.placing().z_lift_mm;
-    let on_supports = placed_by(supported_base(), &plan);
     let volume = &printer.build_volume;
-    let settings = OrientSettings {
-        preset: preset_of(asked.goal),
-        clean_surface: asked.clean_surface,
-        max_tilt_deg: asked.max_tilt_deg,
-        down_now: state.transform.rotation.inverse() * Vec3::NEG_Z,
-        build_volume_mm: Some(Vec3::new(volume.x, volume.y, volume.z)),
-        ..on_supports
-    };
+    let settings = searched_by(asked, &plan, state.transform, volume);
     let body = Body::of(state, meshes).sized(state.transform.sizing());
     let (points, radius_mm, seen_deg) = &asked.keep_clear;
     let plate_mm = Vec2::new(volume.x, volume.y);
@@ -351,7 +362,7 @@ pub(crate) fn apply_orient(
     };
     let at = (footing, choice.oriented.on_plate);
     let transform = stood_turned(state.transform, &meshes.source, rotation, at);
-    document.set_transform(id, transform);
+    stand_at(document, id, transform);
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),

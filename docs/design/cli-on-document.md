@@ -12,8 +12,8 @@ the command line does to reach it, and the cards that get it there.
    the order given, as the window gives them. A project is `Document::from_project`; a plate
    file's entries are models whose `position` folds to a `Move`.
 2. **Fold.** The flags become `Vec<Edit>` per object in the window's order: repair and mends;
-   modelling (relief, label, combine, cut, split, part-off); placement (scale, rotate, center,
-   orient); hollow; drains, channels, plugs; supports; arrange last, over the whole plate.
+   placement (scale, orient, rotate, center, lift); relief; modelling (combine, label, cut,
+   split, part-off); hollow; drains, channels, plugs; supports; arrange last, over the plate.
    `--edits FILE` appends its list after them.
 3. **Apply.** Each edit through `apply` with the run's `Cancel` (Ctrl-C). An error names the
    flag it came from, as `--edits` names its index today.
@@ -44,6 +44,7 @@ What the front end works out, from the machine it knows, goes into an edit as a 
 | `--scale` | `Scale` |
 | `--rotate` | `Rotate` |
 | `--center` | front end: `Move` by the plate's middle less the object's box middle |
+| `--lift` | front end: `Move` standing the object's box that high; `Orient { lift_mm }` |
 | `--orient`, `--orient-goal`, `--max-tilt`, `--clean-surface` | `Orient`, `printer` and `resin` the run's catalogue ids or none (P8), the usable area (B2) |
 | `--orient-pick N` | `Orient { pick: N - 1 }` (counted from 1, decided) |
 | `--orient-choices` | front end: `estimate`'s listing of the search, no edit |

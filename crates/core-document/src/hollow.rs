@@ -7,7 +7,7 @@ use core_engine::project::{BuiltCavity, HollowState, hollow_of};
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
     BLOCKER_REACH_MM, Blocker, BlockerSize, Cancel, HollowMode, HollowSettings, Hollowed,
-    ModelHollow, Shell, VolumeError, blocker_under, carve, cavity_field, plate_down, rod_on,
+    ModelHollow, Shell, blocker_under, carve, cavity_field, plate_down, rod_on,
 };
 
 use crate::apply::{Applied, Report};
@@ -29,9 +29,8 @@ pub fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings 
     }
 }
 
-/// The blockers each of `runs` lays on a model standing under `transform`, in its own space: a
-/// ball at the surface nearest each run's first plate point and a rod on to each next, as a
-/// click and shift-clicks lay them; reaching `reach_mm` past the wall, fitted where unset.
+/// The blockers each of `runs`, plate points, lays on a model standing under `transform`, in
+/// its own space, as a click and shift-clicks lay them, `reach_mm` past the wall.
 pub fn blockers_along(
     (mesh, bvh): (&Mesh, &Bvh),
     transform: Transform,
@@ -101,13 +100,7 @@ pub fn shelled(
     cancel: Cancel<'_>,
     object: ObjectId,
 ) -> Result<Shell, ApplyError> {
-    let failed = |error: VolumeError| match error {
-        VolumeError::Cancelled => ApplyError::Cancelled,
-        other => ApplyError::Failed {
-            object,
-            reason: other.to_string(),
-        },
-    };
+    let failed = |error| ApplyError::of_volume(object, error);
     let field = cavity_field(mesh, bvh, settings, shape, cancel).map_err(failed)?;
     let hollowed = carve(mesh, &field, settings, cancel).map_err(failed)?;
     shell_from(hollowed, shape, settings.clone()).map_err(|NoRoom| ApplyError::NoRoom(object))
@@ -150,28 +143,50 @@ pub(crate) fn apply_hollow(
     })
 }
 
-/// Carries `hollow`, object `id`'s before its surface was replaced with one sized by `sizing`,
-/// onto the new surface and hollows it again as built, as the window's Relief tool does.
-pub(crate) fn hollowed_again(
-    document: &mut Document,
-    id: ObjectId,
+/// An object's hollow carried onto a new surface: its blockers, its cuts and, where it was
+/// hollowed, its shell built again.
+pub(crate) struct Rehollowed {
+    carried: ModelHollow,
+    shell: Option<Shell>,
+}
+
+/// Carries `hollow`, of a surface replaced by `source` sized by `sizing`, onto `source` standing
+/// at `transform` and hollows it again as built, as the window's Relief tool does.
+pub(crate) fn rehollowed(
+    source: &Mesh,
     (hollow, sizing): (&ModelHollow, Mat3),
+    transform: Transform,
     cancel: Cancel<'_>,
-) -> Result<(), ApplyError> {
-    let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
-    let transform = state.transform;
-    let source = Arc::clone(&meshes.source);
-    let bvh = Bvh::build(&source);
-    let carried = hollow.carried_onto(&source, &bvh, sizing);
-    document.set_blockers(id, carried.blockers().to_vec());
-    document.set_cuts(id, carried.drains().to_vec(), carried.channels().to_vec());
-    let Some(asked) = hollow.asked() else {
-        return Ok(());
+    id: ObjectId,
+) -> Result<Rehollowed, ApplyError> {
+    let bvh = Bvh::build(source);
+    let carried = hollow.carried_onto(source, &bvh, sizing);
+    let shell = match hollow.asked() {
+        Some(asked) => {
+            let settings = carried.asking(asked);
+            Some(shelled(
+                (source, &bvh),
+                &settings,
+                transform.unturned(),
+                cancel,
+                id,
+            )?)
+        }
+        None => None,
     };
-    let settings = carried.asking(asked);
-    let shell = shelled((&source, &bvh), &settings, transform.unturned(), cancel, id)?;
-    document.set_built(id, BuiltCavity::of(&shell), shell.mesh);
-    Ok(())
+    Ok(Rehollowed { carried, shell })
+}
+
+impl Rehollowed {
+    /// Gives object `id` this hollow; its supports stay.
+    pub(crate) fn lay_on(self, document: &mut Document, id: ObjectId) {
+        let carried = self.carried;
+        document.set_blockers(id, carried.blockers().to_vec());
+        document.set_cuts(id, carried.drains().to_vec(), carried.channels().to_vec());
+        if let Some(shell) = self.shell {
+            document.set_built(id, BuiltCavity::of(&shell), shell.mesh);
+        }
+    }
 }
 
 #[cfg(test)]

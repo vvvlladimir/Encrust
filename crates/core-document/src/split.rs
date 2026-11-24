@@ -31,11 +31,7 @@ pub fn part_off_at(
 ) -> Result<PartedOff, ApplyError> {
     part_off(placed, at, cancel).map_err(|error| match error {
         VolumeError::NoNeck | VolumeError::NotOnModel => ApplyError::NoNeck(id),
-        VolumeError::Cancelled => ApplyError::Cancelled,
-        other => ApplyError::Failed {
-            object: id,
-            reason: other.to_string(),
-        },
+        other => ApplyError::of_volume(id, other),
     })
 }
 

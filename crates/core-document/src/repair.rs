@@ -4,7 +4,7 @@ use core_edit::{Edit, ObjectId};
 use core_geometry::{
     MendSettings, Mesh, Region, Scalar, bridge, flip_faces, list_shells, remove_faces,
 };
-use core_volume::{Cancel, RepairMethod, RepairSettings, Repaired, VolumeError, repair};
+use core_volume::{Cancel, RepairMethod, RepairSettings, Repaired, repair};
 
 use crate::apply::{Applied, Report};
 use crate::document::Document;
@@ -109,13 +109,7 @@ pub fn repaired(
     cancel: Cancel<'_>,
     object: ObjectId,
 ) -> Result<Repaired, ApplyError> {
-    repair(mesh, method, settings, cancel).map_err(|error| match error {
-        VolumeError::Cancelled => ApplyError::Cancelled,
-        other => ApplyError::Failed {
-            object,
-            reason: other.to_string(),
-        },
-    })
+    repair(mesh, method, settings, cancel).map_err(|error| ApplyError::of_volume(object, error))
 }
 
 /// Repairs the mesh of `id` by `method`.
@@ -128,7 +122,13 @@ pub(crate) fn apply_repair(
     let (_, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
     let settings = repair_settings(seam_mm, shell_mm2);
     let done = repaired(&meshes.source, (method, settings), cancel, id)?;
-    document.reshape(id, done.mesh);
+    // A wrap's surface stands whatever the repair under it did, as in the window's Repair.
+    if done.wrapped || !done.mended.kept_as_found {
+        document.reshape(id, done.mesh);
+        if let Some(orientation) = done.mended.orientation {
+            document.set_orientation(id, orientation);
+        }
+    }
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),

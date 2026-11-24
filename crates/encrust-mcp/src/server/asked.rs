@@ -37,14 +37,27 @@ pub fn asked_after_check(
             return None;
         }
     }
-    if recipe.relief != earlier.relief {
-        asked.push(relief(recipe.relief.as_ref()?, object)?);
-    }
+    let pressed = if recipe.relief == earlier.relief {
+        None
+    } else {
+        let precision = (recipe.hollow.as_ref()).and_then(|hollow| hollow.precision);
+        let precision = precision.unwrap_or_else(core_edit::defaults::lattice_precision);
+        Some(relief(recipe.relief.as_ref()?, precision, object)?)
+    };
     asked.extend(modelled(
         recipe.modelling.as_ref(),
         earlier.modelling.as_ref(),
         object,
     )?);
+    // A turn and a relief go after a scale and before a label, laid where the model stands.
+    let mut at = (asked.iter())
+        .position(|edit| {
+            matches!(
+                edit,
+                Edit::Label { .. } | Edit::Split { .. } | Edit::PartOff { .. } | Edit::Cut { .. }
+            )
+        })
+        .unwrap_or(asked.len());
     if recipe.pose != earlier.pose {
         let turned = match (&recipe.pose, catalogue_ids(recipe)) {
             (Some(Pose::Rotate { degrees }), _) => rotated(object, *degrees),
@@ -54,14 +67,11 @@ pub fn asked_after_check(
             (Some(Pose::Search { .. }), _) => rotated(object, chosen_deg?),
             (None, _) => return None,
         };
-        // A turn goes after a scale and before a label, which is laid where the model stands.
-        let at = asked.iter().position(|edit| {
-            matches!(
-                edit,
-                Edit::Label { .. } | Edit::Split { .. } | Edit::PartOff { .. } | Edit::Cut { .. }
-            )
-        });
-        asked.insert(at.unwrap_or(asked.len()), turned);
+        asked.insert(at, turned);
+        at += 1;
+    }
+    if let Some(pressed) = pressed {
+        asked.insert(at, pressed);
     }
     asked.extend(finished(recipe, earlier, object, fit_drift_mm)?);
     Some(asked)
@@ -124,6 +134,7 @@ fn searched(
         // As the command line reads them: seen at this turn, the model centred on the plate.
         keep_clear_seen_deg: (!keep_clear_at_mm.is_empty())
             .then(|| keep_clear_seen_deg.unwrap_or_default().into()),
+        lift_mm: None,
     })
 }
 
@@ -139,8 +150,8 @@ fn plate_alike(recipe: &Recipe, earlier: &Recipe) -> bool {
         && joined(recipe.modelling.as_ref()) == joined(earlier.modelling.as_ref())
 }
 
-/// The modelling edits, a part taken off before the cut; `None` where one asked earlier is
-/// taken back, which no edit undoes.
+/// The modelling edits in the command line's order: scale, label, cut, then split or part-off;
+/// `None` where one asked earlier is taken back, which no edit undoes.
 fn modelled(
     now: Option<&Modelling>,
     then: Option<&Modelling>,
@@ -163,6 +174,9 @@ fn modelled(
             "follow_surface": label.follow, "angle_deg": label.angle_deg.unwrap_or(0.0),
         }))?);
     }
+    if now.cut != then.cut {
+        asked.push(now.cut.as_ref()?.edit(object));
+    }
     if now.split_smallest_mm3 != then.split_smallest_mm3 {
         asked.push(Edit::Split {
             object,
@@ -174,9 +188,6 @@ fn modelled(
             object,
             at_mm: now.part_off_at_mm?.into(),
         });
-    }
-    if now.cut != then.cut {
-        asked.push(now.cut.as_ref()?.edit(object));
     }
     Some(asked)
 }
@@ -225,11 +236,12 @@ fn mend(mend: &Mend, object: ObjectId) -> Option<Edit> {
 }
 
 /// A picture tiled over the model; the file's own texture is no edit yet (`None`).
-fn relief(relief: &Relief, object: ObjectId) -> Option<Edit> {
+/// The relief `relief` asks, on the lattice `--precision` gives the command line's check.
+fn relief(relief: &Relief, precision: f32, object: ObjectId) -> Option<Edit> {
     let image = relief.image.as_ref()?;
     let mut asked = json!({
         "edit": "relief", "object": object, "depth_mm": relief.depth_mm, "image": image,
-        "invert": relief.invert, "symmetric": relief.symmetric,
+        "invert": relief.invert, "symmetric": relief.symmetric, "precision": precision,
     });
     let given = [
         ("tile_mm", relief.tile_mm),
@@ -246,9 +258,12 @@ fn relief(relief: &Relief, object: ObjectId) -> Option<Edit> {
     edit_of(asked)
 }
 
-/// An edit written as the window reads it; `None` for one this build's `Edit` does not take.
+/// An edit written as the window reads it; `None`, said on stderr, for one this build's `Edit`
+/// does not take, which leaves the revision to be shown by its check's plate.
 fn edit_of(written: Value) -> Option<Edit> {
-    serde_json::from_value(written).ok()
+    serde_json::from_value(written)
+        .map_err(|error| eprintln!("encrust-mcp: an edit this build cannot read: {error}"))
+        .ok()
 }
 
 mod finished;

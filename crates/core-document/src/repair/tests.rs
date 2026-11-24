@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use core_edit::Edit;
 use core_geometry::MendMethod;
 use core_geometry::{Scalar, diagnose, signed_volume};
@@ -5,7 +7,9 @@ use core_volume::Cancel;
 
 use super::*;
 use crate::apply::apply;
-use crate::fixtures::{SIDE_MM, cube, cube_with_hole, cube_with_turned_face, cubes_with_plug};
+use crate::fixtures::{
+    SIDE_MM, cube, cube_with_hole, cube_with_turned_face, cubes_with_plug, sheet,
+};
 
 /// What f32 sums over a cube's faces drift by, mm³.
 const VOLUME_MM3: Scalar = 1e-2;
@@ -204,5 +208,25 @@ fn a_repair_takes_the_lengths_asked_and_the_windows_where_unset() {
         (asked.smallest_shell_mm2 - window.smallest_shell_mm2).abs() < 1e-9,
         "the window's smallest shell, {} mm²",
         window.smallest_shell_mm2
+    );
+}
+
+#[test]
+fn a_repair_that_would_cancel_a_sheet_away_leaves_it_as_it_came() {
+    let mut document = Document::from_project(sheet());
+    let before = Arc::clone(&document.object(CUBE).expect("there").1.source);
+    let edit = Edit::Repair {
+        object: CUBE,
+        method: RepairMethod::Mend(MendMethod::Repair),
+        seam_tolerance_mm: None,
+        smallest_shell_mm2: None,
+    };
+
+    let applied = apply(&mut document, &edit, Cancel::never()).expect("a sheet is looked at");
+
+    let (_, meshes) = document.object(CUBE).expect("the sheet stays");
+    assert!(
+        Arc::ptr_eq(&meshes.source, &before),
+        "the surface is the one it had: {applied:?}"
     );
 }

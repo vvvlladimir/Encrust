@@ -11,15 +11,6 @@ use crate::document::Document;
 use crate::error::ApplyError;
 use crate::piece::{Piece, Role};
 
-/// The volume operation `op` names.
-pub fn boolean_of(op: Op) -> Boolean {
-    match op {
-        Op::Union => Boolean::Union,
-        Op::Difference => Boolean::Difference,
-        Op::Intersection => Boolean::Intersection,
-    }
-}
-
 /// `placed`, models where they stand on the plate, combined by `op`, the first being what a
 /// difference keeps and named `first` in an error. With `toward` set the cut is exact.
 pub fn combined(
@@ -42,11 +33,7 @@ pub fn combined(
     made.map_err(|error| match error {
         VolumeError::NothingLeft => ApplyError::NothingLeft,
         VolumeError::Csg(CsgError::NotSolid(_)) => ApplyError::NotSolid(first),
-        VolumeError::Cancelled => ApplyError::Cancelled,
-        other => ApplyError::Failed {
-            object: first,
-            reason: other.to_string(),
-        },
+        other => ApplyError::of_volume(first, other),
     })
 }
 
@@ -77,7 +64,7 @@ pub(crate) fn apply_combine(
     if cancel.asked() {
         return Err(ApplyError::Cancelled);
     }
-    let made = combined(&placed, boolean_of(op), toward, cancel, *first)?;
+    let made = combined(&placed, op, toward, cancel, *first)?;
     let added = document.replace(*first, vec![Piece::sound(Role::Combined, made.mesh)]);
     let mut removed = vec![*first];
     for id in rest {

@@ -24,11 +24,15 @@ pub(super) fn start_orient(window: &mut Window, edit: &Edit) -> Result<Option<Ob
         ref keep_clear_mm,
         keep_clear_radius_mm,
         keep_clear_seen_deg,
+        lift_mm,
         ..
     } = edit
     else {
         return Ok(None);
     };
+    if let (Some(lift_mm), Some(lifted)) = (lift_mm, window.doc.scene.get_mut(object)) {
+        lifted.lift_to(lift_mm);
+    }
     let standing = (window.doc.scene.get(object)).ok_or_else(|| no_object(object))?;
     let sized = transform_mesh(&standing.mesh, standing.transform.sizing());
     let placed = standing.transform;

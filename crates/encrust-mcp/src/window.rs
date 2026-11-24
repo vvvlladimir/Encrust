@@ -90,9 +90,8 @@ impl Window {
         )
     }
 
-    /// Hands `revision`, its `plate` as its check wrote it, to the window and answers what it
-    /// said; `None` when no window is open, so the tool's answer says nothing of one. One not
-    /// marked `open` is shown only while the window follows its agents.
+    /// Hands `revision` and the `plate` its check wrote to the window, answering what it said or
+    /// `None` with no window open; one not `open` shows only while the window follows agents.
     pub async fn show(&self, revision: &Revision, plate: &Path, open: bool) -> Option<Value> {
         let (stream, token) = self.connect().await?;
         let line = json!({
