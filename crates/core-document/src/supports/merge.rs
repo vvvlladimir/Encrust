@@ -8,7 +8,8 @@ use core_engine::MERGE_NAMING_MM;
 use core_geometry::{Bvh, Vec3};
 use core_supports::{Placed, Profiles, SupportTree, merged};
 
-use super::{kept_supports, table_of};
+use super::groups::table_of;
+use super::kept_supports;
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
@@ -29,22 +30,7 @@ pub(crate) fn apply_merge(
     let transform = state.transform;
     let mut supports = kept_supports(state, meshes, &bvh, &table);
     let at = near_mm.first().copied().unwrap_or_default();
-    let mut picked = (near_mm.iter())
-        .map(|near| {
-            support_near(supports.trees(), *near).ok_or(ApplyError::NoSupportNear {
-                object: id,
-                at_mm: *near,
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    picked.sort_unstable();
-    picked.dedup();
-    if picked.len() < 2 {
-        return Err(ApplyError::OneSupportToMerge {
-            object: id,
-            at_mm: at,
-        });
-    }
+    let picked = picked_trees(supports.trees(), near_mm, id)?;
     let frozen: Vec<usize> = supports
         .freeze_all(&picked, transform)
         .into_iter()
@@ -74,6 +60,32 @@ pub(crate) fn apply_merge(
         added: Vec::new(),
         report: Report::Merged,
     })
+}
+
+/// The trees of `trees` (plate) the points `near_mm` name, each once; refused where a point
+/// names none, or all name one.
+fn picked_trees(
+    trees: &[SupportTree],
+    near_mm: &[Vec3],
+    id: ObjectId,
+) -> Result<Vec<usize>, ApplyError> {
+    let mut picked = (near_mm.iter())
+        .map(|near| {
+            support_near(trees, *near).ok_or(ApplyError::NoSupportNear {
+                object: id,
+                at_mm: *near,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    picked.sort_unstable();
+    picked.dedup();
+    if picked.len() < 2 {
+        return Err(ApplyError::OneSupportToMerge {
+            object: id,
+            at_mm: near_mm.first().copied().unwrap_or_default(),
+        });
+    }
+    Ok(picked)
 }
 
 /// The tree of `trees` (plate) carrying the contact nearest `at`, within `MERGE_NAMING_MM`.

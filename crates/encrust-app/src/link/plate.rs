@@ -129,30 +129,42 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     if tool_is_busy(window) {
         return true;
     }
-    if let Some((id, may_stay)) = work.under_way.take()
-        && window.doc.scene.get(id).is_some()
-        && !(may_stay && !window.machine.status.is_error())
-    {
-        let why = window.machine.status.text();
+    if let Err(why) = land_last(work, window) {
         return finish(applying, refused(why));
     }
-    if let Some((object, pick)) = work.picking.take()
-        && let Err(why) = stand_pick(window, object, pick)
-    {
-        return finish(applying, refused(why));
-    }
-    if let Some((object, sized)) = work.inside.take() {
-        return match start_inside(window, object, sized) {
-            Ok(()) => {
-                work.under_way = Some((object, true));
-                true
-            }
-            Err(why) => finish(applying, refused(why)),
-        };
+    if work.under_way.is_some() {
+        return true;
     }
     let Some(edit) = work.edits.pop_front() else {
         return finish(applying, json!({"applied": true}));
     };
+    match begin(work, &edit, window) {
+        Ok(()) => true,
+        Err(why) => finish(applying, refused(why)),
+    }
+}
+
+/// Lands what the last edit left once its tool is done: refused where the object it replaces
+/// still stands, its pick stood, its pass inside the cavity started.
+fn land_last(work: &mut Applying, window: &mut Window) -> Result<(), String> {
+    if let Some((id, may_stay)) = work.under_way.take()
+        && window.doc.scene.get(id).is_some()
+        && !(may_stay && !window.machine.status.is_error())
+    {
+        return Err(window.machine.status.text());
+    }
+    if let Some((object, pick)) = work.picking.take() {
+        stand_pick(window, object, pick)?;
+    }
+    if let Some((object, sized)) = work.inside.take() {
+        start_inside(window, object, sized)?;
+        work.under_way = Some((object, true));
+    }
+    Ok(())
+}
+
+/// Starts `edit`, noting what landing it waits on.
+fn begin(work: &mut Applying, edit: &Edit, window: &mut Window) -> Result<(), String> {
     let may_stay = matches!(
         edit,
         Edit::Split { .. }
@@ -164,19 +176,15 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
             | Edit::Supports { .. }
             | Edit::Orient { .. }
     );
-    match start_edit(&edit, window) {
-        Ok(id) => {
-            work.under_way = id.map(|id| (id, may_stay));
-            work.inside = inside_pass_of(&edit);
-            work.picking = match edit {
-                Edit::Orient { object, pick, .. } => Some((object, pick)),
-                _ => None,
-            };
-            work.placed = placed(window, Some(&edit));
-            true
-        }
-        Err(why) => finish(applying, refused(why)),
-    }
+    let id = start_edit(edit, window)?;
+    work.under_way = id.map(|id| (id, may_stay));
+    work.inside = inside_pass_of(edit);
+    work.picking = match *edit {
+        Edit::Orient { object, pick, .. } => Some((object, pick)),
+        _ => None,
+    };
+    work.placed = placed(window, Some(edit));
+    Ok(())
 }
 
 /// Where each object stands, but those `edit` may move as it lands.
@@ -248,10 +256,7 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
                 joints,
                 lay_flat,
             };
-            (window.tools.cut)
-                .start_asked(&window.doc.scene, object, asked)
-                .map_err(|error| format!("{error:#}"))?;
-            Ok(Some(object))
+            start_cut(window, object, asked)
         }
         Edit::Split {
             object,
@@ -301,6 +306,18 @@ fn start_edit(edit: &Edit, window: &mut Window) -> Result<Option<ObjectId>, Stri
         | Edit::Duplicate { .. }
         | Edit::Mirror { .. } => start_placing(window, edit),
     }
+}
+
+/// Starts cutting `object` as the Cut tool's job.
+fn start_cut(
+    window: &mut Window,
+    object: ObjectId,
+    asked: CutAsked,
+) -> Result<Option<ObjectId>, String> {
+    (window.tools.cut)
+        .start_asked(&window.doc.scene, object, asked)
+        .map_err(|error| format!("{error:#}"))?;
+    Ok(Some(object))
 }
 
 /// Starts combining `objects` as the Combine tool's job, answering the first, which a

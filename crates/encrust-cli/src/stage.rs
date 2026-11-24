@@ -1,7 +1,7 @@
 //! A plate assembled from what the command line was given — one model, several, a plate
 //! file or a project — before it is written or measured.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 use core_engine::{Cutting, Drained, Model, Plate, SupportPlan};
@@ -29,13 +29,17 @@ pub(crate) use document::{Staging, placed_by_edits, said};
 pub(crate) use finished::{Finished, hollow_report, support_report, usable_area};
 pub(crate) use placed::{shipped_printer, summary_of};
 mod finished;
+mod given;
 mod modelled;
 mod placed;
 mod repaired;
 mod room;
 
+use given::{Given, check_adaptive, given, refuse_idle_cavity};
+pub use given::{
+    describes_a_plate, describes_a_project, refuse_for_a_project, refuse_one_model_flags,
+};
 pub(crate) use room::cleared;
-use room::stood_at;
 
 /// What is done to one model on its way onto the plate.
 #[derive(Debug, Clone)]
@@ -165,45 +169,6 @@ impl Staged {
     }
 }
 
-/// What the inputs on the command line are: models, or one file describing a plate.
-enum Given<'a> {
-    Models(&'a [PathBuf]),
-    PlateFile(&'a Path),
-    Project(&'a Path),
-}
-
-fn given(inputs: &[PathBuf]) -> Result<Given<'_>> {
-    let plate = inputs.iter().find(|path| describes_a_plate(path));
-    match (plate, inputs) {
-        (None, []) => bail!("nothing to slice: name a model, a plate file or a project"),
-        (None, _) => Ok(Given::Models(inputs)),
-        (Some(_), [only]) if extension_of(only).as_deref() == Some("toml") => {
-            Ok(Given::PlateFile(only))
-        }
-        (Some(_), [only]) => Ok(Given::Project(only)),
-        (Some(path), _) => bail!(
-            "{} describes a whole plate, so it is sliced on its own",
-            path.display()
-        ),
-    }
-}
-
-/// Whether `path` names a project saved by the window.
-pub fn describes_a_project(path: &Path) -> bool {
-    extension_of(path).as_deref() == Some("encrust")
-}
-
-/// Whether `path` names a whole plate, a plate file or a project, rather than a model.
-pub fn describes_a_plate(path: &Path) -> bool {
-    matches!(extension_of(path).as_deref(), Some("toml" | "encrust"))
-}
-
-fn extension_of(path: &Path) -> Option<String> {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .map(str::to_ascii_lowercase)
-}
-
 /// Stages whatever `inputs` name. `arrange` spreads several models over the plate; `plate`
 /// picks one of a project's, counted from one.
 pub fn stage(
@@ -249,18 +214,6 @@ pub(crate) fn print_off_the_plate(parts: &[Part]) {
     }
 }
 
-/// The flags of a plate made here, which a project saved by the window answers for itself.
-pub fn refuse_for_a_project(arrange: bool, job: &JobArgs) -> Result<()> {
-    project::refuse_shaping_flags(job)?;
-    if job.model.wanted() {
-        bail!("a project's models are combined, cut and split in the window");
-    }
-    if arrange {
-        bail!("a project stands where it was saved; arrange it in the window");
-    }
-    Ok(())
-}
-
 /// Every model in `paths`, shaped as the flags ask.
 pub fn models(
     paths: &[PathBuf],
@@ -287,32 +240,6 @@ pub fn models(
         .layer_height
         .unwrap_or(chosen.material.layer_height_mm);
     plate_of(&entries, arrange, layer_height, job, chosen, watch)
-}
-
-/// Flags that point at one spot on one model mean nothing across several; models `combined`
-/// make one, which `--center` stands in the middle.
-pub fn refuse_one_model_flags(shaping: &Shaping, combined: bool) -> Result<()> {
-    if shaping.import.transform.center && !combined {
-        bail!("--center stands every model in the middle of the plate; --arrange spreads them");
-    }
-    if shaping.hollow.pointing() {
-        bail!("--drain-at and --channel point at one model; a plate file places them per model");
-    }
-    Ok(())
-}
-
-/// Refuses `--support-cavity` where it would hold nothing up: no supports, or no cavity.
-fn refuse_idle_cavity(job: &JobArgs, shaping: &Shaping) -> Result<()> {
-    if !job.supports.support_cavity || job.recipe_asked().is_some() {
-        return Ok(());
-    }
-    if shaping.supports.is_none() {
-        bail!("--support-cavity stands supports in the cavity, and --supports was not given");
-    }
-    if !shaping.hollow.wanted() {
-        bail!("--support-cavity holds up the cavity --hollow leaves, and --hollow was not given");
-    }
-    Ok(())
 }
 
 /// Imports, places, hollows and supports every entry, or takes each through the recipe
@@ -357,15 +284,29 @@ pub fn plate_of(
             )
         }
     };
+    let machine = (job, chosen, layer_height);
+    let mut staged = staged_of(laid, entries, machine, watch.talk);
+    staged.saved = saved;
+    Ok(staged)
+}
+
+/// The plate `laid` staged on the machine, its parts marked where they meet, drained where a
+/// part is hollow or cut through.
+fn staged_of(
+    laid: Laid,
+    entries: &[(PathBuf, Shaping)],
+    machine: (&JobArgs, &Chosen, Scalar),
+    talk: bool,
+) -> Staged {
     let Laid {
         mut parts,
         models,
         owners,
         ..
     } = laid;
-    meeting::mark(&mut parts, &models, &owners, watch.talk);
-
-    if watch.talk {
+    meeting::mark(&mut parts, &models, &owners, talk);
+    let (job, chosen, _) = machine;
+    if talk {
         warn_if_grey_ignored(&job.raster, chosen.printer.as_ref());
     }
     let drainage = job.slicing.check_drainage
@@ -373,10 +314,7 @@ pub fn plate_of(
         || entries
             .iter()
             .any(|(_, shaping)| shaping.hollow.wanted() || shaping.hollow.cutting());
-    let machine = (job, chosen, layer_height);
-    let mut staged = staged((parts, models), drainage, machine, watch.talk);
-    staged.saved = saved;
-    Ok(staged)
+    staged((parts, models), drainage, machine, talk)
 }
 
 /// Every entry's object taken through the recipe `asked`, the plate arranged where asked, and
@@ -431,8 +369,8 @@ pub(crate) fn staged(
 /// What importing one model reported, and how it was turned.
 pub(crate) type Found = (ImportReport, Option<OrientSummary>);
 
-/// Each entry's model imported and stood where it asks, with what its import reported, all
-/// it asks after the import left to edits.
+/// Each entry's model imported, with what its import reported, all it asks after the import
+/// left to edits.
 fn imported(
     entries: &[(PathBuf, Shaping)],
     chosen: &Chosen,
@@ -444,13 +382,9 @@ fn imported(
         let mut asked = shaping.import.clone();
         repaired::left_to_edits(&mut asked);
         placed::left_to_edits(&mut asked.transform);
-        let (mut mesh, import) = import(path, &asked, chosen, watch)?;
-        let oriented = None;
-        if let Some(position) = shaping.position {
-            mesh = stood_at(&mesh, position)?;
-        }
+        let (mesh, import) = import(path, &asked, chosen, watch)?;
         meshes.push(mesh);
-        found.push((import, oriented));
+        found.push((import, None));
         watch.stop.check()?;
     }
     Ok((meshes, found))
@@ -513,23 +447,6 @@ fn check_pieces(
         }
     }
     Ok(())
-}
-
-/// Refuses an adaptive run on a machine that steps the plate by the header's layer
-/// height, before the stack is cut rather than when the file comes to be written.
-fn check_adaptive(job: &JobArgs, printer: Option<&PrinterProfile>) -> Result<()> {
-    let Some(printer) = printer.filter(|_| job.slicing.adaptive) else {
-        return Ok(());
-    };
-    if printer.firmware.variable_layer_height {
-        return Ok(());
-    }
-    bail!(
-        "{} steps the plate by the header's layer height, so a stack of layers of \
-         different thicknesses cannot be printed on it; --adaptive needs a profile whose \
-         [firmware] claims variable_layer_height",
-        printer.name
-    )
 }
 
 /// Whether anything done to this model past import has a report of its own to print.

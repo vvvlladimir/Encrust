@@ -3,7 +3,7 @@
 The command line prepares models the way the window does: staged into one `Document`, each
 shaping flag folded to an `Edit`, every edit carried out by `core_document::apply` (ADR 0472,
 continuing ADR 0466's phase 5). The window is the reference (ADR 0471); this page says what
-the command line does to reach it, and the cards that get it there.
+the command line does to reach it, and the cards that got it there, all done.
 
 ## The run
 
@@ -95,7 +95,8 @@ on the document's objects, a save slices the document as it stands. `--recipe-ou
 Deleted: `stage.rs`'s `put_down`, `put_down_every`, `Laid`, `imported`'s turn; `pipeline.rs`'s
 `hollow_and_cut` and `drill_auto`; `pipeline/place.rs`'s orient search; `hollowing.rs` and
 `hollowing/` but the flag structs; `supports.rs` but `SupportReport`; `stage/ground.rs`;
-`stage/room.rs`'s spread and stood-at; `modelling.rs`'s calls (the flags stay);
+`stage/room.rs`'s stood-at, a plate file's position now a `Move` (its spread stays for a
+recipe's slide-clear); `modelling.rs`'s calls (the flags stay);
 `recipe/{steps,plate,piece,drain}.rs` where `apply` does the step; `plate_edits::stage_models`'s
 refusals.
 

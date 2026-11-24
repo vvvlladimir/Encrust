@@ -14,6 +14,12 @@ pub fn euler_degrees(angles: Vec3) -> Quat {
         * Quat::from_rotation_x(radians.x)
 }
 
+/// How far a model whose box is `bounds` (plate mm) moves to stand `lift_mm` over the raft it
+/// stands `raft_lift_mm` above, as the window's Lift row stands it.
+pub fn lift_by(bounds: &Aabb, raft_lift_mm: Scalar, lift_mm: Scalar) -> Vec3 {
+    Vec3::new(0.0, 0.0, lift_mm - (bounds.mins.z - raft_lift_mm))
+}
+
 /// `transform` with its translation moved by `by_mm`.
 pub fn moved(transform: Transform, by_mm: Vec3) -> Transform {
     Transform {
@@ -122,6 +128,18 @@ mod tests {
     use core_geometry::cuboid;
 
     use super::*;
+
+    #[test]
+    fn a_lift_is_measured_over_the_raft_the_model_stands_on() {
+        let bar = cuboid(Vec3::new(0.0, 0.0, 6.0), Vec3::new(10.0, 10.0, 30.0));
+        let bounds = bar.aabb().expect("a bar has faces");
+        let by = lift_by(&bounds, 1.0, 4.0);
+        assert!(
+            (by.z - -1.0).abs() < 1e-6,
+            "6 mm up on a 1 mm raft lift is 5 mm over it, so 4 mm moves it down 1, got {}",
+            by.z
+        );
+    }
 
     #[test]
     fn a_pose_not_set_on_the_plate_stands_at_the_lift() {

@@ -158,3 +158,61 @@ fn a_revision_made_on_the_windows_plate_is_not_shown_again() {
     let error = jobs.shown_plate(&first).expect_err("the window holds it");
     assert!(format!("{error:#}").contains("window's plate"), "{error:#}");
 }
+
+/// Revision 1 of `recipe` with a plate kept, and the edits it was made by where given.
+fn kept(name: &str, recipe: Recipe, edits: Option<&[Edit]>) -> (Jobs, Revision) {
+    let jobs = scratch(name);
+    let job = Jobs::name_for(&recipe);
+    let first = jobs
+        .commit(&job, (recipe, None), &Value::Null)
+        .expect("the root is writable");
+    let written = jobs.scratch_plate().expect("the root is writable");
+    fs::write(&written, b"plate").expect("the scratch dir is writable");
+    jobs.keep_plate(&job, first.number, &written)
+        .expect("the job exists");
+    if let Some(edits) = edits {
+        jobs.keep_edits(&job, first.number, edits)
+            .expect("the job exists");
+    }
+    (jobs, first)
+}
+
+fn edit(value: Value) -> Edit {
+    serde_json::from_value(value).expect("an edit core-edit reads")
+}
+
+fn moved(object: u64) -> Edit {
+    edit(json!({"edit": "move", "object": object, "by_mm": [1.0, 0.0, 0.0]}))
+}
+
+#[test]
+fn a_models_own_check_is_the_base_with_the_model_as_object_one() {
+    let (jobs, first) = kept("base-model", recipe(), None);
+    let (plate, object) = jobs.kept_base(&first).expect("one model on a kept plate");
+    assert!(plate.ends_with("1.encrust"), "{}", plate.display());
+    assert_eq!(object, ObjectId(1));
+}
+
+#[test]
+fn a_revision_made_by_edits_is_built_on_the_object_they_named() {
+    let (jobs, first) = kept("base-edits", recipe(), Some(&[moved(4)]));
+    let (_, object) = jobs.kept_base(&first).expect("the edits name one model");
+    assert_eq!(object, ObjectId(4));
+}
+
+#[test]
+fn a_model_cut_into_pieces_is_no_base() {
+    let cut = edit(json!({"edit": "cut", "object": 1, "axis": "z", "at_mm": 5.0}));
+    let (jobs, first) = kept("base-cut", recipe(), Some(&[cut]));
+    assert!(jobs.kept_base(&first).is_none(), "the model is two pieces");
+}
+
+#[test]
+fn a_revision_with_no_plate_kept_is_no_base() {
+    let jobs = scratch("base-none");
+    let job = Jobs::name_for(&recipe());
+    let first = jobs
+        .commit(&job, (recipe(), None), &Value::Null)
+        .expect("the root is writable");
+    assert!(jobs.kept_base(&first).is_none(), "nothing to build on");
+}

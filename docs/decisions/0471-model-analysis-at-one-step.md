@@ -1,6 +1,6 @@
 # 0471. Model analysis runs at one step, and an edit knows no printer or resin
 
-- **Status:** Accepted
+- **Status:** Accepted; what an edit knows of a machine stated as one rule by 0475
 - **Date:** 2026-11-19
 
 ## Context

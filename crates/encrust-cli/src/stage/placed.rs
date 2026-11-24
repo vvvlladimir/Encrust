@@ -1,12 +1,12 @@
-//! The placing flags as edits of each entry's object: the scale, the orientation search, a
-//! turn, centring and the lift, in that order (ADR 0472).
+//! The placing flags as edits of each entry's object: a plate file's position, the scale, the
+//! orientation search, a turn, centring and the lift, in that order (ADR 0472).
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, anyhow};
-use core_document::{ApplyError, Report, degrees_of, euler_degrees};
+use core_document::{ApplyError, Report, degrees_of, euler_degrees, lift_by};
 use core_edit::{Edit, ObjectId, OrientAim};
-use core_geometry::{Quat, Vec3, center_over_plate, drop_to_plate, lift_over_plate};
+use core_geometry::{Quat, Vec2, Vec3, center_over_plate, drop_to_plate};
 use printer_profiles::{Catalogue, PrinterProfile};
 
 use super::document::{Staging, said};
@@ -34,6 +34,9 @@ pub(super) fn placed(
 ) -> Result<()> {
     for (entry, ((_, oriented), (_, shaping))) in found.iter_mut().zip(entries).enumerate() {
         let id = staging.object_of(entry)?;
+        if let Some(position) = shaping.position {
+            stand_at(staging, id, position, watch)?;
+        }
         let transform = &shaping.import.transform;
         if let Some(factors) = transform.scale {
             let edit = Edit::Scale {
@@ -72,11 +75,23 @@ pub(super) fn placed(
     Ok(())
 }
 
-/// Stands the object `lift_mm` off the plate, as the window's Lift off the plate does.
+/// Moves the object so the middle of its footprint is over a plate file's `position` and its
+/// lowest point is on the plate.
+fn stand_at(staging: &mut Staging, object: ObjectId, position: Vec2, watch: &Watch) -> Result<()> {
+    let bounds =
+        (staging.mesh(object).and_then(|mesh| mesh.aabb())).context("mesh has no vertices")?;
+    let middle = (bounds.mins.truncate() + bounds.maxs.truncate()) / 2.0;
+    let by_mm = (position - middle).extend(0.0) + drop_to_plate(&bounds);
+    let edit = Edit::Move { object, by_mm };
+    staging.apply(&edit, object, watch.stop).map_err(said)?;
+    Ok(())
+}
+
+/// Stands the object `lift_mm` over its raft, as the window's Lift row does.
 fn lift(staging: &mut Staging, object: ObjectId, lift_mm: f32, watch: &Watch) -> Result<()> {
     let bounds =
         (staging.mesh(object).and_then(|mesh| mesh.aabb())).context("mesh has no vertices")?;
-    let by_mm = lift_over_plate(&bounds, lift_mm);
+    let by_mm = lift_by(&bounds, staging.raft_lift_mm(object), lift_mm);
     let edit = Edit::Move { object, by_mm };
     staging.apply(&edit, object, watch.stop).map_err(said)?;
     Ok(())

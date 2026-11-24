@@ -674,6 +674,16 @@ async fn each_revision_keeps_the_plate_its_check_wrote_and_hands_it_to_the_open_
 /// plate — the job's latest one under `dir/jobs`, its model object 1 — at version 5, edits
 /// applied; the lines read.
 async fn plate_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
+    plate_window_moving(dir, lines, 0).await
+}
+
+/// A window whose plate the user changes under the first `moves` edits handed to it, each
+/// answered `stale` with the version raised.
+async fn plate_window_moving(
+    dir: &Path,
+    lines: usize,
+    moves: u64,
+) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
     use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -685,6 +695,7 @@ async fn plate_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHa
     let jobs = dir.join("jobs");
     let window = tokio::spawn(async move {
         let mut read = Vec::new();
+        let mut moved = 0;
         for _ in 0..lines {
             let (stream, _) = listener.accept().await.expect("the server connects");
             let mut reader = BufReader::new(stream);
@@ -693,7 +704,11 @@ async fn plate_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHa
             let line: Value = serde_json::from_str(&line).expect("JSON");
             let reply = if line["want"] == "plate" {
                 let job = jobs.join(line["job"].as_str().expect("a job"));
-                json!({"plate": latest_plate(&job), "version": 5, "objects": [1], "job_object": 1})
+                let version = 5 + moved;
+                json!({"plate": latest_plate(&job), "version": version, "objects": [1], "job_object": 1})
+            } else if line.get("apply").is_some() && moved < moves {
+                moved += 1;
+                json!({"applied": false, "stale": true, "version": 5 + moved})
             } else if line.get("apply").is_some() {
                 json!({"applied": true})
             } else {
@@ -853,6 +868,128 @@ async fn the_exposure_check_is_written_and_prepared_like_any_model() {
     let path = PathBuf::from(answer(&written)["path"].as_str().expect("a path"));
     assert_eq!(path, dir.join("exposure-check.stl"));
     start(&client, &path).await;
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn edits_on_a_plate_that_moved_on_are_built_and_checked_again_on_it() {
+    let dir = scratch("window-stale");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    // The revision shown, then the plate, a stale answer, the plate again and the edits landed.
+    let (file, window) = plate_window_moving(&dir, 5, 1).await;
+    let jobs = dir.join("jobs");
+    let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
+    let job = start(&client, &model).await;
+    let hollowed = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+    )
+    .await;
+    client.cancel().await.expect("the server stops");
+
+    assert_eq!(
+        answer(&hollowed)["window"],
+        json!({"applied": true}),
+        "{}",
+        answer(&hollowed)
+    );
+    let lines = window.await.expect("the window's task ends");
+    assert_eq!(
+        lines[2]["base_version"], 5,
+        "first on the plate handed over"
+    );
+    assert_eq!(lines[3]["want"], "plate", "the plate asked for again");
+    assert_eq!(
+        lines[4]["base_version"], 6,
+        "then on the plate as it moved on"
+    );
+    let revisions = fs::read_dir(jobs.join(&job))
+        .expect("the job's folder reads")
+        .flatten();
+    let kept = revisions.filter(|entry| {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        name.strip_suffix(".toml")
+            .is_some_and(|number| number.parse::<u32>().is_ok())
+    });
+    assert_eq!(kept.count(), 2, "the stale try kept no revision of its own");
+}
+
+#[tokio::test]
+async fn a_job_on_the_standard_machine_is_written_only_on_the_machine_the_user_names() {
+    let dir = scratch("standard-machine");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    let client = serve(&encrust(), &dir.join("jobs")).await;
+    let started = call(
+        &client,
+        "start_job",
+        json!({"model": model, "prepare": false}),
+    )
+    .await;
+    assert!(!failed(&started), "{}", answer(&started));
+    let job = answer(&started)["job"].as_str().expect("a job").to_owned();
+    let output = dir.join("cube.goo");
+    let unnamed = call(&client, "write_file", json!({"job": job, "output": output})).await;
+    assert!(
+        failed(&unnamed),
+        "nothing written on a machine nobody named"
+    );
+    assert!(!output.exists(), "no file left behind");
+
+    let named = call(
+        &client,
+        "write_file",
+        json!({
+            "job": job,
+            "output": output,
+            "accept_defects": true,
+            "printer": profile("project-panel.toml"),
+            "resin": profile("test-resin.toml"),
+        }),
+    )
+    .await;
+    assert!(!failed(&named), "{}", answer(&named));
+    assert!(output.is_file(), "written on the machine named");
+    let half = call(
+        &client,
+        "start_job",
+        json!({"model": model, "printer": profile("project-panel.toml"), "prepare": false}),
+    )
+    .await;
+    assert!(failed(&half), "a printer without its resin is refused");
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn with_no_window_a_revision_is_built_on_the_plate_the_last_one_kept() {
+    let dir = scratch("kept-base");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    let client = serve_at_home(&encrust(), &dir.join("jobs"), &[], Some(&dir.join("home"))).await;
+    let job = start(&client, &model).await;
+    let hollowed = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.5}}),
+    )
+    .await;
+    assert!(!failed(&hollowed), "{}", answer(&hollowed));
+    let kept = dir.join("jobs").join(&job);
+    assert!(
+        kept.join("2.edits.json").is_file() && kept.join("2.encrust").is_file(),
+        "revision 2 is plate 1 and its edits"
+    );
+    let output = dir.join("cube.goo");
+    let written = call(
+        &client,
+        "write_file",
+        json!({"job": job, "output": output, "accept_defects": true}),
+    )
+    .await;
+    assert!(!failed(&written), "{}", answer(&written));
+    assert!(output.is_file(), "revision 2's plate is sliced");
     client.cancel().await.expect("the server stops");
 }
 

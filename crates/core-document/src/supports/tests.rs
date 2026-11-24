@@ -1,12 +1,13 @@
 use core_edit::Edit;
 use core_engine::project::HollowState;
-use core_engine::project::{ObjectSupportState, Project, load};
+use core_engine::project::{Group, ObjectSupportState, Project, load};
 use core_geometry::{Region, Vec3};
 use core_supports::SupportTree;
 use core_volume::{HollowMode, InfillSettings};
 
 use printer_profiles::Catalogue;
 
+use super::groups::sized_plan;
 use super::*;
 use crate::apply::apply;
 use crate::fixtures::{cube, cube_of};

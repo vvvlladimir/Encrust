@@ -297,8 +297,9 @@ impl SceneObject {
     /// Stands the model `lift_mm` over its raft and keeps that as the lift asked for, or
     /// forgets it at nought, where auto-orient goes back to the profile's.
     pub fn lift_to(&mut self, lift_mm: f32) {
-        if let Some(now_mm) = self.lift() {
-            self.transform.translation.z += lift_mm - now_mm;
+        if let Some(bounds) = self.world_bounds() {
+            let raft_mm = self.supports.raft_lift_mm();
+            self.transform.translation += core_document::lift_by(&bounds, raft_mm, lift_mm);
         }
         self.lift_mm = (lift_mm > 0.0).then_some(lift_mm);
     }

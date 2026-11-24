@@ -4,6 +4,7 @@ use anyhow::{Context as _, Result, bail};
 
 use super::reply::{Reply, reported, trim_profiles};
 use super::{Context, Server};
+use crate::jobs::Revision;
 use crate::params::{CreateResin, ImportResin, ListProfiles, SaveRecipe, absolute, plain};
 
 impl Server {
@@ -70,15 +71,35 @@ impl Server {
         Ok(reported(&outcome, outcome.report.clone()))
     }
 
+    /// The steps `revision`'s recipe runs, written out by a quick check of it: a revision made
+    /// by edits on a plate was checked as that plate, which names no steps.
+    async fn steps_of(&self, revision: &Revision, ctx: &Context) -> Result<Option<String>> {
+        let out = self.jobs.scratch_steps()?;
+        let mut args = vec!["estimate".to_owned()];
+        args.extend(revision.recipe.flags());
+        args.extend([
+            "--quick-check".to_owned(),
+            format!("--recipe-out={}", out.display()),
+        ]);
+        self.watched(&args, ctx).await?;
+        let steps = std::fs::read_to_string(&out).ok();
+        // A scratch file left behind is overwritten by no other run: its name is this run's.
+        let _ = std::fs::remove_file(&out);
+        Ok(steps)
+    }
+
     /// Keeps a job's steps, or a recipe the client wrote, as one of the user's recipes; the
     /// command line refuses one that would not run, and says why.
     pub(super) async fn keep_recipe(&self, save: SaveRecipe, ctx: &Context) -> Result<Reply> {
         let text = match (&save.job, save.toml) {
             (Some(job), None) => {
                 let revision = self.jobs.open(job, save.revision)?;
-                revision.steps.with_context(|| {
-                    format!("revision {} of job {job} keeps no steps", revision.number)
-                })?
+                match revision.steps.clone() {
+                    Some(steps) => steps,
+                    None => self.steps_of(&revision, ctx).await?.with_context(|| {
+                        format!("revision {} of job {job} keeps no steps", revision.number)
+                    })?,
+                }
             }
             (None, Some(toml)) => toml,
             _ => bail!("save_recipe takes a job or a recipe's toml, one of the two"),

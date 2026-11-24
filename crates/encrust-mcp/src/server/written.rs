@@ -5,15 +5,28 @@ use rmcp::model::{CallToolResult, ContentBlock};
 use serde_json::json;
 
 use super::reply::{Reply, answer, images, reported};
+use super::revise::machine_of;
 use super::{Context, MOST_MARKED, Server, findings};
+use crate::jobs::Revision;
 use crate::params::{Render, SendFile, View, WriteFile, absolute, plain};
+
+/// Why a job on the standard printer and stock resin is not written yet.
+const UNNAMED_MACHINE: &str = "the job runs on the standard printer and stock resin; ask the \
+    user which printer they print on and which resin is in the vat, and pass both to \
+    write_file";
 
 impl Server {
     pub(super) async fn write(&self, write: WriteFile, ctx: &Context) -> Result<Reply> {
         absolute(&write.output, "the output")?;
-        let revision = self.jobs.open(&write.job, write.revision)?;
+        let mut revision = self.jobs.open(&write.job, write.revision)?;
+        let (printer, resin) = machine_of(write.printer, write.resin)?;
+        if !printer.is_empty() {
+            (revision.recipe.printer, revision.recipe.resin) = (printer, resin);
+        } else if !revision.recipe.names_a_machine() {
+            bail!("{UNNAMED_MACHINE}");
+        }
         let mut args = vec!["slice".to_owned()];
-        args.extend(revision.recipe.flags());
+        args.extend(self.staged(&revision));
         args.push(format!("--output={}", write.output.display()));
         if !write.accept_defects {
             args.push("--strict".into());
@@ -52,15 +65,16 @@ impl Server {
         }
         let size = render.size_px.unwrap_or(512).clamp(64, 1024);
         let marked = if render.mark_findings.unwrap_or(true) {
-            let outcome = self.estimate(&revision.recipe, &[], ctx).await?;
-            findings(&outcome.report)
+            let mut args = vec!["estimate".to_owned()];
+            args.extend(self.staged(&revision));
+            findings(&self.watched(&args, ctx).await?.report)
         } else {
             Vec::new()
         };
         let dir = self.jobs.pictures_dir(&revision)?;
         let names: Vec<&str> = views.iter().map(|view| view.name()).collect();
         let mut args = vec!["render".to_owned()];
-        args.extend(revision.recipe.flags());
+        args.extend(self.staged(&revision));
         args.push(format!("--view={}", names.join(",")));
         args.push(format!("--size={size}"));
         args.push(format!("--output={}", dir.display()));
@@ -84,6 +98,16 @@ impl Server {
         )];
         content.extend(images(&outcome.report).await?);
         Ok(CallToolResult::success(content))
+    }
+
+    /// The input and flags that stage `revision`: the plate it was made on, else its recipe.
+    fn staged(&self, revision: &Revision) -> Vec<String> {
+        let Some(plate) = self.jobs.made_on_plate(revision) else {
+            return revision.recipe.flags();
+        };
+        let mut flags = vec![plate.display().to_string()];
+        flags.extend(revision.recipe.machine_flags());
+        flags
     }
 
     pub(super) async fn send(&self, send: SendFile, ctx: &Context) -> Result<Reply> {

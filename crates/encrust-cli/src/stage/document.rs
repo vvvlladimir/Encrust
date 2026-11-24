@@ -80,6 +80,11 @@ impl Staging {
             .with_context(|| format!("model {} has no object on the plate", entry + 1))
     }
 
+    /// How high object `id`'s raft lifts it, mm; nought off a raft or off the plate.
+    pub(crate) fn raft_lift_mm(&self, id: ObjectId) -> f32 {
+        (self.document.object(id)).map_or(0.0, |(state, _)| state.supports.raft_lift_mm)
+    }
+
     /// Where object `id` stands; the identity off the plate.
     pub(crate) fn transform(&self, id: ObjectId) -> Transform {
         self.document

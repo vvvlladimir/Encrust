@@ -37,7 +37,8 @@ pub use orient::{
 };
 pub use piece::{Piece, Role};
 pub use placement::{
-    Footing, degrees_of, euler_degrees, moved, onto_plate, sized_to, stood_turned, turned_to,
+    Footing, degrees_of, euler_degrees, lift_by, moved, onto_plate, sized_to, stood_turned,
+    turned_to,
 };
 pub use plate_contents::mirrored;
 pub use relief::{ReliefAsked, Relieved, press_picture, read_picture, relieved};

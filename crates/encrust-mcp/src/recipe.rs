@@ -16,9 +16,9 @@ pub use slicing::Slicing;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Recipe {
     pub model: PathBuf,
-    /// A printer id of the catalogue, or the path of a printer TOML.
+    /// A printer id of the catalogue, or the path of a printer TOML; empty for the standard one.
     pub printer: String,
-    /// A resin id of the user's, or the path of a resin TOML.
+    /// A resin id of the user's, or the path of a resin TOML; empty for the stock numbers.
     pub resin: String,
     /// The engine's autopilot, `--prepare`, decides every step this recipe leaves out.
     #[serde(default)]
@@ -268,19 +268,44 @@ impl Recipe {
 
     /// Whether the model is a project the window saved, whose models, poses and supports
     /// stand as saved: the command line refuses every flag that would shape them.
+    /// Whether the recipe cuts, splits, parts off or joins its model, so it is no longer one
+    /// object on the plate.
+    pub fn makes_pieces(&self) -> bool {
+        self.modelling.as_ref().is_some_and(|m| {
+            m.cut.is_some()
+                || m.split_smallest_mm3.is_some()
+                || m.part_off_at_mm.is_some()
+                || m.combine.is_some()
+        })
+    }
+
     pub fn is_project(&self) -> bool {
         self.model
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("encrust"))
     }
 
-    /// The flags a check of a plate takes from this recipe: the machine and the slicing.
-    pub fn machine_flags(&self) -> Vec<String> {
-        let mut flags = vec![
+    /// Whether the user named a printer and resin; a job with neither runs on the standard
+    /// printer and stock resin until it is written (ADR 0475).
+    pub fn names_a_machine(&self) -> bool {
+        !self.printer.is_empty()
+    }
+
+    /// The printer and resin flags, none where the user named neither.
+    fn machine_named(&self) -> Vec<String> {
+        if !self.names_a_machine() {
+            return Vec::new();
+        }
+        vec![
             profile_flag(&self.printer, "--printer", "--profile"),
             profile_flag(&self.resin, "--resin", "--material"),
-            "--check-drainage".into(),
-        ];
+        ]
+    }
+
+    /// The flags a check of a plate takes from this recipe: the machine and the slicing.
+    pub fn machine_flags(&self) -> Vec<String> {
+        let mut flags = self.machine_named();
+        flags.push("--check-drainage".into());
         if let Some(slicing) = &self.slicing {
             slicing.push_flags(&mut flags);
         }
@@ -293,10 +318,7 @@ impl Recipe {
         let mut flags = vec![self.model.display().to_string()];
         let others = self.modelling.iter().flat_map(Modelling::others);
         flags.extend(others.map(|other| other.display().to_string()));
-        flags.extend([
-            profile_flag(&self.printer, "--printer", "--profile"),
-            profile_flag(&self.resin, "--resin", "--material"),
-        ]);
+        flags.extend(self.machine_named());
         if !self.is_project() {
             flags.push("--center".into());
         }

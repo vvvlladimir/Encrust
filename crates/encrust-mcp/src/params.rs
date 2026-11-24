@@ -149,9 +149,11 @@ pub struct Start {
     /// the window saved, which is checked and written as it was saved.
     pub model: PathBuf,
     /// The printer the user named: an id `list_profiles` lists, or a printer TOML's path.
-    pub printer: String,
+    /// Absent, with the resin, the job runs on the standard printer and stock resin, and
+    /// `write_file` asks for both.
+    pub printer: Option<String>,
     /// The resin the user named: an id `list_profiles` lists, or a resin TOML's path.
-    pub resin: String,
+    pub resin: Option<String>,
     pub repair: Option<Repair>,
     /// True lets the engine's autopilot decide every step no tool sets — repair when broken,
     /// the orientation search, a 2 mm hollow where it saves resin, drains, supports — what
@@ -260,6 +262,10 @@ pub struct WriteFile {
     /// Writes even when the check names defects. Only when the user accepted them.
     #[serde(default)]
     pub accept_defects: bool,
+    /// The printer the user prints on, which a job started on the standard one needs here.
+    pub printer: Option<String>,
+    /// The resin in the user's vat, with `printer`.
+    pub resin: Option<String>,
 }
 
 /// A side the plate is drawn from.

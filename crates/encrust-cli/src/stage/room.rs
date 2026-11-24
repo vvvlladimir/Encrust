@@ -1,5 +1,5 @@
-//! Where the models of a plate made here stand: spread over it, put at a spot, and the plugs
-//! for their holes kept clear of the plate's edge and of each other.
+//! Where the models of a plate made here stand: spread over it, and the plugs for their holes
+//! kept clear of the plate's edge and of each other.
 
 use std::borrow::Cow;
 use std::path::Path;
@@ -11,15 +11,6 @@ use core_plate::{
     turned_onto,
 };
 use printer_profiles::PrinterProfile;
-
-/// The model moved so the middle of its footprint is over `position` and its lowest
-/// point is on the plate.
-pub(super) fn stood_at(mesh: &Mesh, position: Vec2) -> Result<Mesh> {
-    let bounds = mesh.aabb().context("mesh has no vertices")?;
-    let middle = (bounds.mins.truncate() + bounds.maxs.truncate()) / 2.0;
-    let offset = (position - middle).extend(-bounds.mins.z);
-    Ok(transform_mesh(mesh, Transform::from_translation(offset)))
-}
 
 /// What of `printer`'s plate its inset leaves.
 fn plate_area(printer: &PrinterProfile) -> PlateArea {

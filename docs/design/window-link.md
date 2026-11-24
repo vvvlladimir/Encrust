@@ -70,15 +70,18 @@ builds its edits on that file and hands them back with the version:
 
 Edits on a plate still at `base_version` run one after another as the tools' own jobs, each an
 undo entry, and are answered once all have landed, within 10 min (the server waits 11); one
-that does not land stops the rest and is answered with why. A plate that moved on is answered `stale` with its version,
-and nothing is applied: the server asks for the plate again. A window not following its
+that does not land stops the rest and is answered with why. A plate that moved on is answered
+`stale` with its version, and nothing is applied: the server asks for the plate again, builds
+and checks the edits on it once more and keeps only that revision. A window not following its
 agents refuses both lines, and edits while others are still being applied are refused.
 
 With the window followed, a revision whose every change is an edit is built on the window's
 plate: the server asks for it, checks it with the edits (`estimate PLATE --edits --project-out`)
 and keeps the plate they leave as `N.encrust` and the edits as `N.edits.json`, then hands the
 edits over on that plate's version. What the user changed or undid there is in the next check,
-whatever the change. Without a window, revisions are checked by their flags as before.
+whatever the change. With no window answering, the same revision is built on the plate the
+last one kept, while the job's model on it is one object; a revision made so is written and
+drawn from that plate.
 
 A revision after the first hands over, as edits of the job's model, what it asks beyond the
 revision before: a repair, the faces mended, a picture pressed in, a scale, a turn typed, a

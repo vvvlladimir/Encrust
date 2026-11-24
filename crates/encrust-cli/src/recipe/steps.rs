@@ -6,9 +6,10 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use core_document::{ApplyError, Report};
 use core_edit::{AUTO, Edit};
-use core_engine::{Hollowing, SupportPlan};
+use core_engine::{Drained, Hollowing, SupportPlan};
 use core_geometry::{Aabb, Mat3, Scalar, Vec3};
 use core_recipe::{Metric, StepKind, edits_of};
+use core_supports::Unstood;
 use core_volume::HoleKind;
 
 use super::piece::Piece;
@@ -134,9 +135,13 @@ fn typed(mut edit: Edit, piece: &Piece, (staging, ctx): (&Staging, &Ctx)) -> Edi
         Edit::Plugs { gap_mm, .. } => {
             *gap_mm = hollow.plug_gap_mm - ctx.chosen.material.compensation.fit_drift_mm();
         }
-        Edit::Orient { printer, .. } => {
+        Edit::Orient {
+            printer, lift_mm, ..
+        } => {
             let job = &ctx.job.profile;
             *printer = shipped_printer(job.printer.as_deref(), job.profile.is_some());
+            // The lift asked stays the model's, as the window keeps the row's for its orient.
+            *lift_mm = import.transform.lift.or(*lift_mm);
         }
         Edit::Repair {
             seam_tolerance_mm,
@@ -181,20 +186,7 @@ fn noted(
             holes,
             trapped,
             searched,
-        } => {
-            did.holes = Some(did.holes.unwrap_or(0) + holes);
-            if let (Some(drained), true) = (&searched, talk) {
-                print!("{}", AutoReport(drained, 0.0));
-            }
-            if searched.is_some() {
-                piece.prepared.drained = true;
-                piece.note(Metric::Trapped, trapped as Scalar);
-                piece.drains = searched;
-            } else {
-                let trapped = piece.trapped(staging, ctx.watch.stop)?;
-                piece.note(Metric::Trapped, trapped as Scalar);
-            }
-        }
+        } => drained(piece, staging, (holes, trapped, searched), (ctx, did))?,
         Report::Supported {
             trees,
             contacts_mm,
@@ -202,20 +194,54 @@ fn noted(
             unheld,
             ..
         } => {
-            let report = support_report(staging, piece.id, (trees, contacts_mm, standing, unheld));
-            if talk {
-                print!("{report}");
-            }
-            if let Edit::Supports { profile, .. } = edit {
-                let named = profile.clone().unwrap_or_else(|| AUTO.to_owned());
-                piece.prepared.supports = Some(plan_named(&named));
-                piece.supported_by = Some(named);
-            }
-            piece.supports = Some(report);
+            let parts = (trees, contacts_mm, standing, unheld);
+            supported(piece, staging, edit, parts, talk);
         }
         _ => {}
     }
     Ok(())
+}
+
+/// Notes the holes a drain edit drilled and what it left trapped, searched or scanned.
+fn drained(
+    piece: &mut Piece,
+    staging: &Staging,
+    (holes, trapped, searched): (usize, usize, Option<Drained>),
+    (ctx, did): (&Ctx, &mut Did),
+) -> Result<()> {
+    did.holes = Some(did.holes.unwrap_or(0) + holes);
+    if let (Some(drained), true) = (&searched, ctx.watch.talk) {
+        print!("{}", AutoReport(drained, 0.0));
+    }
+    if searched.is_some() {
+        piece.prepared.drained = true;
+        piece.note(Metric::Trapped, trapped as Scalar);
+        piece.drains = searched;
+    } else {
+        let trapped = piece.trapped(staging, ctx.watch.stop)?;
+        piece.note(Metric::Trapped, trapped as Scalar);
+    }
+    Ok(())
+}
+
+/// Notes the supports a supports edit grew and the profile it named.
+fn supported(
+    piece: &mut Piece,
+    staging: &Staging,
+    edit: &Edit,
+    parts: (usize, Vec<Vec3>, usize, Vec<(Vec3, Unstood)>),
+    talk: bool,
+) {
+    let report = support_report(staging, piece.id, parts);
+    if talk {
+        print!("{report}");
+    }
+    if let Edit::Supports { profile, .. } = edit {
+        let named = profile.clone().unwrap_or_else(|| AUTO.to_owned());
+        piece.prepared.supports = Some(plan_named(&named));
+        piece.supported_by = Some(named);
+    }
+    piece.supports = Some(report);
 }
 
 /// Notes a repair on `piece`'s import, as `--repair` notes it; `wrapped`, whether a wrap held.

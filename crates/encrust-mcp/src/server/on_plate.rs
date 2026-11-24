@@ -5,11 +5,13 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use core_edit::{Edit, ObjectId};
-use serde_json::json;
+use serde_json::{Value, json};
+
+use crate::runner::Outcome;
 
 use super::Server;
-use super::asked::{Area, asked_after_check};
-use super::plate_edits::{fit_drift_of, unkept, usable_area_of};
+use super::asked::{Area, Checked, asked_after_check};
+use super::plate_edits::{GAVE_UP, REBUILDS, cut_object, fit_drift_of, unkept, usable_area_of};
 use super::reply::{Reply, not_applied, revised};
 use crate::jobs::Revision;
 use crate::recipe::Recipe;
@@ -37,19 +39,20 @@ impl Server {
         ctx: &Context,
     ) -> Result<Result<Reply>, Box<Recipe>> {
         let (drift, area) = self.earlier_check(latest, &recipe);
-        let ask = |object| asked_after_check(&recipe, &latest.recipe, object, (None, drift, area));
-        let asked = ask(ObjectId::UNSET);
+        let checked = (None, drift, area);
+        let asked = asked_after_check(&recipe, &latest.recipe, ObjectId::UNSET, checked);
         if asked.as_ref().is_none_or(Vec::is_empty) {
             return Err(Box::new(recipe));
         }
         let Some(base) = self.base_of(latest).await else {
             return Err(Box::new(recipe));
         };
-        let Some(edits) = ask(base.object) else {
+        let Some(edits) = asked_after_check(&recipe, &latest.recipe, base.object, checked) else {
             return Err(Box::new(recipe));
         };
+        let on = (base, edits, checked);
         Ok(self
-            .checked_on_plate((latest, recipe, note), &base, &edits, against, ctx)
+            .checked_on_plate((latest, recipe, note), on, against, ctx)
             .await)
     }
 
@@ -64,25 +67,91 @@ impl Server {
     }
 
     /// The open window's plate with the job's model on it, which holds whatever the user did
-    /// there. Without a window nothing but the job changes the plate, and its recipe stays the
-    /// way it is checked and kept, steps and all.
+    /// there; with no window answering, the plate `latest` kept.
     async fn base_of(&self, latest: &Revision) -> Option<Base> {
-        let plate = self.window.plate(&latest.job).await?;
+        if let Some(plate) = self.window.plate(&latest.job).await {
+            return Some(Base {
+                object: plate.job_object?,
+                path: plate.path,
+                version: Some(plate.version),
+            });
+        }
+        let (path, object) = self.jobs.kept_base(latest)?;
         Some(Base {
-            object: plate.job_object?,
-            path: plate.path,
-            version: Some(plate.version),
+            path,
+            version: None,
+            object,
         })
     }
 
+    /// Checks `edits` on `base` and hands them to the window that handed it over; where its plate
+    /// moved on meanwhile, they are built and checked again on the plate it then holds.
     async fn checked_on_plate(
         &self,
         (latest, recipe, note): Asked<'_>,
-        base: &Base,
-        edits: &[Edit],
+        (mut base, mut edits, checked): (Base, Vec<Edit>, Checked),
         against: &[String],
         ctx: &Context,
     ) -> Result<Reply> {
+        let mut rebuilt = 0;
+        loop {
+            let (outcome, written) = self
+                .check_edits(&base, &edits, &recipe, against, ctx)
+                .await?;
+            if !outcome.reported() {
+                return Ok(not_applied(Some(latest), &outcome));
+            }
+            let answer = match base.version {
+                Some(version) => Some(self.window.apply(&latest.job, &edits, version).await),
+                None => None,
+            };
+            let stale = answer
+                .as_ref()
+                .is_some_and(|a| a.as_ref().is_some_and(|a| a["stale"] == true));
+            if stale && rebuilt < REBUILDS {
+                rebuilt += 1;
+                if let Some(next) = self.rebased(latest, &recipe, checked).await {
+                    (base, edits) = next;
+                    continue;
+                }
+            }
+            let window = answer.map(|answer| match answer {
+                Some(_) if stale => json!({"applied": false, "why_not": GAVE_UP}),
+                Some(answer) => answer,
+                None => json!({"applied": false, "why_not": "the window did not answer"}),
+            });
+            let kept = (edits.as_slice(), written.as_path(), window);
+            return self.keep_on_plate((latest, recipe, note), kept, &outcome);
+        }
+    }
+
+    /// The window's plate as it now stands and `recipe`'s edits built again on it.
+    async fn rebased(
+        &self,
+        latest: &Revision,
+        recipe: &Recipe,
+        checked: Checked,
+    ) -> Option<(Base, Vec<Edit>)> {
+        let plate = self.window.plate(&latest.job).await?;
+        let object = plate.job_object?;
+        let edits = asked_after_check(recipe, &latest.recipe, object, checked)?;
+        let base = Base {
+            path: plate.path,
+            version: Some(plate.version),
+            object,
+        };
+        Some((base, edits))
+    }
+
+    /// A check of `edits` on `base`, and the plate it leaves.
+    async fn check_edits(
+        &self,
+        base: &Base,
+        edits: &[Edit],
+        recipe: &Recipe,
+        against: &[String],
+        ctx: &Context,
+    ) -> Result<(Outcome, PathBuf)> {
         let written = self.jobs.scratch_plate()?;
         let asked = written.with_extension("edits.json");
         std::fs::write(&asked, serde_json::to_string(edits)?)?;
@@ -93,28 +162,34 @@ impl Server {
         args.push(format!("--project-out={}", written.display()));
         let outcome = self.watched(&args, ctx).await;
         let _ = std::fs::remove_file(&asked);
-        let outcome = outcome?;
-        if !outcome.reported() {
-            return Ok(not_applied(Some(latest), &outcome));
-        }
+        Ok((outcome?, written))
+    }
+
+    /// Keeps the revision checked as its plate and edits, with what the window said of them.
+    fn keep_on_plate(
+        &self,
+        (latest, recipe, note): Asked<'_>,
+        (edits, written, window): (&[Edit], &std::path::Path, Option<Value>),
+        outcome: &Outcome,
+    ) -> Result<Reply> {
         let revision = self
             .jobs
             .commit(&latest.job, (recipe, None), &outcome.report)?;
-        unkept(
-            "the edits",
-            self.jobs.keep_edits(&revision.job, revision.number, edits),
-        );
-        let kept = self
-            .jobs
-            .keep_plate(&revision.job, revision.number, &written);
-        unkept("the plate", kept);
-        let mut reply = revised(&revision, &outcome, note);
-        if let Some(version) = base.version {
-            let at = Some((version, base.object));
-            let answer = self.handed_to_window(&revision, at, |_| Some(edits.to_vec()));
-            reply.body["window"] = answer.await.unwrap_or_else(
-                || json!({"applied": false, "why_not": "the window did not answer"}),
+        let (job, number) = (&revision.job, revision.number);
+        unkept("the edits", self.jobs.keep_edits(job, number, edits));
+        unkept("the plate", self.jobs.keep_plate(job, number, written));
+        let landed = window
+            .as_ref()
+            .is_some_and(|answer| answer["applied"] == true);
+        if let Some(cut) = cut_object(edits).filter(|_| landed) {
+            unkept(
+                "the window's cut",
+                self.jobs.keep_window_cut(job, number, cut),
             );
+        }
+        let mut reply = revised(&revision, outcome, note);
+        if let Some(window) = window {
+            reply.body["window"] = window;
         }
         Ok(reply)
     }

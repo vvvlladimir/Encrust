@@ -569,7 +569,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0468](0468-supports-are-grown-the-windows-way-for-every-front-end.md) | Supports are grown the window's way for every front end | Accepted |
 | [0469](0469-the-document-arranges-a-plate-through-core-plate.md) | The document arranges a plate through core-plate | Accepted |
 | [0470](0470-a-recipes-plate-step-is-an-edit.md) | A recipe's plate step is an edit | Accepted |
-| [0471](0471-model-analysis-at-one-step.md) | Model analysis runs at one step, and an edit knows no printer or resin | Accepted |
+| [0471](0471-model-analysis-at-one-step.md) | Model analysis runs at one step, and an edit knows no printer or resin | Accepted; what an edit knows of a machine stated as one rule by 0475 |
 | [0472](0472-the-command-line-runs-on-the-document.md) | The command line runs on the document | Accepted |
 | [0473](0473-a-revision-is-shown-by-the-plate-its-check-wrote.md) | A revision is shown by the plate its check wrote | Accepted |
 | [0474](0474-a-lift-is-a-placement-on-every-front-end.md) | A lift is a placement on every front end | Proposed |
+| [0475](0475-a-job-runs-on-the-standard-machine-until-it-is-written.md) | A job runs on the standard machine until it is written | Accepted |

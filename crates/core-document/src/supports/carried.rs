@@ -1,7 +1,8 @@
 use core_edit::ObjectId;
 use core_geometry::{Bvh, Transform};
 
-use super::{kept_supports, table_of};
+use super::groups::table_of;
+use super::kept_supports;
 use crate::document::Document;
 
 /// Stands object `id` at `transform` with its supports carried there as the window's are: frozen

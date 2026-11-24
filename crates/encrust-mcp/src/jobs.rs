@@ -229,6 +229,40 @@ impl Jobs {
         Ok(plate)
     }
 
+    /// Revision `revision`'s plate where it was made by edits on one: what it slices and draws,
+    /// with the user's changes there, which its recipe does not hold.
+    pub fn made_on_plate(&self, revision: &Revision) -> Option<PathBuf> {
+        let dir = self.dir(&revision.job).ok()?;
+        let number = revision.number;
+        let plate = dir.join(format!("{number}.encrust"));
+        let made = dir.join(format!("{number}.edits.json")).is_file() && plate.is_file();
+        made.then_some(plate)
+    }
+
+    /// Revision `revision`'s plate and the job's one model on it, the base of the next revision
+    /// with no window answering; `None` without a plate, or where the model is now in pieces.
+    pub fn kept_base(&self, revision: &Revision) -> Option<(PathBuf, ObjectId)> {
+        let dir = self.dir(&revision.job).ok()?;
+        let number = revision.number;
+        let plate = dir.join(format!("{number}.encrust"));
+        if !plate.is_file() || revision.recipe.is_project() {
+            return None;
+        }
+        let object = match fs::read_to_string(dir.join(format!("{number}.edits.json"))) {
+            Ok(text) => {
+                let edits: Vec<Edit> = serde_json::from_str(&text).ok()?;
+                if edits.iter().any(makes_pieces) {
+                    return None;
+                }
+                edits.iter().find_map(Edit::object)?
+            }
+            // A check of the model alone stands it as the plate's first object.
+            Err(_) if revision.recipe.makes_pieces() => return None,
+            Err(_) => ObjectId(1),
+        };
+        Some((plate, object))
+    }
+
     /// Keeps the plate a check wrote at `from` as revision `number`'s `N.encrust`.
     pub fn keep_plate(&self, job: &str, number: u32, from: &Path) -> Result<()> {
         let path = self.dir(job)?.join(format!("{number}.encrust"));
@@ -320,6 +354,14 @@ fn slug(stem: &str) -> String {
     } else {
         slug
     }
+}
+
+/// Whether `edit` leaves its model as pieces or joined into another, no longer one object.
+fn makes_pieces(edit: &Edit) -> bool {
+    matches!(
+        edit,
+        Edit::Cut { .. } | Edit::Split { .. } | Edit::PartOff { .. } | Edit::Combine { .. }
+    )
 }
 
 /// The file the window's object of revision `number`'s cut is kept in, to follow its undo.

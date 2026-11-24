@@ -84,13 +84,16 @@ fn rotated(object: ObjectId, degrees: [f32; 3]) -> Edit {
     }
 }
 
-/// The recipe's printer and resin where both are catalogue ids, not the paths of files.
-fn catalogue_ids(recipe: &Recipe) -> Option<(&str, &str)> {
+/// The recipe's printer and resin where both are catalogue ids, not the paths of files; both
+/// unnamed where the job runs on the standard ones.
+fn catalogue_ids(recipe: &Recipe) -> Option<(Option<&str>, Option<&str>)> {
     fn id(name: &str) -> Option<&str> {
-        let path = name.is_empty() || name.contains(['/', '\\', '.']);
-        (!path).then_some(name)
+        (!name.contains(['/', '\\', '.'])).then_some(name)
     }
-    Some((id(&recipe.printer)?, id(&recipe.resin)?))
+    if !recipe.names_a_machine() {
+        return Some((None, None));
+    }
+    Some((Some(id(&recipe.printer)?), Some(id(&recipe.resin)?)))
 }
 
 fn aim_of(goal: Goal) -> OrientAim {
@@ -106,7 +109,7 @@ fn aim_of(goal: Goal) -> OrientAim {
 fn searched(
     pose: &Pose,
     object: ObjectId,
-    ((printer, resin), area_mm): ((&str, &str), Option<Area>),
+    ((printer, resin), area_mm): ((Option<&str>, Option<&str>), Option<Area>),
 ) -> Option<Edit> {
     let Pose::Search {
         goal,
@@ -127,8 +130,8 @@ fn searched(
         pick: usize::from(pick.unwrap_or(1)).saturating_sub(1),
         plate_mm: area_mm.map(|(_, size)| size),
         low_mm: area_mm.map_or([0.0, 0.0], |(low, _)| low),
-        printer: Some(printer.to_owned()),
-        resin: Some(resin.to_owned()),
+        printer: printer.map(str::to_owned),
+        resin: resin.map(str::to_owned),
         keep_clear_mm: keep_clear_at_mm.iter().map(|&at| at.into()).collect(),
         keep_clear_radius_mm: *keep_clear_radius_mm,
         // As the command line reads them: seen at this turn, the model centred on the plate.

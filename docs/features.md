@@ -1105,7 +1105,9 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 the release page or the window's File → Use with Claude Desktop and installed by opening it.
 `encrust-mcp` gives Claude Desktop, Claude Code or any other MCP client the
 command line as tools, so a language model prepares a model step by step on your
-computer, checks it and writes the file; it asks you for the printer and resin. Every flag of
+computer, checks it and writes the file. It asks you for the printer and resin; until you
+say, it works on the standard printer with stock resin numbers, and it writes no file before
+you have named both. Every flag of
 the command line is a tool's: `set_shape` cuts, labels, splits and presses reliefs,
 `set_repair` mends, `set_slicing` sets the layers.
 `compare_poses` shows the model the best few ways the engine found to stand it, each drawn
