@@ -512,6 +512,8 @@ impl eframe::App for SlicerApp {
 }
 
 #[cfg(test)]
+mod agents_ring;
+#[cfg(test)]
 mod plate_card;
 #[cfg(test)]
 mod recipe_page;

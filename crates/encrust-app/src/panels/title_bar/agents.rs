@@ -1,5 +1,5 @@
 //! The agents' ring beside the print chip and the list it opens: each chat client's agent with
-//! its latest jobs, a press showing one on the plate (ADR 0465, `ui-screens.md`, Top bar).
+//! the model in its hand, a press showing it on the plate (ADR 0465, 0476, `ui-screens.md`).
 
 use crate::agents::{Agent, Agents, Asked, Job, State};
 use crate::files::Handed;
@@ -13,20 +13,19 @@ use crate::ui::{
     focus_ring, hairline, hint, icon, paint_ring, ring_badge, switch, theme,
 };
 
-/// The most agents that have ended the list keeps.
-const MOST_ENDED: usize = 3;
-
-/// The agents' ring, beside the printers': there while an agent works or waits for its chat,
+/// The agents' ring, beside the printers': there while an agent has a model in hand,
 /// spinning while one works, the count at its corner past one; a press opens the list.
 /// Answers the width it took; none in a browser, which no agent reaches.
 pub(super) fn ring(ui: &mut egui::Ui, window: &mut Window) -> f32 {
     if cfg!(target_arch = "wasm32") {
         return 0.0;
     }
-    let (count, working) = window.machine.agents.at_work();
+    let agents = &window.machine.agents;
+    let count = agents.list.len();
     if count == 0 {
         return 0.0;
     }
+    let working = agents.working();
     let colors = theme::colors();
     let look = RingLook {
         glyph: icon::AGENTS,
@@ -64,14 +63,12 @@ fn hover_lines(agents: &Agents) -> String {
         .list
         .iter()
         .zip(names)
-        .filter(|(agent, _)| agent.state != State::Ended)
         .map(|(agent, client)| match &agent.state {
-            State::Working { tool, job, since_s } => {
+            State::Working { tool, since_s, .. } => {
                 let agent_name = tr!("agents-working", client = client);
                 let time =
                     duration(u32::try_from(now.saturating_sub(*since_s)).unwrap_or(u32::MAX));
-                let on = job.as_ref().and_then(|id| agents_job(agent, id));
-                match on {
+                match working_on(agent) {
                     Some(job) => tr!(
                         "agents-ring-line",
                         agent = agent_name,
@@ -82,59 +79,48 @@ fn hover_lines(agents: &Agents) -> String {
                     None => tr!("agents-ring-busy", agent = agent_name, time = time),
                 }
             }
-            _ => tr!("agents-idle", client = client),
+            State::Idle => tr!("agents-idle", client = client),
         })
         .collect();
     lines.join("\n")
 }
 
-fn agents_job<'a>(agent: &'a Agent, id: &str) -> Option<&'a Job> {
-    agent.jobs.iter().find(|job| job.id == id)
+/// The agent's job in hand while its running tool works on it.
+fn working_on(agent: &Agent) -> Option<&Job> {
+    match &agent.state {
+        State::Working { job: Some(id), .. } => agent.job.as_ref().filter(|job| job.id == *id),
+        _ => None,
+    }
 }
 
-/// The list the ring opens, hanging under it.
+/// The list the ring opens, hanging under it; a click inside leaves it open, so the switch
+/// can be flipped, and a row pressed closes it.
 fn chooser(ring: &egui::Response) -> egui::Popup<'_> {
     crate::ui::popup_menu(ring)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .frame(chooser_frame())
         .width(theme::CHOOSER_W)
         .gap(theme::CHOOSER_GAP)
 }
 
-/// The list: each agent under its name with its jobs, then whether the window follows them.
-pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
+/// The list: each agent under its name with the model in its hand, then whether the window
+/// follows them.
+fn menu(ui: &mut egui::Ui, window: &mut Window) {
     let agents = &window.machine.agents;
     let mut picked: Option<Job> = None;
-    if agents.list.is_empty() {
-        chooser_group(ui, &tr!("agents-title"));
-        hint(ui, &tr!("agents-none"));
-    }
     let names = client_names(&agents.list);
-    let mut ended = 0;
     for (agent, client) in agents.list.iter().zip(names) {
         let group = match agent.state {
-            _ if agent.unclaimed => tr!("agents-earlier"),
             State::Working { .. } => tr!("agents-working", client = client),
             State::Idle => tr!("agents-idle", client = client),
-            State::Ended => {
-                ended += 1;
-                if ended > MOST_ENDED {
-                    continue;
-                }
-                tr!("agents-ended", client = client)
-            }
         };
         chooser_group(ui, &group);
-        let opening =
-            matches!(&agent.state, State::Working { tool, job: None, .. } if tool == "start_job");
-        if opening {
+        if agent.opening() {
             hint(ui, &tr!("agents-opening"));
-        } else if agent.jobs.is_empty() {
-            hint(ui, &tr!("agents-no-job"));
-        }
-        for job in &agent.jobs {
-            if job_row(ui, agent, job, agents.on_plate.contains(&job.id)) {
-                picked = Some(job.clone());
-            }
+        } else if let Some(job) = &agent.job
+            && job_row(ui, agent, job, agents.on_plate.contains(&job.id))
+        {
+            picked = Some(job.clone());
         }
     }
     hairline(ui);
@@ -158,11 +144,7 @@ pub(super) fn menu(ui: &mut egui::Ui, window: &mut Window) {
 /// ticked. Answers whether it was pressed.
 fn job_row(ui: &mut egui::Ui, agent: &Agent, job: &Job, on_plate: bool) -> bool {
     let working = match &agent.state {
-        State::Working {
-            tool,
-            job: Some(on),
-            ..
-        } if *on == job.id => Some(tool.as_str()),
+        State::Working { tool, .. } if working_on(agent).is_some() => Some(tool.as_str()),
         _ => None,
     };
     let detail = detail(job, working);
@@ -246,8 +228,7 @@ mod tests {
             client: client.map(str::to_owned),
             started_s: 0,
             state: State::Idle,
-            jobs: Vec::new(),
-            unclaimed: false,
+            job: None,
         }
     }
 
@@ -282,23 +263,21 @@ mod tests {
     }
 
     #[test]
-    fn the_ring_says_what_each_agent_there_does_and_leaves_out_the_ended() {
+    fn the_ring_says_what_each_agent_there_does() {
         let mut working = agent(Some("claude-code"));
         working.state = State::Working {
             tool: "check".into(),
             job: Some("cube-1".into()),
             since_s: crate::agents::now_s(),
         };
-        working.jobs = vec![Job {
+        working.job = Some(Job {
             id: "cube-1".into(),
             model: "/m/cube.stl".into(),
             revision: 3,
             clean: None,
-        }];
-        let mut ended = agent(Some("claude-ai"));
-        ended.state = State::Ended;
+        });
         let mut agents = Agents::default();
-        agents.list = vec![working, agent(None), ended];
+        agents.list = vec![working, agent(None)];
         let said = hover_lines(&agents);
         let lines: Vec<&str> = said.lines().collect();
         assert_eq!(lines.len(), 2, "{said}");

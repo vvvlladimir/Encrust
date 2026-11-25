@@ -39,7 +39,7 @@ stripe or a border of its own.
 ## Top bar
 
 Left to right: on macOS 72 for the system's buttons, File, Edit, View as quiet text
-buttons; in the centre the printer ring (while a printer prints; idle ones are reached from the plate card), the agents' ring (while an agent is there) and the chip; at the right
+buttons; in the centre the printer ring (while a printer prints; idle ones are reached from the plate card), the agents' ring (while an agent has a model in hand) and the chip; at the right
 the Beta pill, Find (as wide as its word and `⌘K` at its right), the key sheet and the gear as 30
 squares.
 
@@ -81,17 +81,16 @@ left edge, 300 wide, on `raised` with a window's shadow, a capital group name ov
   washed and ticked; under a rule, *Add a resin*, opening Machine and resin on the
   machine's resins.
 
-- *The agents* (ADR 0465), the same chooser under the agents' ring: a capital group an agent
-  — its client's name, *Claude Code · working*, *· waiting* or *· ended*, a second of one
-  client numbered — at work first, then idle, then at most three ended; under each, a row a
-  job, its latest three: model glyph, the model's file name over *Revision n* and the
-  check's verdict, or what the agent does to it now with an `accent` dot at the right; the
-  job on the plate washed and ticked. A press shows that revision on the plate as one
-  undo; a project's row opens the project, asking first about unsaved work. Last, under
-  *Earlier jobs*, the latest three jobs of the last day that no agent's file names — an
-  older server's, or one whose file is gone. An agent with no job yet says so in a line, *Opening a model…* while it starts one; no agent at all is *No agent has worked here yet* under the
-  group *Agents*. Under a rule, *Follow agents* as a `switch`: on, each revision an agent
-  keeps runs on the plate as it comes.
+- *The agents* (ADR 0465, 0476), the same chooser under the agents' ring: a capital group a
+  live agent with a model in hand — its client's name, *Claude Code · working* or
+  *· waiting*, a second of one client numbered — at work first; under each, one row, the
+  job in hand: model glyph, the model's file name over *Revision n* and the check's
+  verdict, or what the agent does to it now with an `accent` dot at the right; the job on
+  the plate washed and ticked. A press shows that revision on the plate as one undo; a
+  project's row opens the project, asking first about unsaved work. *Opening a model…* in a
+  line while an agent starts one. No ended agent and no earlier job is listed. Under a
+  rule, *Follow agents* as a `switch`: on, each revision an agent keeps runs on the plate
+  as it comes; flipping it leaves the chooser open.
 
 Choosing a row takes it in hand and closes the chooser, as Esc or a click elsewhere does; a
 footer row opens Machine and resin on that machine's page or that resin's form.
@@ -100,8 +99,8 @@ The ring is 32 across, filled clockwise with the current print's fraction in the
 what the printer is doing, the percent in its middle and a count badge when more than one
 printer answers.
 
-The agents' ring stands 6 right of the printers' (ADR 0465), 32 across, while an agent works
-or waits for its chat: the robot glyph in `text_mid` on a `line` track, a quarter arc in
+The agents' ring stands 6 right of the printers' (ADR 0465), 32 across, while an agent has a
+model in hand or opens one: the robot glyph in `text_mid` on a `line` track, a quarter arc in
 `accent` going round while one works, a count badge past one. On hover a line an agent: its
 name and state, and while it works the model, what it does to it and for how long. A press
 opens the agents' chooser under it. None in a browser.

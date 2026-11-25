@@ -383,15 +383,11 @@ surfaces-build-stopped = Подготовка поверхности для по
 ## panels/title_bar/agents.rs
 
 agents-title = Агенты
-agents-none = Здесь ещё не работал ни один агент
 agents-working = { $client } · работает
 agents-idle = { $client } · ждёт
-agents-ended = { $client } · завершён
 agents-numbered = { $client } { $number }
 agents-unnamed = Агент
-agents-earlier = Прежние задания
 agents-opening = Открывает модель…
-agents-no-job = Моделей пока нет
 agents-revision-clean = Ревизия { $revision } · проблем нет
 agents-revision-problems = Ревизия { $revision } · проверка нашла проблемы
 agents-revision = Ревизия { $revision }

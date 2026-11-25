@@ -1115,8 +1115,8 @@ with what it prints, and the model picks one for what the print is — keeping s
 face you named, say, which the search then ranks first. Every step it takes is set against
 the step before and the autopilot's own preparation, so it can undo one that made the print
 worse. The window lists every agent — Claude Code, Claude Desktop — in a robot's ring beside the
-print chip, there while an agent works or waits and turning while it works, each working,
-waiting or ended, with its latest models and what the check found; a click
+print chip, there while an agent has a model in hand and turning while it works, each with
+the model it works on and what the check found — no history; a click
 stands one on the plate beside your own models exactly as the check left it, supports and
 all, one undo, on the job's printer and resin, whenever the window was opened. With Follow
 agents on, each step an agent keeps stands there as it comes; asked to show you the model, the agent

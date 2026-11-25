@@ -563,7 +563,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0462](0462-a-chat-client-keeps-a-way-of-preparing-as-a-recipe.md) | A chat client keeps a way of preparing as a recipe the engine checked | Proposed |
 | [0463](0463-a-failed-print-is-read-against-its-check.md) | A failed print is read against the check of the file printed | Proposed |
 | [0464](0464-a-chat-client-makes-a-resin-from-its-makers-numbers.md) | A chat client makes a resin from its maker's numbers, held to the printer's limits | Proposed |
-| [0465](0465-the-window-lists-agents-and-shows-their-work-when-asked.md) | The window lists its agents and shows their work when asked | Proposed |
+| [0465](0465-the-window-lists-agents-and-shows-their-work-when-asked.md) | The window lists its agents and shows their work when asked | Proposed; what the ring lists narrowed by 0476 |
 | [0466](0466-one-plate-document-is-edited-by-one-apply-and-the-open-window-owns-it.md) | One plate document is edited by one apply, and the open window owns it | Accepted; the window's Prepare for print keeps its own jobs (0470) |
 | [0467](0467-the-document-reaches-the-cores-its-edits-run-on.md) | The document reaches the cores its edits run on | Accepted |
 | [0468](0468-supports-are-grown-the-windows-way-for-every-front-end.md) | Supports are grown the window's way for every front end | Accepted |
@@ -574,3 +574,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0473](0473-a-revision-is-shown-by-the-plate-its-check-wrote.md) | A revision is shown by the plate its check wrote | Accepted |
 | [0474](0474-a-lift-is-a-placement-on-every-front-end.md) | A lift is a placement on every front end | Proposed |
 | [0475](0475-a-job-runs-on-the-standard-machine-until-it-is-written.md) | A job runs on the standard machine until it is written | Accepted |
+| [0476](0476-the-agents-ring-lists-only-the-work-in-hand.md) | The agents' ring lists only the work in hand | Proposed |

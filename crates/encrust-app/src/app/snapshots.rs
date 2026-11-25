@@ -303,16 +303,18 @@ fn the_chip_opening_its_machines_and_its_resins() {
     }
 }
 
-/// The agents' ring beside the chip and the list it opens: an agent at work on one of its
-/// two jobs, the other on the plate, and one ended (ADR 0465).
+/// The agents' ring beside the chip and the list it opens: one agent at work on its model,
+/// another's on the plate (ADR 0465, 0476).
 #[test]
 fn the_agents_ring_opening_its_list() {
     use crate::agents::{Agent, Job, State};
-    let job = |id: &str, model: &str, revision, clean| Job {
-        id: id.into(),
-        model: model.into(),
-        revision,
-        clean,
+    let job = |id: &str, model: &str, revision, clean| {
+        Some(Job {
+            id: id.into(),
+            model: model.into(),
+            revision,
+            clean,
+        })
     };
     let working = Agent {
         client: Some("claude-code".into()),
@@ -322,21 +324,16 @@ fn the_agents_ring_opening_its_list() {
             job: Some("bust-2".into()),
             since_s: crate::agents::now_s(),
         },
-        jobs: vec![
-            job("bust-2", "/m/Dragon bust.stl", 4, None),
-            job("cube-1", "/m/cube.stl", 2, Some(true)),
-        ],
-        unclaimed: false,
+        job: job("bust-2", "/m/Dragon bust.stl", 4, None),
     };
-    let ended = Agent {
+    let waiting = Agent {
         client: Some("claude-ai".into()),
         started_s: 0,
-        state: State::Ended,
-        jobs: vec![job("base-3", "/m/base.stl", 1, Some(false))],
-        unclaimed: false,
+        state: State::Idle,
+        job: job("cube-1", "/m/cube.stl", 2, Some(true)),
     };
     let mut app = pictured();
-    app.machine.agents.list = vec![working, ended];
+    app.machine.agents.list = vec![working, waiting];
     app.machine.agents.on_plate = vec!["cube-1".into()];
     let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app);
     harness.get_by_label("Agents").click();

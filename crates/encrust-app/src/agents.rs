@@ -1,5 +1,5 @@
-//! The agents the window lists: each `encrust-mcp` that keeps its file in `agents/`, with its
-//! latest jobs read from `mcp-jobs/` (ADR 0465, `docs/design/window-link.md`).
+//! The agents the window lists: each live `encrust-mcp` that keeps its file in `agents/` and
+//! has a model in hand, read from `mcp-jobs/` (ADR 0465, 0476, `docs/design/window-link.md`).
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
@@ -14,10 +14,6 @@ mod tests;
 const EVERY: Duration = Duration::from_secs(2);
 /// How long an agent may say nothing before it is taken as ended: three of its beats.
 const SILENT_S: u64 = 60;
-/// How far back the jobs no agent names are listed, s.
-const UNCLAIMED_S: u64 = 24 * 60 * 60;
-/// The most jobs read of one agent.
-pub const MOST_JOBS: usize = 3;
 
 /// What the window knows of its agents, and what the user asked of them this frame.
 #[derive(Debug, Default)]
@@ -44,11 +40,8 @@ pub struct Agent {
     pub client: Option<String>,
     pub started_s: u64,
     pub state: State,
-    /// Its latest jobs, at most `MOST_JOBS`, latest first.
-    pub jobs: Vec<Job>,
-    /// Stands for the jobs of the last day no agent's file names: those of a server that
-    /// keeps none, an older one or one whose file is gone.
-    pub unclaimed: bool,
+    /// The job in hand: the one its running tool names, else the latest it touched.
+    pub job: Option<Job>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,7 +54,6 @@ pub enum State {
         since_s: u64,
     },
     Idle,
-    Ended,
 }
 
 /// A job's latest revision, as its folder holds it.
@@ -86,6 +78,13 @@ impl Job {
             || self.id.clone(),
             |name| name.to_string_lossy().into_owned(),
         )
+    }
+}
+
+impl Agent {
+    /// Whether it starts a job that has no revision yet.
+    pub fn opening(&self) -> bool {
+        matches!(&self.state, State::Working { tool, job: None, .. } if tool == "start_job")
     }
 }
 
@@ -135,14 +134,11 @@ impl Agents {
         }
     }
 
-    /// How many agents are there now, and whether one of them works.
-    pub fn at_work(&self) -> (usize, bool) {
-        let live = self.list.iter().filter(|a| a.state != State::Ended);
-        let working = self
-            .list
+    /// Whether one of the agents runs a tool now.
+    pub fn working(&self) -> bool {
+        self.list
             .iter()
-            .any(|a| matches!(a.state, State::Working { .. }));
-        (live.count(), working)
+            .any(|a| matches!(a.state, State::Working { .. }))
     }
 }
 
@@ -164,93 +160,50 @@ struct Working {
     since_s: u64,
 }
 
-/// The agents whose files are in `agents`, those at work first, then the idle, then the
-/// ended, each the latest seen first; an ended one with no job left is not listed.
+/// The live agents in `agents` with a model in hand or opening one, those at work first,
+/// each the latest seen first.
 pub fn scan(agents: &Path, jobs: &Path, now_s: u64) -> Vec<Agent> {
-    let said: Vec<Said> = std::fs::read_dir(agents)
+    let mut read: Vec<(u64, Agent)> = std::fs::read_dir(agents)
         .into_iter()
         .flatten()
         .filter_map(|entry| Some(entry.ok()?.path()))
         .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
         .filter_map(|path| serde_json::from_slice::<Said>(&std::fs::read(path).ok()?).ok())
+        .filter_map(|said| Some((said.seen_s, agent_of(&said, jobs, now_s)?)))
+        .filter(|(_, agent)| agent.job.is_some() || agent.opening())
         .collect();
-    let claimed: Vec<&str> = said
-        .iter()
-        .flat_map(|said| said.jobs.iter().map(String::as_str))
-        .collect();
-    let unclaimed = unclaimed(jobs, &claimed, now_s);
-    let mut read: Vec<(u64, Agent)> = said
-        .iter()
-        .filter_map(|said| {
-            let agent = agent_of(said, jobs, now_s);
-            let listed = agent.state != State::Ended || !agent.jobs.is_empty();
-            listed.then_some((said.seen_s, agent))
-        })
-        .collect();
-    let rank = |state: &State| match state {
-        State::Working { .. } => 0,
-        State::Idle => 1,
-        State::Ended => 2,
-    };
-    read.sort_by(|(a_seen, a), (b_seen, b)| {
-        rank(&a.state).cmp(&rank(&b.state)).then(b_seen.cmp(a_seen))
-    });
-    let mut listed: Vec<Agent> = read.into_iter().map(|(_, agent)| agent).collect();
-    listed.extend(unclaimed);
-    listed
+    let idle = |agent: &Agent| agent.state == State::Idle;
+    read.sort_by(|(a_seen, a), (b_seen, b)| idle(a).cmp(&idle(b)).then(b_seen.cmp(a_seen)));
+    read.into_iter().map(|(_, agent)| agent).collect()
 }
 
-/// The jobs changed in the last day that no agent's file names, the latest first, as one
-/// entry standing for them; `None` where there are none.
-fn unclaimed(jobs: &Path, claimed: &[&str], now_s: u64) -> Option<Agent> {
-    let since = SystemTime::UNIX_EPOCH + Duration::from_secs(now_s.saturating_sub(UNCLAIMED_S));
-    let mut changed: Vec<(SystemTime, String)> = std::fs::read_dir(jobs)
-        .ok()?
-        .filter_map(|entry| {
-            let entry = entry.ok()?;
-            let id = entry.file_name().into_string().ok()?;
-            let modified = entry.metadata().ok()?.modified().ok()?;
-            (modified >= since && !claimed.contains(&id.as_str())).then_some((modified, id))
-        })
-        .collect();
-    changed.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
-    let listed: Vec<Job> = changed
-        .iter()
-        .filter_map(|(_, id)| job(jobs, id))
-        .take(MOST_JOBS)
-        .collect();
-    (!listed.is_empty()).then_some(Agent {
-        client: None,
-        started_s: 0,
-        state: State::Ended,
-        jobs: listed,
-        unclaimed: true,
-    })
-}
-
-fn agent_of(said: &Said, jobs: &Path, now_s: u64) -> Agent {
+/// The agent a file tells of, `None` once it has ended or fallen silent.
+fn agent_of(said: &Said, jobs: &Path, now_s: u64) -> Option<Agent> {
     let silent = now_s.saturating_sub(said.seen_s) > SILENT_S;
-    let state = match (&said.working, said.ended_s.is_some() || silent) {
-        (_, true) => State::Ended,
-        (Some(working), false) => State::Working {
+    if said.ended_s.is_some() || silent {
+        return None;
+    }
+    let state = match &said.working {
+        Some(working) => State::Working {
             tool: working.tool.clone(),
             job: working.job.clone(),
             since_s: working.since_s,
         },
-        (None, false) => State::Idle,
+        None => State::Idle,
     };
-    Agent {
+    let running = said
+        .working
+        .as_ref()
+        .and_then(|working| working.job.as_ref());
+    Some(Agent {
         client: said.client.clone(),
         started_s: said.started_s,
         state,
-        jobs: said
-            .jobs
-            .iter()
-            .filter_map(|id| job(jobs, id))
-            .take(MOST_JOBS)
-            .collect(),
-        unclaimed: false,
-    }
+        job: running
+            .into_iter()
+            .chain(said.jobs.first())
+            .find_map(|id| job(jobs, id)),
+    })
 }
 
 /// A job's latest revision, or `None` where its folder holds none.

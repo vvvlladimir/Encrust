@@ -39,7 +39,7 @@ fn listed(dir: &Path, now: u64) -> Vec<Agent> {
 }
 
 #[test]
-fn an_agent_at_work_is_listed_first_with_its_jobs_latest_revision_and_verdict() {
+fn an_agent_at_work_is_listed_first_with_the_job_its_tool_names() {
     let dir = scratch("working");
     job(&dir, "cube-1", "/m/cube.stl", 3, "ok");
     job(&dir, "bust-2", "/m/bust.stl", 1, "unclean");
@@ -56,7 +56,7 @@ fn an_agent_at_work_is_listed_first_with_its_jobs_latest_revision_and_verdict() 
         &json!({
             "client": "claude-code", "started_s": 200, "seen_s": 980,
             "working": {"tool": "check", "job": "cube-1", "since_s": 970},
-            "jobs": ["cube-1", "gone-3"],
+            "jobs": ["bust-2", "cube-1"],
         }),
     );
     let agents = listed(&dir, 1000);
@@ -71,40 +71,56 @@ fn an_agent_at_work_is_listed_first_with_its_jobs_latest_revision_and_verdict() 
         }
     );
     assert_eq!(
-        agents[0].jobs,
-        [Job {
+        agents[0].job,
+        Some(Job {
             id: "cube-1".into(),
             model: "/m/cube.stl".into(),
             revision: 3,
             clean: Some(true)
-        }],
-        "a job whose folder is gone is not listed"
+        }),
+        "the job the tool runs on, not the latest touched"
     );
     assert_eq!(agents[1].state, State::Idle);
-    assert_eq!(agents[1].jobs[0].clean, Some(false));
+    assert_eq!(
+        agents[1].job.as_ref().map(|job| job.clean),
+        Some(Some(false))
+    );
 }
 
 #[test]
-fn an_agent_silent_a_minute_has_ended_and_one_ended_with_no_job_is_not_listed() {
-    let dir = scratch("ended");
+fn an_agent_ended_silent_or_with_no_model_in_hand_is_not_listed() {
+    let dir = scratch("unlisted");
     job(&dir, "cube-1", "/m/cube.stl", 1, "ok");
+    let said = |seen: u64, extra: serde_json::Value| {
+        let mut said = json!({"started_s": 1, "seen_s": seen, "jobs": ["cube-1"]});
+        said.as_object_mut()
+            .expect("an object")
+            .extend(extra.as_object().expect("an object").clone());
+        said
+    };
+    agent(&dir, "1-1.json", &said(900, json!({})));
+    agent(&dir, "2-2.json", &said(990, json!({"ended_s": 990})));
+    agent(&dir, "3-3.json", &said(990, json!({"jobs": ["gone-3"]})));
     agent(
         &dir,
-        "1-1.json",
-        &json!({
-            "started_s": 1, "seen_s": 900, "working": {"tool": "check", "since_s": 1}, "jobs": ["cube-1"],
-        }),
+        "4-4.json",
+        &said(
+            990,
+            json!({"jobs": [], "working": {"tool": "list_profiles", "since_s": 1}}),
+        ),
     );
     agent(
         &dir,
-        "2-2.json",
-        &json!({"started_s": 2, "seen_s": 990, "ended_s": 990, "jobs": []}),
+        "5-5.json",
+        &said(
+            990,
+            json!({"jobs": [], "working": {"tool": "start_job", "since_s": 1}}),
+        ),
     );
-    fs::write(dir.join("agents").join("3-3.json.part"), "{").expect("writable");
+    fs::write(dir.join("agents").join("6-6.json.part"), "{").expect("writable");
     let agents = listed(&dir, 1000);
-    assert_eq!(agents.len(), 1);
-    assert_eq!(agents[0].state, State::Ended);
-    assert_eq!(agents[0].client, None);
+    assert_eq!(agents.len(), 1, "{agents:?}");
+    assert!(agents[0].opening(), "one opening a model is listed");
 }
 
 #[test]
@@ -118,39 +134,4 @@ fn a_project_job_is_told_apart_and_no_folder_lists_nothing() {
     assert!(project.is_project());
     assert_eq!(project.name(), "plate.encrust");
     assert!(scan(Path::new("/no/such/agents"), Path::new("/no/jobs"), 0).is_empty());
-}
-
-#[test]
-fn the_jobs_of_the_last_day_no_agent_names_are_listed_as_one_entry_after_the_agents() {
-    let dir = scratch("unclaimed");
-    job(&dir, "cube-1", "/m/cube.stl", 2, "ok");
-    job(&dir, "bust-2", "/m/bust.stl", 1, "ok");
-    agent(
-        &dir,
-        "1-1.json",
-        &json!({"started_s": 1, "seen_s": now_s(), "jobs": ["bust-2"]}),
-    );
-    let agents = listed(&dir, now_s());
-    assert_eq!(agents.len(), 2);
-    assert!(!agents[0].unclaimed);
-    assert!(agents[1].unclaimed && agents[1].state == State::Ended);
-    let ids: Vec<&str> = agents[1].jobs.iter().map(|job| job.id.as_str()).collect();
-    assert_eq!(
-        ids,
-        ["cube-1"],
-        "a job an agent names is listed under it alone"
-    );
-
-    let fs_gone = std::fs::remove_dir_all(dir.join("agents"));
-    assert!(fs_gone.is_ok());
-    assert_eq!(
-        listed(&dir, now_s()).len(),
-        1,
-        "no agents' folder at all still lists them"
-    );
-    let two_days = now_s() + 2 * 24 * 60 * 60;
-    assert!(
-        listed(&dir, two_days).is_empty(),
-        "a job a day old is no longer listed"
-    );
 }

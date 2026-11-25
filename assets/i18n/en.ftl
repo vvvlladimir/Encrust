@@ -371,22 +371,17 @@ surfaces-build-stopped = Preparing the surface supports stand on stopped without
 
 ## panels/title_bar/agents.rs
 
-# The group of the agents' list while no agent is there.
+# The agents' ring, as a screen reader names it.
 agents-title = Agents
-agents-none = No agent has worked here yet
 # A group of the list, one an agent: its chat client's name, then what it does now.
 agents-working = { $client } · working
 agents-idle = { $client } · waiting
-agents-ended = { $client } · ended
 # A second agent of the same chat client, numbered.
 agents-numbered = { $client } { $number }
 # The name of an agent whose chat client gave none.
 agents-unnamed = Agent
-# The group of the list holding the jobs of the last day no agent there names.
-agents-earlier = Earlier jobs
 # Under an agent while it opens a model as a new job, before the job has a revision.
 agents-opening = Opening a model…
-agents-no-job = No model yet
 # Under a model's name in the list: its latest revision and what the check found in it.
 agents-revision-clean = Revision { $revision } · no problems found
 agents-revision-problems = Revision { $revision } · the check found problems
