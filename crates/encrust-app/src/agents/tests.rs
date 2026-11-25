@@ -132,6 +132,6 @@ fn a_project_job_is_told_apart_and_no_folder_lists_nothing() {
         clean: None,
     };
     assert!(project.is_project());
-    assert_eq!(project.name(), "plate.encrust");
+    assert_eq!(project.name(), "plate");
     assert!(scan(Path::new("/no/such/agents"), Path::new("/no/jobs"), 0).is_empty());
 }

@@ -304,7 +304,7 @@ fn the_chip_opening_its_machines_and_its_resins() {
 }
 
 /// The agents' ring beside the chip and the list it opens: one agent at work on its model,
-/// another's on the plate (ADR 0465, 0476).
+/// another waiting with its own (ADR 0465, 0476).
 #[test]
 fn the_agents_ring_opening_its_list() {
     use crate::agents::{Agent, Job, State};
@@ -334,7 +334,6 @@ fn the_agents_ring_opening_its_list() {
     };
     let mut app = pictured();
     app.machine.agents.list = vec![working, waiting];
-    app.machine.agents.on_plate = vec!["cube-1".into()];
     let mut harness = drawn(Harness::builder().with_size(WINDOW).wgpu(), app);
     harness.get_by_label("Agents").click();
     harness.run_steps(SETTLE_FRAMES);

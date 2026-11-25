@@ -103,22 +103,18 @@ fn chooser(ring: &egui::Response) -> egui::Popup<'_> {
         .gap(theme::CHOOSER_GAP)
 }
 
-/// The list: each agent under its name with the model in its hand, then whether the window
-/// follows them.
+/// The list: each agent under its client's name with the model in its hand, then whether the
+/// window follows them.
 fn menu(ui: &mut egui::Ui, window: &mut Window) {
     let agents = &window.machine.agents;
     let mut picked: Option<Job> = None;
     let names = client_names(&agents.list);
     for (agent, client) in agents.list.iter().zip(names) {
-        let group = match agent.state {
-            State::Working { .. } => tr!("agents-working", client = client),
-            State::Idle => tr!("agents-idle", client = client),
-        };
-        chooser_group(ui, &group);
+        chooser_group(ui, &client);
         if agent.opening() {
             hint(ui, &tr!("agents-opening"));
         } else if let Some(job) = &agent.job
-            && job_row(ui, agent, job, agents.on_plate.contains(&job.id))
+            && job_row(ui, agent, job)
         {
             picked = Some(job.clone());
         }
@@ -140,9 +136,9 @@ fn menu(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// One job's row: the model, its revision and what is said of it, the job on the plate
-/// ticked. Answers whether it was pressed.
-fn job_row(ui: &mut egui::Ui, agent: &Agent, job: &Job, on_plate: bool) -> bool {
+/// One job's row: the model, its revision and what is said of it. Answers whether it was
+/// pressed.
+fn job_row(ui: &mut egui::Ui, agent: &Agent, job: &Job) -> bool {
     let working = match &agent.state {
         State::Working { tool, .. } if working_on(agent).is_some() => Some(tool.as_str()),
         _ => None,
@@ -154,7 +150,7 @@ fn job_row(ui: &mut egui::Ui, agent: &Agent, job: &Job, on_plate: bool) -> bool 
         name: &name,
         detail: &detail,
         aside: working.map(|_| Aside::Dot(theme::colors().accent)),
-        chosen: on_plate,
+        chosen: false,
     };
     let tooltip = if job.is_project() {
         tr!("agents-open-project-tooltip")
@@ -259,7 +255,7 @@ mod tests {
             detail(&job, Some("set_hollow")),
             "Revision 3 · changing the model"
         );
-        assert_eq!(detail(&job, None), "Revision 3 · the check found problems");
+        assert_eq!(detail(&job, None), "Revision 3 · problems found");
     }
 
     #[test]
@@ -282,7 +278,7 @@ mod tests {
         let lines: Vec<&str> = said.lines().collect();
         assert_eq!(lines.len(), 2, "{said}");
         assert!(
-            lines[0].starts_with("Claude Code · working: cube.stl, Revision 3 · checking, "),
+            lines[0].starts_with("Claude Code · working: cube, Revision 3 · checking, "),
             "{said}"
         );
         assert_eq!(lines[1], "Agent · waiting");

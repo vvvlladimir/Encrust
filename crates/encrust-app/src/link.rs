@@ -92,14 +92,6 @@ impl Link {
         for index in 0..self.followed.len() {
             self.show(index, window);
         }
-        let scene = &window.doc.scene;
-        window.machine.agents.on_plate = (self.followed.iter())
-            .filter(|f| {
-                f.plate_in(scene)
-                    .is_some_and(|p| scene.on_plate(p).next().is_some())
-            })
-            .map(|f| f.job.clone())
-            .collect();
         applying || self.followed.iter().any(|f| f.waiting.is_some())
     }
 

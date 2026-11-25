@@ -384,7 +384,7 @@ agents-unnamed = Agent
 agents-opening = Opening a model…
 # Under a model's name in the list: its latest revision and what the check found in it.
 agents-revision-clean = Revision { $revision } · no problems found
-agents-revision-problems = Revision { $revision } · the check found problems
+agents-revision-problems = Revision { $revision } · problems found
 agents-revision = Revision { $revision }
 agents-revision-project = Revision { $revision } · project
 # Under a model's name while its agent works on it: what the agent does now.

@@ -22,8 +22,6 @@ pub struct Agents {
     read: Option<Receiver<Vec<Agent>>>,
     /// The revisions the user asked to see on the plate, for the link to take.
     pub asked: Vec<Asked>,
-    /// The jobs whose model the link keeps on the plate.
-    pub on_plate: Vec<String>,
 }
 
 /// A revision of a job, to be shown on the plate.
@@ -72,9 +70,9 @@ impl Job {
         crate::files::has_extension(&self.model, &crate::files::PROJECTS)
     }
 
-    /// The model's file name.
+    /// The model's name: its file's, without the extension.
     pub fn name(&self) -> String {
-        self.model.file_name().map_or_else(
+        self.model.file_stem().map_or_else(
             || self.id.clone(),
             |name| name.to_string_lossy().into_owned(),
         )

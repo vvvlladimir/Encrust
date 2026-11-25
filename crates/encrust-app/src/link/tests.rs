@@ -387,7 +387,11 @@ fn a_revision_the_user_asks_for_is_read_from_the_servers_jobs_and_shown() {
     bench.machine.agents.asked.push(ask(3));
     bench.run_to_end();
     assert_eq!(bench.lows_x(), [5.0]);
-    assert_eq!(bench.machine.agents.on_plate, ["cube-1"]);
+    assert_eq!(
+        bench.doc.scene.plates()[1],
+        "cube",
+        "on the job's own plate"
+    );
 
     bench.machine.agents.asked.push(ask(9));
     bench.run_to_end();
@@ -420,7 +424,11 @@ fn a_second_job_of_the_same_model_takes_the_first_ones_place_on_the_plate() {
     assert_eq!(bench.hand_over(&file, second), json!({"shown": true}));
     bench.run_to_end();
     assert_eq!(bench.lows_x(), [30.0], "one model, shown by the second job");
-    assert_eq!(bench.machine.agents.on_plate, ["cube-2"]);
+    assert_eq!(
+        bench.doc.scene.plates().len(),
+        2,
+        "on the one plate of the model"
+    );
 }
 
 mod plate;
