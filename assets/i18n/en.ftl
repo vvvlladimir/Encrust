@@ -408,6 +408,8 @@ agents-follow-tooltip = Run each revision an agent saves on the plate straight a
 
 # A chat client prepares a model over MCP; each change it keeps is a numbered revision of its job, shown again on the plate.
 link-replaying = Showing revision { $revision } of the chat client's job { $job }
+# The name of the plate an agent's job stands on, when the model's name is a plate's already.
+link-plate-numbered = { $model } { $number }
 
 ## measure.rs
 

@@ -104,8 +104,8 @@ it is tested and improved by prints rather than by prompts.
 MCP 2026-07-28 is stateless: no session, any request on any instance. A call therefore
 names its job, a directory in the user's cache of numbered revisions, each a TOML file —
 the model, printer, resin and each step's settings — that becomes `encrust` flags, and
-beside it the `core-recipe` its check ran. With the window followed, the window owns the plate
-(ADR 0466): a revision whose every change is an edit is checked on the window's plate and kept
+beside it the `core-recipe` its check ran. With the window followed, the window owns the job's plate,
+a plate of its own (ADR 0466, 0477): a revision whose every change is an edit is checked on it and kept
 as that plate and its edits (`N.encrust`, `N.edits.json`), and handed to the window as edits,
 so what the user did there is in the next check; any other revision the window runs by its
 recipe (ADR 0459). An editing tool writes the next revision and checks it; `revert` copies an old one forward;

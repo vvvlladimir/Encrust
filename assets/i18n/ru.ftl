@@ -409,6 +409,7 @@ agents-follow-tooltip = Сразу запускать на платформе к
 ## link.rs
 
 link-replaying = Показываю ревизию { $revision } задания чат-клиента { $job }
+link-plate-numbered = { $model } { $number }
 
 ## measure.rs
 

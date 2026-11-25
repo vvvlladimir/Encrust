@@ -1,6 +1,6 @@
 # 0465. The window lists its agents and shows their work when asked
 
-- **Status:** Proposed; what the ring lists narrowed by 0476
+- **Status:** Proposed; what the ring lists narrowed by 0476, a plate per job by 0477
 - **Date:** 2026-11-18
 
 ## Context

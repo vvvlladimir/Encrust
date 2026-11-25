@@ -19,16 +19,20 @@ use crate::workspace::{Mode, Tool};
 /// A plate of one 10 mm box with its low corner at `low`, written as the server keeps a
 /// revision's, at `path`.
 fn plate_at(path: &Path, low: Vec3) -> PathBuf {
-    let scene = scene_of_boxes(&[(low, low + Vec3::splat(10.0))]);
+    write_plate(&scene_of_boxes(&[(low, low + Vec3::splat(10.0))]), path);
+    path.to_owned()
+}
+
+/// `scene` written as the server keeps a revision's plate, at `path`.
+fn write_plate(scene: &crate::scene::Scene, path: &Path) {
     let (slicing, tools) = (Slicing::default(), Tools::default());
     let plate = capture(Captured {
-        scene: &scene,
+        scene,
         slicing: &slicing,
         tools: &tools,
     });
     std::fs::create_dir_all(path.parent().expect("a folder")).expect("writable");
     save(path, &plate).expect("the plate is written");
-    path.to_owned()
 }
 
 fn cube() -> PathBuf {
@@ -148,6 +152,23 @@ impl Bench {
         server.join().expect("the server's thread ends")
     }
 
+    /// Hands `line` over, running whole frames, so a tool's job lands meanwhile.
+    fn hand_over_running(&mut self, file: &Path, line: Value) -> Value {
+        let file = file.to_owned();
+        let server = std::thread::spawn(move || send(&file, &line));
+        while !server.is_finished() {
+            self.frame();
+            std::thread::yield_now();
+        }
+        server.join().expect("the server's thread ends")
+    }
+
+    fn undo(&mut self) -> bool {
+        let (doc, tools, machine) = (&mut self.doc, &mut self.tools, &mut self.machine);
+        doc.history
+            .undo(&mut doc.scene, tools, &mut machine.slicing)
+    }
+
     /// Frames until nothing runs.
     fn run_to_end(&mut self) {
         while self.frame() || self.doc.surfaces.is_running() || self.doc.drilling.is_running() {
@@ -213,7 +234,7 @@ fn a_plate_that_does_not_read_is_refused_with_why() {
 }
 
 #[test]
-fn a_revision_stands_its_plate_beside_the_users_model_and_is_undone_as_one_edit() {
+fn a_revision_stands_on_a_plate_of_its_own_and_is_undone_as_one_edit() {
     let file = scratch("shown");
     let mut bench = Bench::new(file.clone());
     bench.doc.scene = scene_of_boxes(&[(Vec3::new(50.0, 0.0, 0.0), Vec3::splat(60.0))]);
@@ -224,22 +245,61 @@ fn a_revision_stands_its_plate_beside_the_users_model_and_is_undone_as_one_edit(
         json!({"shown": true})
     );
     bench.run_to_end();
-    assert_eq!(
-        bench.lows_x(),
-        [50.0, 0.0],
-        "the user's box and the revision's"
-    );
-    let Bench {
-        doc,
-        tools,
-        machine,
-        ..
-    } = &mut bench;
-    assert!(
-        doc.history
-            .undo(&mut doc.scene, tools, &mut machine.slicing)
-    );
+    let scene = &bench.doc.scene;
+    assert_eq!(scene.plates().len(), 2, "the job's plate beside the user's");
+    assert_eq!(scene.active_plate(), 1, "the job's plate is shown");
+    assert_eq!(scene.plates()[1], "cube", "named for the job's model");
+    assert_eq!(scene.on_plate(0).count(), 1, "the user's box is left alone");
+    assert_eq!(bench.lows_x(), [50.0, 0.0]);
+    assert!(bench.undo());
     assert_eq!(bench.lows_x(), [50.0], "one undo takes the revision off");
+    assert_eq!(bench.doc.scene.plates().len(), 1, "and its plate");
+}
+
+#[test]
+fn the_server_is_handed_the_jobs_plate_alone() {
+    let file = scratch("plate-alone");
+    let mut bench = Bench::new(file.clone());
+    bench.doc.scene = scene_of_boxes(&[(Vec3::new(50.0, 0.0, 0.0), Vec3::splat(60.0))]);
+    bench.run_to_end();
+    bench.hand_over(&file, line(&file, 1, &revision_plate(&file, 1, 0.0)));
+    bench.run_to_end();
+    let job = bench
+        .doc
+        .scene
+        .on_plate(1)
+        .next()
+        .expect("the job's box")
+        .id;
+    bench.doc.scene.show_plate(0);
+
+    let asked = json!({"schema": 3, "token": found(&file)["token"], "job": "cube-1",
+                       "want": "plate"});
+    let reply = bench.hand_over(&file, asked);
+
+    assert_eq!(reply["objects"], json!([job.0]), "{reply}");
+    assert_eq!(reply["job_object"], json!(job.0), "{reply}");
+}
+
+#[test]
+fn a_revision_shown_after_a_cut_made_by_edits_stands_in_place_of_the_halves() {
+    let file = scratch("after-cut");
+    let mut bench = Bench::new(file.clone());
+    bench.hand_over(&file, line(&file, 1, &revision_plate(&file, 1, 0.0)));
+    bench.run_to_end();
+    let cube = bench.doc.scene.here().next().expect("the job's box").id;
+    let cut = json!({"schema": 3, "token": found(&file)["token"], "job": "cube-1",
+        "base_version": bench.doc.history.plate_version(),
+        "apply": [{"edit": "cut", "object": cube.0, "axis": "z", "at_mm": 5.0}]});
+    let applied = bench.hand_over_running(&file, cut);
+    bench.run_to_end();
+    assert_eq!(applied["applied"], true, "{applied}");
+    assert_eq!(bench.doc.scene.objects().len(), 2, "the two halves");
+
+    bench.hand_over(&file, line(&file, 3, &revision_plate(&file, 3, 20.0)));
+    bench.run_to_end();
+
+    assert_eq!(bench.lows_x(), [20.0], "revision 3 alone, the halves gone");
 }
 
 #[test]

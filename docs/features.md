@@ -1117,10 +1117,11 @@ the step before and the autopilot's own preparation, so it can undo one that mad
 worse. The window lists every agent — Claude Code, Claude Desktop — in a robot's ring beside the
 print chip, there while an agent has a model in hand and turning while it works, each with
 the model it works on and what the check found — no history; a click
-stands one on the plate beside your own models exactly as the check left it, supports and
-all, one undo, on the job's printer and resin, whenever the window was opened. With Follow
+stands it on a plate of its own, named for the model, exactly as the check left it, supports
+and all, one undo, on the job's printer and resin, whenever the window was opened; your own
+plates are left alone and the agent never sees them. With Follow
 agents on, each step an agent keeps stands there as it comes; asked to show you the model, the agent
-puts it on the plate itself, opening Encrust if it is closed. Followed, the window owns the
+puts it on its plate itself, opening Encrust if it is closed. Followed, the window owns that
 plate: a repair, faces mended, a picture pressed in, a scale, a turn typed, a label, a split,
 a cut, a hollow, a hole drilled at a point or supports an agent makes lands there as an edit
 of the model on it, one undo each, and the agent's next step is checked on the plate as you

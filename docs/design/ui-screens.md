@@ -86,7 +86,7 @@ left edge, 300 wide, on `raised` with a window's shadow, a capital group name ov
   *· waiting*, a second of one client numbered — at work first; under each, one row, the
   job in hand: model glyph, the model's file name over *Revision n* and the check's
   verdict, or what the agent does to it now with an `accent` dot at the right; the job on
-  the plate washed and ticked. A press shows that revision on the plate as one undo; a
+  the plate washed and ticked. A press shows that revision on the job's own plate as one undo; a
   project's row opens the project, asking first about unsaved work. *Opening a model…* in a
   line while an agent starts one. No ended agent and no earlier job is listed. Under a
   rule, *Follow agents* as a `switch`: on, each revision an agent keeps runs on the plate

@@ -1,6 +1,6 @@
 # 0473. A revision is shown by the plate its check wrote
 
-- **Status:** Accepted
+- **Status:** Accepted; on the job's own plate (0477)
 - **Date:** 2026-11-23
 
 ## Context

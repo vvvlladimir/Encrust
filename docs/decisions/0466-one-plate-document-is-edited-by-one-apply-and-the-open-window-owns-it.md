@@ -1,6 +1,6 @@
 # 0466. One plate document is edited by one apply, and the open window owns it
 
-- **Status:** Accepted; the window's Prepare for print keeps its own jobs (0470)
+- **Status:** Accepted; the window's Prepare for print keeps its own jobs (0470); the plate handed is the job's own (0477)
 - **Date:** 2026-11-18
 
 ## Context

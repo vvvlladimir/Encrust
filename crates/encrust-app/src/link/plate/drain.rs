@@ -7,7 +7,7 @@ use core_geometry::{Bvh, Vec3};
 use core_volume::{DrainHole, HoleKind, HoleSize, hole_at};
 
 use super::no_object;
-use crate::drain::DrainTool;
+use crate::drain::{DrainTool, PlugsLaid};
 use crate::panels::Window;
 
 /// Drills the holes at `at_mm` at once; with `auto` starts the Drain search on `object`
@@ -98,6 +98,8 @@ pub(super) fn start_plugs(
     let model = (window.doc.scene.get_mut(object)).ok_or_else(|| no_object(object))?;
     let drift_mm = window.machine.slicing.material.compensation.fit_drift_mm();
     model.own.plug_gap_mm = Some(gap_mm + drift_mm);
+    // A model read from a plate keeps its plugs as read; an edit asking for plugs lays them anew.
+    model.plugs_laid.get_or_insert_with(PlugsLaid::default);
     let asked_by = window.doc.history.next_edit();
     window.tools.drain.lay_plugs(
         &mut window.doc.scene,

@@ -41,12 +41,13 @@ server waiting 15 s for it, and the tool's answer carries it as `window`:
 ```
 
 A revision made by edits on the window's plate (below) is not handed over again: that plate
-holds it, and its file holds the user's other models too.
+holds it.
 
 ## The plate and its edits (schema 3)
 
-The open window owns the plate (ADR 0466); `schema` in its file is the highest line it reads.
-A server asks for the plate as it stands:
+The open window owns the plate (ADR 0466), each job's a plate of its own (ADR 0477);
+`schema` in its file is the highest line it reads. A server asks for its job's plate as it
+stands:
 
 ```json
 {"schema": 3, "token": "…", "job": "cube-18e4…", "want": "plate"}
@@ -54,9 +55,10 @@ A server asks for the plate as it stands:
  "job_object": 3}
 ```
 
-The window writes the plate into the job's folder off its drawing thread, every object under
-the id it knows it by, and answers with the path, the ids on the plate, `job_object` — the
-job's model where it stands whole, read in for the job — and its plate's version: a count raised by
+The window writes the job's plate, as a project of that one plate — an empty one for a job
+with none yet — into the job's folder off its drawing thread, every object under the id it
+knows it by, and answers with the path, the ids on the plate, `job_object` — the job's model
+where it stands whole there, its one object that is no plug — and its version: a count raised by
 every recorded change of the plate, its undo and its redo, not by a tool's setting. The server
 builds its edits on that file and hands them back with the version:
 
@@ -68,8 +70,8 @@ builds its edits on that file and hands them back with the version:
 {"applied": false, "why_not": "…"}
 ```
 
-Edits on a plate still at `base_version` run one after another as the tools' own jobs, each an
-undo entry, and are answered once all have landed, within 10 min (the server waits 11); one
+Edits on a plate still at `base_version` run one after another on the job's plate, shown as
+each starts, as the tools' own jobs, each an undo entry, and are answered once all have landed, within 10 min (the server waits 11); one
 that does not land stops the rest and is answered with why. A plate that moved on is answered
 `stale` with its version, and nothing is applied: the server asks for the plate again, builds
 and checks the edits on it once more and keeps only that revision. A window not following its
@@ -100,15 +102,14 @@ shown; a cut the user undid there is taken out of the job's next revision.
 
 What follows is what the window does with a revision it shows (see Following). Once no job
 runs on its plate — a tool's, a Prepare for print, an import — it puts the window on the
-job's printer and resin, takes off the objects the job's last revision stood as, plugs among
-them, and stands the plate's objects on its active plate beside what stands
-(`project::inserted::insert`): an id the plate has taken gets the next free one, and each
-support group joins the window's group of its name, a new one where there is none, the
+job's printer and resin, shows the job's plate — a new one, named for the model and numbered
+past a name taken, the first time — takes off everything on it, and stands the file's objects
+there (`project::inserted::insert`): an id the window has taken gets the next free one, and
+each support group joins the window's group of its name, a new one where there is none, the
 file's profile kept as the object's own where the window's differs. That is one undo entry.
 A newer revision of the job waiting takes the older one's place. A job of the same model file
-takes the place of another job of it, so a model stands on the plate once however many jobs
-an agent starts on it. The job's model, for edits, is the revision's one object that is no
-plug.
+takes the place of another job of it, on its plate, so a model stands once however many jobs
+an agent starts on it. A plate renamed or removed is no longer the job's.
 
 The check every tool answers with is still the command line's: the window shows its plate, it
 does not answer for it.

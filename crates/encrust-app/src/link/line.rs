@@ -19,7 +19,11 @@ pub enum Line {
     /// The plate as it stands, written for `job` to build its next edits on.
     Plate { job: String },
     /// `edits` built on the plate at `base_version`, to apply if it is still that version.
-    Apply { edits: Vec<Edit>, base_version: u64 },
+    Apply {
+        job: String,
+        edits: Vec<Edit>,
+        base_version: u64,
+    },
 }
 
 #[derive(Deserialize)]
@@ -67,6 +71,7 @@ fn plate_line(value: Value) -> Result<Line, String> {
     match (line.want.as_deref(), line.apply, line.base_version) {
         (Some("plate"), None, _) => Ok(Line::Plate { job: line.job }),
         (None, Some(edits), Some(base_version)) => Ok(Line::Apply {
+            job: line.job,
             edits,
             base_version,
         }),

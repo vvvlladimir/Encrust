@@ -12,14 +12,26 @@ use crate::scene::{ImportSummary, Imported, ObjectId};
 use crate::supports::SupportGroup;
 use printer_profiles::SupportProfile;
 
-/// A 10 mm cube standing on the plate, recorded as the plate's first edit.
-fn with_cube(bench: &mut Bench) -> ObjectId {
-    let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
-    let summary = ImportSummary::made(diagnose(&mesh));
-    let imported = Imported::new("cube".into(), Arc::new(mesh), Transform::default(), summary);
-    let id = bench.doc.scene.insert(imported);
+/// `count` 10 mm cubes, one on another, shown as revision 1 of job `cube-1` on its plate.
+fn with_cubes(bench: &mut Bench, file: &Path, count: usize) -> Vec<ObjectId> {
+    let mut scene = crate::scene::Scene::default();
+    for _ in 0..count {
+        let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
+        let summary = ImportSummary::made(diagnose(&mesh));
+        let cube = Imported::new("cube".into(), Arc::new(mesh), Transform::default(), summary);
+        scene.insert(cube);
+    }
+    let plate = file.with_file_name(format!("plates/cubes-{count}.encrust"));
+    write_plate(&scene, &plate);
+    let shown = bench.hand_over(file, line(file, 1, &plate));
+    assert_eq!(shown, json!({"shown": true}));
     bench.run_to_end();
-    id
+    bench.doc.scene.here().map(|object| object.id).collect()
+}
+
+/// A 10 mm cube shown as revision 1 of job `cube-1`, alone on the job's plate.
+fn with_cube(bench: &mut Bench, file: &Path) -> ObjectId {
+    with_cubes(bench, file, 1)[0]
 }
 
 fn asking(file: &Path, rest: Value) -> Value {
@@ -35,30 +47,11 @@ fn cut_at(object: ObjectId, base_version: u64) -> Value {
            "apply": [{"edit": "cut", "object": object.0, "axis": "z", "at_mm": 5.0}]})
 }
 
-impl Bench {
-    /// Hands `line` over, running whole frames, so a tool's job lands meanwhile.
-    fn hand_over_running(&mut self, file: &Path, line: Value) -> Value {
-        let file = file.to_owned();
-        let server = std::thread::spawn(move || send(&file, &line));
-        while !server.is_finished() {
-            self.frame();
-            std::thread::yield_now();
-        }
-        server.join().expect("the server's thread ends")
-    }
-
-    fn undo(&mut self) -> bool {
-        let (doc, tools, machine) = (&mut self.doc, &mut self.tools, &mut self.machine);
-        doc.history
-            .undo(&mut doc.scene, tools, &mut machine.slicing)
-    }
-}
-
 #[test]
 fn the_plate_is_handed_over_at_its_version_with_the_ids_the_window_knows_its_objects_by() {
     let file = scratch("plate");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
 
     let reply = bench.hand_over_running(&file, asking(&file, json!({"want": "plate"})));
 
@@ -77,7 +70,7 @@ fn the_plate_is_handed_over_at_its_version_with_the_ids_the_window_knows_its_obj
 fn a_cut_on_the_version_it_was_built_on_leaves_two_halves_which_one_undo_takes_back() {
     let file = scratch("apply");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
 
     let reply = bench.hand_over_running(&file, asking(&file, cut_at(cube, version)));
@@ -102,7 +95,7 @@ fn mend_of(object: ObjectId, base_version: u64, drop_faces: &[usize]) -> Value {
 fn a_mend_drops_the_faces_it_names_off_the_object_which_keeps_its_id() {
     let file = scratch("mend");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
 
     let reply = bench.hand_over_running(&file, asking(&file, mend_of(cube, version, &[0, 1])));
@@ -121,7 +114,7 @@ fn a_mend_drops_the_faces_it_names_off_the_object_which_keeps_its_id() {
 fn a_mend_naming_a_face_the_object_lacks_is_answered_with_why_and_leaves_the_cube() {
     let file = scratch("mend-refused");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
 
     let reply = bench.hand_over_running(&file, asking(&file, mend_of(cube, version, &[13])));
@@ -149,7 +142,7 @@ fn a_relief_presses_a_picture_into_the_cube_which_keeps_its_id() {
         .expect("the scratch folder is made");
     checker.save(&picture).expect("the picture is written");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let before = signed_volume(&bench.doc.scene.get(cube).expect("the cube is there").mesh);
 
@@ -178,7 +171,7 @@ fn hollow_of(object: ObjectId, base_version: u64, state: &HollowState) -> Value 
 fn a_hollow_shells_the_cube_by_numbers_that_become_its_own_and_keeps_its_id() {
     let file = scratch("hollow");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let state = HollowState {
         thickness_mm: 1.0,
@@ -206,7 +199,7 @@ fn a_hollow_shells_the_cube_by_numbers_that_become_its_own_and_keeps_its_id() {
 fn a_wall_as_thick_as_the_cube_is_answered_not_applied() {
     let file = scratch("hollow-no-room");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let state = HollowState {
         thickness_mm: 10.0,
@@ -223,7 +216,7 @@ fn a_wall_as_thick_as_the_cube_is_answered_not_applied() {
 fn a_drain_drills_a_hole_into_the_cube_at_once_and_keeps_its_id() {
     let file = scratch("drain");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let drain = json!({"base_version": version,
         "apply": [{"edit": "drain", "object": cube.0, "at_mm": [[5.0, 5.0, 10.5]]}]});
@@ -281,7 +274,7 @@ fn a_drain_on_a_scaled_cube_drills_a_hole_of_the_size_asked_on_the_plate() {
 fn a_drain_takes_away_the_supports_it_drills_out_and_leaves_the_rest() {
     let file = scratch("drain-supports");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let stood = json!({"base_version": version,
         "apply": [{"edit": "move", "object": cube.0, "by_mm": [0.0, 0.0, 5.0]},
@@ -317,7 +310,7 @@ fn a_drain_takes_away_the_supports_it_drills_out_and_leaves_the_rest() {
 fn an_auto_drain_searches_a_hollow_cube_and_keeps_the_id() {
     let file = scratch("drain-auto");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let state = HollowState {
         thickness_mm: 1.0,
@@ -342,7 +335,7 @@ fn an_auto_drain_searches_a_hollow_cube_and_keeps_the_id() {
 fn edits_left_when_the_user_moves_the_model_under_a_running_hollow_are_refused() {
     let file = scratch("moved-under");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let state = HollowState {
         thickness_mm: 1.0,
@@ -383,7 +376,7 @@ fn edits_left_when_the_user_moves_the_model_under_a_running_hollow_are_refused()
 fn an_auto_drain_on_a_solid_cube_is_refused_for_want_of_a_cavity() {
     let file = scratch("drain-solid");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let drain = json!({"base_version": version,
         "apply": [{"edit": "drain", "object": cube.0, "auto": true}]});
@@ -397,7 +390,7 @@ fn an_auto_drain_on_a_solid_cube_is_refused_for_want_of_a_cavity() {
 fn a_channel_digs_one_channel_of_the_points_given() {
     let file = scratch("channel");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let channel = json!({"base_version": version,
         "apply": [{"edit": "channel", "object": cube.0, "diameter_mm": 2.0,
@@ -418,7 +411,7 @@ fn a_channel_digs_one_channel_of_the_points_given() {
 fn plugs_for_two_holes_stand_as_two_objects_naming_the_cube() {
     let file = scratch("plugs");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let plugs = json!({"base_version": version,
         "apply": [{"edit": "drain", "object": cube.0,
@@ -443,7 +436,7 @@ fn plug_width_mm(gap_mm: f32, drift_mm: f32) -> f32 {
     let compensation = &mut bench.machine.slicing.material.compensation;
     compensation.tolerance_on = false;
     compensation.hole_offset_mm = drift_mm;
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let plugs = json!({"base_version": version,
         "apply": [{"edit": "drain", "object": cube.0, "at_mm": [[5.0, 5.0, 10.5]]},
@@ -477,8 +470,9 @@ fn a_plug_gap_is_the_final_gap_whatever_the_resin_drifts_by() {
 fn an_arrange_spreads_two_stacked_cubes_apart_on_the_plate_it_names() {
     let file = scratch("arrange");
     let mut bench = Bench::new(file.clone());
-    let first = with_cube(&mut bench);
-    let second = with_cube(&mut bench);
+    let [first, second] = with_cubes(&mut bench, &file, 2)[..] else {
+        panic!("two cubes are shown");
+    };
     let version = bench.doc.history.plate_version();
     let spread = json!({"base_version": version,
         "apply": [{"edit": "arrange", "plate_mm": [100.0, 100.0], "clearance_mm": 2.0}]});
@@ -508,7 +502,7 @@ fn an_arrange_spreads_two_stacked_cubes_apart_on_the_plate_it_names() {
 fn an_arrange_keeps_every_model_inside_the_area_it_names() {
     let file = scratch("arrange-area");
     let mut bench = Bench::new(file.clone());
-    let ids = [with_cube(&mut bench), with_cube(&mut bench)];
+    let ids = with_cubes(&mut bench, &file, 2);
     let version = bench.doc.history.plate_version();
     let spread = json!({"base_version": version,
         "apply": [{"edit": "arrange", "low_mm": [60.0, 0.0],
@@ -554,7 +548,7 @@ fn an_arrange_of_a_model_with_no_surface_is_refused() {
 fn supports_at_a_point_alone_stand_one_contact_on_the_surface_and_keep_the_id() {
     let file = scratch("supports-at");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let supports = json!({"base_version": version,
         "apply": [{"edit": "supports", "object": cube.0, "profile": "medium",
@@ -579,7 +573,7 @@ fn supports_at_a_point_alone_stand_one_contact_on_the_surface_and_keep_the_id() 
 fn auto_supports_stand_contacts_under_a_lifted_cube() {
     let file = scratch("supports-auto");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let lifted = json!({"base_version": version,
         "apply": [{"edit": "move", "object": cube.0, "by_mm": [0.0, 0.0, 5.0]},
@@ -605,7 +599,7 @@ fn lifted_contacts_at(layer_mm: f32) -> Vec<Vec3> {
     let file = scratch("supports-step");
     let mut bench = Bench::new(file.clone());
     bench.machine.slicing.material.layer_height_mm = layer_mm;
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let lifted = json!({"base_version": version,
         "apply": [{"edit": "move", "object": cube.0, "by_mm": [0.0, 0.0, 5.0]},
@@ -629,7 +623,7 @@ fn auto_supports_stand_the_same_contacts_whatever_layer_height_the_machine_print
 fn lifted_contact_count(painted: bool, clean_surface: bool) -> usize {
     let file = scratch("supports-clean");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     if painted {
         let object = bench.doc.scene.get_mut(cube).expect("the cube stands");
         let mesh = Arc::clone(&object.mesh);
@@ -672,7 +666,7 @@ fn supports_read_the_painted_shown_side_only_when_the_edit_asks_for_a_clean_surf
 fn edits_built_on_a_plate_since_changed_are_answered_stale_and_not_applied() {
     let file = scratch("stale");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let older = bench.doc.history.plate_version() - 1;
 
     let reply = bench.hand_over_running(&file, asking(&file, cut_at(cube, older)));
@@ -702,7 +696,7 @@ fn a_plate_asked_for_while_not_following_is_refused() {
 fn an_edit_that_does_not_land_is_answered_with_why_and_leaves_the_plate() {
     let file = scratch("missed");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let above = json!({"base_version": version,
         "apply": [{"edit": "cut", "object": cube.0, "axis": "z", "at_mm": 50.0}]});
@@ -724,9 +718,10 @@ fn an_edit_that_does_not_land_is_answered_with_why_and_leaves_the_plate() {
 fn edits_handed_over_while_others_still_land_are_refused() {
     let file = scratch("under-way");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let cut = |at_mm: f32| Line::Apply {
+        job: "cube-1".into(),
         edits: vec![core_edit::Edit::Cut {
             object: cube,
             axis: core_edit::Axis::Z,
@@ -766,7 +761,7 @@ fn edits_handed_over_while_others_still_land_are_refused() {
 fn a_rotation_on_the_version_it_was_built_on_turns_the_object_about_z() {
     let file = scratch("rotate");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let turn = json!({"base_version": version,
         "apply": [{"edit": "rotate", "object": cube.0, "degrees": [0, 0, 90]}]});
@@ -786,7 +781,7 @@ fn a_rotation_on_the_version_it_was_built_on_turns_the_object_about_z() {
 fn a_duplicate_on_the_version_it_was_built_on_puts_a_copy_beside_the_cube() {
     let file = scratch("duplicate");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let copy = json!({"base_version": version,
         "apply": [{"edit": "duplicate", "object": cube.0, "offset_mm": [20, 0, 0]}]});
@@ -837,7 +832,7 @@ fn a_split_on_the_version_it_was_built_on_replaces_two_cubes_by_their_two_parts(
 fn a_split_of_one_body_leaves_it_in_place_and_is_answered_applied() {
     let file = scratch("split-whole");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let split = json!({"base_version": version,
         "apply": [{"edit": "split", "object": cube.0}]});
@@ -855,7 +850,7 @@ fn a_split_of_one_body_leaves_it_in_place_and_is_answered_applied() {
 fn a_union_on_the_version_it_was_built_on_replaces_two_overlapping_cubes_by_one() {
     let file = scratch("combine");
     let mut bench = Bench::new(file.clone());
-    let first = with_cube(&mut bench);
+    let first = with_cube(&mut bench, &file);
     let mesh = cuboid(Vec3::ZERO, Vec3::splat(10.0));
     let moved = Transform {
         translation: Vec3::new(5.0, 0.0, 0.0),
@@ -892,7 +887,7 @@ fn a_union_on_the_version_it_was_built_on_replaces_two_overlapping_cubes_by_one(
 fn a_label_on_the_version_it_was_built_on_raises_text_from_the_cube() {
     let file = scratch("label");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let version = bench.doc.history.plate_version();
     let label = json!({"base_version": version,
         "apply": [{"edit": "label", "object": cube.0, "text": "I",
@@ -1028,7 +1023,7 @@ fn an_orient_asking_for_a_pose_the_search_did_not_find_is_answered_with_why() {
 fn supports_named_for_a_group_of_the_plate_stand_in_that_group_which_stays_in_hand() {
     let file = scratch("supports-group");
     let mut bench = Bench::new(file.clone());
-    let cube = with_cube(&mut bench);
+    let cube = with_cube(&mut bench, &file);
     let mut profile = SupportProfile::shipped("medium").expect("the medium preset ships");
     "mine".clone_into(&mut profile.name);
     profile.contact_spacing_mm = 20.0;

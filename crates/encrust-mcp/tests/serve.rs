@@ -89,6 +89,10 @@ async fn serve_at_home(
             .arg("--agents")
             .arg(agents)
             .args(extra);
+        // Never the user's open window either, unless the test stands one of its own.
+        if !extra.iter().any(|arg| *arg == "--window") {
+            cmd.arg("--no-window");
+        }
         if let Some(home) = home {
             cmd.env("HOME", home)
                 .env("XDG_CONFIG_HOME", home.join(".config"))

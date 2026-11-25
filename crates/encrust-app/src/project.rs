@@ -303,6 +303,16 @@ pub(crate) fn captured(window: &Window) -> Project {
     })
 }
 
+/// The models on `plate` alone as a project of one plate; `None` gives none.
+pub(crate) fn captured_plate(window: &Window, plate: Option<u32>) -> Project {
+    let captured = state::Captured {
+        scene: &window.doc.scene,
+        slicing: &window.machine.slicing,
+        tools: window.tools,
+    };
+    state::capture_plate(captured, plate)
+}
+
 /// The empty plate the window opens on counts as saved: closing it again asks nothing.
 pub fn mark_saved(window: &mut Window) {
     window.doc.project.saved = Some(digest(&captured(window).manifest));

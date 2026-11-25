@@ -1,5 +1,5 @@
-//! The window as `encrust-mcp`'s viewport: a job's revision stands on the open plate as the plate
-//! its check wrote, in place of its last, one undo each (ADR 0473, `docs/design/window-link.md`).
+//! The window as `encrust-mcp`'s viewport: each job stands on a plate of its own as the plate its
+//! check wrote, in place of its last, one undo each (ADR 0473, 0477, `window-link.md`).
 
 mod line;
 mod listen;
@@ -14,7 +14,7 @@ use serde_json::Value;
 
 use crate::i18n::tr;
 use crate::panels::Window;
-use crate::scene::ObjectId;
+use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 
 use line::Line;
@@ -39,14 +39,23 @@ const EDITS_UNDER_WAY: &str = "the window is still applying the edits handed ove
 const NOT_FOLLOWING: &str = "the window is not following its agents; it lists the revision, \
     which the user can show, or show_in_window shows it";
 
-/// One job on the plate: the objects its last revision shown stands as, and the revision
-/// waiting for the plate to be still.
+/// One job in the window: the name of the plate its revisions stand on, which nothing else
+/// shares, and the revision waiting for the window to be still.
 #[derive(Debug)]
 struct Followed {
     job: String,
     model: PathBuf,
-    objects: Vec<ObjectId>,
+    plate: Option<String>,
     waiting: Option<Box<Shown>>,
+}
+
+impl Followed {
+    /// The job's plate, while one of the window's plates still bears its name.
+    fn plate_in(&self, scene: &Scene) -> Option<u32> {
+        let name = self.plate.as_ref()?;
+        let index = scene.plates().iter().position(|plate| plate == name)?;
+        u32::try_from(index).ok()
+    }
 }
 
 impl Link {
@@ -83,10 +92,12 @@ impl Link {
         for index in 0..self.followed.len() {
             self.show(index, window);
         }
-        window.machine.agents.on_plate = self
-            .followed
-            .iter()
-            .filter(|f| (f.objects.iter()).any(|id| window.doc.scene.get(*id).is_some()))
+        let scene = &window.doc.scene;
+        window.machine.agents.on_plate = (self.followed.iter())
+            .filter(|f| {
+                f.plate_in(scene)
+                    .is_some_and(|p| scene.on_plate(p).next().is_some())
+            })
             .map(|f| f.job.clone())
             .collect();
         applying || self.followed.iter().any(|f| f.waiting.is_some())
@@ -110,17 +121,21 @@ impl Link {
                 let _ = reply.send(refused(NOT_FOLLOWING).unwrap_or_default());
             }
             Line::Plate { job } => {
-                let object = self.job_object(&job, window);
-                plate::hand_plate(&self.jobs, (&job, object), window, reply);
+                let plate = self.plate_of(&job, &window.doc.scene);
+                let object = plate.and_then(|plate| job_object(&window.doc.scene, plate));
+                plate::hand_plate(&self.jobs, (&job, plate, object), window, reply);
             }
             Line::Apply { .. } if self.applying.is_some() => {
                 let _ = reply.send(refused(EDITS_UNDER_WAY).unwrap_or_default());
             }
             Line::Apply {
+                job,
                 edits,
                 base_version,
-                ..
-            } => self.applying = plate::start(edits, base_version, window, reply),
+            } => {
+                let plate = self.plate_of(&job, &window.doc.scene);
+                self.applying = plate::start((edits, plate), base_version, window, reply);
+            }
         }
     }
 
@@ -143,18 +158,10 @@ impl Link {
         self.followed[index].waiting = Some(shown);
     }
 
-    /// Where `job`'s model stands on the plate whole: its last revision shown's one object
-    /// that is no plug, `None` where that revision left pieces or none.
-    fn job_object(&self, job: &str, window: &Window) -> Option<ObjectId> {
+    /// The plate `job` stands on in the window, `None` before one of its revisions is shown.
+    fn plate_of(&self, job: &str, scene: &Scene) -> Option<u32> {
         let followed = self.followed.iter().find(|followed| followed.job == job)?;
-        let scene = &window.doc.scene;
-        let mut whole = (followed.objects.iter().copied()).filter(|id| {
-            scene
-                .get(*id)
-                .is_some_and(|object| object.plug_of.is_none())
-        });
-        let first = whole.next()?;
-        whole.next().is_none().then_some(first)
+        followed.plate_in(scene)
     }
 
     /// The job's place in the list, a new entry where it is new or names another model. A
@@ -169,7 +176,7 @@ impl Link {
         let entry = Followed {
             job: job.to_owned(),
             model: model.clone(),
-            objects: Vec::new(),
+            plate: None,
             waiting: None,
         };
         match found {
@@ -184,8 +191,8 @@ impl Link {
         }
     }
 
-    /// Stands the job's waiting revision on the plate once nothing runs there: on the job's
-    /// machine, its plate's objects in place of the ones its last revision stood as.
+    /// Stands the job's waiting revision on its own plate once nothing runs, a new plate
+    /// where it has none: on the job's machine, its plate's objects in place of all there.
     fn show(&mut self, index: usize, window: &mut Window) {
         let followed = &mut self.followed[index];
         let (doc, tools, held) = (&*window.doc, &*window.tools, &*window.machine);
@@ -200,18 +207,52 @@ impl Link {
             window.machine.status = Status::failed(&error);
             return;
         }
-        for id in followed.objects.drain(..) {
-            window.doc.scene.remove_plugs_of(id);
-            window.doc.scene.remove(id);
+        let scene = &mut window.doc.scene;
+        match followed.plate_in(scene) {
+            Some(plate) => scene.show_plate(plate),
+            None => followed.plate = Some(new_plate(scene, &request)),
         }
-        let (scene, supports) = (&mut window.doc.scene, &mut window.tools.supports);
-        followed.objects = crate::project::inserted::insert(project, scene, supports);
+        let standing: Vec<ObjectId> = scene.here().map(|object| object.id).collect();
+        for id in standing {
+            scene.remove(id);
+        }
+        crate::project::inserted::insert(project, scene, &mut window.tools.supports);
         window.machine.status = Status::Info(tr!(
             "link-replaying",
             job = request.job,
             revision = request.revision
         ));
     }
+}
+
+/// The job's model where it stands on `plate` whole: its one object that is no plug, `None`
+/// where it is in pieces or gone.
+fn job_object(scene: &Scene, plate: u32) -> Option<ObjectId> {
+    let mut whole = scene
+        .on_plate(plate)
+        .filter(|object| object.plug_of.is_none());
+    let first = whole.next()?.id;
+    whole.next().is_none().then_some(first)
+}
+
+/// Adds a plate for the job `request` names, called for its model and numbered past a name
+/// taken, shown; answers its name.
+fn new_plate(scene: &mut Scene, request: &request::Request) -> String {
+    let stem = request
+        .model
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned());
+    let stem = stem.unwrap_or_else(|| request.job.clone());
+    let name = (1..)
+        .map(|number| match number {
+            1 => stem.clone(),
+            number => tr!("link-plate-numbered", model = stem.clone(), number = number),
+        })
+        .find(|name| !scene.plates().contains(name))
+        .unwrap_or(stem);
+    let plate = scene.add_plate();
+    scene.rename_plate(plate, name.clone());
+    name
 }
 
 #[cfg(test)]

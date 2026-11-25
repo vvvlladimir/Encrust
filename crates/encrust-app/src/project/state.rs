@@ -39,11 +39,39 @@ pub struct CapturedMut<'a> {
 
 /// The whole plate as a project, ready to be written.
 pub fn capture(plate: Captured<'_>) -> Project {
-    let Captured {
-        scene,
-        slicing,
-        tools,
-    } = plate;
+    let scene = plate.scene;
+    let objects: Vec<ObjectState> = (scene.objects().iter())
+        .map(|object| object_state(scene, object))
+        .collect();
+    let models = scene.objects().iter().map(model_meshes).collect();
+    let plates = (scene.plates().to_vec(), scene.active_plate());
+    project_of(plate, plates, (objects, models))
+}
+
+/// The models on one plate alone, `None` none at all, as a project of that one plate.
+pub fn capture_plate(plate: Captured<'_>, index: Option<u32>) -> Project {
+    let scene = plate.scene;
+    let on: Vec<&SceneObject> = (scene.objects().iter())
+        .filter(|object| Some(object.plate) == index)
+        .collect();
+    let objects: Vec<ObjectState> = (on.iter())
+        .map(|object| ObjectState {
+            plate: 0,
+            ..object_state(scene, object)
+        })
+        .collect();
+    let models = on.iter().map(|object| model_meshes(object)).collect();
+    let name = index.and_then(|index| scene.plates().get(index as usize).cloned());
+    let plates = (name.into_iter().collect(), 0);
+    project_of(plate, plates, (objects, models))
+}
+
+fn project_of(
+    plate: Captured<'_>,
+    (plates, active_plate): (Vec<String>, u32),
+    (objects, models): (Vec<ObjectState>, Vec<ModelMeshes>),
+) -> Project {
+    let Captured { slicing, tools, .. } = plate;
     let settings = ToolSettings::of(tools, slicing);
     let manifest = Manifest {
         version: VERSION,
@@ -58,17 +86,13 @@ pub fn capture(plate: Captured<'_>) -> Project {
         drain: settings.drain,
         cut: settings.cut,
         array: settings.array,
-        plates: scene.plates().to_vec(),
-        active_plate: scene.active_plate(),
-        objects: scene
-            .objects()
-            .iter()
-            .map(|object| object_state(scene, object))
-            .collect(),
+        plates,
+        active_plate,
+        objects,
     };
     Project {
         manifest,
-        models: scene.objects().iter().map(model_meshes).collect(),
+        models,
         preview: None,
     }
 }

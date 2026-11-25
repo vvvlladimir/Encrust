@@ -1,5 +1,5 @@
-//! Schema 3 of the window link: the plate handed to a server as it stands, and the edits it
-//! built on it applied while the plate is still that version (ADR 0466).
+//! Schema 3 of the window link: the job's plate handed to a server as it stands, and the edits
+//! it built on it applied there while the window is still that version (ADR 0466, 0477).
 
 use std::collections::VecDeque;
 use std::path::{Component, Path, PathBuf};
@@ -34,6 +34,8 @@ use supports::{inside_pass_of, start_inside, start_merge, start_supports};
 #[derive(Debug)]
 pub struct Applying {
     edits: VecDeque<Edit>,
+    /// The job's plate, shown while each edit starts.
+    plate: Option<u32>,
     reply: Sender<Value>,
     /// The object the edit under way replaces, there still if the edit did not land, and
     /// whether the edit may leave it in place and be done (a split of one body).
@@ -56,11 +58,12 @@ fn refused(why: String) -> Value {
     json!({"applied": false, "why_not": why})
 }
 
-/// Writes the plate into `job`'s folder under `jobs` off the drawing thread, answering its path,
-/// version and ids, and `job_object`, the job's model where it stands on the plate whole.
+/// Writes the job's plate, none before it has one, into `job`'s folder under `jobs` off the
+/// drawing thread, answering its path, version and ids, and `job_object`, the job's model
+/// where it stands on the plate whole.
 pub fn hand_plate(
     jobs: &Path,
-    (job, job_object): (&str, Option<ObjectId>),
+    (job, plate, job_object): (&str, Option<u32>, Option<ObjectId>),
     window: &Window,
     reply: Sender<Value>,
 ) {
@@ -69,7 +72,7 @@ pub fn hand_plate(
         return;
     };
     let version = window.doc.history.plate_version();
-    let project = crate::project::captured(window);
+    let project = crate::project::captured_plate(window, plate);
     let objects: Vec<ObjectId> = (project.manifest.objects.iter()).map(|o| o.id).collect();
     let path = dir.join(format!("base-{version}.encrust"));
     std::thread::spawn(move || {
@@ -94,10 +97,10 @@ fn job_dir(jobs: &Path, job: &str) -> Option<PathBuf> {
     }
 }
 
-/// Starts applying `edits` if the plate is still at `base_version`; otherwise answers
-/// `stale` with the version it is at, for the server to build again.
+/// Starts applying `edits` on the job's `plate` if the window is still at `base_version`;
+/// otherwise answers `stale` with the version it is at, for the server to build again.
 pub fn start(
-    edits: Vec<Edit>,
+    (edits, plate): (Vec<Edit>, Option<u32>),
     base_version: u64,
     window: &Window,
     reply: Sender<Value>,
@@ -109,6 +112,7 @@ pub fn start(
     }
     Some(Applying {
         edits: edits.into(),
+        plate,
         reply,
         under_way: None,
         inside: None,
@@ -176,6 +180,9 @@ fn begin(work: &mut Applying, edit: &Edit, window: &mut Window) -> Result<(), St
             | Edit::Supports { .. }
             | Edit::Orient { .. }
     );
+    if let Some(plate) = work.plate {
+        window.doc.scene.show_plate(plate);
+    }
     let id = start_edit(edit, window)?;
     work.under_way = id.map(|id| (id, may_stay));
     work.inside = inside_pass_of(edit);
