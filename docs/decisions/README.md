@@ -574,7 +574,8 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0473](0473-a-revision-is-shown-by-the-plate-its-check-wrote.md) | A revision is shown by the plate its check wrote | Accepted; on the job's own plate (0477) |
 | [0474](0474-a-lift-is-a-placement-on-every-front-end.md) | A lift is a placement on every front end | Proposed |
 | [0475](0475-a-job-runs-on-the-standard-machine-until-it-is-written.md) | A job runs on the standard machine until it is written | Accepted |
-| [0476](0476-the-agents-ring-lists-only-the-work-in-hand.md) | The agents' ring lists only the work in hand | Proposed |
+| [0476](0476-the-agents-ring-lists-only-the-work-in-hand.md) | The agents' ring lists only the work in hand | Proposed; a job hidden or deleted from it by 0480 |
 | [0477](0477-an-agents-job-stands-on-a-plate-of-its-own.md) | An agent's job stands on a plate of its own in the window | Proposed |
 | [0478](0478-the-command-line-and-the-agents-server-reach-the-windows-model-work.md) | The command line and the agents' server reach the window's model work | Proposed; a plate's objects by id (0479) |
 | [0479](0479-the-command-line-shapes-a-plates-objects-by-id.md) | The command line shapes a plate's objects by id | Proposed |
+| [0480](0480-a-job-is-hidden-or-deleted-from-the-agents-list.md) | A job is hidden or deleted from the agents' list | Proposed |

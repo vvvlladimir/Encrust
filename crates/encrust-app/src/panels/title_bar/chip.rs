@@ -10,7 +10,8 @@ use crate::workspace::Tool;
 use egui::{Align, Layout, Rect, Sense, UiBuilder, vec2};
 
 /// The print chip in the middle of the window or as near as `room` allows, names cut short if
-/// needed. Placed by last frame's width, redrawn when that changes.
+/// needed, the rings standing left of it without moving it. Placed by last frame's widths,
+/// redrawn when they change.
 pub(super) fn centred_chip(
     ui: &mut egui::Ui,
     window: &mut Window,
@@ -19,10 +20,15 @@ pub(super) fn centred_chip(
 ) {
     let short = bar.width() < SHORT_NAMES_W;
     let id = ui.id().with("print-chip-w");
-    let width = ui.data(|data| data.get_temp::<f32>(id)).unwrap_or(0.0);
+    let [rings_w, chip_w] = ui
+        .data(|data| data.get_temp::<[f32; 2]>(id))
+        .unwrap_or_default();
     let (least, most) = (*room.start(), *room.end());
     let max_w = (most - least).max(0.0);
-    let x = (bar.center().x - width / 2.0).min(most - width).max(least);
+    let chip_x = (bar.center().x - chip_w / 2.0)
+        .min(most - chip_w)
+        .max(least + rings_w);
+    let x = chip_x - rings_w;
     let rect = Rect::from_x_y_ranges(x..=x + max_w, bar.y_range());
     let drawn = ui
         .scope_builder(
@@ -31,13 +37,17 @@ pub(super) fn centred_chip(
                 .layout(Layout::left_to_right(Align::Center)),
             |ui| {
                 let rings_w = printer_card::ring::ui(ui, window) + super::agents::ring(ui, window);
+                let left = ui.cursor().left();
                 print_chip(ui, window, max_w - rings_w, short);
+                [rings_w, ui.min_rect().right() - left]
             },
         )
-        .response
-        .rect
-        .width();
-    if (drawn - width).abs() > 0.5 {
+        .inner;
+    let moved = drawn
+        .iter()
+        .zip([rings_w, chip_w])
+        .any(|(now, before)| (now - before).abs() > 0.5);
+    if moved {
         ui.data_mut(|data| data.insert_temp(id, drawn));
         ui.ctx().request_discard("the print chip changed width");
     }

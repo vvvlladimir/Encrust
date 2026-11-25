@@ -50,7 +50,8 @@ pub use button::{
 };
 pub use chain::{ChainAction, ChainStep, chain_drop_mark, chain_ghost, chain_seam, chain_step};
 pub use chooser::{
-    Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
+    Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row,
+    chooser_row_with, chooser_switch, group_name,
 };
 pub use colour::colour_field;
 pub use confirm::{Confirm, any_armed, confirm_button, is_armed};
@@ -85,7 +86,7 @@ pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{
     IssueHead, ListRow, answered_row, bullet, found_row, is_renaming, issue_card, issue_line,
     issue_lines, issue_list, issue_row, list, list_row, rename_box, row_mark, start_rename, tag,
-    tag_label, two_lines,
+    tag_label, two_lines, two_lines_in,
 };
 pub use menu::{
     MENU_W, MenuRow, context_menu, menu_button, menu_row, menu_rule, menu_style, menu_sub,

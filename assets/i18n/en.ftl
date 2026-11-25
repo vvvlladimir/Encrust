@@ -397,6 +397,10 @@ agents-reading-print = Revision { $revision } · looking at a print
 agents-changing = Revision { $revision } · changing the model
 agents-show-tooltip = Show this revision on the plate
 agents-open-project-tooltip = Open this project
+agents-hide-tooltip = Hide from the list until the agent takes another model
+agents-delete-tooltip = Delete this job and its revisions from the disk
+# The delete button while the agent runs a tool on this job.
+agents-delete-busy-tooltip = The agent is working on this job
 # The agents' ring on hover, a line an agent at work: its group name, the model, what it does, and for how long.
 agents-ring-line = { $agent }: { $model }, { $detail }, { $time }
 # The same while the agent works on no model yet.

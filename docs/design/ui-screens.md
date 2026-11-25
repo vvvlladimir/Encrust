@@ -39,7 +39,7 @@ stripe or a border of its own.
 ## Top bar
 
 Left to right: on macOS 72 for the system's buttons, File, Edit, View as quiet text
-buttons; in the centre the printer ring (while a printer prints; idle ones are reached from the plate card), the agents' ring (while an agent has a model in hand) and the chip; at the right
+buttons; the chip in the middle of the window, staying there as rings come and go, moved only where the ends leave no room; left of it the printer ring (while a printer prints; idle ones are reached from the plate card) and the agents' ring (while an agent has a model in hand); at the right
 the Beta pill, Find (as wide as its word and `⌘K` at its right), the key sheet and the gear as 30
 squares.
 
@@ -85,12 +85,16 @@ left edge, 300 wide, on `raised` with a window's shadow, a capital group name ov
   live agent with a model in hand — its client's name, a second of one client numbered — at
   work first; under each, one row, the job in hand: model glyph, the model's name without
   its extension over *Revision n* and the check's verdict, or what the agent does to it now
-  with an `accent` dot at the right; no row is ticked, every job standing on its own plate.
+  with an `accent` dot; at the right, two 26 quiet squares: `X` hiding the job until its
+  agent takes another, and the bin deleting its folder by a second press, dimmed while the
+  agent works on it (ADR 0480); the name and detail cut before them. No row is ticked, every
+  job standing on its own plate. Groups stand 8 apart.
   A press shows that revision on the job's own plate as one undo; a
   project's row opens the project, asking first about unsaved work. *Opening a model…* in a
   line while an agent starts one. No ended agent and no earlier job is listed. Under a
-  rule, *Follow agents* as a `switch`: on, each revision an agent keeps runs on the plate
-  as it comes; flipping it leaves the chooser open.
+  rule, *Follow agents* as a `switch` in line with the rows' names: on, each revision an
+  agent keeps runs on the plate as it comes; flipping it, hiding or deleting leaves the
+  chooser open.
 
 Choosing a row takes it in hand and closes the chooser, as Esc or a click elsewhere does; a
 footer row opens Machine and resin on that machine's page or that resin's form.

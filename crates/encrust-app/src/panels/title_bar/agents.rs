@@ -9,8 +9,9 @@ use egui::{Sense, vec2};
 
 use crate::ui::theme::layout::printer_card_ring::{GAP, SIZE};
 use crate::ui::{
-    Aside, ChooserRow, Lead, RingLook, chooser_frame, chooser_group, chooser_row, duration,
-    focus_ring, hairline, hint, icon, paint_ring, ring_badge, switch, theme,
+    Aside, ChooserRow, Lead, RingLook, SquareLook, bin_button, chooser_frame, chooser_group,
+    chooser_row_with, chooser_switch, duration, focus_ring, hairline, hint, icon, paint_ring,
+    quiet_square, ring_badge, theme,
 };
 
 /// The agents' ring, beside the printers': there while an agent has a model in hand,
@@ -94,7 +95,7 @@ fn working_on(agent: &Agent) -> Option<&Job> {
 }
 
 /// The list the ring opens, hanging under it; a click inside leaves it open, so the switch
-/// can be flipped, and a row pressed closes it.
+/// can be flipped and a row hidden or deleted, and a row shown closes it.
 fn chooser(ring: &egui::Response) -> egui::Popup<'_> {
     crate::ui::popup_menu(ring)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
@@ -103,42 +104,57 @@ fn chooser(ring: &egui::Response) -> egui::Popup<'_> {
         .gap(theme::CHOOSER_GAP)
 }
 
+/// What a press on a job's row asked for.
+enum Pressed {
+    Show(Job),
+    Hide(String),
+    Delete(String),
+}
+
 /// The list: each agent under its client's name with the model in its hand, then whether the
 /// window follows them.
 fn menu(ui: &mut egui::Ui, window: &mut Window) {
     let agents = &window.machine.agents;
-    let mut picked: Option<Job> = None;
+    let mut pressed: Option<Pressed> = None;
     let names = client_names(&agents.list);
-    for (agent, client) in agents.list.iter().zip(names) {
+    for (index, (agent, client)) in agents.list.iter().zip(names).enumerate() {
+        if index > 0 {
+            ui.add_space(theme::ITEM_GAP);
+        }
         chooser_group(ui, &client);
         if agent.opening() {
             hint(ui, &tr!("agents-opening"));
         } else if let Some(job) = &agent.job
-            && job_row(ui, agent, job)
+            && let Some(press) = job_row(ui, agent, job)
         {
-            picked = Some(job.clone());
+            pressed = Some(press);
         }
     }
     hairline(ui);
     let general = &mut window.machine.general;
-    switch(ui, &mut general.follow_agents, &tr!("agents-follow"))
+    chooser_switch(ui, &mut general.follow_agents, &tr!("agents-follow"))
         .on_hover_text(tr!("agents-follow-tooltip"));
-    if let Some(job) = picked {
-        ui.close();
-        if job.is_project() {
-            crate::app::open_by_what_it_is(window, Handed::Path(job.model));
-        } else {
-            window.machine.agents.asked.push(Asked {
-                job: job.id,
-                revision: job.revision,
-            });
+    match pressed {
+        Some(Pressed::Show(job)) => {
+            ui.close();
+            if job.is_project() {
+                crate::app::open_by_what_it_is(window, Handed::Path(job.model));
+            } else {
+                window.machine.agents.asked.push(Asked {
+                    job: job.id,
+                    revision: job.revision,
+                });
+            }
         }
+        Some(Pressed::Hide(id)) => window.machine.agents.hide(&id),
+        Some(Pressed::Delete(id)) => window.machine.agents.delete(&id),
+        None => {}
     }
 }
 
-/// One job's row: the model, its revision and what is said of it. Answers whether it was
-/// pressed.
-fn job_row(ui: &mut egui::Ui, agent: &Agent, job: &Job) -> bool {
+/// One job's row: the model, its revision and what is said of it, then a press hiding it
+/// and a bin deleting it, which waits while its agent works on it.
+fn job_row(ui: &mut egui::Ui, agent: &Agent, job: &Job) -> Option<Pressed> {
     let working = match &agent.state {
         State::Working { tool, .. } if working_on(agent).is_some() => Some(tool.as_str()),
         _ => None,
@@ -157,7 +173,25 @@ fn job_row(ui: &mut egui::Ui, agent: &Agent, job: &Job) -> bool {
     } else {
         tr!("agents-show-tooltip")
     };
-    chooser_row(ui, &row).on_hover_text(tooltip).clicked()
+    let (mut hidden, mut deleted) = (false, false);
+    let row = chooser_row_with(ui, &row, |ui| {
+        let delete = match working {
+            Some(_) => tr!("agents-delete-busy-tooltip"),
+            None => tr!("agents-delete-tooltip"),
+        };
+        let side = theme::SMALL_ICON_SIZE;
+        deleted = bin_button(ui, side, SquareLook::Quiet, &delete, working.is_none());
+        hidden = quiet_square(ui, icon::CANCEL, &tr!("agents-hide-tooltip"), side, true).clicked();
+    });
+    if deleted {
+        Some(Pressed::Delete(job.id.clone()))
+    } else if hidden {
+        Some(Pressed::Hide(job.id.clone()))
+    } else {
+        row.on_hover_text(tooltip)
+            .clicked()
+            .then(|| Pressed::Show(job.clone()))
+    }
 }
 
 /// What a job's row says under its name: what its agent does to it now, else the check's

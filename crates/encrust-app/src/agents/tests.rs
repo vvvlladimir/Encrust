@@ -135,3 +135,62 @@ fn a_project_job_is_told_apart_and_no_folder_lists_nothing() {
     assert_eq!(project.name(), "plate");
     assert!(scan(Path::new("/no/such/agents"), Path::new("/no/jobs"), 0).is_empty());
 }
+
+fn holding(id: &str) -> Agent {
+    Agent {
+        client: None,
+        started_s: 1,
+        state: State::Idle,
+        job: Some(Job {
+            id: id.into(),
+            model: "/m/cube.stl".into(),
+            revision: 1,
+            clean: None,
+        }),
+    }
+}
+
+#[test]
+fn a_hidden_job_stays_off_the_list_until_its_agent_takes_another() {
+    let (send, read) = mpsc::channel();
+    let mut agents = Agents {
+        read: Some(read),
+        ..Agents::default()
+    };
+    agents.list = vec![holding("cube-1"), holding("bust-2")];
+    agents.hide("cube-1");
+    assert_eq!(agents.list, [holding("bust-2")]);
+    send.send(vec![holding("cube-1"), holding("bust-2")])
+        .expect("the list is listening");
+    agents.poll();
+    assert_eq!(agents.list, [holding("bust-2")], "read again, still hidden");
+    send.send(vec![holding("cube-3")])
+        .expect("the list is listening");
+    agents.poll();
+    assert_eq!(agents.list, [holding("cube-3")], "its next job is listed");
+}
+
+#[test]
+fn a_deleted_job_leaves_no_folder_and_its_agent_no_row() {
+    let dir = scratch("deleted");
+    job(&dir, "cube-1", "/m/cube.stl", 2, "ok");
+    agent(
+        &dir,
+        "1-1.json",
+        &json!({"started_s": 1, "seen_s": 990, "jobs": ["cube-1"]}),
+    );
+    remove_job(&dir.join("mcp-jobs"), "cube-1").expect("the folder is there");
+    assert!(!dir.join("mcp-jobs").join("cube-1").exists());
+    assert!(listed(&dir, 1000).is_empty());
+}
+
+#[test]
+fn a_name_reaching_out_of_the_jobs_folder_deletes_nothing() {
+    let dir = scratch("outside");
+    let refused = remove_job(&dir.join("mcp-jobs"), "../agents");
+    assert_eq!(
+        refused.map_err(|error| error.kind()),
+        Err(std::io::ErrorKind::InvalidInput)
+    );
+    assert!(dir.join("agents").exists());
+}

@@ -197,7 +197,7 @@ paints from tokens only.
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
 | `mode_column` | Toggles stacked in one sunken group as narrow as they are, spaced as a `mode_group`, centred by its parent |
-| `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
+| `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_row_with`, `chooser_foot`, `chooser_switch` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand, or, `with`, the row's own quiet squares at its right and its lines cut before them — and under a rule rows leading elsewhere or a switch in line with the names |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
 | `chain_step`, `ChainStep`, `chain_seam`, `chain_drop_mark`, `chain_ghost` | Steps run one after another: a folding card on a rail, its number in a disc on it, a grip, glyph, name, a one-line summary, question mark, switch, caret and its actions, some only while open; seams with a + on the rail; where a dragged card lands, and the card by the pointer |
 | `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |

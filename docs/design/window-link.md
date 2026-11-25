@@ -138,7 +138,8 @@ agents' ring beside the print chip (`ui-screens.md`, Top bar): each live agent w
 its hand — the one `working` names, else the first of `jobs` (ADR 0476) — by its latest
 revision — the highest `N.toml` — whose model is the first of `N.args.json` and whose
 verdict is `N.json`'s `status`. An ended agent, one with no job and a job no agent names
-are not listed. A press on a job builds the same line the server sends from
+are not listed, nor a job the user hid; one deleted from the list loses its folder
+(ADR 0480). A press on a job builds the same line the server sends from
 `N.args.json` (`--printer` or `--profile`, `--resin` or `--material`) and `N.encrust`,
 marked `open`, and takes it as one handed over; one made on the plate is said to be there.
 

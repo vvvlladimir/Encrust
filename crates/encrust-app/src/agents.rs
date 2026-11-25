@@ -22,6 +22,10 @@ pub struct Agents {
     read: Option<Receiver<Vec<Agent>>>,
     /// The revisions the user asked to see on the plate, for the link to take.
     pub asked: Vec<Asked>,
+    /// The jobs the user took off the list, kept off it while their agent holds them.
+    hidden: Vec<String>,
+    /// The servers' job folders, where a deleted job is taken away.
+    jobs: Option<PathBuf>,
 }
 
 /// A revision of a job, to be shown on the plate.
@@ -97,6 +101,7 @@ impl Agents {
         };
         let (send, read) = mpsc::channel();
         let ctx = ctx.clone();
+        let jobs = cache.join("mcp-jobs");
         let spawned = std::thread::Builder::new()
             .name("agents".into())
             .spawn(move || {
@@ -119,6 +124,7 @@ impl Agents {
         }
         Self {
             read: Some(read),
+            jobs: Some(jobs),
             ..Self::default()
         }
     }
@@ -128,7 +134,33 @@ impl Agents {
         if let Some(read) = &self.read {
             while let Ok(list) = read.try_recv() {
                 self.list = list;
+                self.list.retain(|agent| !hidden(agent, &self.hidden));
             }
+        }
+    }
+
+    /// Takes `job` off the list until its agent takes another in hand.
+    pub fn hide(&mut self, job: &str) {
+        self.hidden.push(job.to_owned());
+        self.list.retain(|agent| !hidden(agent, &self.hidden));
+    }
+
+    /// Takes `job` off the list and its folder off the disk, on a thread of its own.
+    pub fn delete(&mut self, job: &str) {
+        self.hide(job);
+        let Some(jobs) = self.jobs.clone() else {
+            return;
+        };
+        let id = job.to_owned();
+        let spawned = std::thread::Builder::new()
+            .name("agents-delete".into())
+            .spawn(move || {
+                if let Err(error) = remove_job(&jobs, &id) {
+                    tracing::warn!("job {id} is not deleted: {error}");
+                }
+            });
+        if let Err(error) = spawned {
+            tracing::warn!("not deleting job {job}: {error}");
         }
     }
 
@@ -204,13 +236,36 @@ fn agent_of(said: &Said, jobs: &Path, now_s: u64) -> Option<Agent> {
     })
 }
 
-/// A job's latest revision, or `None` where its folder holds none.
-fn job(jobs: &Path, id: &str) -> Option<Job> {
-    let plain = !id.is_empty()
+/// Whether the user took the job `agent` holds off the list.
+fn hidden(agent: &Agent, hidden: &[String]) -> bool {
+    agent
+        .job
+        .as_ref()
+        .is_some_and(|job| hidden.contains(&job.id))
+}
+
+/// Whether `id` names a job folder and nothing outside `mcp-jobs/`.
+fn plain(id: &str) -> bool {
+    !id.is_empty()
         && id
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-    if !plain {
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Takes the folder of job `id` under `jobs` away with every revision in it.
+pub fn remove_job(jobs: &Path, id: &str) -> std::io::Result<()> {
+    if !plain(id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{id:?} is not a job's name"),
+        ));
+    }
+    std::fs::remove_dir_all(jobs.join(id))
+}
+
+/// A job's latest revision, or `None` where its folder holds none.
+fn job(jobs: &Path, id: &str) -> Option<Job> {
+    if !plain(id) {
         return None;
     }
     let dir = jobs.join(id);
