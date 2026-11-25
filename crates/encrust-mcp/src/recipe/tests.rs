@@ -1,24 +1,14 @@
 use std::path::PathBuf;
 
+use super::finish::{HollowMode, Infill};
 use super::*;
 
 fn plain() -> Recipe {
-    Recipe {
-        model: PathBuf::from("/models/bust.stl"),
-        printer: "elegoo-mars-4-ultra".into(),
-        resin: "my-grey".into(),
-        prepare: false,
-        steps_by: None,
-        repair: None,
-        pose: None,
-        hollow: None,
-        drains: None,
-        supports: None,
-        mend: None,
-        modelling: None,
-        relief: None,
-        slicing: None,
-    }
+    Recipe::bare(
+        PathBuf::from("/models/bust.stl"),
+        "elegoo-mars-4-ultra".into(),
+        "my-grey".into(),
+    )
 }
 
 #[test]
@@ -94,6 +84,7 @@ fn a_negative_number_rides_on_its_flag() {
             pick: Some(2),
             goal: Goal::Auto,
             max_tilt_deg: None,
+            clean_surface: true,
         }),
         ..plain()
     };
@@ -103,6 +94,7 @@ fn a_negative_number_rides_on_its_flag() {
         "--orient-keep-clear=10,-2,3",
         "--orient-keep-clear-turn=0,-90,0",
         "--orient-keep-clear-radius=5",
+        "--clean-surface",
     ] {
         assert!(flags.contains(&flag.to_owned()), "{flag} in {flags:?}");
     }
@@ -232,16 +224,27 @@ fn the_modelling_and_a_relief_become_the_command_lines_flags_with_the_others_aft
                 sunk: true,
                 follow: false,
                 angle_deg: None,
+                font: Some(PathBuf::from("/fonts/serif.ttf")),
             }),
             cut: Some(shape::Cut {
                 axis: shape::Axis::Z,
                 at_mm: 10.0,
                 keep: Some(shape::Keep::Lower),
                 joint: Some(shape::Joint::Dowels),
+                joint_count: Some(3),
+                clearance_mm: Some(0.2),
+                peg_mm: Some([5.0, 8.0]),
+                magnet_mm: None,
+                key_mm: None,
+                unkeyed: true,
+                upright: true,
             }),
             split_smallest_mm3: Some(5.0),
             part_off_at_mm: Some([-1.0, 0.0, 4.0]),
             arrange: true,
+            mirror: Some(shape::Axis::Y),
+            move_mm: Some([0.0, -3.0, 0.0]),
+            copies: Some(2),
         }),
         relief: Some(Relief {
             depth_mm: -0.4,
@@ -268,10 +271,19 @@ fn the_modelling_and_a_relief_become_the_command_lines_flags_with_the_others_aft
         "--cut=z:10",
         "--keep=lower",
         "--joint=dowels",
+        "--joint-count=3",
+        "--joint-clearance=0.2",
+        "--peg-size=5:8",
+        "--unkeyed",
+        "--cut-upright",
+        "--label-font=/fonts/serif.ttf",
         "--split",
         "--split-smallest=5",
         "--part-off=-1,0,4",
         "--arrange",
+        "--mirror=y",
+        "--move=0,-3,0",
+        "--copies=2",
         "--relief=-0.4",
         "--relief-image=/pictures/bark.png",
         "--relief-tile=20",
@@ -387,4 +399,63 @@ fn a_recipe_named_runs_in_place_of_the_autopilot() {
         "{flags:?}"
     );
     assert!(!flags.contains(&"--prepare".to_owned()), "{flags:?}");
+}
+
+#[test]
+fn the_windows_finer_settings_ride_on_their_flags() {
+    let recipe = Recipe {
+        mend: Some(Mend {
+            weld_tolerance_mm: Some(0.01),
+            ..Mend::default()
+        }),
+        hollow: Some(Hollow {
+            wall_mm: 2.0,
+            keep_solid_under_mm: Some(4.0),
+            ..Hollow::default()
+        }),
+        supports: Some(Supports {
+            profile: "auto".into(),
+            lift_mm: Some(5.0),
+            ..Supports::default()
+        }),
+        slicing: Some(Slicing {
+            print: Some(slicing::PrintSettings {
+                exposure_s: Some(2.5),
+                bottom_layers: Some(6),
+                wait_after_lift_s: Some(1.0),
+                light_power: Some(200),
+                ..slicing::PrintSettings::default()
+            }),
+            ..Slicing::default()
+        }),
+        ..plain()
+    };
+    let flags = recipe.flags();
+    for flag in [
+        "--weld-tolerance=0.01",
+        "--keep-solid-under=4",
+        "--lift=5",
+        "--exposure=2.5",
+        "--bottom-layers=6",
+        "--wait-after-lift=1",
+        "--light-power=200",
+    ] {
+        assert!(flags.contains(&flag.to_owned()), "{flag} in {flags:?}");
+    }
+}
+
+#[test]
+fn checks_answers_ride_on_their_flags() {
+    let recipe = Recipe {
+        fixes: Some(Fixes {
+            support_islands: true,
+            drill_cups: false,
+            hold_necks: true,
+        }),
+        ..plain()
+    };
+    let flags = recipe.flags();
+    assert!(flags.contains(&"--support-islands".to_owned()), "{flags:?}");
+    assert!(flags.contains(&"--hold-necks".to_owned()), "{flags:?}");
+    assert!(!flags.contains(&"--drill-cups".to_owned()), "{flags:?}");
 }

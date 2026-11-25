@@ -16,7 +16,7 @@ use crate::modelling::ModelArgs;
 use crate::pipeline::{
     OrientSummary, Watch, cutting_of, import, overrides_of, warn_if_grey_ignored,
 };
-use crate::profiles::{self, Chosen};
+use crate::profiles::Chosen;
 use crate::recipe::{self, Prepared, RecipeRun, Saved};
 use crate::report::{FitCheck, ImportReport, describe_fit};
 use crate::sliced_file::now_unix_s;
@@ -184,7 +184,7 @@ pub fn stage(
     }
     match given {
         Given::Models(paths) => {
-            let chosen = profiles::resolve(&job.profile.selection())?;
+            let chosen = job.profile.resolve()?;
             models(paths, arrange, job, &chosen, watch)
         }
         Given::PlateFile(path) => {
@@ -195,6 +195,16 @@ pub fn stage(
             refuse_for_a_project(arrange, job)?;
             let project = job.edits.applied(project::open(path)?)?;
             project::stage_checked(path, &project, plate, job, watch)
+        }
+        Given::Projects(paths) => {
+            refuse_for_a_project(false, job)?;
+            let printer = job.profile.resolve()?.printer;
+            if arrange && printer.is_none() {
+                bail!("--arrange needs a printer to know the plate");
+            }
+            let laid = project::laid_together(paths, printer.as_ref().filter(|_| arrange))?;
+            let project = job.edits.applied(laid)?;
+            project::stage_checked(&paths[0], &project, None, job, watch)
         }
     }
 }
@@ -328,6 +338,7 @@ fn laid_by_recipe(
     let printer = ctx.chosen.printer.as_ref();
     let left = recipe::lay(asked, (staging, found), entries, ctx)?;
     let mut staging = left.staging;
+    placed::copied(&mut staging, entries, ctx.watch)?;
     if arrange {
         document::arranged(&mut staging, entries, printer, ctx.watch)?;
     }
@@ -430,8 +441,10 @@ fn check_pieces(
     (model, arrange): (&ModelArgs, bool),
     prepared: bool,
 ) -> Result<()> {
-    if model.cut.is_some() && !arrange {
-        bail!("--cut lays the halves down where they would stand on each other; add --arrange");
+    if model.cut.is_some() && !model.cut_upright && !arrange {
+        bail!(
+            "--cut lays the halves down where they would stand on each other; add --arrange or --cut-upright"
+        );
     }
     for (meshes, (path, shaping)) in pieces.iter().zip(entries) {
         let shaped = prepared

@@ -43,15 +43,25 @@ pub struct Asked {
 }
 
 impl Asked {
-    /// The recipe `--recipe` or `--prepare` names, or `None` for a run without one.
+    /// The recipe `--recipe` or `--prepare` names, the flags' own steps where only Check's
+    /// answers are asked, those answers run last; `None` for a run without either.
     pub fn of(job: &JobArgs) -> Result<Option<Self>> {
-        let Some(asked) = job.recipe_asked() else {
-            return Ok(None);
+        let fixes = job.fixes.step()?;
+        let (mut recipe, named) = match (job.recipe_asked(), &fixes) {
+            (Some(asked), _) => {
+                let (source, recipe) = library::find(asked)?;
+                (recipe, format!("the {} recipe {asked}", source.label()))
+            }
+            (None, Some(_)) => (
+                folded::of_flags(&Shaping::of(job)?),
+                "Check's answers".into(),
+            ),
+            (None, None) => return Ok(None),
         };
-        Ok(Some(Self {
-            plan: plan_of_recipe(asked)?,
-            prepare: asked == PREPARE,
-        }))
+        recipe.steps.extend(fixes);
+        let plan = validate(recipe).with_context(|| format!("{named} cannot run"))?;
+        let prepare = job.recipe_asked() == Some(PREPARE);
+        Ok(Some(Self { plan, prepare }))
     }
 
     /// Whether one of its steps writes the plate.
@@ -62,13 +72,6 @@ impl Asked {
             .iter()
             .any(|step| step.enabled && step.kind == StepKind::Save)
     }
-}
-
-/// The recipe `asked` names, read and checked: a built-in id, else one of the user's by
-/// stem, else a recipe file.
-fn plan_of_recipe(asked: &str) -> Result<Plan> {
-    let (source, recipe) = library::find(asked)?;
-    validate(recipe).with_context(|| format!("the {} recipe {asked} cannot run", source.label()))
 }
 
 /// What a recipe runs with: the flags, the machine, the layer height and how the run talks.

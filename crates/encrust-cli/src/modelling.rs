@@ -125,9 +125,37 @@ pub struct ModelArgs {
     #[arg(long, value_enum, default_value_t = Keep::Both, requires = "cut")]
     pub keep: Keep,
 
-    /// Join the two halves of the cut, at the window's default sizes.
+    /// Join the two halves of the cut, at the window's default sizes unless set below.
     #[arg(long, value_enum, requires = "cut")]
     pub joint: Option<Joint>,
+
+    /// Pegs or magnets on each separate piece of the cut face.
+    #[arg(long, value_name = "N", requires = "joint")]
+    pub joint_count: Option<u32>,
+
+    /// Gap a side between a peg, magnet or tongue and its socket, millimetres.
+    #[arg(long, value_name = "MM", requires = "joint")]
+    pub joint_clearance: Option<Scalar>,
+
+    /// A peg's diameter and length, millimetres, in place of sizing it from the face.
+    #[arg(long, value_name = "D:L", value_parser = pair, requires = "joint")]
+    pub peg_size: Option<[Scalar; 2]>,
+
+    /// A magnet's diameter and thickness, millimetres.
+    #[arg(long, value_name = "D:T", value_parser = pair, requires = "joint")]
+    pub magnet_size: Option<[Scalar; 2]>,
+
+    /// The tongue's width and height, millimetres.
+    #[arg(long, value_name = "W:H", value_parser = pair, requires = "joint")]
+    pub key_size: Option<[Scalar; 2]>,
+
+    /// Make every peg the same width, so the halves go together either way.
+    #[arg(long, requires = "joint")]
+    pub unkeyed: bool,
+
+    /// Leave the halves standing as they were cut rather than lay each on its cut face.
+    #[arg(long, requires = "cut")]
+    pub cut_upright: bool,
 
     /// Break each model into the bodies it is made of.
     #[arg(long, conflicts_with = "part_off")]
@@ -157,6 +185,34 @@ impl ModelArgs {
     /// Whether a model may come out as several pieces, each to be put down on its own.
     pub fn splits(&self) -> bool {
         self.cut.is_some() || self.split || self.part_off.is_some()
+    }
+}
+
+/// `a:b` as two sizes, millimetres, each above nought.
+fn pair(text: &str) -> Result<[Scalar; 2], String> {
+    let (a, b) = text
+        .split_once(':')
+        .ok_or_else(|| format!("two sizes are A:B, such as 4:6, got {text:?}"))?;
+    let size = |part: &str| -> Result<Scalar, String> {
+        let mm: Scalar = part.trim().parse().map_err(|error| format!("{error}"))?;
+        (mm.is_finite() && mm > 0.0)
+            .then_some(mm)
+            .ok_or_else(|| format!("a size is above nought, got {part:?}"))
+    };
+    Ok([size(a)?, size(b)?])
+}
+
+impl ModelArgs {
+    /// What the joint flags ask beyond `--joint`'s kind.
+    pub fn joint_asked(&self) -> core_joint::JointAsked {
+        core_joint::JointAsked {
+            per_piece: self.joint_count,
+            clearance_mm: self.joint_clearance,
+            peg_mm: self.peg_size,
+            magnet_mm: self.magnet_size,
+            key_mm: self.key_size,
+            unkeyed: self.unkeyed,
+        }
     }
 }
 

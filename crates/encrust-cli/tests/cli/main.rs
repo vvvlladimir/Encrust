@@ -16,6 +16,7 @@ mod keep_solid;
 mod measure;
 mod modelling;
 mod new_resin;
+mod placing;
 mod plate;
 mod plate_edits;
 mod png_stack;

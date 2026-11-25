@@ -16,7 +16,52 @@ pub struct Joints {
     pub key: Key,
 }
 
+/// What a front end asks of a joint beyond its kind, each absent one left at the default.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct JointAsked {
+    /// Pegs or magnets on each separate piece of the cut face.
+    pub per_piece: Option<u32>,
+    /// Gap a side between a peg, magnet or tongue and its socket, mm.
+    pub clearance_mm: Option<Scalar>,
+    /// A peg's diameter and length, mm, in place of sizing it from the face.
+    pub peg_mm: Option<[Scalar; 2]>,
+    /// A magnet's diameter and thickness, mm.
+    pub magnet_mm: Option<[Scalar; 2]>,
+    /// The tongue's width and height, mm.
+    pub key_mm: Option<[Scalar; 2]>,
+    /// Every peg the same width, so the halves go together either way.
+    pub unkeyed: bool,
+}
+
 impl Joints {
+    /// A joint of `kind` sized as `asked`, the window's defaults for the rest.
+    pub fn asked(kind: Option<JointKind>, asked: &JointAsked) -> Self {
+        let mut joints = Self {
+            kind,
+            ..Self::default()
+        };
+        if let Some(count) = asked.per_piece {
+            (joints.pegs.per_piece, joints.magnets.per_piece) = (count, count);
+        }
+        if let Some(mm) = asked.clearance_mm {
+            joints.pegs.clearance_mm = mm;
+            joints.magnets.clearance_mm = mm;
+            joints.key.clearance_mm = mm;
+        }
+        if let Some([diameter_mm, length_mm]) = asked.peg_mm {
+            (joints.pegs.diameter_mm, joints.pegs.length_mm) = (diameter_mm, length_mm);
+            joints.pegs.auto_size = false;
+        }
+        if let Some([diameter_mm, thickness_mm]) = asked.magnet_mm {
+            (joints.magnets.diameter_mm, joints.magnets.thickness_mm) = (diameter_mm, thickness_mm);
+        }
+        if let Some([width_mm, height_mm]) = asked.key_mm {
+            (joints.key.width_mm, joints.key.height_mm) = (width_mm, height_mm);
+        }
+        joints.pegs.keyed &= !asked.unkeyed;
+        joints
+    }
+
     /// Refuses a size of the kind chosen that is not finite, or not above nought — at or
     /// above it for a clearance — as a project file or a typed field may carry.
     pub fn check(&self) -> Result<(), JointError> {
@@ -135,5 +180,50 @@ impl Default for Key {
             height_mm: 2.0,
             clearance_mm: 0.1,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_joint_asked_by_its_sizes_takes_them_and_the_defaults_for_the_rest() {
+        let asked = JointAsked {
+            per_piece: Some(3),
+            clearance_mm: Some(0.2),
+            peg_mm: Some([5.0, 8.0]),
+            unkeyed: true,
+            ..JointAsked::default()
+        };
+        let joints = Joints::asked(Some(JointKind::Dowels), &asked);
+        assert_eq!(joints.kind, Some(JointKind::Dowels));
+        assert_eq!(
+            joints.pegs,
+            Pegs {
+                per_piece: 3,
+                auto_size: false,
+                diameter_mm: 5.0,
+                length_mm: 8.0,
+                clearance_mm: 0.2,
+                keyed: false,
+            }
+        );
+        assert_eq!(joints.magnets.per_piece, 3);
+        assert_eq!(
+            joints.key,
+            Key {
+                clearance_mm: 0.2,
+                ..Key::default()
+            }
+        );
+    }
+
+    #[test]
+    fn a_joint_asked_nothing_is_the_default() {
+        assert_eq!(
+            Joints::asked(None, &JointAsked::default()),
+            Joints::default()
+        );
     }
 }

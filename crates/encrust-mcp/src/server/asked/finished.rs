@@ -56,6 +56,7 @@ fn hollow(hollow: &Hollow, object: ObjectId) -> Option<Edit> {
                 "density": hollow.infill_density.unwrap_or(infill_cell_and_density().1),
             },
             "open_floor": hollow.open_floor,
+            "solid_under_mm": hollow.keep_solid_under_mm,
         },
         "keep_solid": keep_solid, "keep_solid_reach_mm": hollow.keep_solid_reach_mm,
     }))

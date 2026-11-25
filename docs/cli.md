@@ -167,6 +167,13 @@ Those two cost by the panel rather than by the model, so a run writing one for a
 than any of its own machines have — a `.cbddlp` above 1440 x 2560 px, an `.svgx` above
 3840 x 2400 — says so before it writes a layer.
 
+The resin's print settings can be typed for one run over its own numbers, as the window's
+Print settings change the plate in hand (ADR 0478): `--exposure` and `--bottom-exposure`
+seconds, `--bottom-layers` and `--transition-layers`, `--light-off-delay`, `--lift-distance`,
+`--lift-speed` and `--retract-speed`, `--wait-before-lift`, `--wait-after-lift` and
+`--wait-after-retract` (any wait makes the printer rest rather than hold the light off), and
+`--light-power` and `--bottom-light-power`, 0 to 255. A resin must still be named.
+
 An `.sl1` states one exposure and one layer height for the whole stack, so `--exposure-at`
 and `--adaptive` are refused rather than flattened under an `.sl1` name (ADR 0148). A `.zip`
 is the other archive and carries both, because every number it states is per layer in its
@@ -221,9 +228,11 @@ that plate point, with `--label-height`, `--label-depth`, `--label-sunk`, `--lab
 both|lower|upper` picks the halves and `--joint dowels|pins|magnets|key` joins them at the
 window's default sizes; `--split` breaks a model into its bodies, scraps under
 `--split-smallest` joined or dropped, and `--part-off X,Y,Z` cuts off the part that point is
-on. Each half is laid on its cut face as the window's Lay flat does, but a lower half pins or
-a key stand on, and dowels stand beside it (ADR 0466); a cut needs
-`--arrange`. A piece of several is not hollowed or supported, and a project refuses the
+on. `--joint-count N`, `--joint-clearance MM`, `--peg-size D:L` (sized from the face unless
+given), `--magnet-size D:T`, `--key-size W:H` and `--unkeyed` set the joint as the Cut tool's
+fields do (ADR 0478). Each half is laid on its cut face as the window's Lay flat does, but a
+lower half pins or a key stand on, and dowels stand beside it (ADR 0466); a cut needs
+`--arrange`, unless `--cut-upright` leaves the halves standing as they were cut. A piece of several is not hollowed or supported, and a project refuses the
 flags.
 
 ```sh
@@ -472,6 +481,10 @@ encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe bust
   --hollow 3 -o sliced/
 ```
 
+Check's answers are flags too, run last on the plate as a `check` step whatever else runs
+(ADR 0478): `--support-islands` stands a support under every island and checks again, up to
+three times; `--drill-cups` vents every suction cup; `--hold-necks` holds every weak neck.
+
 A recipe's `check` step takes `drill_cups` and `hold_levers`, which vent every suction cup by the
 shortest way into its lowest point and hold every weak neck with as many supports as bring it
 under its limit, once before its `retry`, and `arrange` takes
@@ -554,12 +567,23 @@ stands on its supports, biggest first with their supports' footprint, and turns 
 than the plate about the vertical by the least that fits it (ADR 0418, 0472); one that finds no
 room is warned of and stands where it was. Without it each stands where its file put it.
 `--rotate` and `--scale` turn and size a model about its centre of mass and stand it on the
-plate, as the window's Position panel does. `--center` and a `--drain-at` point aim at one model, so they
+plate, as the window's Position panel does; `--mirror x|y|z` mirrors it where its middle stays,
+`--move X,Y,Z` moves it by that much once placed, and `--copies N` prints N more of it as
+prepared, in a row beside it for `--arrange` to spread (ADR 0478). `--center` and a `--drain-at` point aim at one model, so they
 are refused for several; `--drain-at auto` drains each model on its own:
 
 ```sh
 encrust slice a.stl b.stl c.stl \
   --printer elegoo-mars-4-ultra --resin my-grey --arrange --supports light -o plate.goo
+```
+
+Several projects (`.encrust`), each the plate it was left on, are laid on one plate, the first's
+printer, resin and settings kept, and `--arrange` spreads them; `--project-out` writes the plate
+they make (ADR 0478):
+
+```sh
+encrust slice bust.encrust base.encrust --printer elegoo-mars-4-ultra --resin my-grey \
+  --arrange -o both.goo
 ```
 
 A plate file says the same per model. Paths are relative to it, every key is optional but
@@ -1027,13 +1051,19 @@ and stages the model as its file stands when `prepare: false`; the client must c
 A project (`.encrust`) starts as it was saved, with neither `--prepare` nor `--center`, which
 the command line refuses for one; the tools that shape a model are refused for it as those
 flags are, it is set against no autopilot, and the open window is not sent it.
-`set_shape` — scale, combine with other models, label, cut with a joint, split, part off,
-arrange, relief — `set_repair` — the repair, its seam and shell limits, faces flipped or
-dropped and shells dropped by number, bridges — and `set_slicing` — layer height, adaptive
-layers, exposure bands, anti-aliasing, greys, blur, islands removed — reach the rest of the
-command line's flags; `set_hollow` takes the mode, precision, `keep_solid_at_mm` and `keep_solid_reach_mm`,
+`set_shape` — scale, combine with other models, label in a font, cut with a sized joint or
+upright, split, part off, arrange, mirror, move, copies, relief — `set_repair` — the repair, its
+seam, shell and weld limits, faces flipped or dropped and shells dropped by number, bridges —
+and `set_slicing` — layer height, adaptive layers, exposure bands, anti-aliasing, greys, blur,
+islands removed, and `print`, exposure, motion and waits over the resin's — reach the rest of
+the command line's flags; `fix_issues` runs Check's answers as `--support-islands`,
+`--drill-cups` and `--hold-necks`; `plate_jobs` lays two jobs or more, each as its latest
+revision stands, on one plate with `--arrange`, checks it and, with `output`, writes it under
+`--strict` unless `accept_defects`, every job on one printer and resin.
+`set_hollow` takes the mode, precision, `keep_solid_at_mm`, `keep_solid_reach_mm` and
+`keep_solid_under_mm`,
 `set_drains` the hole's depth, taper, sides, turn, walled holes, holes into the supports and
-channels, and `set_supports` a profile TOML, `at_mm` with `only_at` and `shown_at_mm`, the
+channels, and `set_supports` a profile TOML, `lift_mm`, `at_mm` with `only_at` and `shown_at_mm`, the
 side meant to be seen, as `--shown-at`, and `merge_at_mm`, as `--merge-supports`. `list_recipes` answers `recipes list` with each
 recipe's TOML; `use_recipe` prepares the job by one with `--recipe` in place of `--prepare`;
 `save_recipe` runs `recipes save` on a revision's steps, or on a recipe the client wrote.
@@ -1049,7 +1079,8 @@ it; every check is set `--against` the revision before and the autopilot, and th
 carries `compared`. `compare_poses` runs a search with `--orient-choices` — 4 ways unless
 `count`, 2 to 8 — and answers with each way's numbers and an `iso` picture each, drawn with
 `--orient-pick`; `set_pose` with that search and `pick` takes one. A search's
-`keep_clear_at_mm` are plate points as the latest revision stands: the server keeps with them
+`keep_clear_at_mm` are plate points as the latest revision stands, `clean_surface` is
+`--clean-surface`: the server keeps with them
 the turn that revision stood in as `keep_clear_seen_deg` and takes its supports' lift off them; edits to one job wait for each other. `set_drains` with `auto` is `--drain-at auto`, a
 proven drain and vent per pocket; a new pose clears drain points given by hand. `check` reads any
 revision again and `revert` copies one forward. `write_file` slices a revision under

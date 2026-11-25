@@ -65,6 +65,48 @@ fn a_cut_box_joined_by_dowels_is_laid_out_in_pieces() {
 }
 
 #[test]
+fn a_cut_left_upright_with_sized_dowels_needs_no_arrange() {
+    let path = write_box_stl("model-cut-upright", 16.0, 12, 0);
+    let (output, _) = shaped(
+        "cut-upright",
+        &[&path],
+        &[
+            "--cut",
+            "z:8",
+            "--cut-upright",
+            "--joint",
+            "dowels",
+            "--peg-size",
+            "3:5",
+            "--joint-clearance",
+            "0.15",
+        ],
+    );
+    succeeded(&output);
+    assert!(stdout(&output).contains("Cut: "), "{}", stdout(&output));
+}
+
+#[test]
+fn a_joint_size_that_is_no_size_is_refused() {
+    let path = write_box_stl("model-cut-bad-peg", 16.0, 12, 0);
+    let (output, _) = shaped(
+        "cut-bad-peg",
+        &[&path],
+        &[
+            "--cut",
+            "z:8",
+            "--arrange",
+            "--joint",
+            "pins",
+            "--peg-size",
+            "0:5",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("above nought"));
+}
+
+#[test]
 fn a_cut_without_arrange_is_refused_rather_than_stacked() {
     let path = write_box_stl("model-cut-stacked", 16.0, 12, 0);
     let (output, _) = shaped("cut-stacked", &[&path], &["--cut", "z:8"]);

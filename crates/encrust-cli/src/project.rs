@@ -5,9 +5,12 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use core_engine::project::{Manifest, Project, load};
+use core_document::{Document, apply};
+use core_edit::Edit;
+use core_engine::project::{Manifest, Project, insert, load};
 use core_engine::{Machine, Opening, open_plate};
 use core_format::ExposurePlan;
+use core_volume::Cancel;
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::JobArgs;
@@ -21,6 +24,39 @@ use crate::stage::{Part, Staged, bounds, print_off_the_plate};
 /// Opens a project to stage its plates from.
 pub fn open(path: &Path) -> Result<Project> {
     load(path).with_context(|| format!("cannot open the project {}", path.display()))
+}
+
+/// The plate each of `paths` was left on, laid on one plate in the order given, the first's
+/// printer, resin and settings kept; spread over `arranged`'s usable plate where it is named.
+pub fn laid_together(paths: &[PathBuf], arranged: Option<&PrinterProfile>) -> Result<Project> {
+    let mut opened = paths.iter().map(|path| open(path));
+    let first = opened.next().context("no project to lay on the plate")??;
+    let mut laid = Project {
+        manifest: Manifest {
+            plates: vec![first.manifest.plates[first.manifest.active_plate as usize].clone()],
+            active_plate: 0,
+            objects: Vec::new(),
+            ..first.manifest.clone()
+        },
+        models: Vec::new(),
+        preview: None,
+    };
+    insert(&mut laid, first, 0);
+    for project in opened {
+        insert(&mut laid, project?, 0);
+    }
+    let Some(printer) = arranged else {
+        return Ok(laid);
+    };
+    let (low_mm, plate_mm) = crate::stage::usable_area(printer);
+    let spread = Edit::Arrange {
+        low_mm,
+        plate_mm,
+        clearance_mm: core_edit::defaults::arrange_clearance_mm(),
+    };
+    let mut document = Document::from_project(laid);
+    apply(&mut document, &spread, Cancel::never()).context("arranging the projects")?;
+    Ok(document.into_project())
 }
 
 /// The plates holding a model to print, by index and name, as the window slices them all.

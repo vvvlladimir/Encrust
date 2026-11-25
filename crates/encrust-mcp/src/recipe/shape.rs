@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use core_edit::{Edit, JointKind, Joints, ObjectId};
+use core_edit::{Edit, JointAsked, JointKind, Joints, ObjectId};
 use rmcp::schemars::{self, JsonSchema};
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +15,9 @@ use super::{kebab, triple};
 pub struct Mend {
     /// How far a vertex may stand off an open edge to be stitched in, mm, as `--seam-tolerance`.
     pub seam_tolerance_mm: Option<f32>,
+    /// How near two vertices weld into one as the model is read, mm, as `--weld-tolerance`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weld_tolerance_mm: Option<f32>,
     /// Smallest area a shell enclosing nothing keeps, mm², as `--smallest-shell`.
     pub smallest_shell_mm2: Option<f32>,
     /// Faces to turn the other way, numbered from 0, as `--flip-faces`.
@@ -87,6 +90,15 @@ pub struct Modelling {
     /// or several models need so none stands on another.
     #[serde(default)]
     pub arrange: bool,
+    /// Mirrors the model across this axis of its own, as `--mirror`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mirror: Option<Axis>,
+    /// Moves the model by this much once placed, mm, as `--move`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub move_mm: Option<[f32; 3]>,
+    /// Prints this many more of the model as prepared, as `--copies`; `arrange` spreads them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copies: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -114,6 +126,9 @@ pub struct Label {
     pub follow: bool,
     /// Turns the line about the surface's normal, degrees anticlockwise.
     pub angle_deg: Option<f32>,
+    /// Absolute path of a font file, in place of the bundled IBM Plex Sans.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font: Option<PathBuf>,
 }
 
 /// A plane cut square to an axis, as `--cut`.
@@ -124,35 +139,105 @@ pub struct Cut {
     pub at_mm: f32,
     pub keep: Option<Keep>,
     pub joint: Option<Joint>,
+    /// Pegs or magnets on each separate piece of the cut face.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joint_count: Option<u32>,
+    /// Gap a side between a peg, magnet or tongue and its socket, mm.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clearance_mm: Option<f32>,
+    /// A peg's diameter and length, mm, in place of sizing it from the face.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peg_mm: Option<[f32; 2]>,
+    /// A magnet's diameter and thickness, mm.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub magnet_mm: Option<[f32; 2]>,
+    /// The tongue's width and height, mm.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_mm: Option<[f32; 2]>,
+    /// Every peg the same width, so the halves go together either way.
+    #[serde(default)]
+    pub unkeyed: bool,
+    /// Leaves the halves standing as cut rather than each laid on its cut face.
+    #[serde(default)]
+    pub upright: bool,
+}
+
+impl From<Axis> for core_edit::Axis {
+    fn from(axis: Axis) -> Self {
+        match axis {
+            Axis::X => Self::X,
+            Axis::Y => Self::Y,
+            Axis::Z => Self::Z,
+        }
+    }
 }
 
 impl Cut {
-    /// The cut as an edit of `object` on a plate, its halves laid on their cut faces as
-    /// `--cut` lays them (ADR 0466).
+    /// The cut as an edit of `object` on a plate, its halves laid on their cut faces unless
+    /// left upright, as `--cut` does (ADR 0466).
     pub fn edit(&self, object: ObjectId) -> Edit {
         Edit::Cut {
             object,
-            axis: match self.axis {
-                Axis::X => core_edit::Axis::X,
-                Axis::Y => core_edit::Axis::Y,
-                Axis::Z => core_edit::Axis::Z,
-            },
+            axis: self.axis.into(),
             at_mm: self.at_mm,
             keep: match self.keep {
                 None | Some(Keep::Both) => core_edit::Keep::Both,
                 Some(Keep::Lower) => core_edit::Keep::Below,
                 Some(Keep::Upper) => core_edit::Keep::Above,
             },
-            joints: Joints {
-                kind: self.joint.map(|joint| match joint {
+            joints: Joints::asked(
+                self.joint.map(|joint| match joint {
                     Joint::Dowels => JointKind::Dowels,
                     Joint::Pins => JointKind::Pins,
                     Joint::Magnets => JointKind::Magnets,
                     Joint::Key => JointKind::Key,
                 }),
-                ..Joints::default()
-            },
-            lay_flat: true,
+                &self.joint_asked(),
+            ),
+            lay_flat: !self.upright,
+        }
+    }
+
+    fn joint_asked(&self) -> JointAsked {
+        JointAsked {
+            per_piece: self.joint_count,
+            clearance_mm: self.clearance_mm,
+            peg_mm: self.peg_mm,
+            magnet_mm: self.magnet_mm,
+            key_mm: self.key_mm,
+            unkeyed: self.unkeyed,
+        }
+    }
+
+    fn push_flags(&self, flags: &mut Vec<String>) {
+        flags.push(format!("--cut={}:{}", kebab(&self.axis), self.at_mm));
+        if let Some(keep) = self.keep {
+            flags.push(format!("--keep={}", kebab(&keep)));
+        }
+        if self.upright {
+            flags.push("--cut-upright".into());
+        }
+        let Some(joint) = self.joint else {
+            return;
+        };
+        flags.push(format!("--joint={}", kebab(&joint)));
+        if let Some(count) = self.joint_count {
+            flags.push(format!("--joint-count={count}"));
+        }
+        if let Some(mm) = self.clearance_mm {
+            flags.push(format!("--joint-clearance={mm}"));
+        }
+        for (flag, sizes) in [
+            ("--peg-size", self.peg_mm),
+            ("--magnet-size", self.magnet_mm),
+            ("--key-size", self.key_mm),
+        ] {
+            if let Some([a, b]) = sizes {
+                flags.push(format!("{flag}={a}:{b}"));
+            }
+        }
+        if self.unkeyed {
+            flags.push("--unkeyed".into());
         }
     }
 }
@@ -186,6 +271,9 @@ impl Mend {
     pub(super) fn push_flags(&self, flags: &mut Vec<String>) {
         if let Some(mm) = self.seam_tolerance_mm {
             flags.push(format!("--seam-tolerance={mm}"));
+        }
+        if let Some(mm) = self.weld_tolerance_mm {
+            flags.push(format!("--weld-tolerance={mm}"));
         }
         if let Some(mm2) = self.smallest_shell_mm2 {
             flags.push(format!("--smallest-shell={mm2}"));
@@ -221,13 +309,7 @@ impl Modelling {
             label.push_flags(flags);
         }
         if let Some(cut) = &self.cut {
-            flags.push(format!("--cut={}:{}", kebab(&cut.axis), cut.at_mm));
-            if let Some(keep) = cut.keep {
-                flags.push(format!("--keep={}", kebab(&keep)));
-            }
-            if let Some(joint) = cut.joint {
-                flags.push(format!("--joint={}", kebab(&joint)));
-            }
+            cut.push_flags(flags);
         }
         if let Some(smallest) = self.split_smallest_mm3 {
             flags.extend(["--split".into(), format!("--split-smallest={smallest}")]);
@@ -237,6 +319,15 @@ impl Modelling {
         }
         if self.arrange {
             flags.push("--arrange".into());
+        }
+        if let Some(axis) = self.mirror {
+            flags.push(format!("--mirror={}", kebab(&axis)));
+        }
+        if let Some(by) = self.move_mm {
+            flags.push(format!("--move={}", triple(by)));
+        }
+        if let Some(copies) = self.copies {
+            flags.push(format!("--copies={copies}"));
         }
     }
 }
@@ -259,6 +350,9 @@ impl Label {
         }
         if let Some(deg) = self.angle_deg {
             flags.push(format!("--label-angle={deg}"));
+        }
+        if let Some(font) = &self.font {
+            flags.push(format!("--label-font={}", font.display()));
         }
     }
 }

@@ -290,3 +290,37 @@ fn a_copy_made_by_an_edit_counts_as_its_models_and_the_next_model_keeps_its_own(
         "the second cube still stands in the first, its copy 40 mm off: {meets}"
     );
 }
+
+#[test]
+fn two_projects_are_laid_on_one_plate_and_spread_apart() {
+    let panel = project_fixture().with_file_name("project-panel.toml");
+    let resin = test_resin();
+    let out = output_file("two-projects.encrust");
+    let output = estimate(&[
+        project_fixture().to_str().expect("a UTF-8 path"),
+        project_fixture().to_str().expect("a UTF-8 path"),
+        "--arrange",
+        "--profile",
+        panel.to_str().expect("a UTF-8 path"),
+        "--material",
+        resin.to_str().expect("a UTF-8 path"),
+        "--project-out",
+        out.to_str().expect("a UTF-8 path"),
+        "--json",
+    ]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let project = load(&out).expect("the plate written reads back");
+    let objects = &project.manifest.objects;
+    assert_eq!(objects.len(), 2, "a cube from each project");
+    assert_ne!(objects[0].id, objects[1].id, "each its own id");
+    let apart = (objects[0].transform.translation - objects[1].transform.translation).length();
+    assert!(
+        apart >= 20.0,
+        "two 20 mm cubes spread apart, {apart} mm between them"
+    );
+    assert!(
+        !json(&output).to_string().contains("\"meets\""),
+        "neither stands in the other"
+    );
+}

@@ -231,3 +231,35 @@ fn contacts_nothing_can_stand_under_are_located_under_what_they_hold() {
         );
     }
 }
+
+#[test]
+fn support_islands_stands_a_support_under_the_island_the_check_finds() {
+    let islands = |name: &str, extra: &[&str]| {
+        let model = island_beside_a_block(name);
+        let panel = test_panel();
+        let mut args = vec![
+            "estimate",
+            model.to_str().unwrap(),
+            "--profile",
+            panel.to_str().unwrap(),
+            "--layer-height",
+            "0.5",
+            "--json",
+        ];
+        args.extend_from_slice(extra);
+        let report = json_of(&args);
+        report["print"]["cured"]["islands"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("the check counts islands: {report}"))
+    };
+    assert_eq!(
+        islands("island-left", &[]),
+        1,
+        "the floating block starts in mid-air"
+    );
+    assert_eq!(
+        islands("island-held", &["--support-islands"]),
+        0,
+        "a support stands under it"
+    );
+}

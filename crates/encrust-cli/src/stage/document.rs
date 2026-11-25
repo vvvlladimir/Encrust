@@ -13,7 +13,6 @@ use core_engine::{Model, SupportPlan};
 use core_geometry::{
     Aabb, BoundingVolume, Mesh, Scalar, Transform, list_shells, signed_volume, transform_mesh,
 };
-use core_plate::ArrangeSettings;
 use core_volume::Cancel;
 use printer_profiles::{PrinterProfile, SupportProfile};
 
@@ -399,6 +398,7 @@ pub(super) fn laid(
         shaping.hollow.check_flags()?;
     }
     let finished = finished::finished(&mut staging, entries, held, watch)?;
+    placed::copied(&mut staging, entries, watch)?;
     if arrange {
         arranged(&mut staging, entries, held.0, watch)?;
     }
@@ -425,7 +425,7 @@ pub(super) fn arranged(
     let edit = Edit::Arrange {
         low_mm,
         plate_mm,
-        clearance_mm: ArrangeSettings::default().clearance_mm,
+        clearance_mm: core_edit::defaults::arrange_clearance_mm(),
     };
     let first = staging.ids().first().copied().unwrap_or(ObjectId::UNSET);
     let applied = staging

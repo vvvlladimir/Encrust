@@ -18,6 +18,11 @@ pub fn infill_cell_and_density() -> (Scalar, Scalar) {
     (infill.cell_mm, infill.density)
 }
 
+/// How far apart an arrange spreads the plate's models, mm.
+pub fn arrange_clearance_mm() -> Scalar {
+    core_engine::ArrangeSettings::default().clearance_mm
+}
+
 /// How far past the surface a drain hole reaches, mm.
 pub fn drain_depth_mm() -> Scalar {
     HoleSize::default().depth_mm

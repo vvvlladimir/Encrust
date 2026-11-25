@@ -205,3 +205,30 @@ fn the_report_carries_the_fit_drift_of_a_resin_with_its_tolerance_off() {
         "0.04 hole and 0.03 outer drift 0.07 a side, got {drift}"
     );
 }
+
+#[test]
+fn an_exposure_typed_for_the_run_lengthens_the_print_over_the_resins() {
+    let path = write_box_stl("exposed-cube", 10.0, 12, 0);
+    let time_s = |extra: &[&str]| {
+        let panel = test_panel().with_file_name("project-panel.toml");
+        let resin = test_resin();
+        let mut args = vec![
+            path.to_str().unwrap(),
+            "--profile",
+            panel.to_str().unwrap(),
+            "--material",
+            resin.to_str().unwrap(),
+            "--json",
+        ];
+        args.extend_from_slice(extra);
+        json(&estimate(&args))["print"]["print_time_s"]
+            .as_u64()
+            .expect("a print time")
+    };
+    let own = time_s(&[]);
+    let longer = time_s(&["--exposure", "9", "--bottom-layers", "2"]);
+    assert!(
+        longer > own,
+        "9 s a layer takes longer than the resin's: {own} s, then {longer} s"
+    );
+}

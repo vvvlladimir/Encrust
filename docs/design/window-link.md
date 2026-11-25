@@ -90,7 +90,9 @@ revision before: a repair, the faces mended, a picture pressed in, a scale, a tu
 label, a split or part cut off, a cut, walled holes, a hollow with its walls kept solid, drains
 — at points or by the engine's search, channels, plugs — supports — by a preset or sized
 automatically, under a cavity, off what shows — points placed by hand, merges and holes into
-the raft, in that order. One that asks anything no edit carries yet — a combination — or takes
+the raft, then, where it cuts pieces with `arrange` or asks `arrange` anew, an `Arrange` over
+the usable area the last check reported, in that order; with no area known it goes by its
+flags. One that asks anything no edit carries yet — a combination — or takes
 back what an earlier one asked is checked by its flags and shown by its plate instead, as
 below. A pose the search picks is handed over as an `Orient`
 edit on the job's printer, its places kept clear with it; on a printer of a file, as the turn the

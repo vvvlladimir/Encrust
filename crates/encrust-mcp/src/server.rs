@@ -17,9 +17,10 @@ use crate::agents::Presence;
 use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::Jobs;
 use crate::params::{
-    ComparePoses, CreateResin, ImportResin, JobRef, ListProfiles, ListRecipes, Model, Render,
-    ReportPrint, Revert, SaveRecipe, SendFile, SetDrains, SetHollow, SetPose, SetRepair, SetShape,
-    SetSlicing, SetSupports, Start, UseRecipe, WriteFile, WriteTestPrint, absolute,
+    ComparePoses, CreateResin, FixIssues, ImportResin, JobRef, ListProfiles, ListRecipes, Model,
+    PlateJobs, Render, ReportPrint, Revert, SaveRecipe, SendFile, SetDrains, SetHollow, SetPose,
+    SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe, WriteFile, WriteTestPrint,
+    absolute,
 };
 use crate::runner::Cli;
 use crate::trace::{Trace, body_of};
@@ -30,6 +31,7 @@ mod asked;
 mod library;
 mod on_plate;
 mod plate_edits;
+mod plated;
 mod poses;
 mod reply;
 mod revise;
@@ -269,6 +271,21 @@ impl Server {
         Ok(answer(edited.await))
     }
 
+    /// Answers what the check finds as Check's Fix all does — a support under each island, a
+    /// vent in each suction cup, supports under each weak neck — and checks the result.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn fix_issues(&self, Parameters(set): Parameters<FixIssues>, ctx: Context) -> Answer {
+        let edited = self.edit(&set.job, &ctx, |recipe| {
+            recipe.fixes = set.fixes;
+            None
+        });
+        Ok(answer(edited.await))
+    }
+
     /// Sets the model's size and the modelling done to it — combined with others, labelled,
     /// cut with a joint, split, a part cut off — and a texture pressed in; checks the result.
     #[tool(annotations(
@@ -301,8 +318,8 @@ impl Server {
         Ok(answer(edited.await))
     }
 
-    /// Sets how the model is sliced and its masks drawn — layer height, adaptive layers,
-    /// exposure bands, anti-aliasing, islands taken out — and checks the result.
+    /// Sets the layers and masks, and `print`'s exposure, motion and waits — only numbers the
+    /// user or the resin's maker gave, never guessed; checks the result.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -362,6 +379,17 @@ impl Server {
     ))]
     async fn write_file(&self, Parameters(write): Parameters<WriteFile>, ctx: Context) -> Answer {
         Ok(answer(self.write(write, &ctx).await))
+    }
+
+    /// Lays two jobs or more on one plate, each as its latest revision stands, spread apart,
+    /// and checks it; with `output` writes it as one printer file.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn plate_jobs(&self, Parameters(laid): Parameters<PlateJobs>, ctx: Context) -> Answer {
+        Ok(answer(self.laid_together(laid, &ctx).await))
     }
 
     /// Draws a revision as it would be built — supports, drain holes and all — from the sides

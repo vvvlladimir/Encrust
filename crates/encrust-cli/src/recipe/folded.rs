@@ -29,7 +29,8 @@ pub fn folded(plan: Option<&Plan>, shaping: &Shaping) -> Recipe {
     recipe
 }
 
-fn of_flags(shaping: &Shaping) -> Recipe {
+/// A recipe of the steps the flags ask for alone, in the command line's order.
+pub(super) fn of_flags(shaping: &Shaping) -> Recipe {
     let steps = FLAGS_ORDER
         .into_iter()
         .filter_map(|kind| {

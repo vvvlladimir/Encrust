@@ -383,6 +383,7 @@ fn searching(pick: Option<u16>, keep_clear_at_mm: Vec<[f32; 3]>) -> Pose {
         goal: crate::recipe::Goal::LeastPeel,
         max_tilt_deg: Some(30.0),
         pick,
+        clean_surface: false,
         keep_clear_at_mm,
         keep_clear_radius_mm: None,
         keep_clear_seen_deg: None,
@@ -553,4 +554,144 @@ fn a_relief_is_pressed_on_the_lattice_the_hollow_asks() {
         ),
         "--precision 0.8 is the relief's lattice too: {asked:?}"
     );
+}
+
+fn cut_x() -> Cut {
+    serde_json::from_value(serde_json::json!({"axis": "x", "at_mm": 10.0})).expect("a cut reads")
+}
+
+#[test]
+fn a_cut_asked_with_arrange_is_spread_over_the_usable_area_last() {
+    let recipe = with_modelling(Modelling {
+        cut: Some(cut_x()),
+        arrange: true,
+        ..Modelling::default()
+    });
+    let area = ([5.0, 5.0], [200.0, 120.0]);
+    let asked = asked_after_check(&recipe, &bare(), MODEL, (None, None, Some(area)))
+        .expect("a cut and an arrange are edits");
+    assert!(
+        matches!(asked.as_slice(), [Edit::Cut { .. }, _]),
+        "{asked:?}"
+    );
+    let spread = Edit::Arrange {
+        low_mm: [5.0, 5.0],
+        plate_mm: [200.0, 120.0],
+        clearance_mm: core_edit::defaults::arrange_clearance_mm(),
+    };
+    assert_eq!(asked[1], spread, "spread last over the usable area");
+    assert_eq!(
+        asked_edits(&recipe, &bare(), MODEL),
+        None,
+        "with no area known the revision is no edit, and the command line arranges it"
+    );
+}
+
+#[test]
+fn an_arrange_kept_from_before_is_not_asked_again_without_new_pieces() {
+    let cut = with_modelling(Modelling {
+        cut: Some(cut_x()),
+        arrange: true,
+        ..Modelling::default()
+    });
+    let scaled = Recipe {
+        modelling: Some(Modelling {
+            scale: Some([2.0, 2.0, 2.0]),
+            ..cut.modelling.clone().expect("modelling")
+        }),
+        ..bare()
+    };
+    let asked = asked_edits(&scaled, &cut, MODEL).expect("a scale is an edit");
+    assert!(
+        matches!(asked.as_slice(), [Edit::Scale { .. }]),
+        "{asked:?}"
+    );
+}
+
+#[test]
+fn a_cut_upright_with_sized_dowels_is_that_edit() {
+    let recipe = with_modelling(Modelling {
+        cut: Some(
+            serde_json::from_value(serde_json::json!({"axis": "z", "at_mm": 10.0,
+                "joint": "dowels", "peg_mm": [5.0, 8.0], "upright": true}))
+            .expect("a cut reads from JSON"),
+        ),
+        ..Modelling::default()
+    });
+    let asked = asked_edits(&recipe, &bare(), MODEL).expect("a cut is an edit");
+    let [
+        Edit::Cut {
+            joints, lay_flat, ..
+        },
+    ] = asked.as_slice()
+    else {
+        panic!("one cut, got {asked:?}");
+    };
+    assert!(!lay_flat, "the halves stand as cut");
+    assert!(!joints.pegs.auto_size, "the pegs keep the size given");
+}
+
+#[test]
+fn a_weld_or_a_lift_changed_is_no_edit_but_a_check_by_flags() {
+    let welded = Recipe {
+        mend: Some(Mend {
+            weld_tolerance_mm: Some(0.01),
+            ..Mend::default()
+        }),
+        ..bare()
+    };
+    assert_eq!(asked_edits(&welded, &bare(), MODEL), None);
+    let lifted = Recipe {
+        supports: Some(Supports {
+            profile: "auto".into(),
+            lift_mm: Some(5.0),
+            ..Supports::default()
+        }),
+        ..bare()
+    };
+    assert_eq!(asked_edits(&lifted, &bare(), MODEL), None);
+}
+
+#[test]
+fn a_hollow_keeping_thin_parts_solid_carries_that_thickness() {
+    let recipe = Recipe {
+        hollow: Some(Hollow {
+            wall_mm: 2.0,
+            keep_solid_under_mm: Some(4.0),
+            ..Hollow::default()
+        }),
+        ..bare()
+    };
+    let asked = asked_edits(&recipe, &bare(), MODEL).expect("a hollow is an edit");
+    let [Edit::Hollow { settings, .. }] = asked.as_slice() else {
+        panic!("one hollow, got {asked:?}");
+    };
+    assert_eq!(settings.solid_under_mm, Some(4.0));
+}
+
+#[test]
+fn a_mirror_and_a_move_are_edits_and_copies_a_check_by_flags() {
+    let moved = with_modelling(
+        serde_json::from_value(serde_json::json!({"mirror": "x", "move_mm": [5.0, 0.0, 0.0]}))
+            .expect("modelling reads from JSON"),
+    );
+    let asked = asked_edits(&moved, &bare(), MODEL).expect("both are edits");
+    assert!(
+        matches!(asked.as_slice(), [Edit::Mirror { .. }, Edit::Move { by_mm, .. }] if (by_mm.x - 5.0).abs() < 1e-6),
+        "{asked:?}"
+    );
+    let further = with_modelling(Modelling {
+        move_mm: Some([2.0, 0.0, 0.0]),
+        ..moved.modelling.clone().expect("modelling")
+    });
+    let asked = asked_edits(&further, &moved, MODEL).expect("a move is an edit");
+    assert!(
+        matches!(asked.as_slice(), [Edit::Move { by_mm, .. }] if (by_mm.x + 3.0).abs() < 1e-6),
+        "only the change of the move: {asked:?}"
+    );
+    let copied = with_modelling(Modelling {
+        copies: Some(2),
+        ..Modelling::default()
+    });
+    assert_eq!(asked_edits(&copied, &bare(), MODEL), None);
 }

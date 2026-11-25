@@ -239,6 +239,25 @@ impl Jobs {
         made.then_some(plate)
     }
 
+    /// The plate revision `revision` stands as: the project it opened, else the plate its check
+    /// wrote.
+    pub fn plate_of(&self, revision: &Revision) -> Result<PathBuf> {
+        if revision.recipe.is_project() {
+            return Ok(revision.recipe.model.clone());
+        }
+        let plate = self
+            .dir(&revision.job)?
+            .join(format!("{}.encrust", revision.number));
+        if !plate.is_file() {
+            bail!(
+                "revision {} of {} keeps no plate",
+                revision.number,
+                revision.job
+            );
+        }
+        Ok(plate)
+    }
+
     /// Revision `revision`'s plate and the job's one model on it, the base of the next revision
     /// with no window answering; `None` without a plate, or where the model is now in pieces.
     pub fn kept_base(&self, revision: &Revision) -> Option<(PathBuf, ObjectId)> {

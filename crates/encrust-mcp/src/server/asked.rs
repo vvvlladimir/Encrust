@@ -74,7 +74,28 @@ pub fn asked_after_check(
         asked.insert(at, pressed);
     }
     asked.extend(finished(recipe, earlier, object, fit_drift_mm)?);
+    if arrange_asked(recipe, earlier, &asked) {
+        let (low_mm, plate_mm) = area_mm?;
+        asked.push(Edit::Arrange {
+            low_mm,
+            plate_mm,
+            clearance_mm: core_edit::defaults::arrange_clearance_mm(),
+        });
+    }
     Some(asked)
+}
+
+/// Whether `--arrange` is asked, which the command line runs last on the usable area: the
+/// revision cuts the model into pieces, or asks it anew.
+fn arrange_asked(recipe: &Recipe, earlier: &Recipe, asked: &[Edit]) -> bool {
+    let wants = |recipe: &Recipe| (recipe.modelling.as_ref()).is_some_and(|m| m.arrange);
+    let pieces = (asked.iter()).any(|edit| {
+        matches!(
+            edit,
+            Edit::Cut { .. } | Edit::Split { .. } | Edit::PartOff { .. }
+        )
+    });
+    wants(recipe) && (pieces || !wants(earlier))
 }
 
 fn rotated(object: ObjectId, degrees: [f32; 3]) -> Edit {
@@ -115,6 +136,7 @@ fn searched(
         goal,
         max_tilt_deg,
         pick,
+        clean_surface,
         keep_clear_at_mm,
         keep_clear_radius_mm,
         keep_clear_seen_deg,
@@ -126,7 +148,7 @@ fn searched(
         object,
         goal: aim_of(*goal),
         max_tilt_deg: *max_tilt_deg,
-        clean_surface: false,
+        clean_surface: *clean_surface,
         pick: usize::from(pick.unwrap_or(1)).saturating_sub(1),
         plate_mm: area_mm.map(|(_, size)| size),
         low_mm: area_mm.map_or([0.0, 0.0], |(low, _)| low),
@@ -141,13 +163,20 @@ fn searched(
     })
 }
 
-/// Whether nothing changed between the two that no edit carries: the way steps are decided or
-/// a combination.
+/// Whether nothing changed between the two that no edit carries: the way steps are decided, a
+/// combination, the weld the model is read with, the lift it stands at, its copies or Check's
+/// answers.
 fn plate_alike(recipe: &Recipe, earlier: &Recipe) -> bool {
-    // `arrange` comes with every cut and split the command line lays apart; the window lays
-    // the pieces out itself, so only a combination is asked of the plate.
+    // `arrange` is an edit of its own, asked after the rest; only a combination is not.
     let joined = |modelling: Option<&Modelling>| modelling.and_then(|m| m.combine.clone());
-    recipe.prepare == earlier.prepare
+    let weld = |recipe: &Recipe| recipe.mend.as_ref().and_then(|m| m.weld_tolerance_mm);
+    let copies = |recipe: &Recipe| recipe.modelling.as_ref().and_then(|m| m.copies);
+    let lift = |recipe: &Recipe| recipe.supports.as_ref().and_then(|s| s.lift_mm);
+    weld(recipe) == weld(earlier)
+        && lift(recipe) == lift(earlier)
+        && recipe.fixes == earlier.fixes
+        && copies(recipe) == copies(earlier)
+        && recipe.prepare == earlier.prepare
         && recipe.steps_by == earlier.steps_by
         && recipe.model == earlier.model
         && joined(recipe.modelling.as_ref()) == joined(earlier.modelling.as_ref())
@@ -169,12 +198,28 @@ fn modelled(
             factors: now.scale?.into(),
         });
     }
+    if now.mirror != then.mirror {
+        // Only a mirror asked anew is an edit; one taken back or changed is checked by flags.
+        then.mirror.is_none().then_some(())?;
+        asked.push(Edit::Mirror {
+            object,
+            axis: now.mirror?.into(),
+        });
+    }
+    if now.move_mm != then.move_mm {
+        let [to, from] = [now.move_mm, then.move_mm].map(Option::unwrap_or_default);
+        asked.push(Edit::Move {
+            object,
+            by_mm: [to[0] - from[0], to[1] - from[1], to[2] - from[2]].into(),
+        });
+    }
     if now.label != then.label {
         let label = now.label.as_ref()?;
         asked.push(edit_of(json!({
             "edit": "label", "object": object, "text": label.text, "at_mm": label.at_mm,
             "height_mm": label.height_mm, "depth_mm": label.depth_mm, "raised": !label.sunk,
             "follow_surface": label.follow, "angle_deg": label.angle_deg.unwrap_or(0.0),
+            "font": label.font,
         }))?);
     }
     if now.cut != then.cut {

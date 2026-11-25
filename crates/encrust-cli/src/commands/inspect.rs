@@ -7,7 +7,7 @@ use crate::args::{ImportArgs, ProfileArgs};
 use crate::batch::ModelReport;
 use crate::commands::GlobalArgs;
 use crate::exit::Exit;
-use crate::{json, pipeline, profiles};
+use crate::{json, pipeline};
 
 #[derive(clap::Args, Debug)]
 pub struct InspectCommand {
@@ -35,7 +35,7 @@ pub struct InspectCommand {
 
 impl InspectCommand {
     pub fn run(&self, global: &GlobalArgs) -> Result<Exit> {
-        let chosen = profiles::resolve(&self.profile.selection())?;
+        let chosen = self.profile.resolve()?;
         let started = Instant::now();
         let asked = pipeline::Inspect {
             intersections: self.intersections,

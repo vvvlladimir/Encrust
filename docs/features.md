@@ -1107,9 +1107,13 @@ the release page or the window's File → Use with Claude Desktop and installed 
 command line as tools, so a language model prepares a model step by step on your
 computer, checks it and writes the file. It asks you for the printer and resin; until you
 say, it works on the standard printer with stock resin numbers, and it writes no file before
-you have named both. Every flag of
-the command line is a tool's: `set_shape` cuts, labels, splits and presses reliefs,
-`set_repair` mends, `set_slicing` sets the layers.
+you have named both. The command line's flags are its tools': `set_shape` cuts with a
+joint of the size you ask or leaves the halves upright, labels in a font, splits, mirrors,
+moves, copies and presses reliefs, `set_repair` mends, `set_slicing` sets the layers and,
+with numbers you or the resin's maker give, the exposure, motion and waits, and `fix_issues`
+answers what Check finds — islands supported, suction cups vented, weak necks held. Each
+model is prepared in a job of its own; `plate_jobs` lays several on one plate, spread apart,
+checks it and writes them as one file.
 `compare_poses` shows the model the best few ways the engine found to stand it, each drawn
 with what it prints, and the model picks one for what the print is — keeping supports off a
 face you named, say, which the search then ranks first. Every step it takes is set against
@@ -1162,8 +1166,19 @@ step keeps the wall solid where the model is thin (`keep_solid_under_mm`), and a
 with `plugs = true` lays a plug beside the model for each hole it drills; without it, none,
 in the window's Prepare for print too.
 
-**Modelling:** combine the models given, write a label on one, cut it with a joint, split
-it into its parts or cut a part off, all at the window's default sizes, before it is sliced.
+**Modelling:** combine the models given, write a label on one, cut it with a joint — its
+count, clearance and peg, magnet or key size as the Cut tool sets them, or the halves left
+standing as cut — split it into its parts or cut a part off, before it is sliced.
+
+**Placing:** mirror a model, move it by a distance, lift it off the plate, print copies of it
+beside it, and lay several saved projects on one plate, spread apart by `--arrange`.
+
+**Print settings:** type the exposure, bottom layers, transition, lift, retract, light-off
+delay, waits and light power for one run over the resin's own numbers, as the window's Print
+settings do.
+
+**Check's answers:** `--support-islands`, `--drill-cups` and `--hold-necks` support the
+islands, vent the suction cups and hold the weak necks Check finds, as its Fix all does.
 
 **Supports:** build to any support profile, size each support by what it holds as **Auto**
 does (`--supports auto`), and hold up a hollowed model's cavity as well as its outside
@@ -1181,12 +1196,12 @@ spot of the plate, as the window's do; a run whose plugs find none stops rather 
 `--support-only-at`; paint the side meant to be seen round a point with `--shown-at`, so the
 supports there stand sparser and lighter.
 
-**You cannot** (from the command line): paint supports or where a relief goes, take the pieces of a cut or a split out as meshes, or hollow or support
-a model a cut or a split broke into several pieces. Do that in the window, save a project, then slice it.
-Nor can you open a sliced file as a model, use a saved Hollow or Drain preset, press one of
-the built-in textures, pick an edge-smoothing look by name, or set a model's lift off the plate
-by a number of your own. Supporting the islands and weak necks and drilling the suction cups Check finds
-is a recipe's `check` step (`retry`, `hold_levers`, `drill_cups`).
+**You cannot** (from the command line or a chat client): paint supports or where a relief
+goes, block an area from supports, move or delete one support, take the pieces of a cut or a
+split out as meshes, or hollow or support a model a cut or a split broke into several pieces.
+Do that in the window, save a project, then slice it. Nor can you open a sliced file as a
+model, use a saved Hollow or Drain preset, press one of the built-in textures, pick an
+edge-smoothing look by name, or set a printer's second, slower lift stage.
 
 ---
 

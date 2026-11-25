@@ -9,9 +9,9 @@ use serde::Serialize;
 use crate::args::ProfileArgs;
 use crate::commands::GlobalArgs;
 use crate::exit::{Cancelled, Exit, Stop};
+use crate::json;
 use crate::progress::bar;
 use crate::sliced_file::{CtbRevision, asked_revision, format_of, now_unix_s, warn_of_limits};
-use crate::{json, profiles};
 
 #[derive(clap::Args, Debug)]
 pub struct ConvertCommand {
@@ -42,7 +42,7 @@ struct Report {
 
 impl ConvertCommand {
     pub fn run(&self, global: &GlobalArgs, stop: &Stop) -> Result<Exit> {
-        let chosen = profiles::resolve(&self.profile.selection())?;
+        let chosen = self.profile.resolve()?;
         let Some(printer) = chosen.printer else {
             bail!("convert needs --printer or --profile: the machine the new file is for");
         };

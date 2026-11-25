@@ -576,3 +576,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0475](0475-a-job-runs-on-the-standard-machine-until-it-is-written.md) | A job runs on the standard machine until it is written | Accepted |
 | [0476](0476-the-agents-ring-lists-only-the-work-in-hand.md) | The agents' ring lists only the work in hand | Proposed |
 | [0477](0477-an-agents-job-stands-on-a-plate-of-its-own.md) | An agent's job stands on a plate of its own in the window | Proposed |
+| [0478](0478-the-command-line-and-the-agents-server-reach-the-windows-model-work.md) | The command line and the agents' server reach the window's model work | Proposed |

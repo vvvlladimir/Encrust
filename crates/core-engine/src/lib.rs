@@ -20,7 +20,9 @@ mod trapped;
 mod trial;
 
 pub use analysis::{ANALYSIS_LAYER_MM, analysis_slicing};
+// What an arrange edit is asked with where nothing is typed (`core_edit::defaults`).
 pub use bake::{Baked, bake, parts};
+pub use core_plate::ArrangeSettings;
 pub use cut::{Cutting, cut};
 pub use drains::{
     DrainSearch, Drained, HoleRole, MOST_TRIES, Scanning, SuggestedHole, suggest_drains,

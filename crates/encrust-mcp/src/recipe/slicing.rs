@@ -29,6 +29,69 @@ pub struct Slicing {
     pub blur_px: Option<u8>,
     /// Takes every island out of the masks, and this many layers more of what hangs there.
     pub remove_islands_passes: Option<u32>,
+    /// Over the resin's own numbers for this job, only as the user or the resin's maker gave
+    /// them: exposure, motion and waits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub print: Option<PrintSettings>,
+}
+
+/// The resin's print settings typed for one job, each absent one the resin's, as
+/// `--exposure` and the flags beside it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct PrintSettings {
+    /// Seconds each layer above the bottom ones is lit.
+    pub exposure_s: Option<f32>,
+    pub bottom_exposure_s: Option<f32>,
+    pub bottom_layers: Option<u32>,
+    /// Layers the exposure steps down over from the bottom one to the normal one.
+    pub transition_layers: Option<u16>,
+    pub light_off_delay_s: Option<f32>,
+    pub lift_distance_mm: Option<f32>,
+    pub lift_speed_mm_min: Option<f32>,
+    pub retract_speed_mm_min: Option<f32>,
+    /// Rests before each lift, after it and after each retract, seconds; any makes the
+    /// printer rest rather than hold the light off.
+    pub wait_before_lift_s: Option<f32>,
+    pub wait_after_lift_s: Option<f32>,
+    pub wait_after_retract_s: Option<f32>,
+    /// The light's power, 0 to 255, where the printer takes it.
+    pub light_power: Option<u8>,
+    pub bottom_light_power: Option<u8>,
+}
+
+impl PrintSettings {
+    fn push_flags(&self, flags: &mut Vec<String>) {
+        let counts = [
+            ("--bottom-layers", self.bottom_layers),
+            ("--transition-layers", self.transition_layers.map(u32::from)),
+            ("--light-power", self.light_power.map(u32::from)),
+            (
+                "--bottom-light-power",
+                self.bottom_light_power.map(u32::from),
+            ),
+        ];
+        let numbers = [
+            ("--exposure", self.exposure_s),
+            ("--bottom-exposure", self.bottom_exposure_s),
+            ("--light-off-delay", self.light_off_delay_s),
+            ("--lift-distance", self.lift_distance_mm),
+            ("--lift-speed", self.lift_speed_mm_min),
+            ("--retract-speed", self.retract_speed_mm_min),
+            ("--wait-before-lift", self.wait_before_lift_s),
+            ("--wait-after-lift", self.wait_after_lift_s),
+            ("--wait-after-retract", self.wait_after_retract_s),
+        ];
+        for (flag, count) in counts {
+            if let Some(count) = count {
+                flags.push(format!("{flag}={count}"));
+            }
+        }
+        for (flag, value) in numbers {
+            if let Some(value) = value {
+                flags.push(format!("{flag}={value}"));
+            }
+        }
+    }
 }
 
 /// One band of `--exposure-at`.
@@ -79,6 +142,9 @@ impl Slicing {
                 "--remove-islands".into(),
                 format!("--hanging-passes={passes}"),
             ]);
+        }
+        if let Some(print) = &self.print {
+            print.push_flags(flags);
         }
     }
 }

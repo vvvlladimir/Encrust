@@ -125,11 +125,8 @@ fn cut(
         axis,
         at_mm,
         keep: args.keep.into(),
-        joints: Joints {
-            kind: args.joint.map(JointKind::from),
-            ..Joints::default()
-        },
-        lay_flat: true,
+        joints: Joints::asked(args.joint.map(JointKind::from), &args.joint_asked()),
+        lay_flat: !args.cut_upright,
     };
     let applied = staging
         .apply(&edit, object, stop)

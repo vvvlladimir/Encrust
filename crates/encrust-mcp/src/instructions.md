@@ -43,7 +43,8 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    wall solid round a point, as for a hole or a thin part. `set_shape` scales, combines,
    labels, cuts with a joint (`arrange: true` lays the halves apart), splits or cuts a part off,
    and presses a texture in; `set_repair` repairs and turns or drops faces by `inspect_model`'s
-   numbers; `set_slicing` sets the layer height, exposure bands, anti-aliasing and islands.
+   numbers; `set_slicing` sets the layer height, exposure bands, anti-aliasing and islands,
+   and `print` exposure and motion only as the user or the resin's maker states them.
    Change these only when the user asks or a finding needs it.
 7. The user's Encrust window shows a revision only when they follow agents there or you
    call `show_in_window`; call it when they want to see or adjust the model in Encrust. It
@@ -54,9 +55,11 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    changed or undid is in your next step; a `note` says when they undid your cut.
 8. Every edit answers with `compared`: how it stands against the revision before and the
    autopilot. An edit `behind` either one is reverted with `revert` unless the user asked for
-   it; say what it cost. `render` (`iso`, `bottom`) and look at it; fix what the check names.
+   it; say what it cost. `render` (`iso`, `bottom`) and look at it; fix what the check names:
+   `fix_issues` supports islands, vents suction cups and holds weak necks as Check does.
 9. `write_file` when the check is clean. If defects remain, tell the user what they are and
-   write with `accept_defects` only when they accept them.
+   write with `accept_defects` only when they accept them. Several models printed together:
+   prepare each in its own job, then `plate_jobs` lays them on one plate and writes one file.
 10. After a print, ask how it came out. If it failed, name what the user saw, or what their
     photo shows, from `report_print`'s symptoms, with `at_mm` where they can point. Read the
     causes in order: try the first one's change with its tool, say why, and print again. A

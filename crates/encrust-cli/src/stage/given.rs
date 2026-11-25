@@ -9,11 +9,13 @@ use super::Shaping;
 use crate::args::JobArgs;
 use crate::project;
 
-/// What the inputs on the command line are: models, or one file describing a plate.
+/// What the inputs on the command line are: models, one file describing a plate, or several
+/// projects laid on one plate.
 pub(super) enum Given<'a> {
     Models(&'a [PathBuf]),
     PlateFile(&'a Path),
     Project(&'a Path),
+    Projects(&'a [PathBuf]),
 }
 
 pub(super) fn given(inputs: &[PathBuf]) -> Result<Given<'_>> {
@@ -25,6 +27,9 @@ pub(super) fn given(inputs: &[PathBuf]) -> Result<Given<'_>> {
             Ok(Given::PlateFile(only))
         }
         (Some(_), [only]) => Ok(Given::Project(only)),
+        (Some(_), _) if inputs.iter().all(|path| describes_a_project(path)) => {
+            Ok(Given::Projects(inputs))
+        }
         (Some(path), _) => bail!(
             "{} describes a whole plate, so it is sliced on its own",
             path.display()

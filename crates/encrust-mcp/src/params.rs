@@ -7,7 +7,9 @@ use anyhow::{Result, bail};
 use rmcp::schemars::{self, JsonSchema};
 use serde::Deserialize;
 
-use crate::recipe::{Drains, Hollow, Mend, Modelling, Pose, Relief, Repair, Slicing, Supports};
+use crate::recipe::{
+    Drains, Fixes, Hollow, Mend, Modelling, Pose, Relief, Repair, Slicing, Supports,
+};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListProfiles {
@@ -216,6 +218,25 @@ pub struct SetSupports {
     pub job: String,
     /// Absent stands the model on nothing but the plate.
     pub supports: Option<Supports>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct PlateJobs {
+    /// Two jobs or more, each laid on the plate as its latest revision stands; all on one
+    /// printer and resin.
+    pub jobs: Vec<String>,
+    /// Absolute path of the printer file to write; absent checks the plate and writes nothing.
+    pub output: Option<PathBuf>,
+    /// Writes the file though the check names defects, once the user accepts them.
+    #[serde(default)]
+    pub accept_defects: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct FixIssues {
+    pub job: String,
+    /// Absent takes back every answer asked before.
+    pub fixes: Option<Fixes>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]

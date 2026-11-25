@@ -1,5 +1,6 @@
 //! The placing flags as edits of each entry's object: a plate file's position, the scale, the
-//! orientation search, a turn, centring and the lift, in that order (ADR 0472).
+//! orientation search, a turn, a mirror, centring, a move and the lift, in that order, and the
+//! copies once the plate is finished (ADR 0472, 0478).
 
 use std::path::PathBuf;
 
@@ -65,8 +66,19 @@ pub(super) fn placed(
                 watch,
             )?;
         }
+        if let Some(axis) = transform.placing.mirror {
+            let edit = Edit::Mirror {
+                object: id,
+                axis: axis.into(),
+            };
+            staging.apply(&edit, id, watch.stop).map_err(said)?;
+        }
         if transform.center {
             centre(staging, id, printer, watch)?;
+        }
+        if let Some(by_mm) = transform.placing.move_by {
+            let edit = Edit::Move { object: id, by_mm };
+            staging.apply(&edit, id, watch.stop).map_err(said)?;
         }
         if let Some(lift_mm) = transform.lift {
             lift(staging, id, lift_mm, watch)?;
@@ -74,6 +86,34 @@ pub(super) fn placed(
     }
     Ok(())
 }
+
+/// Puts each entry's `--copies` beside each of its objects, in a row along X, each as far on as
+/// the object and its supports are wide plus a gap; `--arrange` spreads them after.
+pub(super) fn copied(
+    staging: &mut Staging,
+    entries: &[(PathBuf, Shaping)],
+    watch: &Watch,
+) -> Result<()> {
+    for (entry, (_, shaping)) in entries.iter().enumerate() {
+        let copies = shaping.import.transform.placing.copies.unwrap_or(0);
+        for id in staging.ids_of(entry) {
+            let width_mm =
+                (staging.standing_bounds(id)).map_or(0.0, |bounds| bounds.maxs.x - bounds.mins.x);
+            for copy in 1..=copies {
+                let offset_mm = Vec3::new((width_mm + COPY_GAP_MM) * copy as f32, 0.0, 0.0);
+                let edit = Edit::Duplicate {
+                    object: id,
+                    offset_mm,
+                };
+                staging.apply(&edit, id, watch.stop).map_err(said)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Gap between a model and its copies, mm, before an arrange spreads them.
+const COPY_GAP_MM: f32 = 5.0;
 
 /// Moves the object so the middle of its footprint is over a plate file's `position` and its
 /// lowest point is on the plate.

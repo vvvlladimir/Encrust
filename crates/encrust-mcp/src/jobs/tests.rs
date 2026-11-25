@@ -12,22 +12,11 @@ fn scratch(name: &str) -> Jobs {
 }
 
 fn recipe() -> Recipe {
-    Recipe {
-        model: PathBuf::from("/models/My Bust (final).stl"),
-        printer: "elegoo-mars-4-ultra".into(),
-        resin: "my-grey".into(),
-        prepare: false,
-        steps_by: None,
-        repair: None,
-        pose: None,
-        hollow: None,
-        drains: None,
-        supports: None,
-        mend: None,
-        modelling: None,
-        relief: None,
-        slicing: None,
-    }
+    Recipe::bare(
+        PathBuf::from("/models/My Bust (final).stl"),
+        "elegoo-mars-4-ultra".into(),
+        "my-grey".into(),
+    )
 }
 
 #[test]

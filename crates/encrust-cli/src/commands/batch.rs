@@ -6,7 +6,7 @@ use crate::args::JobArgs;
 use crate::batch::{self, Batch};
 use crate::commands::GlobalArgs;
 use crate::exit::{Exit, Stop};
-use crate::{json, profiles};
+use crate::json;
 
 #[derive(clap::Args, Debug)]
 pub struct BatchCommand {
@@ -43,7 +43,7 @@ impl BatchCommand {
     }
 
     pub fn run(&self, global: &GlobalArgs, stop: &Stop) -> Result<Exit> {
-        let chosen = profiles::resolve(&self.job.profile.selection())?;
+        let chosen = self.job.profile.resolve()?;
         let summary = batch::run(&self.batch(), &chosen, &global.watch(stop))?;
         if global.json {
             json::print(&summary)?;

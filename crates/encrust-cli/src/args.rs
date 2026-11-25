@@ -17,12 +17,15 @@ use core_slicer::{AdaptiveSettings, WINDOW_LAYERS};
 use core_volume::Tiling;
 use printer_profiles::SupportProfile;
 
+use crate::fixes::FixArgs;
 use crate::hollowing::HollowArgs;
 use crate::modelling::ModelArgs;
+use crate::placing::PlacingArgs;
 use crate::plate_edits::EditArgs;
-use crate::profiles::Selection;
+use crate::profiles::{Chosen, Selection};
 use crate::raster_report::parse_grey_range;
 use crate::report::{parse_exposure_band, parse_rotation, parse_scale};
+use crate::resin_set::ResinSet;
 use crate::sliced_file::CtbRevision;
 use crate::supports::{MergePoints, merge_points};
 
@@ -45,9 +48,19 @@ pub struct ProfileArgs {
     /// Resin from the catalogue, by id. Its numbers are retuned for the chosen printer.
     #[arg(long, value_name = "ID")]
     pub resin: Option<String>,
+
+    #[command(flatten)]
+    pub set: ResinSet,
 }
 
 impl ProfileArgs {
+    /// The printer and resin named, the resin's numbers typed for this run in place of its own.
+    pub fn resolve(&self) -> Result<Chosen> {
+        let mut chosen = crate::profiles::resolve(&self.selection())?;
+        self.set.apply(&mut chosen.material);
+        Ok(chosen)
+    }
+
     pub fn selection(&self) -> Selection<'_> {
         Selection {
             printer_id: self.printer.as_deref(),
@@ -237,6 +250,9 @@ pub struct TransformArgs {
         requires = "orient_keep_clear"
     )]
     pub orient_keep_clear_radius: Scalar,
+
+    #[command(flatten)]
+    pub placing: PlacingArgs,
 }
 
 /// Which repair `--repair` runs.
@@ -520,6 +536,9 @@ pub struct JobArgs {
 
     #[command(flatten)]
     pub raster: RasterArgs,
+
+    #[command(flatten)]
+    pub fixes: FixArgs,
 
     /// Prepare each model as the engine's defaults would: repair it if it has defects, orient
     /// it, hollow, drain and hold up its cavity where a wall saves resin, and stand it on

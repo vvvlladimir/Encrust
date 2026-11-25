@@ -155,10 +155,12 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "check",
             "compare_poses",
             "create_resin",
+            "fix_issues",
             "import_resin",
             "inspect_model",
             "list_profiles",
             "list_recipes",
+            "plate_jobs",
             "render",
             "report_print",
             "revert",
@@ -1289,4 +1291,32 @@ async fn models_combined_are_one_model_the_command_line_takes() {
     )
     .await;
     assert!(!failed(&combined), "{}", answer(&combined));
+}
+
+#[tokio::test]
+async fn two_jobs_are_laid_on_one_plate_apart_and_written_as_one_file() {
+    let dir = scratch("plate-jobs");
+    let (model, client) = cube_and_server(&dir).await;
+    let first = start(&client, &model).await;
+    let other = dir.join("other.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(10.0)), &other);
+    let second = start(&client, &other).await;
+    let output = dir.join("both.goo");
+
+    let laid = call(
+        &client,
+        "plate_jobs",
+        json!({"jobs": [first, second], "output": output, "accept_defects": true}),
+    )
+    .await;
+
+    assert!(!failed(&laid), "plate_jobs failed: {}", answer(&laid));
+    let laid = answer(&laid);
+    assert_eq!(laid["written"], true, "{laid}");
+    assert!(output.is_file(), "one file holds both");
+    assert!(
+        !laid["report"].to_string().contains("\"meets\""),
+        "the two stand apart: {laid}"
+    );
+    client.cancel().await.expect("the server stops");
 }
