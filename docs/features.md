@@ -1139,8 +1139,10 @@ that against what the check found in the file you printed — trapped resin, a s
 a part starting in mid-air — names the likely cause and makes the change to try. A resin you have not set up it takes in from a
 file that printed well with it or from another slicer's export, and it writes the exposure
 check for you to print; a resin known only by its label's numbers it makes from those
-numbers, refusing one past what your printer takes. A project you saved in the window it checks, draws, writes and sends as it stands;
-its models you change in the window.
+numbers, refusing one past what your printer takes. A project you saved in the window it
+checks, draws, writes and sends, and shapes as it does a model. Each tool shapes every object
+of the job — after a cut, both halves — or only those it names by id, and `set_machine` moves
+the job to another printer and resin.
 
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,
@@ -1173,6 +1175,12 @@ standing as cut — split it into its parts or cut a part off, before it is slic
 **Placing:** mirror a model, move it by a distance, lift it off the plate, print copies of it
 beside it, and lay several saved projects on one plate, spread apart by `--arrange`.
 
+**Objects by id:** `encrust inspect plate.encrust` lists every object of a saved plate by its
+id, and every report names each model's id. Flags shape every object of the plate — both
+halves of a cut, hollowed and supported each — or only those `--only 2,3` names, on models and
+on a saved project alike, whose plate `--project-out` writes again; `render --only` draws those
+alone.
+
 **Print settings:** type the exposure, bottom layers, transition, lift, retract, light-off
 delay, waits and light power for one run over the resin's own numbers, as the window's Print
 settings do.
@@ -1198,8 +1206,8 @@ supports there stand sparser and lighter.
 
 **You cannot** (from the command line or a chat client): paint supports or where a relief
 goes, block an area from supports, move or delete one support, take the pieces of a cut or a
-split out as meshes, or hollow or support a model a cut or a split broke into several pieces.
-Do that in the window, save a project, then slice it. Nor can you open a sliced file as a
+split out as meshes, or prepare a cut model or a saved project by a recipe. Do that in the
+window, save a project, then slice it. Nor can you open a sliced file as a
 model, use a saved Hollow or Drain preset, press one of the built-in textures, pick an
 edge-smoothing look by name, or set a printer's second, slower lift stage.
 

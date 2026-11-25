@@ -53,15 +53,9 @@ fn extension_of(path: &Path) -> Option<String> {
         .map(str::to_ascii_lowercase)
 }
 
-/// The flags of a plate made here, which a project saved by the window answers for itself.
-pub fn refuse_for_a_project(arrange: bool, job: &JobArgs) -> Result<()> {
-    project::refuse_shaping_flags(job)?;
-    if job.model.wanted() {
-        bail!("a project's models are combined, cut and split in the window");
-    }
-    if arrange {
-        bail!("a project stands where it was saved; arrange it in the window");
-    }
+/// The flags a project cannot take, which prepare models as they come in.
+pub fn refuse_for_a_project(job: &JobArgs) -> Result<()> {
+    project::refuse_for_projects(job)?;
     Ok(())
 }
 

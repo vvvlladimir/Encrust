@@ -28,7 +28,7 @@ pub(super) fn left_to_edits(args: &mut ImportArgs) {
     }
 }
 
-/// Mends and repairs each entry's one object as its flags ask, before it is placed.
+/// Mends and repairs each entry's objects the flags shape, before they are placed.
 pub(super) fn repaired(
     staging: &mut Staging,
     found: &mut [Found],
@@ -36,22 +36,24 @@ pub(super) fn repaired(
     watch: &Watch,
 ) -> Result<()> {
     for (entry, ((import, _), (_, shaping))) in found.iter_mut().zip(entries).enumerate() {
-        let id = staging.object_of(entry)?;
-        mend(staging, id, &shaping.import, import, watch)?;
-        repair(staging, id, &shaping.import, import, watch)?;
+        for id in staging.targets(entry) {
+            mend(staging, id, &shaping.import, import, watch)?;
+            repair(staging, id, &shaping.import, import, watch)?;
+        }
     }
     Ok(())
 }
 
-/// Presses each entry's picture into its object where its flags ask, once it is placed.
+/// Presses each entry's picture into its objects the flags shape, once they are placed.
 pub(super) fn pressed(
     staging: &mut Staging,
     entries: &[(PathBuf, Shaping)],
     watch: &Watch,
 ) -> Result<()> {
     for (entry, (_, shaping)) in entries.iter().enumerate() {
-        let id = staging.object_of(entry)?;
-        relief(staging, id, &shaping.import, watch)?;
+        for id in staging.targets(entry) {
+            relief(staging, id, &shaping.import, watch)?;
+        }
     }
     Ok(())
 }

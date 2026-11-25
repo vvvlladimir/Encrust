@@ -7,7 +7,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use core_document::{Document, apply};
 use core_edit::Edit;
-use core_engine::project::{Manifest, Project, insert, load};
+use core_engine::project::{Manifest, ModelMeshes, ObjectState, Project, insert, load};
+use core_geometry::transform_mesh;
+use std::time::Duration;
+
+use crate::hollowing::HollowReport;
+use crate::supports::SupportReport;
 use core_engine::{Machine, Opening, open_plate};
 use core_format::ExposurePlan;
 use core_volume::Cancel;
@@ -152,27 +157,27 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
         None => built.material,
     };
 
-    let on_plate: Vec<_> = manifest
-        .objects
-        .iter()
-        .filter(|object| object.printable_on(plate))
+    let on_plate: Vec<_> = (manifest.objects.iter().zip(&project.models))
+        .filter(|(object, _)| object.printable_on(plate))
         .collect();
     let drainage = job.slicing.check_drainage
-        || on_plate.iter().any(|object| {
+        || on_plate.iter().any(|(object, _)| {
             let hollow = &object.hollow;
             hollow.built.is_some() || !hollow.drains.is_empty() || !hollow.channels.is_empty()
         });
     Ok(Staged {
+        model_ids: on_plate.iter().map(|(object, _)| object.id).collect(),
         parts: on_plate
             .iter()
             .zip(&built.models)
-            .map(|(object, model)| Part {
+            .map(|((object, meshes), model)| Part {
+                id: Some(object.id),
                 input: PathBuf::from(&object.name),
                 import: None,
                 oriented: None,
-                hollow: None,
+                hollow: saved_hollow(manifest, object, meshes),
                 drains: None,
-                supports: None,
+                supports: saved_supports(object, model),
                 standing: bounds(model).map(|bounds| FitCheck::of(&bounds, &built.printer)),
                 meets: Vec::new(),
                 prepared: None,
@@ -192,9 +197,47 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
     })
 }
 
+/// What the cavity `object` carries as saved says of it, as `--hollow` would have.
+fn saved_hollow(
+    manifest: &Manifest,
+    object: &ObjectState,
+    meshes: &ModelMeshes,
+) -> Option<HollowReport> {
+    let built = object.hollow.built.as_ref()?;
+    let state = object.own_hollow.as_ref().unwrap_or(&manifest.hollow);
+    let faces = (meshes.source.faces.len(), meshes.printed().faces.len());
+    let lattice = (built.cavity_mm3, built.voxel_mm, built.coarsened);
+    Some(HollowReport::of(
+        (state, object.transform),
+        faces,
+        lattice,
+        Duration::ZERO,
+    ))
+}
+
+/// What the supports `object` stands on as saved say of them, as `--supports` would have.
+fn saved_supports(object: &ObjectState, model: &core_engine::Model) -> Option<SupportReport> {
+    let held = &object.supports;
+    let trees: Vec<_> = held.frozen.iter().chain(&held.grown).collect();
+    if trees.is_empty() {
+        return None;
+    }
+    let lowest = transform_mesh(&model.mesh, model.transform)
+        .aabb()
+        .map_or(0.0, |bounds| bounds.mins.z);
+    Some(SupportReport {
+        lifted_mm: lowest.max(0.0),
+        contacts: trees.iter().flat_map(|tree| tree.contacts()).collect(),
+        standing: trees.len(),
+        unheld: Vec::new(),
+        trees: trees.len(),
+        faces: model.supports.iter().map(|mesh| mesh.faces.len()).sum(),
+    })
+}
+
 /// The printer and resin the flags name, or else the ones the project names by id, as
 /// the user's catalogue has them; the engine tunes the resin to the machine as the window does.
-fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
+pub(crate) fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
     let flags = &job.profile;
     let (printer, printer_id) = match (&flags.profile, &flags.printer) {
         (Some(path), _) => {
@@ -216,7 +259,7 @@ fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
             (printer_of(id, &why)?, Some(id.to_owned()))
         }
     };
-    let resin = match (&flags.material, &flags.resin) {
+    let mut resin = match (&flags.material, &flags.resin) {
         (Some(path), _) => MaterialProfile::load(path)
             .with_context(|| format!("cannot load {}", path.display()))?,
         (None, Some(id)) => resin_of(id, &format!("--resin {id} is not among your resins"))?,
@@ -229,6 +272,7 @@ fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
             resin_of(id, &why)?
         }
     };
+    flags.set.apply(&mut resin);
     Ok(Machine {
         printer,
         printer_id,
@@ -252,40 +296,51 @@ fn resin_of(id: &str, why: &str) -> Result<MaterialProfile> {
     Ok(entry.profile.clone())
 }
 
-/// The flags a project already answers for itself.
-pub fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
+/// The flags a project cannot take: a recipe and Check's answers, which prepare models as they
+/// come in, the islands it slices as saved, and models combined from files.
+pub fn refuse_for_projects(job: &JobArgs) -> Result<()> {
     job.hollow.check_flags()?;
-    if let Some(flag) = shaping_flags(job).first() {
-        bail!("{flag} does not apply to a project, which carries its own; change it in the window");
+    let refused = [
+        ("--prepare", job.prepare),
+        ("--recipe", job.recipe.is_some()),
+        (
+            "--support-islands, --drill-cups and --hold-necks",
+            job.fixes.step()?.is_some(),
+        ),
+        ("--remove-islands", job.raster.remove_islands),
+        ("--hanging-passes", job.raster.hanging_passes != 0),
+        ("--combine", job.model.combine.is_some()),
+    ];
+    if let Some((flag, _)) = refused.iter().find(|(_, given)| *given) {
+        bail!("{flag} does not apply to a project; prepare the models it holds by their flags");
     }
     Ok(())
 }
 
-/// The flags given that shape, hollow, drain or support a model, in the order they are listed.
-pub fn shaping_flags(job: &JobArgs) -> Vec<&'static str> {
+/// Whether a flag given shapes the project's models, so its plate is edited by them first.
+pub fn shaped_by_flags(job: &JobArgs, arrange: bool) -> bool {
     let import = &job.import;
     let transform = &import.transform;
-    let given = [
-        ("--rotate", transform.rotate.is_some()),
-        ("--scale", transform.scale.is_some()),
-        ("--center", transform.center),
-        ("--orient", transform.orient),
-        ("--relief", import.relief.is_some()),
-        ("--hollow", job.hollow.wanted()),
-        ("--drain-at or --channel", job.hollow.cutting()),
-        (
-            "--supports",
-            job.supports.supports.is_some() || job.supports.support_profile.is_some(),
-        ),
-        ("--support-cavity", job.supports.support_cavity),
-        ("--prepare", job.prepare),
-        ("--recipe", job.recipe.is_some()),
-        ("--remove-islands", job.raster.remove_islands),
-        ("--hanging-passes", job.raster.hanging_passes != 0),
-    ];
-    (given.into_iter())
-        .filter_map(|(flag, given)| given.then_some(flag))
-        .collect()
+    let placing = &transform.placing;
+    arrange
+        || !job.only.is_empty()
+        || job.model.wanted()
+        || import.repair.is_some()
+        || !crate::edits::mend_asked(import).is_empty()
+        || import.relief.is_some()
+        || transform.rotate.is_some()
+        || transform.scale.is_some()
+        || transform.center
+        || transform.orient
+        || transform.lift.is_some()
+        || placing.mirror.is_some()
+        || placing.move_by.is_some()
+        || placing.copies.is_some()
+        || job.hollow.wanted()
+        || job.hollow.cutting()
+        || job.supports.supports.is_some()
+        || job.supports.support_profile.is_some()
+        || job.supports.support_cavity
 }
 
 #[cfg(test)]

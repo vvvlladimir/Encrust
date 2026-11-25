@@ -168,6 +168,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "send_to_printer",
             "set_drains",
             "set_hollow",
+            "set_machine",
             "set_pose",
             "set_repair",
             "set_shape",
@@ -1048,7 +1049,7 @@ async fn a_jobs_steps_are_kept_as_a_recipe_of_the_users_and_one_that_would_not_r
 }
 
 #[tokio::test]
-async fn a_project_the_window_saved_is_checked_drawn_and_written_as_it_stands() {
+async fn a_project_the_window_saved_is_checked_drawn_written_and_shaped() {
     let dir = scratch("project");
     let client = serve(&encrust(), &dir.join("jobs")).await;
     let project = profile("cube.encrust");
@@ -1086,14 +1087,19 @@ async fn a_project_the_window_saved_is_checked_drawn_and_written_as_it_stands() 
     )
     .await;
     assert!(
-        failed(&hollowed),
-        "a project's models are shaped in the window"
+        !failed(&hollowed),
+        "a project's objects are shaped: {}",
+        answer(&hollowed)
     );
-    let inspected = call(&client, "inspect_model", json!({"path": project})).await;
+    let models = answer(&hollowed)["report"]["models"].clone();
     assert!(
-        answer_text(&inspected).contains("start_job"),
-        "inspect_model points a project to start_job: {}",
-        answer_text(&inspected)
+        !models[0]["hollow"].is_null(),
+        "its cube is hollowed: {models}"
+    );
+    let inspected = answer(&call(&client, "inspect_model", json!({"path": project})).await);
+    assert!(
+        inspected["objects"][0]["id"].as_u64().is_some(),
+        "inspect_model lists a project's objects by id: {inspected}"
     );
     client.cancel().await.expect("the server stops");
 }
@@ -1318,5 +1324,71 @@ async fn two_jobs_are_laid_on_one_plate_apart_and_written_as_one_file() {
         !laid["report"].to_string().contains("\"meets\""),
         "the two stand apart: {laid}"
     );
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn a_cut_model_is_hollowed_and_supported_half_by_half_and_one_half_alone_by_its_id() {
+    let dir = scratch("cut-objects");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let cut =
+        json!({"job": job, "modelling": {"cut": {"axis": "z", "at_mm": 10.0}, "arrange": true}});
+    let cut = call(&client, "set_shape", cut).await;
+    assert!(!failed(&cut), "the cut failed: {}", answer(&cut));
+
+    let hollowed = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+    )
+    .await;
+    assert!(
+        !failed(&hollowed),
+        "the hollow failed: {}",
+        answer(&hollowed)
+    );
+    let models = answer(&hollowed)["report"]["models"].clone();
+    let halves = models.as_array().expect("a model a half");
+    assert_eq!(halves.len(), 2, "{models}");
+    assert!(
+        halves.iter().all(|half| !half["hollow"].is_null()),
+        "both hollowed: {models}"
+    );
+
+    let id = halves[0]["id"].as_u64().expect("each half names its id");
+    let one = json!({"job": job, "hollow": {"wall_mm": 2.0, "objects": [id]}});
+    let one = answer(&call(&client, "set_hollow", one).await);
+    let hollow: Vec<bool> = (one["report"]["models"].as_array().expect("models").iter())
+        .map(|half| !half["hollow"].is_null())
+        .collect();
+    assert_eq!(
+        hollow.iter().filter(|&&is| is).count(),
+        1,
+        "one half alone: {one}"
+    );
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn a_job_moves_to_another_printer_and_resin_and_is_checked_there() {
+    let dir = scratch("set-machine");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let moved = call(
+        &client,
+        "set_machine",
+        json!({"job": job, "printer": profile("test-panel.toml"), "resin": profile("test-resin.toml")}),
+    )
+    .await;
+    assert!(!failed(&moved), "set_machine failed: {}", answer(&moved));
+    assert_eq!(answer(&moved)["revision"], 2);
+    let refused = call(
+        &client,
+        "set_machine",
+        json!({"job": job, "printer": "-x", "resin": "r"}),
+    )
+    .await;
+    assert!(failed(&refused), "a name read as a flag is refused");
     client.cancel().await.expect("the server stops");
 }

@@ -60,6 +60,10 @@ pub struct Hollow {
     /// From 0 to 1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub infill_density: Option<f32>,
+    /// The ids of the job's objects this shapes, as `inspect_model` lists them on its plate;
+    /// every one when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub objects: Vec<u64>,
 }
 
 /// Holes that let the resin out of a cavity, as `--drain` and `--drain-at`.
@@ -106,6 +110,10 @@ pub struct Drains {
     /// The channels' diameter, mm; 2 when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_mm: Option<f32>,
+    /// The ids of the job's objects this shapes, as `inspect_model` lists them on its plate;
+    /// every one when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub objects: Vec<u64>,
 }
 
 /// What a hole is drilled as.
@@ -147,6 +155,10 @@ pub struct Supports {
     /// group's points are joined into one tree, as `--merge-supports`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub merge_at_mm: Vec<Vec<[f32; 3]>>,
+    /// The ids of the job's objects this shapes, as `inspect_model` lists them on its plate;
+    /// every one when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub objects: Vec<u64>,
 }
 
 /// Check's automatic answers, run on the plate once the rest is done, as `--support-islands`

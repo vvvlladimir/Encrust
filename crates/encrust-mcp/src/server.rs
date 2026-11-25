@@ -18,9 +18,9 @@ use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::Jobs;
 use crate::params::{
     ComparePoses, CreateResin, FixIssues, ImportResin, JobRef, ListProfiles, ListRecipes, Model,
-    PlateJobs, Render, ReportPrint, Revert, SaveRecipe, SendFile, SetDrains, SetHollow, SetPose,
-    SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe, WriteFile, WriteTestPrint,
-    absolute,
+    PlateJobs, Render, ReportPrint, Revert, SaveRecipe, SendFile, SetDrains, SetHollow, SetMachine,
+    SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe, WriteFile,
+    WriteTestPrint, absolute,
 };
 use crate::runner::Cli;
 use crate::trace::{Trace, body_of};
@@ -268,6 +268,26 @@ impl Server {
             recipe.supports = set.supports;
             None
         });
+        Ok(answer(edited.await))
+    }
+
+    /// Moves the job to the printer and resin the user names, and checks it there; ask the
+    /// user for both, never choose them.
+    #[tool(annotations(
+        read_only_hint = false,
+        destructive_hint = false,
+        open_world_hint = false
+    ))]
+    async fn set_machine(&self, Parameters(set): Parameters<SetMachine>, ctx: Context) -> Answer {
+        let named = revise::machine_of(Some(set.printer), Some(set.resin));
+        let edited = async {
+            let (printer, resin) = named?;
+            self.edit(&set.job, &ctx, |recipe| {
+                (recipe.printer, recipe.resin) = (printer, resin);
+                None
+            })
+            .await
+        };
         Ok(answer(edited.await))
     }
 

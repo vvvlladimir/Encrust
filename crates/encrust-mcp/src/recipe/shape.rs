@@ -99,6 +99,10 @@ pub struct Modelling {
     /// Prints this many more of the model as prepared, as `--copies`; `arrange` spreads them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copies: Option<u32>,
+    /// The ids of the job's objects this shapes, as `inspect_model` lists them on its plate;
+    /// every one when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub objects: Vec<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

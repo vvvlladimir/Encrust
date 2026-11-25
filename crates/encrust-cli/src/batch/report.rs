@@ -122,6 +122,9 @@ impl EstimateReport {
 /// What was done to one model on its way onto the plate.
 #[derive(Debug, Serialize)]
 pub struct PartReport {
+    /// The object it is on the plate, as `--only` names it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<u64>,
     pub input: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<Model>,
@@ -261,6 +264,7 @@ impl PartReport {
     pub fn of(part: &Part) -> Self {
         let import = part.import.as_ref();
         Self {
+            id: part.id.map(|id| id.0),
             input: part.input.display().to_string(),
             model: import.map(model_of),
             repair: import.map(repair_of),
@@ -300,6 +304,7 @@ impl PartReport {
 
     fn named(input: &Path) -> Self {
         Self {
+            id: None,
             input: input.display().to_string(),
             model: None,
             repair: None,

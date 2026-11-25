@@ -26,29 +26,29 @@ pub(super) fn modelled(
     if let Some(op) = args.combine {
         combine(staging, op, (talk, stop))?;
         if let Some(printer) = centred {
-            for id in staging.ids() {
+            for id in staging.every_target() {
                 centre(staging, id, printer, watch)?;
             }
         }
     }
     if let Some(text) = &args.label {
-        for id in staging.ids() {
+        for id in staging.every_target() {
             label(staging, id, text, args, (talk, stop))?;
         }
     }
     if let Some(plane) = args.cut {
-        for id in staging.ids() {
+        for id in staging.every_target() {
             cut(staging, id, plane, args, (talk, stop))?;
         }
     }
-    for id in staging.ids() {
+    for id in staging.every_target() {
         part(staging, id, args, (talk, stop))?;
     }
     Ok(())
 }
 
 fn combine(staging: &mut Staging, op: Op, (talk, stop): (bool, &Stop)) -> Result<()> {
-    let objects = staging.ids();
+    let objects = staging.every_target();
     if objects.len() < 2 {
         bail!("--combine takes two models or more, got {}", objects.len());
     }

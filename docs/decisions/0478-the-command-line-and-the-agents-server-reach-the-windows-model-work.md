@@ -1,6 +1,6 @@
 # 0478. The command line and the agents' server reach the window's model work
 
-- **Status:** Proposed
+- **Status:** Proposed; a plate's objects by id (0479)
 - **Date:** 2026-11-25
 
 ## Context

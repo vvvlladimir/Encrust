@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
+use core_edit::ObjectId;
 use core_geometry::Scalar;
 use core_recipe::{
     Decision, Metrics, OnFail, Plan, Setting, StepKind, decide, decide_forced, validate,
@@ -122,7 +123,7 @@ struct Run<'a> {
 pub struct Left {
     pub staging: Staging,
     pub found: Vec<Found>,
-    pub finished: Vec<Finished>,
+    pub finished: Vec<(ObjectId, Finished)>,
     pub said: Vec<Option<(Option<Prepared>, RecipeRun)>>,
     pub saved: Option<Saved>,
 }
@@ -358,9 +359,10 @@ impl Run<'_> {
             if ctx.watch.talk && self.asked.prepare {
                 print!("{}", piece.prepared);
             }
+            let id = piece.id;
             let (found, finished, (prepared, steps)) = piece.found();
             left.found.push(found);
-            left.finished.push(finished);
+            left.finished.push((id, finished));
             let run = RecipeRun {
                 name: name.clone(),
                 steps,

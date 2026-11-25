@@ -16,8 +16,8 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    `prepare: false`, then only those tools. Only when they ask to prepare it for print,
    `prepare: true`: the engine's autopilot then prepares it at once — repair, orientation, a
    hollow where it saves resin, drains, supports — and `report.models[].prepared` says what it
-   decided. One job a model: edit the job you have rather than starting another. A project (`.encrust`) the user saved in the window starts as it was saved: check,
-   `render`, `set_slicing` and `write_file` it; its models are changed in the window. Each
+   decided. One job a model: edit the job you have rather than starting another. A project (`.encrust`) the user saved in the window starts as it was saved;
+   `inspect_model` lists its objects by id, and the tools shape them as they do a model. Each
    tool below overrides one step. Every editing tool answers with the new
    revision and its check: read `status` and the findings before the next step. An edit the
    command line refuses is not applied, and the latest revision stays as it was.
@@ -57,6 +57,9 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    autopilot. An edit `behind` either one is reverted with `revert` unless the user asked for
    it; say what it cost. `render` (`iso`, `bottom`) and look at it; fix what the check names:
    `fix_issues` supports islands, vents suction cups and holds weak necks as Check does.
+   A tool shapes every object of the job; after a cut, each half. To shape some, pass their
+   ids from the check's `models[].id` as `objects`. `set_machine` moves the job to the
+   printer and resin the user names.
 9. `write_file` when the check is clean. If defects remain, tell the user what they are and
    write with `accept_defects` only when they accept them. Several models printed together:
    prepare each in its own job, then `plate_jobs` lays them on one plate and writes one file.

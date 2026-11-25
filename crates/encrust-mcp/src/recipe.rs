@@ -7,10 +7,12 @@ use rmcp::schemars::{self, JsonSchema};
 use serde::{Deserialize, Serialize};
 
 mod finish;
+mod runs;
 mod shape;
 mod slicing;
 
 pub use finish::{Drains, Fixes, HoleKind, Hollow, Supports};
+pub use runs::PREVIOUS;
 pub use shape::{Cut, Mend, Modelling, Relief};
 pub use slicing::Slicing;
 

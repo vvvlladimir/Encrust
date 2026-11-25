@@ -245,6 +245,7 @@ fn the_modelling_and_a_relief_become_the_command_lines_flags_with_the_others_aft
             mirror: Some(shape::Axis::Y),
             move_mm: Some([0.0, -3.0, 0.0]),
             copies: Some(2),
+            objects: Vec::new(),
         }),
         relief: Some(Relief {
             depth_mm: -0.4,
@@ -458,4 +459,52 @@ fn checks_answers_ride_on_their_flags() {
     assert!(flags.contains(&"--support-islands".to_owned()), "{flags:?}");
     assert!(flags.contains(&"--hold-necks".to_owned()), "{flags:?}");
     assert!(!flags.contains(&"--drill-cups".to_owned()), "{flags:?}");
+}
+
+#[test]
+fn steps_naming_objects_run_on_the_plate_before_them_by_only() {
+    let recipe = Recipe {
+        modelling: Some(Modelling {
+            cut: Some(
+                serde_json::from_value(serde_json::json!({"axis": "z", "at_mm": 10.0}))
+                    .expect("a cut reads"),
+            ),
+            arrange: true,
+            ..Modelling::default()
+        }),
+        hollow: Some(Hollow {
+            wall_mm: 2.0,
+            objects: vec![2],
+            ..Hollow::default()
+        }),
+        supports: Some(Supports {
+            profile: "auto".into(),
+            ..Supports::default()
+        }),
+        ..plain()
+    };
+    let runs = recipe.runs().expect("runs");
+    assert_eq!(
+        runs.len(),
+        3,
+        "the model and its cut, then each object group: {runs:?}"
+    );
+    assert!(runs[0].contains(&"--cut=z:10".to_owned()), "{:?}", runs[0]);
+    assert_eq!(runs[1][0], PREVIOUS);
+    assert!(runs[1].contains(&"--only=2".to_owned()) && runs[1].contains(&"--hollow=2".to_owned()));
+    assert!(
+        !runs[2].iter().any(|flag| flag.starts_with("--only")),
+        "every object: {:?}",
+        runs[2]
+    );
+    assert!(
+        runs[2].contains(&"--arrange".to_owned()),
+        "spread last: {:?}",
+        runs[2]
+    );
+}
+
+#[test]
+fn a_recipe_with_no_objects_named_is_one_run() {
+    assert_eq!(plain().runs().expect("runs"), [plain().flags()]);
 }

@@ -24,8 +24,8 @@ pub(super) fn left_to_edits(transform: &mut TransformArgs) {
     transform.orient = false;
 }
 
-/// Scales, orients, turns and centres each entry's one object as its flags ask; what the
-/// search chose is noted where import notes it.
+/// Scales, orients, turns and centres each entry's objects the flags shape; what the search
+/// chose is noted where import notes it.
 pub(super) fn placed(
     staging: &mut Staging,
     found: &mut [Found],
@@ -34,55 +34,68 @@ pub(super) fn placed(
     watch: &Watch,
 ) -> Result<()> {
     for (entry, ((_, oriented), (_, shaping))) in found.iter_mut().zip(entries).enumerate() {
-        let id = staging.object_of(entry)?;
-        if let Some(position) = shaping.position {
-            stand_at(staging, id, position, watch)?;
+        for id in staging.targets(entry) {
+            place(staging, id, (shaping, oriented), (profile, printer), watch)?;
         }
-        let transform = &shaping.import.transform;
-        if let Some(factors) = transform.scale {
-            let edit = Edit::Scale {
-                object: id,
-                factors,
-            };
-            staging.apply(&edit, id, watch.stop).map_err(said)?;
-        }
-        if transform.orient {
-            let supported = shaping.supports.is_some();
-            let summary = orient(
-                staging,
-                id,
-                (transform, profile),
-                (printer, supported),
-                watch,
-            )?;
-            *oriented = Some(summary);
-        }
-        if let Some(degrees) = transform.rotate {
-            turn(
-                staging,
-                id,
-                euler_degrees(degrees),
-                oriented.as_mut(),
-                watch,
-            )?;
-        }
-        if let Some(axis) = transform.placing.mirror {
-            let edit = Edit::Mirror {
-                object: id,
-                axis: axis.into(),
-            };
-            staging.apply(&edit, id, watch.stop).map_err(said)?;
-        }
-        if transform.center {
-            centre(staging, id, printer, watch)?;
-        }
-        if let Some(by_mm) = transform.placing.move_by {
-            let edit = Edit::Move { object: id, by_mm };
-            staging.apply(&edit, id, watch.stop).map_err(said)?;
-        }
-        if let Some(lift_mm) = transform.lift {
-            lift(staging, id, lift_mm, watch)?;
-        }
+    }
+    Ok(())
+}
+
+/// Places object `id` as `shaping`'s flags ask, in their order.
+fn place(
+    staging: &mut Staging,
+    id: ObjectId,
+    (shaping, oriented): (&Shaping, &mut Option<OrientSummary>),
+    (profile, printer): (&ProfileArgs, Option<&PrinterProfile>),
+    watch: &Watch,
+) -> Result<()> {
+    if let Some(position) = shaping.position {
+        stand_at(staging, id, position, watch)?;
+    }
+    let transform = &shaping.import.transform;
+    if let Some(factors) = transform.scale {
+        let edit = Edit::Scale {
+            object: id,
+            factors,
+        };
+        staging.apply(&edit, id, watch.stop).map_err(said)?;
+    }
+    if transform.orient {
+        let supported = shaping.supports.is_some();
+        let summary = orient(
+            staging,
+            id,
+            (transform, profile),
+            (printer, supported),
+            watch,
+        )?;
+        *oriented = Some(summary);
+    }
+    if let Some(degrees) = transform.rotate {
+        turn(
+            staging,
+            id,
+            euler_degrees(degrees),
+            oriented.as_mut(),
+            watch,
+        )?;
+    }
+    if let Some(axis) = transform.placing.mirror {
+        let edit = Edit::Mirror {
+            object: id,
+            axis: axis.into(),
+        };
+        staging.apply(&edit, id, watch.stop).map_err(said)?;
+    }
+    if transform.center {
+        centre(staging, id, printer, watch)?;
+    }
+    if let Some(by_mm) = transform.placing.move_by {
+        let edit = Edit::Move { object: id, by_mm };
+        staging.apply(&edit, id, watch.stop).map_err(said)?;
+    }
+    if let Some(lift_mm) = transform.lift {
+        lift(staging, id, lift_mm, watch)?;
     }
     Ok(())
 }
@@ -96,7 +109,7 @@ pub(super) fn copied(
 ) -> Result<()> {
     for (entry, (_, shaping)) in entries.iter().enumerate() {
         let copies = shaping.import.transform.placing.copies.unwrap_or(0);
-        for id in staging.ids_of(entry) {
+        for id in staging.targets(entry) {
             let width_mm =
                 (staging.standing_bounds(id)).map_or(0.0, |bounds| bounds.maxs.x - bounds.mins.x);
             for copy in 1..=copies {

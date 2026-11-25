@@ -18,6 +18,7 @@ mod modelling;
 mod placing;
 mod plate_edits;
 mod plate_file;
+mod plate_objects;
 mod png_stack;
 mod progress;
 mod project;

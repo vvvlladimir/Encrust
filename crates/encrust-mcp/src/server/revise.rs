@@ -14,9 +14,20 @@ use crate::recipe::{Recipe, Repair};
 use crate::runner::Outcome;
 
 /// What a job of a project answers with first.
-const PROJECT: &str = "a project the window saved: its models, poses, hollows and supports \
-    stand as saved, and the tools that shape them are refused; check, render, set_slicing, \
-    write_file and send_to_printer work. To prepare a model anew, start a job from its file.";
+const PROJECT: &str = "a project the window saved: its models stand as saved, and each tool \
+    shapes every one of them, or the ids its `objects` names, as `inspect_model` lists them; \
+    the autopilot, recipes and fix_issues prepare models from their files only.";
+
+/// `run`'s flags with the plate the run before wrote in the place left for it.
+fn after(run: Vec<String>, previous: Option<&std::path::Path>) -> Vec<String> {
+    let previous = previous.map(|path| path.display().to_string());
+    (run.into_iter())
+        .map(|flag| match (&previous, flag == crate::recipe::PREVIOUS) {
+            (Some(path), true) => path.clone(),
+            _ => flag,
+        })
+        .collect()
+}
 
 /// How often a client hears that a long run is still going, so it does not time out.
 const BEAT: Duration = Duration::from_secs(5);
@@ -24,12 +35,6 @@ const BEAT: Duration = Duration::from_secs(5);
 impl Server {
     pub(super) async fn inspect(&self, model: Model, ctx: &Context) -> Result<Reply> {
         absolute(&model.path, "the model")?;
-        if Recipe::bare(model.path.clone(), String::new(), String::new()).is_project() {
-            bail!(
-                "{} is a project the window saved; start_job checks it as it stands",
-                model.path.display()
-            );
-        }
         let mut args = vec!["inspect".into(), model.path.display().to_string()];
         args.extend(model.repair.map(Repair::flag));
         let outcome = self.watched(&args, ctx).await?;
@@ -45,9 +50,6 @@ impl Server {
             ..Recipe::bare(start.model, printer, resin)
         };
         if recipe.is_project() {
-            if recipe.repair.is_some() {
-                bail!("a project's models are repaired in the window, as they were saved");
-            }
             recipe.prepare = false;
         }
         let (outcome, steps, plate) = self.checked(&recipe, &[], ctx).await?;
@@ -120,20 +122,34 @@ impl Server {
         against: &[String],
         ctx: &Context,
     ) -> Result<(Outcome, Option<String>, Option<PathBuf>)> {
+        let mut runs = recipe.runs()?;
+        let last = runs.pop().unwrap_or_default();
+        let mut previous: Option<PathBuf> = None;
+        for run in runs {
+            let plate = self.jobs.scratch_plate()?;
+            let mut args = vec!["estimate".to_owned()];
+            args.extend(after(run, previous.as_deref()));
+            args.push(format!("--project-out={}", plate.display()));
+            let outcome = self.watched(&args, ctx).await?;
+            if let Some(before) = previous.replace(plate) {
+                let _ = std::fs::remove_file(before);
+            }
+            if outcome.exit_code != 0 {
+                return Ok((outcome, None, None));
+            }
+        }
         let out = self.jobs.scratch_steps()?;
         let mut args = vec!["estimate".to_owned()];
-        args.extend(recipe.flags());
+        args.extend(after(last, previous.as_deref()));
         args.extend(against.iter().cloned());
         args.push(format!("--recipe-out={}", out.display()));
-        let plate = if recipe.is_project() {
-            None
-        } else {
-            Some(self.jobs.scratch_plate()?)
-        };
-        if let Some(plate) = &plate {
-            args.push(format!("--project-out={}", plate.display()));
-        }
+        let plate = self.jobs.scratch_plate()?;
+        args.push(format!("--project-out={}", plate.display()));
+        let plate = Some(plate);
         let outcome = self.watched(&args, ctx).await?;
+        if let Some(before) = previous {
+            let _ = std::fs::remove_file(before);
+        }
         let steps = std::fs::read_to_string(&out).ok();
         // A scratch file left behind is overwritten by no other run: its name is this run's.
         let _ = std::fs::remove_file(&out);
@@ -156,10 +172,6 @@ impl Server {
         note: Option<&str>,
     ) -> Reply {
         let mut reply = revised(revision, outcome, note);
-        // The window reads a job's model in beside the plate; a project would take its place.
-        if revision.recipe.is_project() {
-            return reply;
-        }
         if let Some(applied) = self.edits_in_window(revision, &outcome.report).await {
             reply.body["window"] = applied;
             return reply;

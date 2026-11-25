@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Result, bail};
+use core_edit::ObjectId;
 use core_engine::{Cutting, Drained, Model, Plate, SupportPlan};
 use core_format::ExposurePlan;
 use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar, Vec2, placed_aabb};
@@ -24,13 +25,16 @@ use crate::supports::SupportReport;
 use crate::{meeting, plate_file, project};
 
 mod document;
+mod laying;
 
-pub(crate) use document::{Staging, placed_by_edits, said};
+pub(crate) use document::{Staging, said};
 pub(crate) use finished::{Finished, hollow_report, support_report, usable_area};
+pub(crate) use laying::placed_by_edits;
 pub(crate) use placed::{shipped_printer, summary_of};
 mod finished;
 mod given;
 mod modelled;
+mod on_project;
 mod placed;
 mod repaired;
 mod room;
@@ -52,6 +56,8 @@ pub struct Shaping {
     pub position: Option<Vec2>,
     /// Which of its hollow and supports a plate file's key gave rather than a flag.
     pub keyed: Keyed,
+    /// The objects of the plate `--only` names, empty for every one.
+    pub only: Vec<ObjectId>,
 }
 
 /// The plate file's keys that ask a step of a recipe to run, as their flags do.
@@ -70,6 +76,7 @@ impl Shaping {
             supports: job.supports.plan()?,
             position: None,
             keyed: Keyed::default(),
+            only: job.only.iter().copied().map(ObjectId).collect(),
         })
     }
 
@@ -81,12 +88,15 @@ impl Shaping {
             supports: None,
             position: None,
             keyed: Keyed::default(),
+            only: Vec::new(),
         })
     }
 }
 
 /// One model's way onto the plate, and what each stage found on it.
 pub struct Part {
+    /// The object it is on the plate, as `--only` names it.
+    pub id: Option<ObjectId>,
     /// The file it came from, or its name in the project it was saved in.
     pub input: PathBuf,
     /// Absent for a model out of a project, which was repaired when it was imported.
@@ -127,6 +137,8 @@ impl Part {
 pub struct Staged {
     pub parts: Vec<Part>,
     pub models: Vec<Model>,
+    /// The object each of `models` is, or the one it is a plug for; empty where not known.
+    pub model_ids: Vec<ObjectId>,
     pub printer: Option<PrinterProfile>,
     pub material: MaterialProfile,
     pub cutting: Cutting,
@@ -192,12 +204,20 @@ pub fn stage(
             plate_file::stage(path, arrange, job, watch)
         }
         Given::Project(path) => {
-            refuse_for_a_project(arrange, job)?;
-            let project = job.edits.applied(project::open(path)?)?;
+            refuse_for_a_project(job)?;
+            let mut opened = project::open(path)?;
+            let plate_index = match plate {
+                Some(number) => project::chosen_plate(&opened.manifest, number)?,
+                None => opened.manifest.active_plate,
+            };
+            if project::shaped_by_flags(job, arrange) {
+                opened = on_project::shaped(path, opened, plate_index, (job, arrange), watch)?;
+            }
+            let project = job.edits.applied(opened)?;
             project::stage_checked(path, &project, plate, job, watch)
         }
         Given::Projects(paths) => {
-            refuse_for_a_project(false, job)?;
+            refuse_for_a_project(job)?;
             let printer = job.profile.resolve()?.printer;
             if arrange && printer.is_none() {
                 bail!("--arrange needs a printer to know the plate");
@@ -269,9 +289,8 @@ pub fn plate_of(
     if asked.is_some() && job.edits.edits.is_some() {
         bail!("--edits takes the flags' plate, and a recipe prepares its own");
     }
-    let (staging, found) = document::shaped(entries, (job, chosen), watch, asked.is_some())?;
-    let pieces = staging.pieces(entries.len());
-    check_pieces(&pieces, entries, (&job.model, arrange), asked.is_some())?;
+    let (staging, found) = laying::shaped(entries, (job, chosen), watch, asked.is_some())?;
+    check_pieces(&staging, entries, (&job.model, arrange), asked.is_some())?;
     watch.stop.check()?;
 
     let drift_mm = chosen.material.compensation.fit_drift_mm();
@@ -289,7 +308,7 @@ pub fn plate_of(
         None => {
             let edits = (entries, &job.edits);
             (
-                document::laid(staging, found, edits, (held, arrange), watch)?,
+                laying::laid(staging, found, edits, (held, arrange), watch)?,
                 None,
             )
         }
@@ -315,6 +334,9 @@ fn staged_of(
         ..
     } = laid;
     meeting::mark(&mut parts, &models, &owners, talk);
+    let model_ids = (owners.iter())
+        .filter_map(|&part| parts.get(part).and_then(|part| part.id))
+        .collect();
     let (job, chosen, _) = machine;
     if talk {
         warn_if_grey_ignored(&job.raster, chosen.printer.as_ref());
@@ -324,7 +346,10 @@ fn staged_of(
         || entries
             .iter()
             .any(|(_, shaping)| shaping.hollow.wanted() || shaping.hollow.cutting());
-    staged((parts, models), drainage, machine, talk)
+    Staged {
+        model_ids,
+        ..staged((parts, models), drainage, machine, talk)
+    }
 }
 
 /// Every entry's object taken through the recipe `asked`, the plate arranged where asked, and
@@ -340,13 +365,14 @@ fn laid_by_recipe(
     let mut staging = left.staging;
     placed::copied(&mut staging, entries, ctx.watch)?;
     if arrange {
-        document::arranged(&mut staging, entries, printer, ctx.watch)?;
+        laying::arranged(&mut staging, entries, printer, ctx.watch)?;
     }
     let reported = (left.found, left.finished);
     let out = ctx.job.edits.project_out.as_deref();
     let mut laid = staging.laid(reported, (entries, out), printer, ctx.watch.talk)?;
-    for (part, said) in laid.parts.iter_mut().zip(left.said) {
-        if let Some((prepared, run)) = said {
+    let mut said = left.said;
+    for (part, &entry) in laid.parts.iter_mut().zip(&laid.part_entries) {
+        if let Some((prepared, run)) = said.get_mut(entry).and_then(Option::take) {
             part.prepared = prepared;
             part.recipe = Some(run);
         }
@@ -365,6 +391,7 @@ pub(crate) fn staged(
     Staged {
         parts,
         models,
+        model_ids: Vec::new(),
         printer: chosen.printer.clone(),
         material: chosen.material.clone(),
         cutting: cutting_of(job, layer_height, &chosen.material.compensation, talk),
@@ -416,6 +443,8 @@ pub(crate) struct Laid {
     models: Vec<Model>,
     /// The part each of `models` belongs to, by its index in `parts`.
     owners: Vec<usize>,
+    /// The entry of the command line each of `parts` came from.
+    part_entries: Vec<usize>,
 }
 
 /// How a model put down in `stands_in` sits on `printer`'s plate, said when supports changed
@@ -433,10 +462,11 @@ pub(crate) fn standing_of(
     Some(check)
 }
 
-/// Refuses what the rest of the run cannot take: several pieces of one model to hollow, support
-/// or prepare by a recipe, or halves of a cut standing on one another's spot.
+/// Refuses what the rest of the run cannot take: several pieces of one model for a recipe,
+/// which takes a model as one, halves of a cut standing on one another's spot, or an `--only`
+/// naming no object of the plate.
 fn check_pieces(
-    pieces: &[Vec<Mesh>],
+    staging: &Staging,
     entries: &[(PathBuf, Shaping)],
     (model, arrange): (&ModelArgs, bool),
     prepared: bool,
@@ -446,16 +476,20 @@ fn check_pieces(
             "--cut lays the halves down where they would stand on each other; add --arrange or --cut-upright"
         );
     }
-    for (meshes, (path, shaping)) in pieces.iter().zip(entries) {
-        let shaped = prepared
-            || shaping.hollow.wanted()
-            || shaping.hollow.cutting()
-            || shaping.supports.is_some();
-        if meshes.len() > 1 && shaped {
+    let unknown = staging.unknown_only();
+    if !unknown.is_empty() {
+        let ids: Vec<String> = unknown.iter().map(|id| id.0.to_string()).collect();
+        bail!(
+            "--only {} names no object of the plate; `encrust inspect` lists them",
+            ids.join(",")
+        );
+    }
+    for (entry, (path, _)) in entries.iter().enumerate() {
+        let pieces = staging.targets(entry).len();
+        if pieces > 1 && prepared {
             bail!(
-                "{} comes out of --cut or --split in {} pieces; hollow or support them from a plate file of the pieces",
-                path.display(),
-                meshes.len()
+                "{} comes out of --cut or --split in {pieces} pieces, and a recipe takes a model as one; shape them by flags, or save the plate with --project-out and prepare that",
+                path.display()
             );
         }
     }

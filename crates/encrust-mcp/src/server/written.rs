@@ -100,9 +100,12 @@ impl Server {
         Ok(CallToolResult::success(content))
     }
 
-    /// The input and flags that stage `revision`: the plate it was made on, else its recipe.
+    /// The input and flags that stage `revision`: the plate it was made on, or the plate its
+    /// runs left where its steps name objects, else its recipe.
     fn staged(&self, revision: &Revision) -> Vec<String> {
-        let Some(plate) = self.jobs.made_on_plate(revision) else {
+        let made = self.jobs.made_on_plate(revision);
+        let left = (revision.recipe.scoped()).then(|| self.jobs.plate_of(revision).ok());
+        let Some(plate) = made.or(left.flatten()) else {
             return revision.recipe.flags();
         };
         let mut flags = vec![plate.display().to_string()];

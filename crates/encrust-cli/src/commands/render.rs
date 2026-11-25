@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
+use core_edit::ObjectId;
 use core_engine::Model;
 use core_geometry::Vec3;
 use core_thumbnail::{Marker, Part, Rendered, Rgb, ThumbnailSettings, View, render_view};
@@ -43,6 +44,21 @@ pub struct RenderCommand {
     pub job: JobArgs,
 }
 
+/// `models` but those `--only` leaves out, plugs going with their model.
+fn shown(job: &JobArgs, models: Vec<Model>, ids: &[ObjectId]) -> Result<Vec<Model>> {
+    if job.only.is_empty() {
+        return Ok(models);
+    }
+    if ids.len() != models.len() {
+        bail!("--only picks objects of a plate whose ids this run does not know");
+    }
+    let shown = (models.into_iter().zip(ids))
+        .filter(|(_, id)| job.only.contains(&id.0))
+        .map(|(model, _)| model)
+        .collect();
+    Ok(shown)
+}
+
 /// What a marker is drawn in: orange reads on the dark background and on the blue model.
 const MARK: Rgb = [0xFF, 0x7A, 0x1A];
 
@@ -57,7 +73,7 @@ impl RenderCommand {
             report(global, &[])?;
             return Ok(Exit::Unclean);
         }
-        let models = drilled(staged.models, stop)?;
+        let models = drilled(shown(&self.job, staged.models, &staged.model_ids)?, stop)?;
         let placed = core_engine::parts(&models);
         let parts: Vec<Part<'_>> = placed
             .iter()

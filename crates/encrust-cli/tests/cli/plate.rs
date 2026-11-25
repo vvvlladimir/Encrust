@@ -244,10 +244,10 @@ fn a_project_naming_no_printer_asks_for_one() {
 }
 
 #[test]
-fn a_flag_that_shapes_a_model_is_refused_for_a_project() {
-    let output = estimate(&[project_fixture().to_str().unwrap(), "--hollow", "3"]);
+fn a_recipe_is_refused_for_a_project() {
+    let output = estimate(&[project_fixture().to_str().unwrap(), "--prepare"]);
     assert_eq!(output.status.code(), Some(1));
-    assert!(stderr(&output).contains("--hollow"), "{}", stderr(&output));
+    assert!(stderr(&output).contains("--prepare"), "{}", stderr(&output));
 }
 
 #[test]

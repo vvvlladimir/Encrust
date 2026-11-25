@@ -232,8 +232,9 @@ on. `--joint-count N`, `--joint-clearance MM`, `--peg-size D:L` (sized from the 
 given), `--magnet-size D:T`, `--key-size W:H` and `--unkeyed` set the joint as the Cut tool's
 fields do (ADR 0478). Each half is laid on its cut face as the window's Lay flat does, but a
 lower half pins or a key stand on, and dowels stand beside it (ADR 0466); a cut needs
-`--arrange`, unless `--cut-upright` leaves the halves standing as they were cut. A piece of several is not hollowed or supported, and a project refuses the
-flags.
+`--arrange`, unless `--cut-upright` leaves the halves standing as they were cut. Each piece is
+hollowed, drilled and supported on its own, as the window's tools would each half (ADR 0479);
+a recipe still takes a model as one, so `--prepare` and `--recipe` refuse a cut model.
 
 ```sh
 encrust slice base.stl lid.stl --printer elegoo-mars-4-ultra --resin my-grey \
@@ -609,9 +610,12 @@ hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould; ope
 ```
 
 A project saved by the window slices its models as they were saved: the file holds its
-shells and its support trees, and nothing is built again (ADR 0191). It carries its own
-models, so a flag that shapes one — `--hollow`, `--supports`, `--rotate`, `--infill` and the
-rest — is refused; `--printer` and `--resin` replace the project's own. It keeps no print
+shells and its support trees, and nothing is built again (ADR 0191). A flag that shapes a
+model — `--hollow`, `--supports`, `--rotate`, `--cut`, `--mirror`, `--arrange` and the rest —
+is made as the same edit of every object of the plate, or of those `--only` names, and
+`--project-out` writes the plate they leave (ADR 0479); `--prepare`, `--recipe`, Check's
+answers, `--combine` and the island flags, which a project slices as saved, are refused.
+`--printer` and `--resin` replace the project's own. It keeps no print
 settings (ADR 0380): they are the printer's and resin's, under `--layer-height`,
 `--adaptive`, `--samples-per-layer`, `--exposure-at`, the mask flags and `--slice-window` as
 for a model. The project names
@@ -632,6 +636,22 @@ encrust slice plate.encrust --all-plates -o plate.goo
 ```
 
 A flag wins over the plate file or project, which wins over the profiles' own numbers.
+
+Every object of a plate has an id, kept across saves (ADR 0466): `inspect plate.encrust` lists
+them — id, name, plate, where it stands, whether it is hollow, its support trees and the model a
+plug is for — and every model a report names carries its `id`, a piece of a cut or a copy
+named `input #id`. `--only 2,3` shapes those objects alone, on models as on a project, every
+object when left out; a point flag — `--drain-at X,Y,Z`, `--channel`, `--keep-solid`,
+`--support-at`, `--shown-at`, `--merge-supports`, `--drain-support-at` — names one model, so
+with several shaped it asks for `--only`. `render --only` draws those objects alone (ADR 0479):
+
+```sh
+encrust estimate bust.stl --cut z:60 --arrange --project-out bust.encrust
+encrust inspect bust.encrust                          # ids 2 and 3, the halves
+encrust estimate bust.encrust --only 3 --hollow 2 --drain-at auto --project-out bust.encrust
+encrust slice bust.encrust --supports auto --arrange -o bust.goo
+encrust render bust.encrust --only 2 --view iso -o lower.png
+```
 
 A project's plate is edited as the window's tools edit it by `--edits FILE`, a JSON list of
 edits carried out in order before the run, each naming its object by the id the project
@@ -1044,13 +1064,17 @@ tool_timeout_sec = 1800
 ```
 
 `list_profiles` reads the catalogue, its printers cut to id, name and volume and filtered by
-`printer_query`; `inspect_model` reads a model. `start_job` takes a model, a printer and a
+`printer_query`; `inspect_model` reads a model, or lists a project's objects by id. `start_job` takes a model, a printer and a
 resin — ids or TOML paths — and answers with the job and its first revision checked; it
 runs under `--prepare` when `prepare: true`, so every step no tool sets is the autopilot's,
 and stages the model as its file stands when `prepare: false`; the client must choose.
-A project (`.encrust`) starts as it was saved, with neither `--prepare` nor `--center`, which
-the command line refuses for one; the tools that shape a model are refused for it as those
-flags are, it is set against no autopilot, and the open window is not sent it.
+A project (`.encrust`) starts as it was saved, with neither `--prepare` nor `--center`, and is
+set against no autopilot; the tools shape its objects as the command line's flags do one.
+`set_machine` moves a job to another printer and resin, and the next revision is checked
+there. `set_shape`, `set_hollow`, `set_drains` and `set_supports` take `objects`, ids of the
+job's plate as a check's `models[].id` names them: the revision then runs as the model with
+the steps for every object, then a run per group of steps naming the same objects, each on the
+plate the one before wrote with `--only`, and is kept as the plate the last left (ADR 0479).
 `set_shape` — scale, combine with other models, label in a font, cut with a sized joint or
 upright, split, part off, arrange, mirror, move, copies, relief — `set_repair` — the repair, its
 seam, shell and weld limits, faces flipped or dropped and shells dropped by number, bridges —

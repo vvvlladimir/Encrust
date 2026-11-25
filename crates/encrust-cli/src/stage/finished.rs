@@ -28,39 +28,84 @@ pub(crate) struct Finished {
     pub supports: Option<SupportReport>,
 }
 
-/// Hollows, drills, plugs and supports each entry's object as its flags ask, on the plate
+/// Hollows, drills, plugs and supports each entry's objects the flags shape, on the plate
 /// `printer` has, plugs `drift_mm` narrower than asked as the resin prints them wider.
 pub(super) fn finished(
     staging: &mut Staging,
     entries: &[(PathBuf, Shaping)],
-    (printer, drift_mm): (Option<&PrinterProfile>, Scalar),
+    held: (Option<&PrinterProfile>, Scalar),
     watch: &Watch,
-) -> Result<Vec<Finished>> {
+) -> Result<Vec<(ObjectId, Finished)>> {
     let mut found = Vec::with_capacity(entries.len());
     for (entry, (path, shaping)) in entries.iter().enumerate() {
-        let Some(&id) = staging.ids_of(entry).first() else {
-            found.push(Finished::default());
-            continue;
-        };
+        let targets = staging.targets(entry);
+        if targets.len() > 1
+            && let Some(flag) = pointing_flag(shaping)
+        {
+            bail!(
+                "{flag} points at one model and {} stand on the plate; name it with --only, as \
+                 `encrust inspect` lists them",
+                targets.len()
+            );
+        }
         if watch.talk && entries.len() > 1 && super::shapes_anything(shaping) {
             println!("{}", path.display());
         }
-        let hollow = &shaping.hollow;
-        let mut done = Finished {
-            hollow: hollowed(staging, id, (hollow, shaping.import.precision), watch)?,
-            ..Finished::default()
-        };
-        drilled(staging, id, hollow, watch)?;
-        done.drains = searched(staging, id, hollow, watch)?;
-        plugged(staging, id, (path, hollow), (printer, drift_mm), watch)?;
-        if let Some(plan) = &shaping.supports {
-            done.supports = Some(supported(staging, id, plan, watch)?);
-            merged(staging, id, plan, watch)?;
+        for id in targets {
+            found.push((id, finish(staging, id, (path, shaping), held, watch)?));
         }
-        rafted(staging, id, hollow, watch)?;
-        found.push(done);
     }
     Ok(found)
+}
+
+/// Hollows, drills, plugs and supports object `id` as `shaping` asks.
+fn finish(
+    staging: &mut Staging,
+    id: ObjectId,
+    (path, shaping): (&Path, &Shaping),
+    (printer, drift_mm): (Option<&PrinterProfile>, Scalar),
+    watch: &Watch,
+) -> Result<Finished> {
+    let hollow = &shaping.hollow;
+    let mut done = Finished {
+        hollow: hollowed(staging, id, (hollow, shaping.import.precision), watch)?,
+        ..Finished::default()
+    };
+    drilled(staging, id, hollow, watch)?;
+    done.drains = searched(staging, id, hollow, watch)?;
+    plugged(staging, id, (path, hollow), (printer, drift_mm), watch)?;
+    if let Some(plan) = &shaping.supports {
+        done.supports = Some(supported(staging, id, plan, watch)?);
+        merged(staging, id, plan, watch)?;
+    }
+    rafted(staging, id, hollow, watch)?;
+    Ok(done)
+}
+
+/// The first flag given that names a point on one model, which several cannot share.
+fn pointing_flag(shaping: &Shaping) -> Option<&'static str> {
+    let hollow = &shaping.hollow;
+    let plan = shaping.supports.as_ref();
+    [
+        ("--drain-at", hollow.points().next().is_some()),
+        ("--channel", !hollow.channels.is_empty()),
+        ("--keep-solid", !hollow.keep_solid.runs.is_empty()),
+        ("--drain-support-at", !hollow.drain_support_at.is_empty()),
+        (
+            "--support-at",
+            plan.is_some_and(|plan| !plan.by_hand.at_mm.is_empty()),
+        ),
+        (
+            "--shown-at",
+            plan.is_some_and(|plan| !plan.shown_at.is_empty()),
+        ),
+        (
+            "--merge-supports",
+            plan.is_some_and(|plan| !plan.merges.is_empty()),
+        ),
+    ]
+    .into_iter()
+    .find_map(|(flag, given)| given.then_some(flag))
 }
 
 fn hollowed(

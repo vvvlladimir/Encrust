@@ -233,6 +233,15 @@ pub struct PlateJobs {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetMachine {
+    pub job: String,
+    /// A printer id `list_profiles` names, or the absolute path of a printer TOML.
+    pub printer: String,
+    /// A resin id of the user's for that printer, or the absolute path of a resin TOML.
+    pub resin: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct FixIssues {
     pub job: String,
     /// Absent takes back every answer asked before.

@@ -51,6 +51,35 @@ pub(super) fn checked(
     })
 }
 
+/// What import would say of `mesh` as a saved plate holds it, read as it stands: nothing
+/// welded, dropped or turned, since the window did that when the model came in.
+pub(crate) fn saved_model_report(
+    input: &Path,
+    mesh: &Mesh,
+    profile: Option<&PrinterProfile>,
+) -> Result<ImportReport> {
+    let facts = Facts::of(mesh, true, profile)?;
+    Ok(ImportReport {
+        path: input.to_path_buf(),
+        stats: facts.stats,
+        welded: Welded {
+            mesh: Mesh::default(),
+            vertices_merged: 0,
+            dropped: Vec::new(),
+        },
+        doubled: 0,
+        diagnostics: facts.diagnostics,
+        orientation: None,
+        mended: None,
+        wrapped: None,
+        crossing_pairs: None,
+        edited: None,
+        shells: None,
+        fit: facts.fit,
+        hollowing_saves: facts.hollowing_saves,
+    })
+}
+
 /// What import reads off a mesh as it stands: its size, what is wrong with it when
 /// `validated`, how it fits `profile` and what hollowing it would save.
 struct Facts {

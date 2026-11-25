@@ -283,11 +283,26 @@ fn a_copy_made_by_an_edit_counts_as_its_models_and_the_next_model_keeps_its_own(
     ]);
 
     let report = json(&output);
-    let meets = &report["models"][1]["meets"];
+    let models = report["models"].as_array().expect("a model a part");
     assert_eq!(
-        meets[0].as_str(),
-        first.to_str(),
-        "the second cube still stands in the first, its copy 40 mm off: {meets}"
+        models.len(),
+        3,
+        "the first cube, its copy and the second: {report}"
+    );
+    let second_part = (models.iter())
+        .find(|model| model["input"].as_str() == second.to_str())
+        .expect("the second cube is a part of its own");
+    let meets = &second_part["meets"];
+    assert_eq!(
+        meets.as_array().map(Vec::len),
+        Some(1),
+        "the second cube still stands in the first alone, its copy 40 mm off: {meets}"
+    );
+    assert!(
+        meets[0]
+            .as_str()
+            .is_some_and(|met| met.starts_with(first.to_str().expect("UTF-8"))),
+        "{meets}"
     );
 }
 

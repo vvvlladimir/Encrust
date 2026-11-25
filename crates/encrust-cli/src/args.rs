@@ -540,6 +540,11 @@ pub struct JobArgs {
     #[command(flatten)]
     pub fixes: FixArgs,
 
+    /// Shape only the objects of the plate with these ids, as `inspect` lists them; every
+    /// object when left out.
+    #[arg(long, value_name = "ID,...", value_delimiter = ',')]
+    pub only: Vec<u64>,
+
     /// Prepare each model as the engine's defaults would: repair it if it has defects, orient
     /// it, hollow, drain and hold up its cavity where a wall saves resin, and stand it on
     /// automatic supports. The same as `--recipe prepare`, writing to `out` without -o.

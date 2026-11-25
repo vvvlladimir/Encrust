@@ -28,7 +28,7 @@ mod oriented;
 mod relief;
 
 use checked::checked;
-pub(crate) use checked::{read_again, repair_refused, with_bar};
+pub(crate) use checked::{read_again, repair_refused, saved_model_report, with_bar};
 use inspect::talk_mapping;
 pub use inspect::{Inspect, inspect};
 pub use oriented::{OrientChoice, OrientSummary, orient_settings, rotate_degrees};
