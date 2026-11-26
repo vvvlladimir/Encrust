@@ -3,9 +3,10 @@
 
 use std::path::PathBuf;
 
+use agent_link::ApplyReply;
 use anyhow::Result;
 use core_edit::{Edit, ObjectId};
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::runner::Outcome;
 
@@ -14,7 +15,7 @@ use super::asked::{Area, Checked, Stood, asked_after_check};
 use super::plate_edits::{
     GAVE_UP, REBUILDS, cut_object, fit_drift_of, stood_of, unkept, usable_area_of,
 };
-use super::reply::{Reply, not_applied, revised};
+use super::reply::{Reply, not_applied, not_taken, revised};
 use crate::jobs::Revision;
 use crate::recipe::Recipe;
 use crate::server::Context;
@@ -116,7 +117,7 @@ impl Server {
             };
             let stale = answer
                 .as_ref()
-                .is_some_and(|a| a.as_ref().is_some_and(|a| a["stale"] == true));
+                .is_some_and(|a| a.as_ref().is_some_and(|a| a.stale));
             if stale && rebuilt < REBUILDS {
                 rebuilt += 1;
                 if let Some(next) = self.rebased(latest, &recipe, checked).await {
@@ -124,11 +125,19 @@ impl Server {
                     continue;
                 }
             }
+            // A window that answered no holds its plate as before; one gone holds nothing.
+            let refused = answer
+                .as_ref()
+                .is_some_and(|a| a.as_ref().is_some_and(|a| !a.applied));
             let window = answer.map(|answer| match answer {
-                Some(_) if stale => json!({"applied": false, "why_not": GAVE_UP}),
+                Some(_) if stale => ApplyReply::refused(GAVE_UP),
                 Some(answer) => answer,
-                None => json!({"applied": false, "why_not": "the window did not answer"}),
+                None => ApplyReply::refused("the window did not answer"),
             });
+            if refused {
+                let _ = std::fs::remove_file(&written);
+                return Ok(not_taken(latest, &json!(window)));
+            }
             let kept = (edits.as_slice(), written.as_path(), window);
             return self.keep_on_plate((latest, recipe, note), kept, &outcome);
         }
@@ -178,7 +187,7 @@ impl Server {
     fn keep_on_plate(
         &self,
         (latest, recipe, note): Asked<'_>,
-        (edits, written, window): (&[Edit], &std::path::Path, Option<Value>),
+        (edits, written, window): (&[Edit], &std::path::Path, Option<ApplyReply>),
         outcome: &Outcome,
     ) -> Result<Reply> {
         let revision = self
@@ -187,9 +196,7 @@ impl Server {
         let (job, number) = (&revision.job, revision.number);
         unkept("the edits", self.jobs.keep_edits(job, number, edits));
         unkept("the plate", self.jobs.keep_plate(job, number, written));
-        let landed = window
-            .as_ref()
-            .is_some_and(|answer| answer["applied"] == true);
+        let landed = window.as_ref().is_some_and(|answer| answer.applied);
         if let Some(cut) = cut_object(edits).filter(|_| landed) {
             unkept(
                 "the window's cut",
@@ -198,7 +205,7 @@ impl Server {
         }
         let mut reply = revised(&revision, outcome, note);
         if let Some(window) = window {
-            reply.body["window"] = window;
+            reply.body["window"] = json!(window);
         }
         Ok(reply)
     }

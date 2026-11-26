@@ -95,9 +95,10 @@ impl Jobs {
     pub fn commit(
         &self,
         job: &str,
-        (recipe, steps): (Recipe, Option<String>),
+        (mut recipe, steps): (Recipe, Option<String>),
         report: &Value,
     ) -> Result<Revision> {
+        recipe.pin_pose(report);
         let dir = self.dir(job)?;
         let number = if dir.is_dir() {
             self.latest(job)? + 1
@@ -325,6 +326,13 @@ impl Jobs {
         let path = self.dir(job)?.join(format!("{number}.edits.json"));
         fs::write(&path, serde_json::to_string(edits)?)
             .with_context(|| format!("writing {}", path.display()))
+    }
+
+    /// Forgets the edits revision `number` handed the open window, which did not take them: the
+    /// revision stands by its own plate again.
+    pub fn forget_edits(&self, job: &str, number: u32) -> Result<()> {
+        let path = self.dir(job)?.join(format!("{number}.edits.json"));
+        fs::remove_file(&path).with_context(|| format!("removing {}", path.display()))
     }
 
     /// Notes that the open window holds revision `number`'s cut, which replaced `object`.

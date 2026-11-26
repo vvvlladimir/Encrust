@@ -64,7 +64,7 @@ fn send(file: &Path, line: &Value) -> Value {
 
 /// Revision `revision` of job `cube-1` shown by `plate`, as `encrust-mcp` writes it.
 fn line(file: &Path, revision: u32, plate: &Path) -> Value {
-    json!({"schema": request::SCHEMA, "token": found(file)["token"], "job": "cube-1",
+    json!({"schema": agent_link::SHOW_SCHEMA, "token": found(file)["token"], "job": "cube-1",
            "revision": revision, "model": cube(), "printer": "", "resin": "", "plate": plate})
 }
 
@@ -87,6 +87,48 @@ fn a_line_with_another_token_is_refused_and_never_reaches_the_window() {
     );
     drop(link);
     assert!(!file.exists(), "a closed window takes its file away");
+}
+
+#[test]
+fn a_line_is_answered_while_another_still_waits_for_the_window() {
+    let file = scratch("two-at-once");
+    let _link = Link::start(file.clone(), || {}).expect("a loopback port is free");
+    let port = found(&file)["port"].as_u64().expect("a port") as u16;
+    let mut waiting = TcpStream::connect(("127.0.0.1", port)).expect("the window listens");
+    let plate = json!({"schema": 3, "token": found(&file)["token"], "job": "cube-1",
+                       "want": "plate"});
+    writeln!(waiting, "{plate}").expect("the line is sent");
+
+    let mut refused = line(&file, 1, &revision_plate(&file, 1, 0.0));
+    refused["token"] = json!("not-it");
+    let started = std::time::Instant::now();
+    let answer = send(&file, &refused);
+
+    assert_eq!(answer["shown"], false, "{answer}");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(3),
+        "answered without waiting on the first line, in {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn a_revision_is_taken_before_its_plate_is_read() {
+    let file = scratch("taken-unread");
+    let mut bench = Bench::new(file.clone());
+    let plate = file.with_file_name("plates/broken.encrust");
+    std::fs::create_dir_all(plate.parent().expect("a folder")).expect("writable");
+    std::fs::write(&plate, b"not a project").expect("writable");
+
+    let answer = bench.hand_over(&file, line(&file, 1, &plate));
+    bench.run_to_end();
+
+    assert_eq!(answer, json!({"shown": true}));
+    assert!(
+        bench.machine.status.is_error(),
+        "the plate that does not read is told"
+    );
+    assert!(bench.doc.scene.objects().is_empty());
 }
 
 /// The window's state, run a frame at a time as the window runs it.

@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::Sender;
 
+use agent_link::{ApplyReply, HandedPlate, plate_refused};
 use core_document::{
     ApplyError, CutAsked, LabelAsked, MendAsked, ReliefAsked, blockers_along, mirrored, moved,
     part_settings, repair_settings, sized_to, turned_to,
@@ -14,11 +15,12 @@ use core_engine::project::HollowState;
 use core_geometry::{Mesh, Transform, Vec3};
 use core_volume::PartSettings;
 use core_volume::{RepairMethod, RepairSettings};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::job::Method;
 use crate::panels::Window;
 use crate::repair::RepairState;
+use crate::tool_settings::ToolSettings;
 
 mod arrange;
 mod drain;
@@ -51,11 +53,18 @@ pub struct Applying {
     placed: Vec<(ObjectId, Transform)>,
 }
 
+/// Why edits are refused while another run, Prepare's, holds the undo history.
+const HELD: &str = "the window is preparing a plate; hand the edits over once it is done";
+
 /// Why the edits left stop once the user changed the plate under them.
 const CHANGED_UNDER: &str = "the plate was changed in the window while the edits were applied";
 
 fn refused(why: String) -> Value {
-    json!({"applied": false, "why_not": why})
+    reply_of(&ApplyReply::refused(why))
+}
+
+fn reply_of(reply: &impl serde::Serialize) -> Value {
+    serde_json::to_value(reply).unwrap_or_default()
 }
 
 /// Writes the job's plate into its folder under `jobs` off the drawing thread, answering its
@@ -67,7 +76,7 @@ pub fn hand_plate(
     reply: Sender<Value>,
 ) {
     let Some(dir) = job_dir(jobs, job) else {
-        let _ = reply.send(json!({"plate": null, "why_not": format!("{job:?} names no job")}));
+        let _ = reply.send(plate_refused(format!("{job:?} names no job")));
         return;
     };
     let version = window.doc.history.plate_version();
@@ -79,9 +88,13 @@ pub fn hand_plate(
             .map_err(|error| error.to_string())
             .and_then(|()| core_engine::project::save(&path, &project).map_err(|e| e.to_string()));
         let answer = match written {
-            Ok(()) => json!({"plate": path, "version": version, "objects": objects,
-                             "job_object": job_object}),
-            Err(why) => json!({"plate": null, "why_not": why}),
+            Ok(()) => reply_of(&HandedPlate {
+                path,
+                version,
+                objects,
+                job_object,
+            }),
+            Err(why) => plate_refused(why),
         };
         let _ = reply.send(answer);
     });
@@ -96,19 +109,27 @@ fn job_dir(jobs: &Path, job: &str) -> Option<PathBuf> {
     }
 }
 
-/// Starts applying `edits` on the job's `plate` if the window is still at `base_version`;
-/// otherwise answers `stale` with the version it is at, for the server to build again.
+/// Starts applying `edits` on the job's `plate` if the window is still at `base_version`, all
+/// held for one undo entry; otherwise answers `stale` with the version it is at, for the server
+/// to build again.
 pub fn start(
     (edits, plate): (Vec<Edit>, Option<u32>),
     base_version: u64,
-    window: &Window,
+    window: &mut Window,
     reply: Sender<Value>,
 ) -> Option<Applying> {
     let version = window.doc.history.plate_version();
     if base_version != version {
-        let _ = reply.send(json!({"applied": false, "stale": true, "version": version}));
+        let _ = reply.send(reply_of(&ApplyReply::stale(version)));
         return None;
     }
+    if window.doc.history.is_held() {
+        let _ = reply.send(refused(HELD.to_owned()));
+        return None;
+    }
+    let settings = ToolSettings::of(window.tools, &window.machine.slicing);
+    let chosen = window.machine.slicing.chosen();
+    (window.doc.history).hold(&window.doc.scene, &settings, chosen);
     Some(Applying {
         edits: edits.into(),
         plate,
@@ -127,24 +148,34 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
         return false;
     };
     if moved_by_hand(&work.placed, window) {
+        // The user took the plate over: it stays as they left it, one undo entry.
+        window.doc.history.release();
         return finish(applying, refused(CHANGED_UNDER.to_owned()));
     }
     if tool_is_busy(window) {
         return true;
     }
     if let Err(why) = land_last(work, window) {
-        return finish(applying, refused(why));
+        return taken_back(applying, window, why);
     }
     if work.under_way.is_some() {
         return true;
     }
     let Some(edit) = work.edits.pop_front() else {
-        return finish(applying, json!({"applied": true}));
+        window.doc.history.release();
+        return finish(applying, reply_of(&ApplyReply::landed()));
     };
     match begin(work, &edit, window) {
         Ok(()) => true,
-        Err(why) => finish(applying, refused(why)),
+        Err(why) => taken_back(applying, window, why),
     }
+}
+
+/// Puts the plate back as the edits found it, recording nothing, and answers why (ADR 0483).
+fn taken_back(applying: &mut Option<Applying>, window: &mut Window, why: String) -> bool {
+    let doc = &mut *window.doc;
+    (doc.history).abandon(&mut doc.scene, window.tools, &mut window.machine.slicing);
+    finish(applying, refused(why))
 }
 
 /// Lands what the last edit left once its tool is done: refused where the object it replaces

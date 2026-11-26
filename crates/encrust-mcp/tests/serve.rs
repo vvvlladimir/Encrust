@@ -640,6 +640,39 @@ async fn an_edit_is_set_against_the_revision_before_and_the_autopilot() {
 }
 
 #[tokio::test]
+async fn a_pose_the_search_chose_holds_when_the_lift_changes() {
+    let dir = scratch("pose-held");
+    let model = dir.join("bar.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::new(40.0, 10.0, 6.0)), &model);
+    let client = serve(&encrust(), &dir.join("jobs")).await;
+    let job = start(&client, &model).await;
+    let pose = json!({"by": "search", "goal": "auto", "pick": 2});
+    let posed = answer(&call(&client, "set_pose", json!({"job": job, "pose": pose})).await);
+    let mut turns = Vec::new();
+    for lift_mm in [3.0, 8.0] {
+        let supports = json!({"profile": "auto", "lift_mm": lift_mm});
+        let lifted = call(
+            &client,
+            "set_supports",
+            json!({"job": job, "supports": supports}),
+        );
+        let lifted = answer(&lifted.await);
+        turns.push(lifted["recipe"]["pose"]["stood_deg"].clone());
+    }
+    client.cancel().await.expect("the server stops");
+
+    let chosen = &posed["recipe"]["pose"]["stood_deg"];
+    assert!(chosen.is_array(), "the turn chosen is kept: {posed}");
+    assert_eq!(turns, [chosen.clone(), chosen.clone()], "the pose holds");
+    let flags = fs::read_to_string(dir.join("jobs").join(&job).join("4.args.json"))
+        .expect("revision 4 keeps its flags");
+    assert!(
+        !flags.contains("--orient\""),
+        "no search runs again: {flags}"
+    );
+}
+
+#[tokio::test]
 async fn points_kept_clear_are_kept_with_the_turn_they_were_seen_in() {
     let dir = scratch("keep-clear");
     let (model, client) = cube_and_server(&dir).await;
@@ -665,7 +698,11 @@ async fn each_revision_keeps_the_plate_its_check_wrote_and_hands_it_to_the_open_
         .expect("a free port");
     let port = listener.local_addr().expect("bound").port();
     let file = dir.join("window.json");
-    fs::write(&file, json!({"port": port, "token": "t"}).to_string()).expect("writable");
+    fs::write(
+        &file,
+        json!({"schema": 4, "port": port, "token": "t", "pid": 1}).to_string(),
+    )
+    .expect("writable");
     let window = tokio::spawn(async move {
         let mut lines = Vec::new();
         for _ in 0..2 {
@@ -722,6 +759,16 @@ async fn plate_window_moving(
     lines: usize,
     moves: u64,
 ) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
+    window_answering(dir, lines, moves, true).await
+}
+
+/// As `plate_window_moving`, the edits that are not stale `landed` or refused.
+async fn window_answering(
+    dir: &Path,
+    lines: usize,
+    moves: u64,
+    landed: bool,
+) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
     use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -729,7 +776,11 @@ async fn plate_window_moving(
         .expect("a free port");
     let port = listener.local_addr().expect("bound").port();
     let file = dir.join("window.json");
-    fs::write(&file, json!({"port": port, "token": "t"}).to_string()).expect("writable");
+    fs::write(
+        &file,
+        json!({"schema": 4, "port": port, "token": "t", "pid": 1}).to_string(),
+    )
+    .expect("writable");
     let jobs = dir.join("jobs");
     let window = tokio::spawn(async move {
         let mut read = Vec::new();
@@ -748,7 +799,7 @@ async fn plate_window_moving(
                 moved += 1;
                 json!({"applied": false, "stale": true, "version": 5 + moved})
             } else if line.get("apply").is_some() {
-                json!({"applied": true})
+                json!({"applied": landed, "why_not": (!landed).then_some("a tool failed")})
             } else {
                 json!({"shown": true})
             };
@@ -952,6 +1003,63 @@ async fn edits_on_a_plate_that_moved_on_are_built_and_checked_again_on_it() {
             .is_some_and(|number| number.parse::<u32>().is_ok())
     });
     assert_eq!(kept.count(), 2, "the stale try kept no revision of its own");
+}
+
+#[tokio::test]
+async fn edits_the_window_takes_back_keep_no_revision() {
+    let dir = scratch("window-refused");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    // The revision shown, then the plate and the edits refused.
+    let (file, window) = window_answering(&dir, 3, 0, false).await;
+    let jobs = dir.join("jobs");
+    let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
+    let job = start(&client, &model).await;
+    let hollowed = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+    )
+    .await;
+    client.cancel().await.expect("the server stops");
+    window.await.expect("the window's task ends");
+
+    assert!(failed(&hollowed), "{}", answer(&hollowed));
+    assert_eq!(answer(&hollowed)["latest_revision"], 1);
+    assert_eq!(answer(&hollowed)["window"]["why_not"], "a tool failed");
+    assert!(
+        !jobs.join(&job).join("2.toml").exists(),
+        "no revision kept that the window does not hold"
+    );
+}
+
+#[tokio::test]
+async fn a_checked_revision_whose_edits_the_window_takes_back_is_shown_by_its_plate() {
+    let dir = scratch("window-refused-shown");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    // The revision shown; the turn checked by the flags, its edit refused, then its plate shown.
+    let (file, window) = window_answering(&dir, 4, 0, false).await;
+    let jobs = dir.join("jobs");
+    let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
+    let job = start(&client, &model).await;
+    let pose = json!({"by": "search", "goal": "auto"});
+    let posed = call(&client, "set_pose", json!({"job": job, "pose": pose})).await;
+    client.cancel().await.expect("the server stops");
+    let lines = window.await.expect("the window's task ends");
+
+    assert!(!failed(&posed), "{}", answer(&posed));
+    let told = &answer(&posed)["window"];
+    assert_eq!(told["applied"], false, "{told}");
+    assert_eq!(told["then_shown"], json!({"shown": true}), "{told}");
+    assert_eq!(
+        lines[3]["revision"], 2,
+        "the window is shown revision 2's plate"
+    );
+    assert!(
+        !jobs.join(&job).join("2.edits.json").exists(),
+        "the edits not taken are forgotten"
+    );
 }
 
 #[tokio::test]
@@ -1270,7 +1378,11 @@ async fn a_revision_asked_for_is_shown_in_the_window_marked_open_and_with_none_t
         .expect("a free port");
     let port = listener.local_addr().expect("bound").port();
     let file = dir.join("window.json");
-    fs::write(&file, json!({"port": port, "token": "t"}).to_string()).expect("writable");
+    fs::write(
+        &file,
+        json!({"schema": 4, "port": port, "token": "t", "pid": 1}).to_string(),
+    )
+    .expect("writable");
     let window = tokio::spawn(async move {
         let mut lines = Vec::new();
         for answer in [
@@ -1388,16 +1500,25 @@ async fn a_cut_model_is_hollowed_and_supported_half_by_half_and_one_half_alone_b
     );
 
     let id = halves[0]["id"].as_u64().expect("each half names its id");
+    let walls = |reply: &Value| -> Vec<Option<f64>> {
+        let models = reply["report"]["models"].as_array().expect("models");
+        (models.iter())
+            .map(|half| half["hollow"]["wall_mm"].as_f64())
+            .collect()
+    };
+    let thicker = json!({"job": job, "hollow": {"wall_mm": 3.0, "objects": [id]}});
+    let thicker = answer(&call(&client, "set_hollow", thicker).await);
+    assert_eq!(
+        walls(&thicker),
+        [Some(3.0), Some(2.0)],
+        "the other half stays hollow: {thicker}"
+    );
+
+    let solid = json!({"job": job, "hollow": null});
+    assert!(!failed(&call(&client, "set_hollow", solid).await));
     let one = json!({"job": job, "hollow": {"wall_mm": 2.0, "objects": [id]}});
     let one = answer(&call(&client, "set_hollow", one).await);
-    let hollow: Vec<bool> = (one["report"]["models"].as_array().expect("models").iter())
-        .map(|half| !half["hollow"].is_null())
-        .collect();
-    assert_eq!(
-        hollow.iter().filter(|&&is| is).count(),
-        1,
-        "one half alone: {one}"
-    );
+    assert_eq!(walls(&one), [Some(2.0), None], "one half alone: {one}");
     client.cancel().await.expect("the server stops");
 }
 
@@ -1434,7 +1555,11 @@ async fn cut_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHand
         .expect("a free port");
     let port = listener.local_addr().expect("bound").port();
     let file = dir.join("window.json");
-    fs::write(&file, json!({"port": port, "token": "t"}).to_string()).expect("writable");
+    fs::write(
+        &file,
+        json!({"schema": 4, "port": port, "token": "t", "pid": 1}).to_string(),
+    )
+    .expect("writable");
     let jobs = dir.join("jobs");
     let window = tokio::spawn(async move {
         let (mut read, mut cut) = (Vec::new(), false);

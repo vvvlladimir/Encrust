@@ -581,3 +581,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0480](0480-a-job-is-hidden-or-deleted-from-the-agents-list.md) | A job is hidden or deleted from the agents' list | Proposed |
 | [0481](0481-a-job-with-no-machine-is-checked-on-the-standard-one.md) | A job with no machine is checked on the standard one, and cut pieces are shaped after the cut | Proposed |
 | [0482](0482-a-new-pose-stands-the-supports-anew.md) | A new pose from a client stands the supports anew | Proposed |
+| [0483](0483-edits-handed-to-the-window-land-whole-or-not-at-all.md) | Edits handed to the window land whole or not at all | Proposed |
+| [0484](0484-a-step-for-some-objects-keeps-the-others-steps.md) | A step for some objects keeps the others' steps | Proposed |
+| [0485](0485-a-searched-pose-is-kept-as-its-turn.md) | A searched pose is kept as its turn | Proposed |
+| [0486](0486-the-window-and-its-agents-server-share-agent-link.md) | The window and its agents' server share agent-link | Proposed |

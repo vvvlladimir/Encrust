@@ -2,20 +2,16 @@
 //! the plate asked for, or edits to apply on the version it was built on
 //! (`docs/design/window-link.md`).
 
+use agent_link::{Header, PLATE_SCHEMA, PlateLine, SHOW_SCHEMA, Show};
 use core_edit::Edit;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::request::{Request, SCHEMA, Shown};
-
-/// The schema that asks for the plate and applies edits to it (ADR 0466).
-pub const PLATE_SCHEMA: u64 = 3;
-
 /// One line read, its token checked.
 #[derive(Debug)]
 pub enum Line {
-    /// A revision, its plate read off the window's thread.
-    Revision(Box<Shown>),
+    /// A revision, its plate there to read.
+    Revision(Box<Show>),
     /// The plate as it stands, written for `job` to build its next edits on.
     Plate { job: String },
     /// `edits` built on the plate at `base_version`, to apply if it is still that version.
@@ -24,23 +20,6 @@ pub enum Line {
         edits: Vec<Edit>,
         base_version: u64,
     },
-}
-
-#[derive(Deserialize)]
-struct Header {
-    schema: u64,
-    token: String,
-}
-
-#[derive(Deserialize)]
-struct PlateLine {
-    job: String,
-    #[serde(default)]
-    want: Option<String>,
-    #[serde(default)]
-    apply: Option<Vec<Edit>>,
-    #[serde(default)]
-    base_version: Option<u64>,
 }
 
 /// `text` as a line from a server holding `token`, or why it is refused.
@@ -53,14 +32,20 @@ pub fn read(text: &str, token: &str) -> Result<Line, String> {
         return Err("the token is not this window's".into());
     }
     match header.schema {
-        SCHEMA => Request::deserialize(value)
-            .map_err(|error| format!("the revision does not read: {error}"))?
-            .read()
-            .map(|shown| Line::Revision(Box::new(shown)))
-            .map_err(|error| format!("{error:#}")),
+        SHOW_SCHEMA => {
+            let show = Show::deserialize(value)
+                .map_err(|error| format!("the revision does not read: {error}"))?;
+            if !show.plate.is_file() {
+                return Err(format!(
+                    "the revision's plate {} is not there",
+                    show.plate.display()
+                ));
+            }
+            Ok(Line::Revision(Box::new(show)))
+        }
         PLATE_SCHEMA => plate_line(value),
         found => Err(format!(
-            "schema {found} is neither {SCHEMA} nor {PLATE_SCHEMA}"
+            "schema {found} is neither {SHOW_SCHEMA} nor {PLATE_SCHEMA}"
         )),
     }
 }

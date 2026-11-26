@@ -192,14 +192,21 @@ impl Server {
     ) -> Reply {
         let mut reply = revised(revision, outcome, note);
         if let Some(applied) = self.edits_in_window(revision, &outcome.report).await {
+            // Edits the window took back leave its plate behind: it is shown the revision's.
+            let taken_back = applied["applied"] == false;
             reply.body["window"] = applied;
-            return reply;
+            if !taken_back {
+                return reply;
+            }
         }
         let plate = self.jobs.shown_plate(revision).ok();
         if let Some(plate) = plate
             && let Some(shown) = self.window.show(revision, &plate, false).await
         {
-            reply.body["window"] = shown;
+            match reply.body["window"].as_object_mut() {
+                Some(refused) => _ = refused.insert("then_shown".into(), shown),
+                None => reply.body["window"] = shown,
+            }
         }
         reply
     }

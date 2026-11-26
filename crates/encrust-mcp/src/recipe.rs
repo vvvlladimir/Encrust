@@ -5,9 +5,11 @@ use std::path::{Path, PathBuf};
 
 use rmcp::schemars::{self, JsonSchema};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 mod finish;
 mod runs;
+mod scoped;
 mod shape;
 mod slicing;
 
@@ -36,14 +38,23 @@ pub struct Recipe {
     pub mend: Option<Mend>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub modelling: Option<Modelling>,
+    /// Modelling asked later for some objects alone, each over `modelling` for those objects.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub more_modelling: Vec<Modelling>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relief: Option<Relief>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pose: Option<Pose>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hollow: Option<Hollow>,
+    /// Hollows asked later for some objects alone, each over `hollow` for those objects.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub more_hollow: Vec<Hollow>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drains: Option<Drains>,
+    /// Drain holes asked later for some objects alone, each over `drains` for those objects.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub more_drains: Vec<Drains>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supports: Option<Supports>,
     /// Supports asked later for some objects alone, each over `supports` for those objects.
@@ -107,6 +118,11 @@ pub enum Pose {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[schemars(skip)]
         keep_clear_seen_deg: Option<[f32; 3]>,
+        /// The turn the search chose, the server's: kept once checked, so a later revision stands
+        /// the model so again rather than searching anew (ADR 0485).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(skip)]
+        stood_deg: Option<[f32; 3]>,
     },
     /// Degrees around X, Y and Z, as `--rotate`.
     Rotate { degrees: [f32; 3] },
@@ -134,10 +150,13 @@ impl Recipe {
             repair: None,
             mend: None,
             modelling: None,
+            more_modelling: Vec::new(),
             relief: None,
             pose: None,
             hollow: None,
+            more_hollow: Vec::new(),
             drains: None,
+            more_drains: Vec::new(),
             supports: None,
             more_supports: Vec::new(),
             slicing: None,
@@ -145,29 +164,28 @@ impl Recipe {
         }
     }
 
-    /// Takes `supports` as the latest asked: for every object it stands in for all before it;
-    /// for some, it stands over what was asked before for those alone, the rest keeping theirs.
-    pub fn ask_supports(&mut self, supports: Option<Supports>) {
-        match (supports, &self.supports) {
-            (Some(new), Some(old)) if !new.objects.is_empty() && old.objects == new.objects => {
-                self.supports = Some(new);
-            }
-            (Some(new), Some(_)) if !new.objects.is_empty() => {
-                self.more_supports
-                    .retain(|asked| asked.objects != new.objects);
-                self.more_supports.push(new);
-            }
-            (asked, _) => {
-                self.supports = asked;
-                self.more_supports.clear();
-            }
+    /// Keeps the turn `report`'s search chose for the one model it stood, so the pose holds
+    /// through later revisions; a pose after a cut stands each piece and keeps none.
+    pub fn pin_pose(&mut self, report: &Value) {
+        let models = report["models"].as_array().map_or(0, Vec::len);
+        let after_cut = self.modellings().any(|m| !m.objects.is_empty());
+        let Some(Pose::Search { stood_deg, .. }) = self.pose.as_mut() else {
+            return;
+        };
+        if stood_deg.is_some() || models != 1 || after_cut {
+            return;
+        }
+        let turn = report["models"][0]["oriented"]["rotate_deg"].as_array();
+        let angle = |at: usize| Some(turn?.get(at)?.as_f64()? as f32);
+        if let (Some(x), Some(y), Some(z)) = (angle(0), angle(1), angle(2)) {
+            *stood_deg = Some([x, y, z]);
         }
     }
 
     /// Whether the recipe cuts, splits, parts off, joins or copies its model, so it is no
     /// longer one object on the plate.
     pub fn makes_pieces(&self) -> bool {
-        self.modelling.as_ref().is_some_and(|m| {
+        self.modellings().any(|m| {
             m.cut.is_some()
                 || m.split_smallest_mm3.is_some()
                 || m.part_off_at_mm.is_some()
@@ -272,15 +290,17 @@ impl Recipe {
         if let Some(recipe) = &self.steps_by {
             crate::params::plain(recipe, "the recipe")?;
         }
-        if let Some(supports) = &self.supports {
+        for supports in self.supports.iter().chain(&self.more_supports) {
             crate::params::plain(&supports.profile, "the support profile")?;
         }
-        let others = self.modelling.iter().flat_map(Modelling::others);
+        let others = self.modellings().flat_map(Modelling::others);
         let image = self
             .relief
             .iter()
             .filter_map(|relief| relief.image.as_ref());
-        let font = (self.modelling.iter()).filter_map(|m| m.label.as_ref()?.font.as_ref());
+        let font = self
+            .modellings()
+            .filter_map(|m| m.label.as_ref()?.font.as_ref());
         for path in others.chain(image).chain(font) {
             crate::params::absolute(path, "the file")?;
         }
@@ -300,7 +320,22 @@ impl Pose {
             keep_clear_at_mm: Vec::new(),
             keep_clear_radius_mm: None,
             keep_clear_seen_deg: None,
+            stood_deg: None,
         }
+    }
+
+    /// Whether two poses ask the same, whatever turn either was checked at.
+    pub fn same_ask(this: Option<&Self>, other: Option<&Self>) -> bool {
+        this.map(Self::unstood) == other.map(Self::unstood)
+    }
+
+    /// The pose with no turn kept, as a client asks it.
+    pub fn unstood(&self) -> Self {
+        let mut pose = self.clone();
+        if let Self::Search { stood_deg, .. } = &mut pose {
+            *stood_deg = None;
+        }
+        pose
     }
 
     fn push_flags(&self, flags: &mut Vec<String>) {
@@ -313,7 +348,12 @@ impl Pose {
                 keep_clear_at_mm,
                 keep_clear_radius_mm,
                 keep_clear_seen_deg,
+                stood_deg,
             } => {
+                if let Some(turn) = stood_deg {
+                    flags.push(format!("--rotate={}", triple(*turn)));
+                    return;
+                }
                 flags.extend(["--orient".into(), format!("--orient-goal={}", kebab(goal))]);
                 if *clean_surface {
                     flags.push("--clean-surface".into());

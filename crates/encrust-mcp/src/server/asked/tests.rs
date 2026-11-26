@@ -392,6 +392,7 @@ fn searching(pick: Option<u16>, keep_clear_at_mm: Vec<[f32; 3]>) -> Pose {
         keep_clear_at_mm,
         keep_clear_radius_mm: None,
         keep_clear_seen_deg: None,
+        stood_deg: None,
     }
 }
 

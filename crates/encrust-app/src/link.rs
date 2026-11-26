@@ -17,9 +17,10 @@ use crate::panels::Window;
 use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 
+use agent_link::{JOBS, Show, ShowReply};
 use line::Line;
 use listen::{Listening, default_file};
-use request::{Reply, Request, Shown};
+use request::{Shown, Waiting};
 
 /// The port listened on and the jobs followed on the plate.
 #[derive(Debug)]
@@ -46,7 +47,7 @@ struct Followed {
     job: String,
     model: PathBuf,
     plate: Option<String>,
-    waiting: Option<Box<Shown>>,
+    waiting: Option<Waiting>,
 }
 
 impl Followed {
@@ -70,8 +71,8 @@ impl Link {
     }
 
     /// Listens for the server, the file that says where written to `file`.
-    pub fn start(file: PathBuf, wake: impl Fn() + Send + 'static) -> anyhow::Result<Self> {
-        let jobs = file.with_file_name("mcp-jobs");
+    pub fn start(file: PathBuf, wake: impl Fn() + Send + Sync + 'static) -> anyhow::Result<Self> {
+        let jobs = file.with_file_name(JOBS);
         Ok(Self {
             listening: Listening::start(file, wake)?,
             followed: Vec::new(),
@@ -98,12 +99,12 @@ impl Link {
     /// Answers one line: a revision is taken to show, the plate handed over or edits applied
     /// as ADR 0466 does, all only while the window follows its agents.
     fn answer(&mut self, line: Line, reply: Sender<Value>, follow: bool, window: &mut Window) {
-        let refused = |why: &str| serde_json::to_value(Reply::refused(why.to_owned()));
+        let refused = |why: &str| serde_json::to_value(ShowReply::refused(why));
         match line {
-            Line::Revision(shown) => {
-                let answer = if shown.request.open || follow {
-                    self.take(shown);
-                    serde_json::to_value(Reply::taken()).unwrap_or_default()
+            Line::Revision(show) => {
+                let answer = if show.open || follow {
+                    self.take(*show);
+                    serde_json::to_value(ShowReply::taken()).unwrap_or_default()
                 } else {
                     refused(NOT_FOLLOWING).unwrap_or_default()
                 };
@@ -134,20 +135,17 @@ impl Link {
     /// Takes the revisions the user asked to see from the agents' list.
     fn take_asked(&mut self, window: &mut Window) {
         for asked in std::mem::take(&mut window.machine.agents.asked) {
-            let read =
-                Request::of_job(&self.jobs, &asked.job, asked.revision).and_then(Request::read);
-            match read {
-                Ok(shown) => self.take(Box::new(shown)),
+            match request::of_job(&self.jobs, &asked.job, asked.revision) {
+                Ok(show) => self.take(show),
                 Err(error) => window.machine.status = Status::failed(&error),
             }
         }
     }
 
-    /// Notes a revision to show, in place of one of its job still waiting.
-    fn take(&mut self, shown: Box<Shown>) {
-        let request = &shown.request;
-        let index = self.followed_index(&request.job, &request.model);
-        self.followed[index].waiting = Some(shown);
+    /// Notes a revision to show, its plate read aside, in place of one of its job still waiting.
+    fn take(&mut self, show: Show) {
+        let index = self.followed_index(&show.job, &show.model);
+        self.followed[index].waiting = Some(Waiting::read_aside(show));
     }
 
     /// The plate `job` stands on in the window, `None` before one of its revisions is shown.
@@ -187,11 +185,23 @@ impl Link {
     /// where it has none: on the job's machine, its plate's objects in place of all there.
     fn show(&mut self, index: usize, window: &mut Window) {
         let followed = &mut self.followed[index];
+        let Some(waiting) = followed.waiting.as_mut() else {
+            return;
+        };
+        match waiting.settle() {
+            Ok(true) => {}
+            Ok(false) => return,
+            Err(error) => {
+                followed.waiting = None;
+                window.machine.status = Status::failed(&error);
+                return;
+            }
+        }
         let (doc, tools, held) = (&*window.doc, &*window.tools, &*window.machine);
-        if followed.waiting.is_none() || crate::prepare::busy(doc, tools, held) {
+        if crate::prepare::busy(doc, tools, held) {
             return;
         }
-        let Some(shown) = followed.waiting.take() else {
+        let Some(Waiting::Read(shown)) = followed.waiting.take() else {
             return;
         };
         let Shown { request, project } = *shown;
@@ -229,7 +239,7 @@ fn job_object(scene: &Scene, plate: u32) -> Option<ObjectId> {
 
 /// Adds a plate for the job `request` names, called for its model and numbered past a name
 /// taken, shown; answers its name.
-fn new_plate(scene: &mut Scene, request: &request::Request) -> String {
+fn new_plate(scene: &mut Scene, request: &Show) -> String {
     let stem = request
         .model
         .file_stem()

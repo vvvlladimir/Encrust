@@ -15,6 +15,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use agent_link::cache_dir;
 use anyhow::{Context, Result, bail};
 use rmcp::ServiceExt;
 use rmcp::transport::stdio;
@@ -93,15 +94,16 @@ fn parse(
         Some(jobs) => jobs,
         None => cache_dir()
             .context("this system names no cache directory; pass --jobs DIR")?
-            .join("mcp-jobs"),
+            .join(agent_link::JOBS),
     };
     // The open window writes its file beside the jobs, in the user's cache.
     let agents = match (&window, agents) {
         (_, Some(dir)) => Some(dir),
-        (Some(_), None) => cache_dir().map(|dir| dir.join("agents")),
+        (Some(_), None) => cache_dir().map(|dir| dir.join(agent_link::AGENTS)),
         (None, None) => None,
     };
-    let window = window.and_then(|file| file.or_else(|| Some(cache_dir()?.join("window.json"))));
+    let window =
+        window.and_then(|file| file.or_else(|| Some(cache_dir()?.join(agent_link::WINDOW_FILE))));
     // On stderr, which a client keeps in its log of the server, so a stale build is told.
     eprintln!(
         "encrust-mcp {}: jobs in {}, agents in {}, window file {}",
@@ -120,11 +122,6 @@ fn parse(
         Presence::new(agents),
     );
     Ok((Cli::new(program, timeout), Jobs::new(jobs), shown))
-}
-
-fn cache_dir() -> Option<PathBuf> {
-    let dirs = directories::ProjectDirs::from("", "", "Encrust")?;
-    Some(dirs.cache_dir().to_owned())
 }
 
 /// The programs `show_in_window` starts the window by, in turn: `--app`, else the window beside

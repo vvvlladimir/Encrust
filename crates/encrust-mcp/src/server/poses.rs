@@ -26,8 +26,10 @@ const BOTH_CLEARED: &str = "the drain and support points given by hand were clea
 /// Stands `recipe`'s model at `pose`, taking away the points given on the old one; answers
 /// what the client is told of them.
 pub(super) fn turned(recipe: &mut Recipe, pose: Option<Pose>) -> Option<&'static str> {
-    let had_drains = (recipe.drains.as_mut())
-        .is_some_and(|drains| !std::mem::take(&mut drains.at_mm).is_empty());
+    let cleared: Vec<bool> = (recipe.drains_mut())
+        .map(|drains| !std::mem::take(&mut drains.at_mm).is_empty())
+        .collect();
+    let had_drains = cleared.contains(&true);
     let asked = recipe.supports.iter_mut().chain(&mut recipe.more_supports);
     let dropped: Vec<bool> = asked.map(Supports::drop_plate_points).collect();
     let had_points = dropped.contains(&true);
@@ -48,7 +50,7 @@ impl Server {
         ctx: &Context,
     ) -> Result<CallToolResult> {
         let latest = self.jobs.open(&compare.job, None)?;
-        let mut pose = match compare.pose {
+        let pose = match compare.pose {
             Some(pose @ Pose::Search { .. }) => pose,
             Some(Pose::Rotate { .. }) => bail!("compare_poses compares the ways a search finds"),
             None => match &latest.recipe.pose {
@@ -56,13 +58,14 @@ impl Server {
                 _ => Pose::search(Goal::Auto, None),
             },
         };
+        let mut pose = pose.unstood();
         if let Pose::Search { pick, .. } = &mut pose {
             *pick = None;
         }
         self.seat_keep_clear(&mut pose, &latest)?;
         let mut recipe = latest.recipe.clone();
         recipe.pose = Some(pose.clone());
-        if let Some(drains) = recipe.drains.as_mut() {
+        for drains in recipe.drains_mut() {
             drains.at_mm.clear();
         }
         let count = compare.count.unwrap_or(COUNT).clamp(2, 8);

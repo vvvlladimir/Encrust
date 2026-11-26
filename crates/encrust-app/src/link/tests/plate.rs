@@ -743,6 +743,58 @@ fn an_edit_that_does_not_land_is_answered_with_why_and_leaves_the_plate() {
 }
 
 #[test]
+fn edits_that_stop_short_take_back_what_landed_before_and_leave_the_version() {
+    let file = scratch("taken-back");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench, &file);
+    let version = bench.doc.history.plate_version();
+    let turn_then_miss = json!({"base_version": version, "apply": [
+        {"edit": "rotate", "object": cube.0, "degrees": [0, 0, 90]},
+        {"edit": "cut", "object": cube.0, "axis": "z", "at_mm": 50.0}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, turn_then_miss));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], false, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("the cube is still there");
+    let (_, angle) = object.transform.rotation.to_axis_angle();
+    assert!(
+        angle.abs() < 1e-4,
+        "the turn is taken back, got {angle} rad"
+    );
+    assert_eq!(
+        bench.doc.history.plate_version(),
+        version,
+        "nothing was recorded"
+    );
+}
+
+#[test]
+fn edits_that_all_land_are_one_undo_entry() {
+    let file = scratch("one-entry");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench, &file);
+    let version = bench.doc.history.plate_version();
+    let turn_then_cut = json!({"base_version": version, "apply": [
+        {"edit": "rotate", "object": cube.0, "degrees": [0, 0, 90]},
+        {"edit": "cut", "object": cube.0, "axis": "z", "at_mm": 5.0}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, turn_then_cut));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    assert_eq!(bench.doc.scene.objects().len(), 2, "the cube's two halves");
+    assert!(bench.undo());
+    let object = bench
+        .doc
+        .scene
+        .get(cube)
+        .expect("one undo puts the cube back");
+    let (_, angle) = object.transform.rotation.to_axis_angle();
+    assert!(angle.abs() < 1e-4, "and unturned, got {angle} rad");
+}
+
+#[test]
 fn edits_handed_over_while_others_still_land_are_refused() {
     let file = scratch("under-way");
     let mut bench = Bench::new(file.clone());

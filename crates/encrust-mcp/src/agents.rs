@@ -7,11 +7,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use serde::Serialize;
+use agent_link::{AGENT_SCHEMA, AgentFile, Working};
 use serde_json::Value;
 
-/// The schema of an agent's file.
-const SCHEMA: u32 = 1;
 /// How long the file of an agent long gone is kept, for the window to list its jobs.
 const KEPT: Duration = Duration::from_hours(24 * 7);
 /// The most jobs one file names, the latest first.
@@ -24,31 +22,7 @@ pub const BEAT: Duration = Duration::from_secs(20);
 #[derive(Debug, Clone)]
 pub struct Presence {
     file: Option<PathBuf>,
-    said: Arc<Mutex<Said>>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct Said {
-    schema: u32,
-    pid: u32,
-    /// The client's own name for itself, as it introduced itself: `claude-code`, say.
-    client: Option<String>,
-    started_s: u64,
-    seen_s: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    ended_s: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    working: Option<Working>,
-    jobs: Vec<String>,
-}
-
-/// The tool running, on which job, since when.
-#[derive(Debug, Clone, Serialize)]
-struct Working {
-    tool: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    job: Option<String>,
-    since_s: u64,
+    said: Arc<Mutex<AgentFile>>,
 }
 
 impl Presence {
@@ -64,8 +38,8 @@ impl Presence {
         });
         let presence = Self {
             file,
-            said: Arc::new(Mutex::new(Said {
-                schema: SCHEMA,
+            said: Arc::new(Mutex::new(AgentFile {
+                schema: AGENT_SCHEMA,
                 pid,
                 client: None,
                 started_s: now,
@@ -120,7 +94,7 @@ impl Presence {
 
     /// Changes what the file says, stamps it now and writes it whole. A file that cannot be
     /// written leaves the window without this agent, never the client without an answer.
-    fn update(&self, change: impl FnOnce(&mut Said)) {
+    fn update(&self, change: impl FnOnce(&mut AgentFile)) {
         let mut seen = self.said.lock().unwrap_or_else(PoisonError::into_inner);
         seen.seen_s = now_s();
         change(&mut seen);

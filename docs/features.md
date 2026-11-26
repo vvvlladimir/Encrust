@@ -1134,9 +1134,11 @@ agents on, each step an agent keeps stands there as it comes; asked to show you 
 puts it on its plate itself, opening Encrust if it is closed. Followed, the window owns that
 plate: a repair, faces mended, a picture pressed in, a scale, a turn typed, a label, a split,
 a cut, a hollow, a hole drilled at a point or supports an agent makes lands there as an edit
-of the model on it, one undo each, and the agent's next step is checked on the plate as you
-left it, so what you changed or undid there is part of it. A pose the search picked lands as
-the turn it chose, and the drain search and plugs land as edits too. It asks what the print is for and can prepare it by
+of the model on it, each step one undo, and the agent's next step is checked on the plate as
+you left it, so what you changed or undid there is part of it. A step that cannot land whole
+is taken back from the plate and not kept by the agent, so the plate and the agent never
+disagree. A pose the search picked lands as the turn it chose and stays that turn through the
+agent's later steps, a new lift included, and the drain search and plugs land as edits too. It asks what the print is for and can prepare it by
 another recipe, such as Miniatures; it can be told which side of the model is looked at, so
 the supports there are sparser and lighter. A way of preparing that worked, or one you
 describe in words, it keeps as a recipe of your own, which the window's Prepare for print then
@@ -1147,7 +1149,8 @@ file that printed well with it or from another slicer's export, and it writes th
 check for you to print; a resin known only by its label's numbers it makes from those
 numbers, refusing one past what your printer takes. A project you saved in the window it
 checks, draws, writes and sends, and shapes as it does a model. Each tool shapes every object
-of the job — after a cut, both halves — or only those it names by id, and `set_machine` moves
+of the job — after a cut, both halves — or only those it names by id, the others keeping what
+they were given, and `set_machine` moves
 the job to another printer and resin.
 
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail

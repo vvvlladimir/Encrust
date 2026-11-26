@@ -5,23 +5,22 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use agent_link::{
+    ApplyReply, HandedPlate, Header, PLATE_SCHEMA, PlateLine, SHOW_SCHEMA, Show, Signed, WindowFile,
+};
 use anyhow::{Context, Result, bail};
-use core_edit::{Edit, ObjectId};
-use serde::Deserialize;
+use core_edit::Edit;
+use serde::Serialize;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 use tokio::net::TcpStream;
 
 use crate::jobs::Revision;
 
-/// The schema of a revision handed over as its plate (ADR 0473).
-const SCHEMA: u64 = 4;
 /// How long the window may take to take the connection.
 const CONNECT_WAIT: Duration = Duration::from_secs(1);
 /// How long it may take to answer: its next frame, which a busy plate can hold up.
 const REPLY_WAIT: Duration = Duration::from_secs(15);
-/// The schema that asks for the plate and applies edits to it (ADR 0466).
-const PLATE_SCHEMA: u64 = 3;
 /// How long edits handed over may take to land, each a tool's job: longer than the window
 /// waits for them, so its answer always arrives.
 const APPLY_WAIT: Duration = Duration::from_mins(11);
@@ -94,17 +93,16 @@ impl Window {
     /// `None` with no window open; one not `open` shows only while the window follows agents.
     pub async fn show(&self, revision: &Revision, plate: &Path, open: bool) -> Option<Value> {
         let (stream, token) = self.connect().await?;
-        let line = json!({
-            "schema": SCHEMA,
-            "token": token,
-            "job": revision.job,
-            "revision": revision.number,
-            "model": revision.recipe.model,
-            "printer": revision.recipe.printer,
-            "resin": revision.recipe.resin,
-            "plate": plate,
-            "open": open,
-        });
+        let show = Show {
+            job: revision.job.clone(),
+            revision: revision.number,
+            model: revision.recipe.model.clone(),
+            printer: revision.recipe.printer.clone(),
+            resin: revision.recipe.resin.clone(),
+            plate: plate.to_owned(),
+            open,
+        };
+        let line = signed(SHOW_SCHEMA, token, &show)?;
         Some(
             ask(stream, &line, REPLY_WAIT)
                 .await
@@ -114,31 +112,31 @@ impl Window {
 
     /// The open window's plate as `job` builds on it: its file, version, the ids on it and the
     /// job's model there, or `None` with no window that hands it over (ADR 0466).
-    pub async fn plate(&self, job: &str) -> Option<Plate> {
+    pub async fn plate(&self, job: &str) -> Option<HandedPlate> {
         let (stream, token) = self.connect().await?;
-        let line = json!({"schema": PLATE_SCHEMA, "token": token, "job": job, "want": "plate"});
+        let line = signed(PLATE_SCHEMA, token, &PlateLine::plate_of(job))?;
         let answer = ask(stream, &line, REPLY_WAIT).await.ok()?;
         serde_json::from_value(answer).ok()
     }
 
     /// Hands `edits` built on the plate at `base_version` to the window, and its answer.
-    pub async fn apply(&self, job: &str, edits: &[Edit], base_version: u64) -> Option<Value> {
+    pub async fn apply(&self, job: &str, edits: &[Edit], base_version: u64) -> Option<ApplyReply> {
         let (stream, token) = self.connect().await?;
-        let line = json!({"schema": PLATE_SCHEMA, "token": token, "job": job,
-                          "base_version": base_version, "apply": edits});
-        Some(
-            ask(stream, &line, APPLY_WAIT)
-                .await
-                .unwrap_or_else(|error| json!({"applied": false, "why_not": format!("{error:#}")})),
-        )
+        let line = signed(
+            PLATE_SCHEMA,
+            token,
+            &PlateLine::apply(job, edits, base_version),
+        )?;
+        let answer = ask(stream, &line, APPLY_WAIT).await.and_then(|answer| {
+            serde_json::from_value(answer).context("the window's answer does not read")
+        });
+        Some(answer.unwrap_or_else(|error| ApplyReply::refused(format!("{error:#}"))))
     }
 
     /// A connection to the window its file names, and the token it asks for.
     async fn connect(&self) -> Option<(TcpStream, String)> {
         let text = tokio::fs::read_to_string(self.file.as_ref()?).await.ok()?;
-        let found: Value = serde_json::from_str(&text).ok()?;
-        let port = u16::try_from(found["port"].as_u64()?).ok()?;
-        let token = found["token"].as_str()?.to_owned();
+        let WindowFile { port, token, .. } = serde_json::from_str(&text).ok()?;
         let connected = tokio::time::timeout(CONNECT_WAIT, TcpStream::connect(("127.0.0.1", port)));
         // A file left by a window that has closed names a port nobody listens on.
         let stream = connected.await.ok()?.ok()?;
@@ -146,17 +144,10 @@ impl Window {
     }
 }
 
-/// The plate the window handed over.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct Plate {
-    /// The `.encrust` file it wrote.
-    #[serde(rename = "plate")]
-    pub path: PathBuf,
-    pub version: u64,
-    /// Every object on the plate.
-    pub objects: Vec<ObjectId>,
-    /// The job's model where it stands whole on the plate.
-    pub job_object: Option<ObjectId>,
+/// `body` under the header of `schema` and `token`, as a line to send.
+fn signed(schema: u64, token: String, body: &impl Serialize) -> Option<Value> {
+    let header = Header { schema, token };
+    serde_json::to_value(Signed { header, body }).ok()
 }
 
 async fn ask(mut stream: TcpStream, line: &Value, wait: Duration) -> Result<Value> {
@@ -213,8 +204,8 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.expect("a free port");
         let port = listener.local_addr().expect("bound").port();
         let path = file("open");
-        std::fs::write(&path, json!({"port": port, "token": "t0"}).to_string())
-            .expect("the temp dir is writable");
+        let found = json!({"schema": 4, "port": port, "token": "t0", "pid": 1});
+        std::fs::write(&path, found.to_string()).expect("the temp dir is writable");
         let window = tokio::spawn(async move {
             let (stream, _) = listener.accept().await.expect("the server connects");
             let mut reader = BufReader::new(stream);

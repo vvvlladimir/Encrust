@@ -17,6 +17,9 @@ impl Recipe {
             || self.hollow.as_ref().is_some_and(|h| named(&h.objects))
             || self.drains.as_ref().is_some_and(|d| named(&d.objects))
             || self.supports.as_ref().is_some_and(|s| named(&s.objects))
+            || !self.more_modelling.is_empty()
+            || !self.more_hollow.is_empty()
+            || !self.more_drains.is_empty()
             || !self.more_supports.is_empty()
     }
 
@@ -43,8 +46,11 @@ impl Recipe {
         let base = Recipe {
             pose: self.pose.clone().filter(|_| !self.models_some()),
             modelling: None,
+            more_modelling: Vec::new(),
             hollow: None,
+            more_hollow: Vec::new(),
             drains: None,
+            more_drains: Vec::new(),
             supports: None,
             more_supports: Vec::new(),
             ..self.clone()
@@ -64,7 +70,7 @@ impl Recipe {
             run.extend(flags);
             runs.push(run);
         }
-        let arranged = self.modelling.as_ref().is_some_and(|m| m.arrange);
+        let arranged = self.modellings().any(|m| m.arrange);
         if arranged
             && let Some(last) = runs.last_mut()
             && !last.iter().any(|flag| flag == "--arrange")
@@ -77,15 +83,13 @@ impl Recipe {
     /// Whether the modelling names some objects, so the pose runs on its pieces after it
     /// (ADR 0481).
     fn models_some(&self) -> bool {
-        self.modelling
-            .as_ref()
-            .is_some_and(|m| !m.objects.is_empty())
+        self.modellings().any(|m| !m.objects.is_empty())
     }
 
     /// Each step's objects and flags, in the command line's order.
     fn steps(&self) -> Vec<(Vec<u64>, Vec<String>)> {
         let mut steps = Vec::new();
-        if let Some(modelling) = &self.modelling {
+        for modelling in self.modellings() {
             let mut flags = Vec::new();
             modelling.push_flags(&mut flags);
             steps.push((modelling.objects.clone(), flags));
@@ -95,12 +99,12 @@ impl Recipe {
             pose.push_flags(&mut flags);
             steps.push((Vec::new(), flags));
         }
-        if let Some(hollow) = &self.hollow {
+        for hollow in self.hollow.iter().chain(&self.more_hollow) {
             let mut flags = Vec::new();
             hollow.push_flags(&mut flags);
             steps.push((hollow.objects.clone(), flags));
         }
-        if let Some(drains) = &self.drains {
+        for drains in self.drains.iter().chain(&self.more_drains) {
             let mut flags = Vec::new();
             drains.push_flags(&mut flags);
             steps.push((drains.objects.clone(), flags));

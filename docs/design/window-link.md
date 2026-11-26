@@ -7,7 +7,8 @@ land in the viewport and on the undo stack (ADR 0473; the plan is `ai-integratio
 
 A window on the desktop listens on a free port of `127.0.0.1` and writes `window.json` in the
 user's cache directory — `ProjectDirs("", "", "Encrust").cache_dir()`, beside the server's
-`mcp-jobs` — readable by the user alone:
+`mcp-jobs` — readable by the user alone. Both sides take the lines, the files and these names
+from `agent-link` (ADR 0486):
 
 ```json
 {"schema": 4, "port": 50123, "token": "9f0c…32 hex digits", "pid": 4242}
@@ -30,10 +31,13 @@ writes one line of JSON and reads one back:
  "printer": "elegoo-mars-4-ultra", "resin": "my-grey", "plate": "…/cube-18e4…/2.encrust"}
 ```
 
-`printer` and `resin` are catalogue ids or TOML paths, as the job holds them. The window's
-link thread reads the plate; a line with another token or schema, or a plate that does not
-read, is refused and never reaches the plate. The window answers on its next frame, the
-server waiting 15 s for it, and the tool's answer carries it as `window`:
+`printer` and `resin` are catalogue ids or TOML paths, as the job holds them. Each connection
+is answered on a thread of its own, at most eight at once, so a line waiting on the window holds
+up no other (ADR 0483). A line with another token or schema, or a plate that is not there, is
+refused and never reaches the plate. The window takes the revision on its next frame and
+answers then, the server waiting 15 s for it; the plate is read on a thread aside and stood
+once read, a plate that does not read told on the status line. The tool's answer carries the
+window's as `window`:
 
 ```json
 {"shown": true}
@@ -71,8 +75,12 @@ builds its edits on that file and hands them back with the version:
 ```
 
 Edits on a plate still at `base_version` run one after another on the job's plate, shown as
-each starts, as the tools' own jobs, each an undo entry, and are answered once all have landed, within 10 min (the server waits 11); one
-that does not land stops the rest and is answered with why. A plate that moved on is answered
+each starts, as the tools' own jobs, and are answered once all have landed, within 10 min (the
+server waits 11): all of them one undo entry. One that does not land stops the rest, the plate
+is put back as the edits found it, and the answer says why (ADR 0483). The server then keeps no
+revision of them; a revision checked by its flags before its edits were handed over is shown
+by its plate instead, the answer's `then_shown`. A plate the user changes while edits land is
+left as they left it, one undo entry, and answered with why. A plate that moved on is answered
 `stale` with its version, and nothing is applied: the server asks for the plate again, builds
 and checks the edits on it once more and keeps only that revision. A window not following its
 agents refuses both lines, and edits while others are still being applied are refused.

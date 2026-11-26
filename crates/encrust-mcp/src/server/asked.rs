@@ -61,8 +61,9 @@ pub fn asked_after_check(
             )
         })
         .unwrap_or(asked.len());
-    if recipe.pose != earlier.pose {
-        let turned = match (&recipe.pose, catalogue_ids(recipe)) {
+    let turned = !Pose::same_ask(recipe.pose.as_ref(), earlier.pose.as_ref());
+    if turned {
+        let edit = match (&recipe.pose, catalogue_ids(recipe)) {
             (Some(Pose::Rotate { degrees }), _) => rotated(object, *degrees),
             (Some(pose @ Pose::Search { .. }), Some(ids)) => {
                 searched(pose, object, (ids, area_mm))?
@@ -70,14 +71,14 @@ pub fn asked_after_check(
             (Some(Pose::Search { .. }), _) => rotated(object, chosen_deg?),
             (None, _) => return None,
         };
-        asked.insert(at, turned);
+        asked.insert(at, edit);
         at += 1;
     }
     if let Some(pressed) = pressed {
         asked.insert(at, pressed);
     }
     // Contacts from the old pose would stand on faces that now look up, the new underside bare.
-    let turned_from = (recipe.pose != earlier.pose).then_some(stood);
+    let turned_from = turned.then_some(stood);
     asked.extend(finished(
         recipe,
         earlier,
@@ -150,6 +151,7 @@ fn searched(
         keep_clear_at_mm,
         keep_clear_radius_mm,
         keep_clear_seen_deg,
+        ..
     } = pose
     else {
         return None;

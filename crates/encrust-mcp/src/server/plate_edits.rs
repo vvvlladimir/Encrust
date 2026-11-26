@@ -1,6 +1,7 @@
 //! What a client asks of the plate handed to the open window as edits of it, and an undone cut
 //! carried back into the job (ADR 0466, `docs/design/window-link.md`).
 
+use agent_link::ApplyReply;
 use core_edit::{Edit, ObjectId};
 use serde_json::{Value, json};
 
@@ -103,18 +104,27 @@ impl Server {
             let answer = (self.window)
                 .apply(&revision.job, &edits, plate.version)
                 .await?;
-            if answer["stale"] == true {
+            if answer.stale {
                 continue;
             }
-            if let Some(cut) = cut_object(&edits).filter(|_| answer["applied"] == true) {
+            if let Some(cut) = cut_object(&edits).filter(|_| answer.applied) {
                 let kept = self
                     .jobs
                     .keep_window_cut(&revision.job, revision.number, cut);
                 unkept("the window's cut", kept);
             }
-            return Some(answer);
+            return Some(self.answered(revision, &answer));
         }
-        Some(json!({"applied": false, "why_not": GAVE_UP}))
+        Some(self.answered(revision, &ApplyReply::refused(GAVE_UP)))
+    }
+
+    /// What the window said of `revision`'s edits; those it did not take are forgotten.
+    fn answered(&self, revision: &Revision, answer: &ApplyReply) -> Value {
+        if !answer.applied {
+            let forgot = self.jobs.forget_edits(&revision.job, revision.number);
+            unkept("the edits forgotten", forgot);
+        }
+        json!(answer)
     }
 }
 

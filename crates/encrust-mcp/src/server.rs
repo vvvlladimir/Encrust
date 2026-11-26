@@ -224,7 +224,7 @@ impl Server {
     ))]
     async fn set_hollow(&self, Parameters(set): Parameters<SetHollow>, ctx: Context) -> Answer {
         let edited = self.edit(&set.job, &ctx, |recipe| {
-            recipe.hollow = set.hollow;
+            recipe.ask_hollow(set.hollow);
             None
         });
         Ok(answer(edited.await))
@@ -238,7 +238,7 @@ impl Server {
     ))]
     async fn set_drains(&self, Parameters(set): Parameters<SetDrains>, ctx: Context) -> Answer {
         let edited = self.edit(&set.job, &ctx, |recipe| {
-            recipe.drains = set.drains;
+            recipe.ask_drains(set.drains);
             None
         });
         Ok(answer(edited.await))
@@ -302,7 +302,7 @@ impl Server {
     ))]
     async fn set_shape(&self, Parameters(set): Parameters<SetShape>, ctx: Context) -> Answer {
         let edited = self.edit(&set.job, &ctx, |recipe| {
-            recipe.modelling = set.modelling;
+            recipe.ask_modelling(set.modelling);
             recipe.relief = set.relief;
             None
         });

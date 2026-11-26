@@ -107,6 +107,7 @@ fn a_negative_number_rides_on_its_flag() {
         pose: Some(Pose::Search {
             keep_clear_at_mm: vec![[10.0, -2.0, 3.0]],
             keep_clear_seen_deg: Some([0.0, -90.0, 0.0]),
+            stood_deg: None,
             keep_clear_radius_mm: Some(5.0),
             pick: Some(2),
             goal: Goal::Auto,
@@ -616,4 +617,32 @@ fn a_pose_runs_on_the_pieces_after_a_cut_naming_some_objects() {
             .any(|f| f.starts_with("--only")),
         "on every piece: {runs:?}"
     );
+}
+
+#[test]
+fn a_search_keeps_the_turn_its_check_chose_and_stands_by_it_after() {
+    let mut recipe = Recipe {
+        pose: Some(Pose::search(Goal::Auto, None)),
+        ..plain()
+    };
+    let report = serde_json::json!({"models": [{"oriented": {"rotate_deg": [90.0, 0.0, 45.0]}}]});
+    recipe.pin_pose(&report);
+    let flags = recipe.flags();
+    assert!(flags.contains(&"--rotate=90,0,45".to_owned()), "{flags:?}");
+    assert!(!flags.contains(&"--orient".to_owned()), "{flags:?}");
+    assert!(
+        Pose::same_ask(recipe.pose.as_ref(), Some(&Pose::search(Goal::Auto, None))),
+        "the turn kept is no new ask"
+    );
+}
+
+#[test]
+fn a_pose_over_several_models_keeps_no_turn() {
+    let mut recipe = Recipe {
+        pose: Some(Pose::search(Goal::Auto, None)),
+        ..plain()
+    };
+    let turned = serde_json::json!({"oriented": {"rotate_deg": [90.0, 0.0, 0.0]}});
+    recipe.pin_pose(&serde_json::json!({"models": [turned.clone(), turned]}));
+    assert!(recipe.flags().contains(&"--orient".to_owned()));
 }

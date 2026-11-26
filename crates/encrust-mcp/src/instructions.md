@@ -59,7 +59,8 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    it; say what it cost. `render` (`iso`, `bottom`) and look at it; fix what the check names:
    `fix_issues` supports islands, vents suction cups and holds weak necks as Check does.
    A tool shapes every object of the job; after a cut, each half. To shape some, pass their
-   ids from the check's `models[].id` as `objects`; a refusal naming `--only` asks for them.
+   ids from the check's `models[].id` as `objects`: the others keep what they were given, and
+   a call without `objects` replaces it for all. A refusal naming `--only` asks for them.
    `set_machine` moves the job to the printer and resin the user names.
 9. `write_file` when the check is clean. If defects remain, tell the user what they are and
    write with `accept_defects` only when they accept them. Several models printed together:

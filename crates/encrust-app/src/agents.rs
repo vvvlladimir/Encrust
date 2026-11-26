@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use serde::Deserialize;
+use agent_link::{AGENTS, AgentFile, JOBS};
 
 #[cfg(test)]
 mod tests;
@@ -94,21 +94,19 @@ impl Agents {
     /// Reads the folders under the user's cache every `EVERY` on a thread of its own, a frame
     /// asked of `ctx` whenever what it read changed.
     pub fn start(ctx: &egui::Context) -> Self {
-        let Some(cache) = directories::ProjectDirs::from("", "", "Encrust")
-            .map(|dirs| dirs.cache_dir().to_owned())
-        else {
+        let Some(cache) = agent_link::cache_dir() else {
             return Self::default();
         };
         let (send, read) = mpsc::channel();
         let ctx = ctx.clone();
-        let jobs = cache.join("mcp-jobs");
+        let jobs = cache.join(JOBS);
         let spawned = std::thread::Builder::new()
             .name("agents".into())
             .spawn(move || {
                 let mut last = None;
                 loop {
                     let now = now_s();
-                    let listed = scan(&cache.join("agents"), &cache.join("mcp-jobs"), now);
+                    let listed = scan(&cache.join(AGENTS), &cache.join(JOBS), now);
                     if last.as_ref() != Some(&listed) {
                         if send.send(listed.clone()).is_err() {
                             return;
@@ -172,24 +170,6 @@ impl Agents {
     }
 }
 
-#[derive(Deserialize)]
-struct Said {
-    client: Option<String>,
-    started_s: u64,
-    seen_s: u64,
-    ended_s: Option<u64>,
-    working: Option<Working>,
-    #[serde(default)]
-    jobs: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct Working {
-    tool: String,
-    job: Option<String>,
-    since_s: u64,
-}
-
 /// The live agents in `agents` with a model in hand or opening one, those at work first,
 /// each the latest seen first.
 pub fn scan(agents: &Path, jobs: &Path, now_s: u64) -> Vec<Agent> {
@@ -198,7 +178,7 @@ pub fn scan(agents: &Path, jobs: &Path, now_s: u64) -> Vec<Agent> {
         .flatten()
         .filter_map(|entry| Some(entry.ok()?.path()))
         .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
-        .filter_map(|path| serde_json::from_slice::<Said>(&std::fs::read(path).ok()?).ok())
+        .filter_map(|path| serde_json::from_slice::<AgentFile>(&std::fs::read(path).ok()?).ok())
         .filter_map(|said| Some((said.seen_s, agent_of(&said, jobs, now_s)?)))
         .filter(|(_, agent)| agent.job.is_some() || agent.opening())
         .collect();
@@ -208,7 +188,7 @@ pub fn scan(agents: &Path, jobs: &Path, now_s: u64) -> Vec<Agent> {
 }
 
 /// The agent a file tells of, `None` once it has ended or fallen silent.
-fn agent_of(said: &Said, jobs: &Path, now_s: u64) -> Option<Agent> {
+fn agent_of(said: &AgentFile, jobs: &Path, now_s: u64) -> Option<Agent> {
     let silent = now_s.saturating_sub(said.seen_s) > SILENT_S;
     if said.ended_s.is_some() || silent {
         return None;

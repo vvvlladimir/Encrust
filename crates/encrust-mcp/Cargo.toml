@@ -13,6 +13,7 @@ name = "encrust-mcp"
 path = "src/main.rs"
 
 [dependencies]
+agent-link.workspace = true
 anyhow.workspace = true
 core-edit.workspace = true
 base64.workspace = true
@@ -21,7 +22,6 @@ serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "process", "io-std", "fs", "sync", "time", "net", "io-util"] }
 toml.workspace = true
-directories.workspace = true
 
 [dev-dependencies]
 core-geometry.workspace = true

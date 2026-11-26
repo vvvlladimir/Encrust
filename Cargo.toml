@@ -29,6 +29,7 @@ core-engine = { path = "crates/core-engine" }
 core-recipe = { path = "crates/core-recipe" }
 core-edit = { path = "crates/core-edit" }
 core-document = { path = "crates/core-document" }
+agent-link = { path = "crates/agent-link" }
 encrust-cli = { path = "crates/encrust-cli" }
 encrust-app = { path = "crates/encrust-app" }
 core-format = { path = "crates/core-format" }
