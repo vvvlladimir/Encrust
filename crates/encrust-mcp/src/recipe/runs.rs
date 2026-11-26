@@ -41,6 +41,7 @@ impl Recipe {
             }
         }
         let base = Recipe {
+            pose: self.pose.clone().filter(|_| !self.models_some()),
             modelling: None,
             hollow: None,
             drains: None,
@@ -73,6 +74,14 @@ impl Recipe {
         Ok(runs)
     }
 
+    /// Whether the modelling names some objects, so the pose runs on its pieces after it
+    /// (ADR 0481).
+    fn models_some(&self) -> bool {
+        self.modelling
+            .as_ref()
+            .is_some_and(|m| !m.objects.is_empty())
+    }
+
     /// Each step's objects and flags, in the command line's order.
     fn steps(&self) -> Vec<(Vec<u64>, Vec<String>)> {
         let mut steps = Vec::new();
@@ -80,6 +89,11 @@ impl Recipe {
             let mut flags = Vec::new();
             modelling.push_flags(&mut flags);
             steps.push((modelling.objects.clone(), flags));
+        }
+        if let Some(pose) = self.pose.as_ref().filter(|_| self.models_some()) {
+            let mut flags = Vec::new();
+            pose.push_flags(&mut flags);
+            steps.push((Vec::new(), flags));
         }
         if let Some(hollow) = &self.hollow {
             let mut flags = Vec::new();

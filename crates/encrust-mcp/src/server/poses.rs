@@ -66,8 +66,10 @@ impl Server {
             drains.at_mm.clear();
         }
         let count = compare.count.unwrap_or(COUNT).clamp(2, 8);
+        // The search runs in the first run, before any step naming some objects (ADR 0479).
+        let flags = recipe.runs()?.swap_remove(0);
         let mut args = vec!["estimate".to_owned()];
-        args.extend(recipe.flags());
+        args.extend(flags.iter().cloned());
         args.push(format!("--orient-choices={count}"));
         let outcome = self.watched(&args, ctx).await?;
         let choices = outcome.report["models"][0]["oriented"]["choices"].clone();
@@ -93,13 +95,7 @@ impl Server {
             for choice in listed {
                 let pick = choice["pick"].as_u64().context("a choice has its number")?;
                 let drawn = self
-                    .drawn_pick(
-                        &recipe.flags(),
-                        (&latest, pick),
-                        &views,
-                        compare.size_px,
-                        ctx,
-                    )
+                    .drawn_pick(&flags, (&latest, pick), &views, compare.size_px, ctx)
                     .await?;
                 content.extend(drawn);
             }

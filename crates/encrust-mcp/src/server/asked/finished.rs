@@ -205,9 +205,8 @@ fn supported(now: &Supports, then: Option<&Supports>, object: ObjectId) -> Optio
     Some(asked)
 }
 
-/// Supports stood again from nothing after a new pose, as the flags would stand them for
-/// `recipe`; none where it asks none and none stood, `None` where the flags place them: a
-/// recipe's own steps or points given on the old pose.
+/// Supports stood anew after a new pose as the flags would stand them for `recipe`; `None`
+/// where only the flags can: a recipe's own steps, or points given on the old pose.
 fn supported_anew(
     recipe: &Recipe,
     (stood, hollowed): Stood,

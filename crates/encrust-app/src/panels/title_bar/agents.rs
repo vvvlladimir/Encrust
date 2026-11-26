@@ -14,9 +14,8 @@ use crate::ui::{
     quiet_square, ring_badge, theme,
 };
 
-/// The agents' ring, beside the printers': there while an agent has a model in hand,
-/// spinning while one works, the count at its corner past one; a press opens the list.
-/// Answers the width it took; none in a browser, which no agent reaches.
+/// The agents' ring beside the printers', there while an agent has a model in hand; a press
+/// opens the list. Answers the width it took, none in a browser.
 pub(super) fn ring(ui: &mut egui::Ui, window: &mut Window) -> f32 {
     if cfg!(target_arch = "wasm32") {
         return 0.0;

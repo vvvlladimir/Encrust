@@ -58,9 +58,8 @@ fn refused(why: String) -> Value {
     json!({"applied": false, "why_not": why})
 }
 
-/// Writes the job's plate, none before it has one, into `job`'s folder under `jobs` off the
-/// drawing thread, answering its path, version and ids, and `job_object`, the job's model
-/// where it stands on the plate whole.
+/// Writes the job's plate into its folder under `jobs` off the drawing thread, answering its
+/// path, version, ids and `job_object`, the job's model where it stands whole.
 pub fn hand_plate(
     jobs: &Path,
     (job, plate, job_object): (&str, Option<u32>, Option<ObjectId>),

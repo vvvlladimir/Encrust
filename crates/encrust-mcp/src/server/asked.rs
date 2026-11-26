@@ -173,9 +173,8 @@ fn searched(
     })
 }
 
-/// Whether nothing changed between the two that no edit carries: the way steps are decided, a
-/// combination, the weld the model is read with, the lift it stands at, its copies, Check's
-/// answers, or a step naming some objects, which runs by `--only`.
+/// Whether nothing changed between the two that no edit carries, such as the steps' source, a
+/// combination, the weld, the lift, copies, Check's answers or a step naming some objects.
 fn plate_alike(recipe: &Recipe, earlier: &Recipe) -> bool {
     // `arrange` is an edit of its own, asked after the rest; only a combination is not.
     let joined = |modelling: Option<&Modelling>| modelling.and_then(|m| m.combine.clone());

@@ -568,3 +568,52 @@ fn supports_asked_for_one_piece_keep_those_asked_for_every_one() {
         "supports for every piece stand in for all before"
     );
 }
+
+#[test]
+fn supports_asked_again_for_one_piece_keep_the_other_pieces() {
+    let piece = |id| Supports {
+        profile: "auto".into(),
+        objects: vec![id],
+        ..Default::default()
+    };
+    let mut recipe = plain();
+    recipe.ask_supports(Some(piece(1)));
+    recipe.ask_supports(Some(piece(2)));
+    recipe.ask_supports(Some(piece(1)));
+
+    assert_eq!(
+        recipe.more_supports,
+        [piece(2)],
+        "piece 2 keeps its supports when piece 1 is asked again"
+    );
+}
+
+#[test]
+fn a_pose_runs_on_the_pieces_after_a_cut_naming_some_objects() {
+    let recipe = Recipe {
+        modelling: Some(Modelling {
+            cut: Some(
+                serde_json::from_value(serde_json::json!({"axis": "z", "at_mm": 10.0}))
+                    .expect("a cut reads"),
+            ),
+            objects: vec![1],
+            ..Modelling::default()
+        }),
+        pose: Some(Pose::search(Goal::Auto, None)),
+        ..plain()
+    };
+    let runs = recipe.runs().expect("runs");
+    let at = |flag: &str| runs.iter().position(|run| run.iter().any(|f| f == flag));
+    assert!(
+        at("--cut=z:10") < at("--orient"),
+        "the search runs after the cut: {runs:?}"
+    );
+    assert!(
+        !runs
+            .last()
+            .expect("a run")
+            .iter()
+            .any(|f| f.starts_with("--only")),
+        "on every piece: {runs:?}"
+    );
+}

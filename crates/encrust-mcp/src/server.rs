@@ -38,7 +38,7 @@ mod revise;
 mod shown;
 mod written;
 
-use reply::{answer, reported, revised};
+use reply::{answer, not_applied, reported, revised};
 
 const INSTRUCTIONS: &str = include_str!("instructions.md");
 
@@ -192,17 +192,13 @@ impl Server {
         open_world_hint = false
     ))]
     async fn set_pose(&self, Parameters(set): Parameters<SetPose>, ctx: Context) -> Answer {
-        let mut set = set;
-        if let Some(pose) = set.pose.as_mut() {
-            let seated = self
-                .jobs
-                .open(&set.job, None)
-                .and_then(|latest| self.seat_keep_clear(pose, &latest));
-            if let Err(error) = seated {
-                return Ok(answer(Err(error)));
+        let mut pose = set.pose;
+        let edited = self.edit_on_latest(&set.job, &ctx, |recipe, latest| {
+            if let Some(pose) = pose.as_mut() {
+                self.seat_keep_clear(pose, latest)?;
             }
-        }
-        let edited = self.edit(&set.job, &ctx, |recipe| poses::turned(recipe, set.pose));
+            Ok(poses::turned(recipe, pose))
+        });
         Ok(answer(edited.await))
     }
 
@@ -373,6 +369,9 @@ impl Server {
             let latest = self.jobs.open(&revert.job, None)?;
             let against = self.jobs.against(&revert.job, Some(latest.number));
             let (outcome, steps, plate) = self.checked(&old.recipe, &against, &ctx).await?;
+            if !outcome.reported() {
+                return Ok(not_applied(Some(&latest), &outcome));
+            }
             let kept = (old.recipe, steps);
             let revision = self.jobs.commit(&revert.job, kept, &outcome.report)?;
             self.keep_plate(&revision, plate);
@@ -465,9 +464,8 @@ impl Server {
     }
 }
 
-/// The client's own name for itself: from the request's `_meta`, as a client of the stateless
-/// protocol sends it, else from its handshake, else `claude-code` where Claude Code, which
-/// may send neither, marks the processes it starts.
+/// The client's own name for itself: from the request's `_meta`, else its handshake, else
+/// `claude-code` where the processes it starts are marked so, as it may send neither.
 fn client_name(context: &Context) -> Option<String> {
     context
         .meta

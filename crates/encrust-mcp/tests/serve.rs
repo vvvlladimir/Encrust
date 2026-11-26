@@ -485,6 +485,23 @@ async fn an_edit_the_command_line_refuses_is_not_kept() {
 }
 
 #[tokio::test]
+async fn a_revert_the_command_line_refuses_is_not_kept() {
+    let dir = scratch("revert-refused");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    fs::remove_file(&model).expect("the cube was written");
+    let refused = call(&client, "revert", json!({"job": job, "revision": 1})).await;
+    assert!(
+        failed(&refused),
+        "a revert with its model gone: {}",
+        answer(&refused)
+    );
+    let latest = answer(&call(&client, "check", json!({"job": job})).await);
+    assert_eq!(latest["revision"], 1, "the refused revert became {latest}");
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
 async fn two_edits_at_once_both_land_one_after_the_other() {
     let dir = scratch("race");
     let (model, client) = cube_and_server(&dir).await;
@@ -692,9 +709,8 @@ async fn each_revision_keeps_the_plate_its_check_wrote_and_hands_it_to_the_open_
     );
 }
 
-/// A window that answers each line by its kind for `lines` connections: a revision shown, the
-/// plate — the job's latest one under `dir/jobs`, its model object 1 — at version 5, edits
-/// applied; the lines read.
+/// A window answering `lines` connections by kind: shown, the job's latest plate at version 5
+/// with its model object 1, edits applied; it hands back the lines read.
 async fn plate_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
     plate_window_moving(dir, lines, 0).await
 }

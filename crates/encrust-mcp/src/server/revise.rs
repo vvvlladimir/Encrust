@@ -89,12 +89,23 @@ impl Server {
         ctx: &Context,
         change: impl FnOnce(&mut Recipe) -> Option<&'static str>,
     ) -> Result<Reply> {
+        self.edit_on_latest(job, ctx, |recipe, _| Ok(change(recipe)))
+            .await
+    }
+
+    /// As `edit`, with the change reading the revision it is made on under the same lock.
+    pub(super) async fn edit_on_latest(
+        &self,
+        job: &str,
+        ctx: &Context,
+        change: impl FnOnce(&mut Recipe, &Revision) -> Result<Option<&'static str>>,
+    ) -> Result<Reply> {
         let lock = self.jobs.lock(job);
         let _held = lock.lock().await;
         let latest = self.jobs.open(job, None)?;
         let mut recipe = latest.recipe.clone();
         let undone = self.follow_window_undo(&latest, &mut recipe).await;
-        let note = match (change(&mut recipe), undone) {
+        let note = match (change(&mut recipe, &latest)?, undone) {
             (Some(asked), Some(undone)) => Some(format!("{asked}; {undone}")),
             (asked, undone) => asked.or(undone).map(str::to_owned),
         };
@@ -130,12 +141,16 @@ impl Server {
             let mut args = vec!["estimate".to_owned()];
             args.extend(after(run, previous.as_deref()));
             args.push(format!("--project-out={}", plate.display()));
-            let outcome = self.watched(&args, ctx).await?;
+            let outcome = self.watched(&args, ctx).await;
             if let Some(before) = previous.replace(plate) {
                 let _ = std::fs::remove_file(before);
             }
-            if outcome.exit_code != 0 {
-                return Ok((outcome, None, None));
+            match outcome {
+                Ok(outcome) if outcome.exit_code == 0 => {}
+                failed => {
+                    let _ = previous.map(std::fs::remove_file);
+                    return failed.map(|outcome| (outcome, None, None));
+                }
             }
         }
         let out = self.jobs.scratch_steps()?;
@@ -145,15 +160,19 @@ impl Server {
         args.push(format!("--recipe-out={}", out.display()));
         let plate = self.jobs.scratch_plate()?;
         args.push(format!("--project-out={}", plate.display()));
-        let plate = Some(plate);
-        let outcome = self.watched(&args, ctx).await?;
+        let outcome = self.watched(&args, ctx).await;
         if let Some(before) = previous {
             let _ = std::fs::remove_file(before);
         }
         let steps = std::fs::read_to_string(&out).ok();
         // A scratch file left behind is overwritten by no other run: its name is this run's.
         let _ = std::fs::remove_file(&out);
-        Ok((outcome, steps, plate.filter(|plate| plate.is_file())))
+        let outcome = outcome.inspect_err(|_| drop(std::fs::remove_file(&plate)))?;
+        if !outcome.reported() {
+            let _ = std::fs::remove_file(&plate);
+            return Ok((outcome, steps, None));
+        }
+        Ok((outcome, steps, Some(plate).filter(|plate| plate.is_file())))
     }
 
     /// Keeps the plate a check wrote as the revision's, which the window is shown.

@@ -104,7 +104,8 @@ fn both_preparations_are_drawn_and_a_judge_of_its_own_rules_between_them() {
     );
     let output = Command::new(env!("CARGO_BIN_EXE_agent-lab"))
         .arg(&model)
-        .args(["--printer", panel.to_str().unwrap()])
+        .arg("--printer")
+        .arg(&panel)
         .arg("--resin")
         .arg(test_resin())
         .arg("--agent")

@@ -148,20 +148,16 @@ impl Recipe {
     /// Takes `supports` as the latest asked: for every object it stands in for all before it;
     /// for some, it stands over what was asked before for those alone, the rest keeping theirs.
     pub fn ask_supports(&mut self, supports: Option<Supports>) {
-        let over_others =
-            |new: &Supports, old: &Supports| !new.objects.is_empty() && old.objects != new.objects;
-        match supports {
-            Some(new)
-                if self
-                    .supports
-                    .as_ref()
-                    .is_some_and(|old| over_others(&new, old)) =>
-            {
+        match (supports, &self.supports) {
+            (Some(new), Some(old)) if !new.objects.is_empty() && old.objects == new.objects => {
+                self.supports = Some(new);
+            }
+            (Some(new), Some(_)) if !new.objects.is_empty() => {
                 self.more_supports
                     .retain(|asked| asked.objects != new.objects);
                 self.more_supports.push(new);
             }
-            asked => {
+            (asked, _) => {
                 self.supports = asked;
                 self.more_supports.clear();
             }
