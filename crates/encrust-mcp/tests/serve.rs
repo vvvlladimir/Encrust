@@ -155,6 +155,7 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
             "check",
             "compare_poses",
             "create_resin",
+            "find_printers",
             "fix_issues",
             "import_resin",
             "inspect_model",
@@ -189,6 +190,18 @@ async fn the_server_offers_the_preparation_tools_and_marks_what_writes() {
     };
     assert_eq!(hint("write_file"), Some(true));
     assert_eq!(hint("send_to_printer"), Some(true));
+    let manifest =
+        fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bundle/manifest.json"))
+            .expect("the bundle's manifest reads");
+    let manifest: Value = serde_json::from_str(&manifest).expect("the manifest is JSON");
+    let mut listed: Vec<&str> = (manifest["tools"].as_array().expect("a tool list").iter())
+        .filter_map(|tool| tool["name"].as_str())
+        .collect();
+    listed.sort_unstable();
+    assert_eq!(
+        listed, names,
+        "the bundle lists every tool the server serves"
+    );
     client.cancel().await.expect("the server stops");
 }
 
@@ -531,6 +544,8 @@ async fn a_name_from_the_client_never_reaches_the_command_line_as_a_flag() {
     )
     .await;
     assert!(failed(&escaping));
+    let found = call(&client, "find_printers", json!({"address": "--wait=999"})).await;
+    assert!(failed(&found), "an address that reads as a flag is refused");
     client.cancel().await.expect("the server stops");
 }
 
@@ -1391,4 +1406,87 @@ async fn a_job_moves_to_another_printer_and_resin_and_is_checked_there() {
     .await;
     assert!(failed(&refused), "a name read as a flag is refused");
     client.cancel().await.expect("the server stops");
+}
+
+/// A window whose plate holds the job's model, object 1, until a cut lands, then its halves,
+/// 2 and 3; it answers `lines` connections by their kind and returns the lines read.
+async fn cut_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
+    use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("a free port");
+    let port = listener.local_addr().expect("bound").port();
+    let file = dir.join("window.json");
+    fs::write(&file, json!({"port": port, "token": "t"}).to_string()).expect("writable");
+    let jobs = dir.join("jobs");
+    let window = tokio::spawn(async move {
+        let (mut read, mut cut) = (Vec::new(), false);
+        for _ in 0..lines {
+            let (stream, _) = listener.accept().await.expect("the server connects");
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).await.expect("a line");
+            let line: Value = serde_json::from_str(&line).expect("JSON");
+            let reply = if line["want"] == "plate" {
+                let job = jobs.join(line["job"].as_str().expect("a job"));
+                let (version, objects, object) = if cut {
+                    (6, json!([2, 3]), Value::Null)
+                } else {
+                    (5, json!([1]), json!(1))
+                };
+                json!({"plate": latest_plate(&job), "version": version, "objects": objects, "job_object": object})
+            } else if line.get("apply").is_some() {
+                cut = true;
+                json!({"applied": true})
+            } else {
+                json!({"shown": true})
+            };
+            let reply = format!("{reply}\n");
+            (reader.get_mut().write_all(reply.as_bytes()).await).expect("answered");
+            read.push(line);
+        }
+        read
+    });
+    (file, window)
+}
+
+#[tokio::test]
+async fn supports_asked_after_a_cut_the_window_holds_reach_it_as_the_plate_checked() {
+    let dir = scratch("window-cut-then-supports");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    // The first revision shown; the plate and the cut; then the plate twice and the plate shown.
+    let (file, window) = cut_window(&dir, 6).await;
+    let jobs = dir.join("jobs");
+    let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
+    let job = start(&client, &model).await;
+    let cut = json!({"axis": "z", "at_mm": 10.0});
+    call(
+        &client,
+        "set_shape",
+        json!({"job": job, "modelling": {"cut": cut, "arrange": true}}),
+    )
+    .await;
+
+    let supported = call(
+        &client,
+        "set_supports",
+        json!({"job": job, "supports": {"profile": "auto"}}),
+    )
+    .await;
+    client.cancel().await.expect("the server stops");
+
+    assert_eq!(
+        answer(&supported)["window"],
+        json!({"shown": true}),
+        "{}",
+        answer(&supported)
+    );
+    let lines = window.await.expect("the window's task ends");
+    assert_eq!(
+        lines[5]["revision"].as_u64(),
+        Some(3),
+        "the window is shown the plate with the supports: {lines:?}"
+    );
 }

@@ -25,10 +25,25 @@ pub(super) fn revised(revision: &Revision, outcome: &Outcome, note: Option<&str>
             "note": note,
             "compared": outcome.report.get("compared"),
             "exit_code": outcome.exit_code,
-            "report": outcome.report,
+            "report": read_short(&outcome.report),
         }),
         failed: false,
     }
+}
+
+/// A check as a client reads it: `compared` once, above it, and each model's supports by their
+/// count and the contacts left without one; `N.json` keeps the whole.
+fn read_short(report: &Value) -> Value {
+    let mut report = report.clone();
+    if let Some(report) = report.as_object_mut() {
+        report.remove("compared");
+    }
+    for model in report["models"].as_array_mut().into_iter().flatten() {
+        if let Some(supports) = model["supports"].as_object_mut() {
+            supports.remove("contacts_at_mm");
+        }
+    }
+    report
 }
 
 pub(super) fn not_applied(latest: Option<&Revision>, outcome: &Outcome) -> Reply {
@@ -103,5 +118,40 @@ pub(super) fn answer(reply: Result<Reply>) -> CallToolResult {
         CallToolResult::error(content)
     } else {
         CallToolResult::success(content)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_check_is_answered_without_each_contact_or_a_second_comparison() {
+        let report = json!({
+            "compared": {"previous": {"standing": "beats"}},
+            "models": [{"supports": {
+                "contacts": 2,
+                "contacts_at_mm": [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+                "no_room_at_mm": [[1.0, 2.0, 3.0]],
+            }}],
+        });
+
+        let short = read_short(&report);
+
+        assert!(
+            short.get("compared").is_none(),
+            "compared stands once, above the report"
+        );
+        let supports = &short["models"][0]["supports"];
+        assert!(
+            supports.get("contacts_at_mm").is_none(),
+            "every contact is left in N.json"
+        );
+        assert_eq!(supports["contacts"], 2, "the count stays");
+        assert_eq!(
+            supports["no_room_at_mm"],
+            json!([[1.0, 2.0, 3.0]]),
+            "what to act on stays"
+        );
     }
 }

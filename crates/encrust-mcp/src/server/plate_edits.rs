@@ -63,7 +63,9 @@ impl Server {
                 "the window's cut",
                 (self.jobs).keep_window_cut(&revision.job, revision.number, held),
             );
-            return Some(json!({"shown": false, "why_not": CUT_HELD}));
+            // What is asked of the pieces no edit of the job's model carries: its plate shows it.
+            return (revision.recipe == earlier.recipe)
+                .then(|| json!({"shown": false, "why_not": CUT_HELD}));
         }
         let chosen = (
             chosen_turn(report),

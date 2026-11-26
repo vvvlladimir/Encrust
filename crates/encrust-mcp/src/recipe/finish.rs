@@ -155,8 +155,8 @@ pub struct Supports {
     /// group's points are joined into one tree, as `--merge-supports`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub merge_at_mm: Vec<Vec<[f32; 3]>>,
-    /// The ids of the job's objects this shapes, as `inspect_model` lists them on its plate;
-    /// every one when empty.
+    /// The ids of the job's objects this shapes, as the check's `models[].id` lists them;
+    /// every one when empty. Naming some keeps the supports asked before for the others.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub objects: Vec<u64>,
 }

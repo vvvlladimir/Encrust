@@ -26,6 +26,33 @@ fn a_plain_recipe_stages_the_model_centred_and_checks_drainage() {
 }
 
 #[test]
+fn a_job_with_no_machine_is_checked_on_the_standard_one_but_a_project_on_its_own() {
+    let unnamed = Recipe::bare(
+        PathBuf::from("/models/bust.stl"),
+        String::new(),
+        String::new(),
+    );
+    let project = Recipe::bare(
+        PathBuf::from("/plates/a.encrust"),
+        String::new(),
+        String::new(),
+    );
+
+    assert_eq!(
+        unnamed.flags()[1..3],
+        ["--standard-machine", "--center"],
+        "a model with no printer named is placed on the standard printer's plate"
+    );
+    assert!(
+        !project
+            .flags()
+            .iter()
+            .any(|flag| flag == "--standard-machine"),
+        "a saved project keeps the machine it names"
+    );
+}
+
+#[test]
 fn every_step_becomes_the_flags_the_command_line_documents() {
     let recipe = Recipe {
         repair: Some(Repair::CloseHoles),
@@ -507,4 +534,37 @@ fn steps_naming_objects_run_on_the_plate_before_them_by_only() {
 #[test]
 fn a_recipe_with_no_objects_named_is_one_run() {
     assert_eq!(plain().runs().expect("runs"), [plain().flags()]);
+}
+
+#[test]
+fn supports_asked_for_one_piece_keep_those_asked_for_every_one() {
+    let auto = Supports {
+        profile: "auto".into(),
+        ..Default::default()
+    };
+    let one = Supports {
+        profile: "auto".into(),
+        at_mm: vec![[10.0, 20.0, 3.0]],
+        objects: vec![2],
+        ..Default::default()
+    };
+    let mut recipe = plain();
+    recipe.ask_supports(Some(auto.clone()));
+    recipe.ask_supports(Some(one.clone()));
+
+    let runs = recipe.runs().expect("the steps run in turn");
+    assert!(
+        runs[0].iter().any(|flag| flag == "--supports=auto"),
+        "every piece keeps its supports: {runs:?}"
+    );
+    assert!(
+        runs[1].iter().any(|flag| flag == "--only=2"),
+        "then piece 2 alone takes its points: {runs:?}"
+    );
+
+    recipe.ask_supports(Some(auto));
+    assert!(
+        recipe.more_supports.is_empty(),
+        "supports for every piece stand in for all before"
+    );
 }

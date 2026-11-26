@@ -15,7 +15,7 @@ use core_plate::{OrientGoal, OrientPreset};
 use core_raster::GreyRange;
 use core_slicer::{AdaptiveSettings, WINDOW_LAYERS};
 use core_volume::Tiling;
-use printer_profiles::SupportProfile;
+use printer_profiles::{STANDARD_PRINTER, SupportProfile};
 
 use crate::fixes::FixArgs;
 use crate::hollowing::HollowArgs;
@@ -51,6 +51,11 @@ pub struct ProfileArgs {
 
     #[command(flatten)]
     pub set: ResinSet,
+
+    /// Checks on the standard printer with the stock resin numbers, as a chat client's job does
+    /// until the user names theirs (ADR 0481); no file is written on it.
+    #[arg(long, conflicts_with_all = ["profile", "printer", "material", "resin"])]
+    pub standard_machine: bool,
 }
 
 impl ProfileArgs {
@@ -58,12 +63,26 @@ impl ProfileArgs {
     pub fn resolve(&self) -> Result<Chosen> {
         let mut chosen = crate::profiles::resolve(&self.selection())?;
         self.set.apply(&mut chosen.material);
+        chosen.invented_exposure &= !self.standard_machine;
         Ok(chosen)
+    }
+
+    /// The catalogue printer named, the standard one with `--standard-machine`.
+    pub fn printer_id(&self) -> Option<&str> {
+        (self.printer.as_deref()).or(self.standard_machine.then_some(STANDARD_PRINTER))
+    }
+
+    /// Refuses `--standard-machine` where a file is written: its exposure nobody measured.
+    pub fn refuse_standard_machine(&self) -> Result<()> {
+        if self.standard_machine {
+            bail!("--standard-machine only checks: name the printer and the resin the file is for");
+        }
+        Ok(())
     }
 
     pub fn selection(&self) -> Selection<'_> {
         Selection {
-            printer_id: self.printer.as_deref(),
+            printer_id: self.printer_id(),
             printer_path: self.profile.as_deref(),
             resin_id: self.resin.as_deref(),
             resin_path: self.material.as_deref(),

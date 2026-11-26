@@ -24,6 +24,35 @@ pub(super) fn left_to_edits(transform: &mut TransformArgs) {
     transform.orient = false;
 }
 
+/// A model's file and what its flags ask of it.
+type Entry = (PathBuf, Shaping);
+
+/// Each entry's placing split where its modelling makes pieces: the search, the turn after it
+/// and the lift wait for the pieces, each stood on its own; the rest places the whole model.
+pub(super) fn split_at_pieces(entries: &[Entry]) -> (Vec<Entry>, Vec<Entry>) {
+    let early = entries.iter().map(|(path, shaping)| {
+        let mut shaping = shaping.clone();
+        let transform = &mut shaping.import.transform;
+        if transform.orient {
+            transform.rotate = None;
+        }
+        (transform.orient, transform.lift) = (false, None);
+        (path.clone(), shaping)
+    });
+    let late = entries.iter().map(|(path, shaping)| {
+        let mut shaping = shaping.clone();
+        shaping.position = None;
+        let transform = &mut shaping.import.transform;
+        if !transform.orient {
+            transform.rotate = None;
+        }
+        (transform.scale, transform.center) = (None, false);
+        (transform.placing.mirror, transform.placing.move_by) = (None, None);
+        (path.clone(), shaping)
+    });
+    (early.collect(), late.collect())
+}
+
 /// Scales, orients, turns and centres each entry's objects the flags shape; what the search
 /// chose is noted where import notes it.
 pub(super) fn placed(
@@ -34,8 +63,12 @@ pub(super) fn placed(
     watch: &Watch,
 ) -> Result<()> {
     for (entry, ((_, oriented), (_, shaping))) in found.iter_mut().zip(entries).enumerate() {
-        for id in staging.targets(entry) {
+        let ids = staging.targets(entry);
+        for &id in &ids {
             place(staging, id, (shaping, oriented), (profile, printer), watch)?;
+            if let Some(summary) = oriented.take_if(|_| ids.len() > 1) {
+                staging.note_oriented(id, summary);
+            }
         }
     }
     Ok(())

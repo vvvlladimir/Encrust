@@ -356,6 +356,13 @@ pub struct SendFile {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct FindPrinters {
+    /// An address to ask directly, for a network the broadcast does not cross.
+    #[serde(default)]
+    pub address: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct ReportPrint {
     pub job: String,
     /// The revision printed, counted from one; absent for the one last written, else the

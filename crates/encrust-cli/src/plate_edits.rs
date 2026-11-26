@@ -34,7 +34,7 @@ impl EditArgs {
     /// The edits `--edits` names, none without it.
     pub fn listed(&self) -> Result<Vec<Edit>> {
         match &self.edits {
-            Some(path) => read(path),
+            Some(path) => Ok(read(path)?.into_iter().map(proved_as_shipped).collect()),
             None => Ok(Vec::new()),
         }
     }
@@ -110,4 +110,14 @@ pub(crate) fn each_edit(
 /// Writes `project` to `path`, as `--project-out` asks.
 pub(crate) fn write_project(path: &Path, project: &Project) -> Result<()> {
     save(path, project).with_context(|| format!("cannot write the project {}", path.display()))
+}
+
+/// An orient proved on the machine `--orient` proves on: a printer the shipped catalogue lists,
+/// the standard one for the user's own, and the stock resin numbers, as no resin ships.
+fn proved_as_shipped(mut edit: Edit) -> Edit {
+    if let Edit::Orient { printer, resin, .. } = &mut edit {
+        *printer = crate::stage::shipped_printer(printer.as_deref(), false);
+        *resin = None;
+    }
+    edit
 }

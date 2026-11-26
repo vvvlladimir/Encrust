@@ -74,6 +74,9 @@ pub struct Fit {
     pub inset_mm: [Scalar; 2],
     /// The plate inside its inset as its low corner and its size, mm.
     pub usable_mm: [[Scalar; 2]; 2],
+    /// Where the model stands, its low and high corners in plate mm: what a plate point
+    /// such as a cut's lands on.
+    pub bounds_mm: [[Scalar; 3]; 2],
 }
 
 pub(super) fn model_of(import: &ImportReport) -> Model {
@@ -144,5 +147,6 @@ pub(super) fn fit_of(check: &FitCheck) -> Fit {
         outside_mm: fit.outside_mm.to_array(),
         inset_mm: fit.inset_mm.to_array(),
         usable_mm: check.usable_mm,
+        bounds_mm: check.bounds_mm,
     }
 }

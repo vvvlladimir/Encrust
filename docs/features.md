@@ -1106,8 +1106,12 @@ the release page or the window's File → Use with Claude Desktop and installed 
 `encrust-mcp` gives Claude Desktop, Claude Code or any other MCP client the
 command line as tools, so a language model prepares a model step by step on your
 computer, checks it and writes the file. It asks you for the printer and resin; until you
-say, it works on the standard printer with stock resin numbers, and it writes no file before
-you have named both. The command line's flags are its tools': `set_shape` cuts with a
+say, it works on the standard printer's plate with stock resin numbers, so a cut it made
+there stays where it was once you name yours, and it writes no file before you have named
+both. Each check says where every model stands on the plate. After a cut, each piece is
+turned and lifted on its own, and supports asked for one piece keep the others'. It finds
+the printers on your network itself before sending a file. The command line's flags are its
+tools': `set_shape` cuts with a
 joint of the size you ask or leaves the halves upright, labels in a font, splits, mirrors,
 moves, copies and presses reliefs, `set_repair` mends, `set_slicing` sets the layers and,
 with numbers you or the resin's maker give, the exposure, motion and waits, and `fix_issues`

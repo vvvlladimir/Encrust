@@ -339,3 +339,20 @@ fn two_projects_are_laid_on_one_plate_and_spread_apart() {
         "neither stands in the other"
     );
 }
+
+#[test]
+fn an_orient_naming_the_users_own_printer_and_resin_is_proved_as_the_flag_proves() {
+    let edits = edits_file(
+        "orient-own-resin-edits.json",
+        r#"[{"edit": "orient", "object": 1, "printer": "my-own-printer", "resin": "my-own-resin"}]"#,
+    );
+    let out = output_file("orient-own-resin.encrust");
+
+    let output = estimate_edited(&edits, &out);
+
+    assert!(
+        output.status.success(),
+        "proved on the standard printer and stock resin numbers: {}",
+        stderr(&output)
+    );
+}

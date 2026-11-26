@@ -1,6 +1,6 @@
 # 0475. A job runs on the standard machine until it is written
 
-- **Status:** Accepted
+- **Status:** Accepted; its checks with no machine flag replaced by `--standard-machine` (0481)
 - **Date:** 2026-11-24
 
 ## Context

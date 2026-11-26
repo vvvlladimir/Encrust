@@ -173,6 +173,11 @@ pub struct ModelArgs {
 }
 
 impl ModelArgs {
+    /// Whether the models are cut into pieces, which then each stand on their own.
+    pub fn makes_pieces(&self) -> bool {
+        self.cut.is_some() || self.split || self.part_off.is_some()
+    }
+
     /// Whether anything is asked of the models.
     pub fn wanted(&self) -> bool {
         self.combine.is_some()

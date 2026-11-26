@@ -67,3 +67,37 @@ fn a_mirror_turns_the_model_inside_out_across_its_axis() {
         "a mirror flips the model's handedness: {still:?} then {mirrored:?}"
     );
 }
+
+#[test]
+fn the_standard_machine_centres_a_model_on_the_standard_printers_plate() {
+    let catalogue = printer_profiles::Catalogue::bundled().expect("the shipped catalogue reads");
+    let plate = (catalogue.printer(printer_profiles::STANDARD_PRINTER))
+        .expect("the standard printer ships")
+        .profile
+        .build_volume;
+    let project = placed("standard-cube", &["--standard-machine", "--center"]);
+    // The cube's file stands it from its origin, so its middle is 5 mm on from its translation.
+    let at = transforms(&project)[0].translation + core_geometry::Vec3::new(5.0, 5.0, 0.0);
+    let middle = (plate.x / 2.0, plate.y / 2.0);
+    assert!(
+        (at.x - middle.0).abs() < 0.5 && (at.y - middle.1).abs() < 0.5,
+        "the cube's middle over the plate's, {middle:?} mm, got {at:?}"
+    );
+}
+
+#[test]
+fn a_file_is_never_written_on_the_standard_machine() {
+    let cube = write_box_stl("standard-unwritten", 10.0, 12, 0);
+    let out = output_file("standard-unwritten.goo");
+    let output = slice(&[
+        cube.to_str().expect("a UTF-8 path"),
+        "--standard-machine",
+        "-o",
+        out.to_str().expect("a UTF-8 path"),
+    ]);
+    assert!(
+        !output.status.success(),
+        "slicing on the standard machine is refused"
+    );
+    assert!(!out.exists(), "nothing written");
+}

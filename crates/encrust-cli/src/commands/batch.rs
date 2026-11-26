@@ -43,6 +43,7 @@ impl BatchCommand {
     }
 
     pub fn run(&self, global: &GlobalArgs, stop: &Stop) -> Result<Exit> {
+        self.job.profile.refuse_standard_machine()?;
         let chosen = self.job.profile.resolve()?;
         let summary = batch::run(&self.batch(), &chosen, &global.watch(stop))?;
         if global.json {

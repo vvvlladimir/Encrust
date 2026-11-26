@@ -192,3 +192,43 @@ fn models_combined_and_centred_are_joined_where_their_files_put_them_then_centre
         "joined as the files place them, 7 400 pixels at a 0.2 mm pitch, got {lit}"
     );
 }
+
+#[test]
+fn each_piece_of_a_cut_is_searched_and_lifted_on_its_own() {
+    let path = write_box_stl("model-cut-lifted", 16.0, 12, 0);
+    let out = output_file("model-cut-lifted.encrust");
+    let output = estimate(&[
+        "--json",
+        path.to_str().expect("a UTF-8 path"),
+        "--standard-machine",
+        "--center",
+        "--cut=x:109.44",
+        "--arrange",
+        "--orient",
+        "--lift=5",
+        "--project-out",
+        out.to_str().expect("a UTF-8 path"),
+    ]);
+    succeeded(&output);
+    let report = json(&output);
+    let models = report["models"].as_array().expect("a model a piece");
+    assert_eq!(models.len(), 2, "the cube cut in two");
+    for model in models {
+        assert!(
+            model["oriented"].is_object(),
+            "each piece searched, got {model}"
+        );
+    }
+    let inspected = json(&encrust(&[
+        "--json",
+        "inspect",
+        out.to_str().expect("a UTF-8 path"),
+    ]));
+    for object in inspected["objects"].as_array().expect("the pieces") {
+        let lowest = object["min_mm"][2].as_f64().expect("a height");
+        assert!(
+            (lowest - 5.0).abs() < 1e-3,
+            "each piece 5 mm up, got {lowest}"
+        );
+    }
+}

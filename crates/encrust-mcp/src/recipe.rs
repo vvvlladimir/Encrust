@@ -46,6 +46,9 @@ pub struct Recipe {
     pub drains: Option<Drains>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supports: Option<Supports>,
+    /// Supports asked later for some objects alone, each over `supports` for those objects.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub more_supports: Vec<Supports>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slicing: Option<Slicing>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -136,8 +139,32 @@ impl Recipe {
             hollow: None,
             drains: None,
             supports: None,
+            more_supports: Vec::new(),
             slicing: None,
             fixes: None,
+        }
+    }
+
+    /// Takes `supports` as the latest asked: for every object it stands in for all before it;
+    /// for some, it stands over what was asked before for those alone, the rest keeping theirs.
+    pub fn ask_supports(&mut self, supports: Option<Supports>) {
+        let over_others =
+            |new: &Supports, old: &Supports| !new.objects.is_empty() && old.objects != new.objects;
+        match supports {
+            Some(new)
+                if self
+                    .supports
+                    .as_ref()
+                    .is_some_and(|old| over_others(&new, old)) =>
+            {
+                self.more_supports
+                    .retain(|asked| asked.objects != new.objects);
+                self.more_supports.push(new);
+            }
+            asked => {
+                self.supports = asked;
+                self.more_supports.clear();
+            }
         }
     }
 
@@ -167,10 +194,14 @@ impl Recipe {
         !self.printer.is_empty()
     }
 
-    /// The printer and resin flags, none where the user named neither.
+    /// The printer and resin flags; where the user named neither, the standard machine, so a
+    /// plate point means one place before and after they do (ADR 0481); a project keeps its own.
     fn machine_named(&self) -> Vec<String> {
         if !self.names_a_machine() {
-            return Vec::new();
+            return (!self.is_project())
+                .then(|| "--standard-machine".to_owned())
+                .into_iter()
+                .collect();
         }
         vec![
             profile_flag(&self.printer, "--printer", "--profile"),

@@ -8,7 +8,7 @@ use super::reply::{Reply, answer, images, reported};
 use super::revise::machine_of;
 use super::{Context, MOST_MARKED, Server, findings};
 use crate::jobs::Revision;
-use crate::params::{Render, SendFile, View, WriteFile, absolute, plain};
+use crate::params::{FindPrinters, Render, SendFile, View, WriteFile, absolute, plain};
 
 /// Why a job on the standard printer and stock resin is not written yet.
 const UNNAMED_MACHINE: &str = "the job runs on the standard printer and stock resin; ask the \
@@ -111,6 +111,16 @@ impl Server {
         let mut flags = vec![plate.display().to_string()];
         flags.extend(revision.recipe.machine_flags());
         flags
+    }
+
+    pub(super) async fn discovered(&self, find: FindPrinters, ctx: &Context) -> Result<Reply> {
+        let mut args = vec!["printer".into(), "discover".into()];
+        if let Some(address) = find.address {
+            plain(&address, "the printer's address")?;
+            args.push(format!("--address={address}"));
+        }
+        let outcome = self.watched(&args, ctx).await?;
+        Ok(reported(&outcome, outcome.report.clone()))
     }
 
     pub(super) async fn send(&self, send: SendFile, ctx: &Context) -> Result<Reply> {

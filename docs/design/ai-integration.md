@@ -54,7 +54,7 @@ a crate of its own when the window's panel or the connector needs it too.
 |---|---|---|---|
 | `list_profiles` | printers, the user's resins, support profiles | `profiles list` | read |
 | `inspect_model` | a file's size, shells, defects, what a repair would do | `inspect` | read |
-| `start_job` | a job for a model, on the printer and resin named or the standard ones (ADR 0475), checked as it stands | `estimate` | creates a job |
+| `start_job` | a job for a model, on the printer and resin named or the standard ones (ADR 0475), checked as it stands | `estimate`, `--standard-machine` with none named (ADR 0481) | creates a job |
 | `set_pose` | the orientation search, one of its ways or a turn; places kept clear; clears the drains | `--orient`, `--orient-pick`, `--orient-keep-clear`, `--rotate` | edits |
 | `compare_poses` | the search's best ways, each with what it prints and drawn | `estimate --orient-choices`, `render --orient-pick` | read |
 | `set_hollow` | the wall, infill, open floor | `--hollow` and its flags | edits |
@@ -64,6 +64,7 @@ a crate of its own when the window's panel or the connector needs it too.
 | `revert` | an earlier revision made the latest again | — | edits |
 | `write_file` | the printer file, on the printer and resin the user names; refused while the check names defects | `slice --strict` | writes a file |
 | `render` | pictures from each side, the check's findings marked | `render --mark` | read |
+| `find_printers` | the printers on the user's network that answer, each with its address | `printer discover` | read |
 | `send_to_printer` | the file to a printer on the user's network | `printer send` | outward |
 | `show_in_window` | a revision on the open window's plate, the window started if closed (ADR 0465) | — | edits the window |
 | `set_supports` `shown_at_mm` (step 13) | the side meant to be seen, painted round plate points | `--shown-at` | edits |

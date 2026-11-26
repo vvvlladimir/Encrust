@@ -17,10 +17,10 @@ use crate::agents::Presence;
 use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::Jobs;
 use crate::params::{
-    ComparePoses, CreateResin, FixIssues, ImportResin, JobRef, ListProfiles, ListRecipes, Model,
-    PlateJobs, Render, ReportPrint, Revert, SaveRecipe, SendFile, SetDrains, SetHollow, SetMachine,
-    SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe, WriteFile,
-    WriteTestPrint, absolute,
+    ComparePoses, CreateResin, FindPrinters, FixIssues, ImportResin, JobRef, ListProfiles,
+    ListRecipes, Model, PlateJobs, Render, ReportPrint, Revert, SaveRecipe, SendFile, SetDrains,
+    SetHollow, SetMachine, SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe,
+    WriteFile, WriteTestPrint, absolute,
 };
 use crate::runner::Cli;
 use crate::trace::{Trace, body_of};
@@ -265,7 +265,7 @@ impl Server {
     ))]
     async fn set_supports(&self, Parameters(set): Parameters<SetSupports>, ctx: Context) -> Answer {
         let edited = self.edit(&set.job, &ctx, |recipe| {
-            recipe.supports = set.supports;
+            recipe.ask_supports(set.supports);
             None
         });
         Ok(answer(edited.await))
@@ -446,6 +446,17 @@ impl Server {
     ))]
     async fn show_in_window(&self, Parameters(at): Parameters<JobRef>, _: Context) -> Answer {
         Ok(answer(self.shown(at).await))
+    }
+
+    /// Finds the printers on the local network that answer, each with its address, for
+    /// `send_to_printer`; ask the user for an address only when none answers.
+    #[tool(annotations(read_only_hint = true, open_world_hint = true))]
+    async fn find_printers(
+        &self,
+        Parameters(find): Parameters<FindPrinters>,
+        ctx: Context,
+    ) -> Answer {
+        Ok(answer(self.discovered(find, &ctx).await))
     }
 
     /// Sends a written file to a printer on the local network, and starts it if asked.

@@ -71,8 +71,11 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
     up, no supports on the face" — offer to keep it: `save_recipe` with the job, or with a
     recipe written in the TOML `list_recipes` shows. It is refused with the reason if it
     would not run; fix that and save again. The window then runs it as Prepare for print.
-12. `send_to_printer` only when the user asks for that printer; `start` only when they ask to
-    start and say the vat is filled and the plate and film are clear.
+12. `send_to_printer` only when the user asks for that printer: `find_printers` gives its
+    address, asked of the user only when none answers; `start` only when they ask to start
+    and say the vat is filled and the plate and film are clear.
 
 Coordinates are plate millimetres from the plate's front left corner, Z up; the model stands
-centred on the plate.
+centred on the plate, the standard printer's until the user names theirs. Each check gives
+every model's `fit.bounds_mm`, its low and high corners: take a cut's `at_mm` and every point
+from there, never from a guess at the plate's middle.

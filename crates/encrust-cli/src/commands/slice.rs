@@ -73,6 +73,7 @@ impl PlateArgs {
 
 impl SliceCommand {
     pub fn run(&self, global: &GlobalArgs, stop: &Stop) -> Result<Exit> {
+        self.job.profile.refuse_standard_machine()?;
         self.plate.check()?;
         if self.all_plates {
             return self.run_every_plate(global, stop);

@@ -17,6 +17,7 @@ use printer_profiles::{PrinterProfile, SupportProfile};
 use super::finished::Finished;
 use super::{Found, Laid, Part, Shaping, bounds, standing_of};
 use crate::exit::{Cancelled, Stop};
+use crate::pipeline::OrientSummary;
 use crate::plate_edits::{imported_model, write_project};
 
 /// The printer and resin a project names by catalogue id.
@@ -30,6 +31,8 @@ pub(crate) struct Staging {
     only: Vec<ObjectId>,
     /// The plate the flags work on, for a project's; a run of models has one.
     plate: u32,
+    /// What the search chose for each piece it stood, where an entry was cut into several.
+    oriented: HashMap<ObjectId, OrientSummary>,
 }
 
 impl Staging {
@@ -63,6 +66,7 @@ impl Staging {
             owners,
             only,
             plate: 0,
+            oriented: HashMap::new(),
         }
     }
 
@@ -76,7 +80,13 @@ impl Staging {
             owners,
             only,
             plate,
+            oriented: HashMap::new(),
         }
+    }
+
+    /// Notes what the search chose for `object`, one piece of several an entry was cut into.
+    pub(super) fn note_oriented(&mut self, object: ObjectId, summary: OrientSummary) {
+        self.oriented.insert(object, summary);
     }
 
     /// The plate as a project, as the edits left it.
@@ -248,7 +258,7 @@ impl Staging {
     /// The plate as it stands, with a part for each object but a plug, which counts with its
     /// model, and what was found on it; import's findings go with an entry's first part.
     pub(crate) fn laid(
-        self,
+        mut self,
         (found, finished): (Vec<Found>, Vec<(ObjectId, Finished)>),
         (entries, out): (&[(PathBuf, Shaping)], Option<&Path>),
         printer: Option<&PrinterProfile>,
@@ -285,6 +295,7 @@ impl Staging {
             let (import, oriented) = found[entry]
                 .take()
                 .map_or((None, None), |(i, o)| (Some(i), o));
+            let oriented = self.oriented.remove(&object.id).or(oriented);
             let done = finished.remove(&object.id).unwrap_or_default();
             part_at.insert(index, parts.len());
             parts.push(Part {

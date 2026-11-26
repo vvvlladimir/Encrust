@@ -42,6 +42,7 @@ struct Report {
 
 impl ConvertCommand {
     pub fn run(&self, global: &GlobalArgs, stop: &Stop) -> Result<Exit> {
+        self.profile.refuse_standard_machine()?;
         let chosen = self.profile.resolve()?;
         let Some(printer) = chosen.printer else {
             bail!("convert needs --printer or --profile: the machine the new file is for");

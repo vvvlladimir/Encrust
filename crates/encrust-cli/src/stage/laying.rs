@@ -46,7 +46,13 @@ pub(super) fn shaped(
         .iter()
         .any(|(_, shaping)| shaping.import.transform.center);
     let printer = chosen.printer.as_ref();
-    let (mut staging, found) = placed_by_edits(&edited, (&job.profile, chosen), false, watch)?;
+    let pieces = job.model.makes_pieces();
+    let (edited, late) = if pieces {
+        placed::split_at_pieces(&edited)
+    } else {
+        (edited, Vec::new())
+    };
+    let (mut staging, mut found) = placed_by_edits(&edited, (&job.profile, chosen), false, watch)?;
     if watch.talk {
         for (import, _) in &found {
             print!("{import}");
@@ -54,6 +60,15 @@ pub(super) fn shaped(
     }
     let centred = (combining && centred).then_some(printer);
     modelled::modelled(&mut staging, &job.model, centred, watch)?;
+    if pieces {
+        placed::placed(
+            &mut staging,
+            &mut found,
+            &late,
+            (&job.profile, printer),
+            watch,
+        )?;
+    }
     Ok((staging, found))
 }
 

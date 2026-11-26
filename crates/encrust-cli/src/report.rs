@@ -18,6 +18,8 @@ pub struct FitCheck {
     pub fit: PlateFit,
     /// The plate inside its inset as its low corner and its size, mm.
     pub usable_mm: [[Scalar; 2]; 2],
+    /// Where the model stands, its low and high corners in plate mm.
+    pub bounds_mm: [[Scalar; 3]; 2],
 }
 
 impl FitCheck {
@@ -29,6 +31,7 @@ impl FitCheck {
         Self {
             printer: profile.name.clone(),
             usable_mm: [low, size],
+            bounds_mm: [bounds.mins.to_array(), bounds.maxs.to_array()],
             fit: PlateFit::of(
                 bounds,
                 Vec3::new(volume.x, volume.y, volume.z),

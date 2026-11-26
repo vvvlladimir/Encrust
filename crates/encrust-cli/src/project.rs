@@ -239,7 +239,7 @@ fn saved_supports(object: &ObjectState, model: &core_engine::Model) -> Option<Su
 /// the user's catalogue has them; the engine tunes the resin to the machine as the window does.
 pub(crate) fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
     let flags = &job.profile;
-    let (printer, printer_id) = match (&flags.profile, &flags.printer) {
+    let (printer, printer_id) = match (&flags.profile, flags.printer_id()) {
         (Some(path), _) => {
             let printer = PrinterProfile::load(path)
                 .with_context(|| format!("cannot load {}", path.display()))?;
@@ -247,7 +247,7 @@ pub(crate) fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
         }
         (None, Some(id)) => {
             let why = format!("--printer {id} is not among your printers");
-            (printer_of(id, &why)?, Some(id.clone()))
+            (printer_of(id, &why)?, Some(id.to_owned()))
         }
         (None, None) => {
             let id = manifest
@@ -263,6 +263,7 @@ pub(crate) fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
         (Some(path), _) => MaterialProfile::load(path)
             .with_context(|| format!("cannot load {}", path.display()))?,
         (None, Some(id)) => resin_of(id, &format!("--resin {id} is not among your resins"))?,
+        (None, None) if flags.standard_machine => MaterialProfile::default(),
         (None, None) => {
             let id = manifest
                 .resin

@@ -717,6 +717,14 @@ encrust estimate plate.encrust --edits cut.json --project-out cut.encrust --json
 `estimate` takes what `slice` takes and writes nothing. It prints what the stack is and,
 with a printer, what the print takes: time, resin by volume and weight, price where the
 resin has one, and the layers likely to fail. `--strict` fails it on the same defects.
+`--standard-machine` checks on the standard printer with the stock resin numbers where the
+user has named neither, as a chat client's job does: a model is centred and arranged on that
+plate, so a plate point keeps its place once the user names a machine of its size; `slice`,
+`batch` and `convert` refuse it, since nobody measured its exposure (ADR 0481).
+
+```sh
+encrust estimate bust.stl --standard-machine --center --cut x:109.44 --arrange
+```
 `--quick-check` reads the panel in squares of two by two pixels, as the window's background
 check does: quicker, but blind to an island near the smallest one named (ADR 0419). The
 `fits` line answers for the model where it stands, not only for its size: one small enough
@@ -724,7 +732,8 @@ to print but hanging off the plate is named as off it, because the panel clips w
 hangs over and the resin figure then counts material no machine would cure. A model in the
 band a maker keeps clear along the plate's edges still fits, and the line names how far it
 reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON; `models[].fit.usable_mm`, the usable plate's low
-corner and size in mm, in the check report, which encrust-mcp reads); it slices whole (ADR 0371). Once
+corner and size in mm, and `models[].fit.bounds_mm`, the model's low and high corners on the
+plate, in the check report, which encrust-mcp reads); it slices whole (ADR 0371). Once
 `--supports` has stood them, an *On the plate* block answers again for the model with its
 supports and raft where it was put down, and each project model that does not fit so is
 named with its `fits` line; `--strict` fails on

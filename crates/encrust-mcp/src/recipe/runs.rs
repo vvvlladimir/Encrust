@@ -17,6 +17,7 @@ impl Recipe {
             || self.hollow.as_ref().is_some_and(|h| named(&h.objects))
             || self.drains.as_ref().is_some_and(|d| named(&d.objects))
             || self.supports.as_ref().is_some_and(|s| named(&s.objects))
+            || !self.more_supports.is_empty()
     }
 
     /// The runs that stage this recipe, each its flags after the subcommand: one where every
@@ -44,6 +45,7 @@ impl Recipe {
             hollow: None,
             drains: None,
             supports: None,
+            more_supports: Vec::new(),
             ..self.clone()
         };
         let mut runs = vec![base.flags()];
@@ -89,7 +91,7 @@ impl Recipe {
             drains.push_flags(&mut flags);
             steps.push((drains.objects.clone(), flags));
         }
-        if let Some(supports) = &self.supports {
+        for supports in self.supports.iter().chain(&self.more_supports) {
             let mut flags = Vec::new();
             supports.push_flags(&mut flags);
             steps.push((supports.objects.clone(), flags));
