@@ -23,6 +23,7 @@ fn supports(profile: Option<&str>, at_mm: Vec<Vec3>, only_at: bool) -> Edit {
         cavity: false,
         shown_at: Vec::new(),
         clean_surface: false,
+        anew: false,
     }
 }
 
@@ -248,6 +249,7 @@ fn auto(cavity: bool, shown_at: Vec<ShownAt>) -> Edit {
         cavity,
         shown_at,
         clean_surface: false,
+        anew: false,
     }
 }
 
@@ -361,6 +363,7 @@ fn supports_for_an_object_not_on_the_plate_name_it() {
         cavity: false,
         shown_at: Vec::new(),
         clean_surface: false,
+        anew: false,
     };
 
     let error = apply(&mut document, &edit, Cancel::never()).expect_err("no such object");
@@ -532,4 +535,45 @@ fn frozen_trees_on_a_cube_tipped_over_thaw_to_grow_again() {
         !state.supports.points.is_empty(),
         "the thawed trees' tips are points to grow from"
     );
+}
+
+fn plate_points(document: &Document) -> Vec<Vec3> {
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    let matrix = state.transform.to_matrix();
+    (state.supports.points.iter())
+        .map(|point| matrix.transform_point3(point.contact))
+        .collect()
+}
+
+#[test]
+fn supports_asked_anew_after_a_turn_keep_no_contact_from_the_old_pose() {
+    let mut document = lifted_cube(5.0);
+    let medium = supports(Some("medium"), Vec::new(), false);
+    apply(&mut document, &medium, Cancel::never()).expect("a lifted cube is supported");
+    let turn = Edit::Rotate {
+        object: CUBE,
+        degrees: Vec3::new(90.0, 0.0, 0.0),
+    };
+    let lift = Edit::Move {
+        object: CUBE,
+        by_mm: Vec3::new(0.0, 0.0, 5.0),
+    };
+    for edit in [&turn, &lift] {
+        apply(&mut document, edit, Cancel::never()).expect("the cube turns and lifts");
+    }
+    let mut again = medium;
+    if let Edit::Supports { anew, .. } = &mut again {
+        *anew = true;
+    }
+    apply(&mut document, &again, Cancel::never()).expect("the turned cube is supported");
+
+    let points = plate_points(&document);
+    let lowest = points.iter().map(|at| at.z).fold(f32::INFINITY, f32::min);
+    assert!(!points.is_empty(), "the turned cube stands on supports");
+    for at in &points {
+        assert!(
+            (at.z - lowest).abs() < 1e-3,
+            "every contact is on the new underside at z {lowest}, got {at}"
+        );
+    }
 }

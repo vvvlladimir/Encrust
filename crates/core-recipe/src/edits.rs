@@ -63,6 +63,7 @@ pub fn edits_of(
             cavity: flag(settings, "cavity").unwrap_or(false),
             shown_at: Vec::new(),
             clean_surface: false,
+            anew: false,
         }],
         // Sliding clear only what is in the way is the window's, with no edit yet.
         StepKind::Arrange => {

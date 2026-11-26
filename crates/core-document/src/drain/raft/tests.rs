@@ -29,6 +29,7 @@ fn lifted_cube(rafted: bool) -> Document {
         cavity: false,
         shown_at: Vec::new(),
         clean_surface: false,
+        anew: false,
     };
     apply(&mut document, &edit, Cancel::never()).expect("a lifted cube is held up");
     document

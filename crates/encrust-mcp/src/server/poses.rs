@@ -8,12 +8,37 @@ use serde_json::{Value, json};
 use super::{Context, Server};
 use crate::jobs::Revision;
 use crate::params::{ComparePoses, View};
-use crate::recipe::{Goal, Pose};
+use crate::recipe::{Goal, Pose, Recipe, Supports};
 
 /// How many ways are compared when the client names no count.
 const COUNT: u16 = 4;
 /// Each picture's width and height when the client names none: small, for one a choice.
 const SIZE_PX: u32 = 320;
+
+/// What the client is told of the points a new pose took away, which were on the old one.
+const DRAINS_CLEARED: &str =
+    "the drain points were cleared: they were on the old pose; automatic drains stay";
+const SUPPORT_POINTS_CLEARED: &str = "the support points, shown points and merges given by hand \
+    were cleared: they were on the old pose; the supports stand again for the new one";
+const BOTH_CLEARED: &str = "the drain and support points given by hand were cleared: they were \
+    on the old pose; automatic drains stay and the supports stand again for the new one";
+
+/// Stands `recipe`'s model at `pose`, taking away the points given on the old one; answers
+/// what the client is told of them.
+pub(super) fn turned(recipe: &mut Recipe, pose: Option<Pose>) -> Option<&'static str> {
+    let had_drains = (recipe.drains.as_mut())
+        .is_some_and(|drains| !std::mem::take(&mut drains.at_mm).is_empty());
+    let asked = recipe.supports.iter_mut().chain(&mut recipe.more_supports);
+    let dropped: Vec<bool> = asked.map(Supports::drop_plate_points).collect();
+    let had_points = dropped.contains(&true);
+    recipe.pose = pose;
+    match (had_drains, had_points) {
+        (false, false) => None,
+        (true, false) => Some(DRAINS_CLEARED),
+        (false, true) => Some(SUPPORT_POINTS_CLEARED),
+        (true, true) => Some(BOTH_CLEARED),
+    }
+}
 
 impl Server {
     /// The ways the latest revision's model could stand, each with its numbers and pictures.

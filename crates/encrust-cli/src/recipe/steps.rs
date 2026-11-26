@@ -348,6 +348,7 @@ pub(super) fn hold_up(
         cavity: false,
         shown_at: Vec::new(),
         clean_surface: false,
+        anew: false,
     };
     let applied = staging
         .apply(&edit, piece.id, ctx.watch.stop)

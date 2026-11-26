@@ -10,8 +10,10 @@ use serde_json::{Value, json};
 use crate::runner::Outcome;
 
 use super::Server;
-use super::asked::{Area, Checked, asked_after_check};
-use super::plate_edits::{GAVE_UP, REBUILDS, cut_object, fit_drift_of, unkept, usable_area_of};
+use super::asked::{Area, Checked, Stood, asked_after_check};
+use super::plate_edits::{
+    GAVE_UP, REBUILDS, cut_object, fit_drift_of, stood_of, unkept, usable_area_of,
+};
 use super::reply::{Reply, not_applied, revised};
 use crate::jobs::Revision;
 use crate::recipe::Recipe;
@@ -38,8 +40,8 @@ impl Server {
         against: &[String],
         ctx: &Context,
     ) -> Result<Result<Reply>, Box<Recipe>> {
-        let (drift, area) = self.earlier_check(latest, &recipe);
-        let checked = (None, drift, area);
+        let (drift, area, stood) = self.earlier_check(latest, &recipe);
+        let checked = (None, drift, area, stood);
         let asked = asked_after_check(&recipe, &latest.recipe, ObjectId::UNSET, checked);
         if asked.as_ref().is_none_or(Vec::is_empty) {
             return Err(Box::new(recipe));
@@ -57,13 +59,20 @@ impl Server {
     }
 
     /// The fit drift and usable plate area the previous revision's check reported, where it ran
-    /// on the printer and resin `recipe` names: this revision's check has not run yet.
-    fn earlier_check(&self, latest: &Revision, recipe: &Recipe) -> (Option<f32>, Option<Area>) {
+    /// on the printer and resin `recipe` names, and what the model stood on there: this
+    /// revision's check has not run yet.
+    fn earlier_check(
+        &self,
+        latest: &Revision,
+        recipe: &Recipe,
+    ) -> (Option<f32>, Option<Area>, Stood) {
         let same = latest.recipe.printer == recipe.printer && latest.recipe.resin == recipe.resin;
-        let Some(report) = self.jobs.report(latest).ok().filter(|_| same) else {
-            return (None, None);
+        let report = self.jobs.report(latest).ok();
+        let stood = stood_of(report.as_ref());
+        let Some(report) = report.filter(|_| same) else {
+            return (None, None, stood);
         };
-        (fit_drift_of(&report), usable_area_of(&report))
+        (fit_drift_of(&report), usable_area_of(&report), stood)
     }
 
     /// The open window's plate with the job's model on it, which holds whatever the user did

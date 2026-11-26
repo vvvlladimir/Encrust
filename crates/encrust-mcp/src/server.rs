@@ -202,16 +202,7 @@ impl Server {
                 return Ok(answer(Err(error)));
             }
         }
-        let edited = self.edit(&set.job, &ctx, |recipe| {
-            let had_drains = recipe
-                .drains
-                .as_mut()
-                .is_some_and(|drains| !std::mem::take(&mut drains.at_mm).is_empty());
-            recipe.pose = set.pose;
-            had_drains.then_some(
-                "the drain points were cleared: they were on the old pose; automatic drains stay",
-            )
-        });
+        let edited = self.edit(&set.job, &ctx, |recipe| poses::turned(recipe, set.pose));
         Ok(answer(edited.await))
     }
 

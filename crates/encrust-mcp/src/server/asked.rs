@@ -7,8 +7,11 @@ use serde_json::{Value, json};
 use crate::recipe::{Goal, Mend, Modelling, Pose, Recipe, Relief, Repair};
 
 /// What the check of a revision reports for the edits: the turn its search chose, the resin's fit
-/// drift and the printer's usable area as its low corner and size, mm.
-pub type Checked = (Option<[f32; 3]>, Option<f32>, Option<Area>);
+/// drift, the printer's usable area as its low corner and size, mm, and how the model stood.
+pub type Checked = (Option<[f32; 3]>, Option<f32>, Option<Area>, Stood);
+
+/// Whether the model stood on supports and whether it was hollowed, as a check reports them.
+pub type Stood = (bool, bool);
 
 /// A plate area as its low corner and its size, mm.
 pub type Area = ([f32; 2], [f32; 2]);
@@ -19,7 +22,7 @@ pub fn asked_after_check(
     recipe: &Recipe,
     earlier: &Recipe,
     object: ObjectId,
-    (chosen_deg, fit_drift_mm, area_mm): Checked,
+    (chosen_deg, fit_drift_mm, area_mm, stood): Checked,
 ) -> Option<Vec<Edit>> {
     if !plate_alike(recipe, earlier) {
         return None;
@@ -73,7 +76,14 @@ pub fn asked_after_check(
     if let Some(pressed) = pressed {
         asked.insert(at, pressed);
     }
-    asked.extend(finished(recipe, earlier, object, fit_drift_mm)?);
+    // Contacts from the old pose would stand on faces that now look up, the new underside bare.
+    let turned_from = (recipe.pose != earlier.pose).then_some(stood);
+    asked.extend(finished(
+        recipe,
+        earlier,
+        object,
+        (fit_drift_mm, turned_from),
+    )?);
     if arrange_asked(recipe, earlier, &asked) {
         let (low_mm, plate_mm) = area_mm?;
         asked.push(Edit::Arrange {

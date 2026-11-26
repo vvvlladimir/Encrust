@@ -5,7 +5,7 @@ use core_edit::{Edit, ObjectId};
 use serde_json::{Value, json};
 
 use super::Server;
-use super::asked::{Area, asked_after_check};
+use super::asked::{Area, Stood, asked_after_check};
 use crate::jobs::Revision;
 use crate::recipe::{Cut, Recipe};
 
@@ -67,10 +67,12 @@ impl Server {
             return (revision.recipe == earlier.recipe)
                 .then(|| json!({"shown": false, "why_not": CUT_HELD}));
         }
+        let earlier_report = self.jobs.report(&earlier).ok();
         let chosen = (
             chosen_turn(report),
             fit_drift_of(report),
             usable_area_of(report),
+            stood_of(earlier_report.as_ref()),
         );
         let asked = asked_after_check(&revision.recipe, &earlier.recipe, ObjectId::UNSET, chosen)?;
         if asked.is_empty() {
@@ -137,6 +139,15 @@ pub(super) fn fit_drift_of(report: &Value) -> Option<f32> {
     report["slicing"]["fit_drift_mm"]
         .as_f64()
         .map(|drift| drift as f32)
+}
+
+/// Whether the job's model stood on supports at the check and whether it was hollowed. A plate
+/// whose trees grow again on opening reports none, so a recipe's supports count as well.
+pub(super) fn stood_of(report: Option<&Value>) -> Stood {
+    let model = report.map_or(&Value::Null, |report| &report["models"][0]);
+    let contacts = model["supports"]["contacts"].as_u64().unwrap_or(0);
+    let cavity_mm3 = model["hollow"]["cavity_mm3"].as_f64().unwrap_or(0.0);
+    (contacts > 0, cavity_mm3 > 0.0)
 }
 
 /// The printer's usable area of the check, its low corner and its size, mm.

@@ -172,6 +172,7 @@ fn lifted_cubes_keep_their_supports_clear_of_each_other() {
             cavity: false,
             shown_at: Vec::new(),
             clean_surface: false,
+            anew: false,
         };
         apply(&mut document, &supports, Cancel::never()).expect("a lifted cube is supported");
     }

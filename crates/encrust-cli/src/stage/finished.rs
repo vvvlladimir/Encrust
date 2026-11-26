@@ -348,6 +348,7 @@ fn supported(
         cavity: plan.cavity,
         shown_at: plan.shown_at.clone(),
         clean_surface: false,
+        anew: false,
     };
     let applied = staging
         .apply(&edit, id, watch.stop)

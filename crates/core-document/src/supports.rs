@@ -51,10 +51,11 @@ impl<'a> SupportsAsked<'a> {
     }
 }
 
-/// Stands supports under object `id`, by the preset's contacts and the points asked for.
+/// Stands supports under object `id`, by the preset's contacts and the points asked for; `anew`,
+/// from none rather than beside those standing.
 pub(crate) fn apply_supports(
     document: &mut Document,
-    id: ObjectId,
+    (id, anew): (ObjectId, bool),
     asked: &SupportsAsked<'_>,
     cancel: Cancel<'_>,
 ) -> Result<Applied, ApplyError> {
@@ -69,6 +70,9 @@ pub(crate) fn apply_supports(
     let surface = meshes.printed();
     let bvh = Arc::new(Bvh::build(surface));
     let mut supports = kept_supports(state, meshes, &bvh, &table);
+    if anew {
+        supports.clear();
+    }
     let placed = transform_mesh(surface, transform);
     let placed_bvh = Bvh::build(&placed);
     let on = PlacedModel {

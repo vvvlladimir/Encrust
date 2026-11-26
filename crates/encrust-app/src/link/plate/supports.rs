@@ -25,14 +25,19 @@ pub(super) fn start_supports(
         only_at,
         shown_at,
         clean_surface,
+        anew,
         ..
     } = edit
     else {
         return Err(no_object(object));
     };
     let scene = &mut window.doc.scene;
-    scene.get(object).ok_or_else(|| no_object(object))?;
+    let model = scene.get_mut(object).ok_or_else(|| no_object(object))?;
     let tool = &mut window.tools.supports;
+    if *anew {
+        model.supports.clear();
+        tool.picked.retain(|picked| picked.id != object);
+    }
     let named = profile.as_deref().filter(|name| *name != AUTO);
     if let Some(name) = named {
         take_up_named(tool, scene, name)?;

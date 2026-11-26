@@ -580,3 +580,4 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0479](0479-the-command-line-shapes-a-plates-objects-by-id.md) | The command line shapes a plate's objects by id | Proposed |
 | [0480](0480-a-job-is-hidden-or-deleted-from-the-agents-list.md) | A job is hidden or deleted from the agents' list | Proposed |
 | [0481](0481-a-job-with-no-machine-is-checked-on-the-standard-one.md) | A job with no machine is checked on the standard one, and cut pieces are shaped after the cut | Proposed |
+| [0482](0482-a-new-pose-stands-the-supports-anew.md) | A new pose from a client stands the supports anew | Proposed |

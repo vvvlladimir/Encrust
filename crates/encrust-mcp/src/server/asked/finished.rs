@@ -4,19 +4,19 @@
 use core_edit::defaults::{
     SHOWN_RADIUS_MM, drain_depth_mm, infill_cell_and_density, lattice_precision,
 };
-use core_edit::{Edit, ObjectId, PLUG_GAP_MM};
+use core_edit::{AUTO, Edit, ObjectId, PLUG_GAP_MM};
 use serde_json::{Value, json};
 
-use super::edit_of;
+use super::{Stood, edit_of};
 use crate::recipe::{Drains, HoleKind, Hollow, Recipe, Supports};
 
 /// The edits finishing `object` that `recipe` asks beyond `earlier`, `None` where one is no
-/// edit yet.
+/// edit yet; `turned_from`, how the model stood before a new pose, if one is asked.
 pub(super) fn finished(
     recipe: &Recipe,
     earlier: &Recipe,
     object: ObjectId,
-    fit_drift_mm: Option<f32>,
+    (fit_drift_mm, turned_from): (Option<f32>, Option<Stood>),
 ) -> Option<Vec<Edit>> {
     let drilled = if recipe.drains == earlier.drains {
         Drilled::default()
@@ -31,7 +31,9 @@ pub(super) fn finished(
         asked.push(hollow(recipe.hollow.as_ref()?, object)?);
     }
     asked.extend(drilled.after_hollow);
-    if recipe.supports != earlier.supports {
+    if let Some(stood) = turned_from {
+        asked.extend(supported_anew(recipe, stood, object)?);
+    } else if recipe.supports != earlier.supports {
         let then = earlier.supports.as_ref();
         asked.extend(supported(recipe.supports.as_ref()?, then, object)?);
     }
@@ -201,6 +203,37 @@ fn supported(now: &Supports, then: Option<&Supports>, object: ObjectId) -> Optio
         asked.push(edit_of(merge)?);
     }
     Some(asked)
+}
+
+/// Supports stood again from nothing after a new pose, as the flags would stand them for
+/// `recipe`; none where it asks none and none stood, `None` where the flags place them: a
+/// recipe's own steps or points given on the old pose.
+fn supported_anew(
+    recipe: &Recipe,
+    (stood, hollowed): Stood,
+    object: ObjectId,
+) -> Option<Vec<Edit>> {
+    let cavity_held = hollowed || recipe.hollow.is_some();
+    let (profile, cavity) = match &recipe.supports {
+        Some(asked) if by_hand(asked) => return None,
+        Some(asked) => (Some(asked.profile.as_str()), asked.cavity),
+        None if recipe.steps_by.is_some() => return None,
+        None if recipe.prepare => (Some(AUTO), cavity_held),
+        None if stood => (None, cavity_held),
+        None => return Some(Vec::new()),
+    };
+    let anew = json!({
+        "edit": "supports", "object": object, "profile": profile, "cavity": cavity, "anew": true,
+    });
+    Some(vec![edit_of(anew)?])
+}
+
+/// Whether `asked` names points on the plate or asks for those alone.
+fn by_hand(asked: &Supports) -> bool {
+    !asked.at_mm.is_empty()
+        || !asked.shown_at_mm.is_empty()
+        || !asked.merge_at_mm.is_empty()
+        || asked.only_at
 }
 
 /// A `Supports` edit by `now`'s profile at `at_mm`; a `whole_run` holds up the cavity and paints

@@ -696,12 +696,13 @@ printer, the standard `elegoo-saturn-4-ultra` where none is named, and stands th
 over the middle it stood over. An id is looked up in the shipped catalogue alone, so a printer or resin
 of your own folder is refused (`NoPrinter`, `NoResin`); the window's link takes the window's own;
 `supports` (`object`, and optional `profile`, a shipped support preset, `at_mm`, a list of
-`[x, y, z]`, `only_at`, `cavity`, `shown_at` and `clean_surface`) stands supports under the object by the preset,
+`[x, y, z]`, `only_at`, `cavity`, `shown_at`, `clean_surface` and `anew`) stands supports under the object by the preset,
 the plate's active group's where unset, and a contact at the surface nearest each point; with
 `only_at` those contacts alone. `auto` sizes each support by what it holds, as `--supports auto`;
 `cavity` holds up a hollow object's cavity too, as `--support-cavity`; `shown_at`, a list of
 `{"at_mm": [x, y, z], "radius_mm": r}`, marks the side meant to be seen, as `--shown-at`; the side painted shown in the file is read only
-with `clean_surface` or strokes, as the window's Clean surface reads it;
+with `clean_surface` or strokes, as the window's Clean surface reads it; `anew` takes every support
+of the object away first, so none stands from an earlier pose;
 `arrange` (`plate_mm`, `[x, y]`, `clearance_mm` and optional `low_mm`, `[x, y]`, 0) spreads every
 visible object of the active plate over the usable area that size from that corner (the plate less
 its inset), each with its supports, turning one no slide fits, as the window's
@@ -1115,7 +1116,8 @@ carries `compared`. `compare_poses` runs a search with `--orient-choices` — 4 
 `keep_clear_at_mm` are plate points as the latest revision stands, `clean_surface` is
 `--clean-surface`: the server keeps with them
 the turn that revision stood in as `keep_clear_seen_deg` and takes its supports' lift off them; edits to one job wait for each other. `set_drains` with `auto` is `--drain-at auto`, a
-proven drain and vent per pocket; a new pose clears drain points given by hand. `check` reads any
+proven drain and vent per pocket; a new pose clears drain and support points given by hand and stands
+the supports anew for it (ADR 0482). `check` reads any
 revision again and `revert` copies one forward. `write_file` slices a revision under
 `--strict` unless `accept_defects`, and answers `written: false` as a tool error when nothing
 was written; `send_to_printer` is `printer send`. `render` draws a revision with `encrust render` —

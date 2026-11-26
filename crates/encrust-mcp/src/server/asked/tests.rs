@@ -4,7 +4,7 @@ use crate::recipe::{Cut, Drains, HoleKind, Hollow, Mend, Relief, Supports};
 const MODEL: ObjectId = ObjectId(3);
 
 fn asked_edits(recipe: &Recipe, earlier: &Recipe, object: ObjectId) -> Option<Vec<Edit>> {
-    asked_after_check(recipe, earlier, object, (None, None, None))
+    asked_after_check(recipe, earlier, object, (None, None, None, (false, false)))
 }
 
 fn bare() -> Recipe {
@@ -261,8 +261,13 @@ fn a_drain_search_with_channels_and_plugs_is_a_drain_a_channel_each_and_plugs() 
         }),
         ..bare()
     };
-    let asked = asked_after_check(&recipe, &bare(), MODEL, (None, Some(0.0), None))
-        .expect("a search, a channel and plugs are edits");
+    let asked = asked_after_check(
+        &recipe,
+        &bare(),
+        MODEL,
+        (None, Some(0.0), None, (false, false)),
+    )
+    .expect("a search, a channel and plugs are edits");
     assert!(
         matches!(
             asked.as_slice(),
@@ -398,7 +403,7 @@ fn a_pose_the_search_picked_is_an_orient_proved_on_the_jobs_printer_and_resin() 
     };
 
     let area = Some(([5.0, 3.0], [200.0, 120.0]));
-    let asked = asked_after_check(&recipe, &bare(), MODEL, (None, None, area))
+    let asked = asked_after_check(&recipe, &bare(), MODEL, (None, None, area, (false, false)))
         .expect("a search is an edit");
 
     assert_eq!(
@@ -433,7 +438,7 @@ fn a_search_on_a_printer_file_is_the_turn_its_check_chose() {
         &by_file,
         &bare(),
         MODEL,
-        (Some([90.0, 0.0, 0.0]), None, None),
+        (Some([90.0, 0.0, 0.0]), None, None, (false, false)),
     )
     .expect("the turn chosen is an edit");
     assert!(
@@ -449,7 +454,7 @@ fn a_search_keeping_a_place_clear_is_an_orient_keeping_it_clear_as_the_check_saw
         ..bare()
     };
 
-    let asked = asked_after_check(&keeping, &bare(), MODEL, (None, None, None))
+    let asked = asked_after_check(&keeping, &bare(), MODEL, (None, None, None, (false, false)))
         .expect("a search is an edit");
 
     assert!(
@@ -476,8 +481,13 @@ fn a_plug_gap_is_the_typed_gap_less_the_resins_fit_drift() {
         ..bare()
     };
     let gap_of = |recipe: &Recipe| {
-        let asked = asked_after_check(recipe, &bare(), MODEL, (None, Some(0.05), None))
-            .expect("holes and plugs are edits");
+        let asked = asked_after_check(
+            recipe,
+            &bare(),
+            MODEL,
+            (None, Some(0.05), None, (false, false)),
+        )
+        .expect("holes and plugs are edits");
         match asked.last() {
             Some(Edit::Plugs { gap_mm, .. }) => *gap_mm,
             other => panic!("plugs last, got {other:?}"),
@@ -493,7 +503,12 @@ fn a_plug_gap_is_the_typed_gap_less_the_resins_fit_drift() {
         "0.15 less 0.05"
     );
     assert_eq!(
-        asked_after_check(&drains(None), &bare(), MODEL, (None, None, None)),
+        asked_after_check(
+            &drains(None),
+            &bare(),
+            MODEL,
+            (None, None, None, (false, false))
+        ),
         None,
         "without the resin's drift a plug is no edit"
     );
@@ -568,8 +583,13 @@ fn a_cut_asked_with_arrange_is_spread_over_the_usable_area_last() {
         ..Modelling::default()
     });
     let area = ([5.0, 5.0], [200.0, 120.0]);
-    let asked = asked_after_check(&recipe, &bare(), MODEL, (None, None, Some(area)))
-        .expect("a cut and an arrange are edits");
+    let asked = asked_after_check(
+        &recipe,
+        &bare(),
+        MODEL,
+        (None, None, Some(area), (false, false)),
+    )
+    .expect("a cut and an arrange are edits");
     assert!(
         matches!(asked.as_slice(), [Edit::Cut { .. }, _]),
         "{asked:?}"
@@ -695,3 +715,5 @@ fn a_mirror_and_a_move_are_edits_and_copies_a_check_by_flags() {
     });
     assert_eq!(asked_edits(&copied, &bare(), MODEL), None);
 }
+
+mod anew;

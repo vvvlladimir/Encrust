@@ -191,6 +191,18 @@ impl Fixes {
 }
 
 impl Supports {
+    /// Takes away the points given in plate mm, which were on the pose before, and the asking
+    /// for those alone; answers whether there were any.
+    pub fn drop_plate_points(&mut self) -> bool {
+        let had =
+            !self.at_mm.is_empty() || !self.shown_at_mm.is_empty() || !self.merge_at_mm.is_empty();
+        self.at_mm.clear();
+        self.shown_at_mm.clear();
+        self.merge_at_mm.clear();
+        self.only_at &= !had;
+        had
+    }
+
     pub(super) fn push_flags(&self, flags: &mut Vec<String>) {
         flags.push(profile_flag(
             &self.profile,

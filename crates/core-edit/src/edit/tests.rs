@@ -360,6 +360,7 @@ fn supports_written_by_hand_default_to_the_active_group_and_no_points() {
         cavity,
         shown_at,
         clean_surface,
+        anew,
     }) = parsed
     else {
         panic!("supports with only an object are an edit: {parsed:?}");
@@ -371,6 +372,7 @@ fn supports_written_by_hand_default_to_the_active_group_and_no_points() {
     assert!(!cavity, "the cavity is held only when asked");
     assert!(shown_at.is_empty());
     assert!(!clean_surface, "the painted side is read only when asked");
+    assert!(!anew, "the supports standing are kept unless asked anew");
 }
 
 #[test]

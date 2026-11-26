@@ -594,6 +594,34 @@ fn auto_supports_stand_contacts_under_a_lifted_cube() {
     }
 }
 
+#[test]
+fn supports_asked_anew_take_away_what_stood_before() {
+    let file = scratch("supports-anew");
+    let mut bench = Bench::new(file.clone());
+    let cube = with_cube(&mut bench, &file);
+    let version = bench.doc.history.plate_version();
+    let again = json!({"base_version": version,
+        "apply": [{"edit": "move", "object": cube.0, "by_mm": [0.0, 0.0, 5.0]},
+                  {"edit": "supports", "object": cube.0, "profile": "medium",
+                   "at_mm": [[2.0, 2.0, 4.0]], "only_at": true},
+                  {"edit": "supports", "object": cube.0, "profile": "medium",
+                   "at_mm": [[8.0, 8.0, 4.0]], "only_at": true, "anew": true}]});
+
+    let reply = bench.hand_over_running(&file, asking(&file, again));
+    bench.run_to_end();
+
+    assert_eq!(reply["applied"], true, "{reply}");
+    let object = bench.doc.scene.get(cube).expect("supports keep the id");
+    let contacts = object.supports.contacts(object.transform);
+    let [contact] = contacts[..] else {
+        panic!("only the contact asked anew stands, got {contacts:?}");
+    };
+    assert!(
+        contact.abs_diff_eq(Vec3::new(8.0, 8.0, 5.0), 1e-3),
+        "the contact is at (8, 8, 5) within 1e-3, got {contact}"
+    );
+}
+
 /// The contacts auto supports stand under a cube lifted 5 mm, on a machine printing at `layer_mm`.
 fn lifted_contacts_at(layer_mm: f32) -> Vec<Vec3> {
     let file = scratch("supports-step");

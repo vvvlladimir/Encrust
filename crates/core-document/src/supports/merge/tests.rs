@@ -23,6 +23,7 @@ fn supported_cube() -> (Document, Vec<Vec3>) {
         cavity: false,
         shown_at: Vec::new(),
         clean_surface: false,
+        anew: false,
     };
     let applied = apply(&mut document, &edit, Cancel::never()).expect("a lifted cube is held up");
     let Report::Supported { contacts_mm, .. } = applied.report else {
@@ -64,6 +65,7 @@ fn slab_on_two_supports() -> (Document, [Vec3; 2]) {
         cavity: false,
         shown_at: Vec::new(),
         clean_surface: false,
+        anew: false,
     };
     apply(&mut document, &edit, Cancel::never()).expect("the slab's ends are held up");
     (document, ends)

@@ -173,8 +173,8 @@ no resin drift added or taken off here; the window stores the gap plus its resin
 its tool takes off again, and `edits_of` takes the drift off the default (ADR 0471). The window
 starts its plugs job. The search reads the analysis step (ADR 0471).
 
-`Supports { object, profile, at_mm, only_at, cavity, shown_at, clean_surface }` stands supports under one
-object. `profile` is the plate's group of that name, else a shipped preset
+`Supports { object, profile, at_mm, only_at, cavity, shown_at, clean_surface, anew }` stands supports under one
+object; `anew` clears its points and frozen trees first, its painted regions kept (ADR 0482). `profile` is the plate's group of that name, else a shipped preset
 (`SupportProfile::shipped`), the active group where unset; neither is `NoProfile`. A preset becomes
 a group of the plate where none carries its name; the group named becomes the active one (as the
 panel takes a profile up), and the contacts go into it. A profile of a user's folder reaches an

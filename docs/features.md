@@ -1120,7 +1120,8 @@ model is prepared in a job of its own; `plate_jobs` lays several on one plate, s
 checks it and writes them as one file.
 `compare_poses` shows the model the best few ways the engine found to stand it, each drawn
 with what it prints, and the model picks one for what the print is — keeping supports off a
-face you named, say, which the search then ranks first. Every step it takes is set against
+face you named, say, which the search then ranks first. A model on supports that the agent
+stands a new way gets its supports again for that pose, none left over from the old one. Every step it takes is set against
 the step before and the autopilot's own preparation, so it can undo one that made the print
 worse. The window lists every agent — Claude Code, Claude Desktop — in a robot's ring beside the
 print chip, there while an agent has a model in hand and turning while it works, each with

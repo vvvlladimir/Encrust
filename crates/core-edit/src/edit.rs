@@ -252,6 +252,9 @@ pub enum Edit {
         /// Reads the side painted shown in the file, as the window's Clean surface does.
         #[serde(default)]
         clean_surface: bool,
+        /// Takes every support of `object` away first, as after a new pose (ADR 0482).
+        #[serde(default)]
+        anew: bool,
     },
     /// Joins the supports of `object` whose contacts lie nearest `near_mm`, two or more, plate
     /// mm, into one, as the window's Merge into one joins those picked (ADR 0440).

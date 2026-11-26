@@ -183,9 +183,9 @@ fn apply_to_the_surface(
         Edit::Drain { object, .. } | Edit::Channel { object, .. } | Edit::Plugs { object, .. } => {
             apply_drains(document, edit, object, cancel)
         }
-        Edit::Supports { object, .. } => {
+        Edit::Supports { object, anew, .. } => {
             let asked = SupportsAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
-            apply_supports(document, object, &asked, cancel)
+            apply_supports(document, (object, anew), &asked, cancel)
         }
         Edit::MergeSupports {
             object,
