@@ -7,12 +7,14 @@ use rmcp::schemars::{self, JsonSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod by_object;
 mod finish;
 mod runs;
 mod scoped;
 mod shape;
 mod slicing;
 
+pub use by_object::{ObjectBox, PlatePoints, split_by_object};
 pub use finish::{Drains, Fixes, HoleKind, Hollow, Supports};
 pub use runs::PREVIOUS;
 pub use shape::{Cut, Mend, Modelling, Relief};

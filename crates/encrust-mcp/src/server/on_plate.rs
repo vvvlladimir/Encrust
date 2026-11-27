@@ -11,9 +11,9 @@ use serde_json::json;
 use crate::runner::Outcome;
 
 use super::Server;
-use super::asked::{Area, Checked, Stood, asked_after_check};
+use super::asked::{Area, Checked, Stood, asked_after_check, asked_of_pieces};
 use super::plate_edits::{
-    GAVE_UP, REBUILDS, cut_object, fit_drift_of, stood_of, unkept, usable_area_of,
+    GAVE_UP, REBUILDS, cut_object, fit_drift_of, pieces_of, stood_of, unkept, usable_area_of,
 };
 use super::reply::{Reply, not_applied, not_taken, revised};
 use crate::jobs::Revision;
@@ -41,6 +41,11 @@ impl Server {
         against: &[String],
         ctx: &Context,
     ) -> Result<Result<Reply>, Box<Recipe>> {
+        if let Some(on) = self.pieces_on_plate(latest, &recipe) {
+            let job = latest.job.clone();
+            let reply = (self.checked_on_plate((latest, recipe, note), on, against, ctx)).await;
+            return Ok(self.shown_kept(&job, reply).await);
+        }
         let (drift, area, stood) = self.earlier_check(latest, &recipe);
         let checked = (None, drift, area, stood);
         let asked = asked_after_check(&recipe, &latest.recipe, ObjectId::UNSET, checked);
@@ -57,6 +62,38 @@ impl Server {
         Ok(self
             .checked_on_plate((latest, recipe, note), on, against, ctx)
             .await)
+    }
+
+    /// The plate `latest` left in pieces and what `recipe` asks of each as edits; `None` where
+    /// it is no such plate or one change is no edit, for the flags.
+    fn pieces_on_plate(
+        &self,
+        latest: &Revision,
+        recipe: &Recipe,
+    ) -> Option<(Base, Vec<Edit>, Checked)> {
+        let path = self.jobs.kept_pieces(latest)?;
+        let report = self.jobs.report(latest).ok()?;
+        let (drift, area, stood) = self.earlier_check(latest, recipe);
+        let edits = asked_of_pieces(recipe, &latest.recipe, &pieces_of(&report), (drift, area))?;
+        let base = Base {
+            path,
+            version: None,
+            object: ObjectId::UNSET,
+        };
+        (!edits.is_empty()).then_some((base, edits, (None, drift, area, stood)))
+    }
+
+    /// Shows the open window the revision `reply` kept, as a check by flags is shown.
+    async fn shown_kept(&self, job: &str, mut reply: Result<Reply>) -> Result<Reply> {
+        if let Ok(kept) = &mut reply
+            && !kept.failed
+            && let Ok(revision) = self.jobs.open(job, None)
+            && let Some(plate) = self.jobs.made_on_plate(&revision)
+            && let Some(shown) = self.window.show(&revision, &plate, false).await
+        {
+            kept.body["window"] = shown;
+        }
+        reply
     }
 
     /// The fit drift and usable plate area the previous revision's check reported, where it ran

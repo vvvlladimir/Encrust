@@ -154,10 +154,24 @@ pub(super) fn fit_drift_of(report: &Value) -> Option<f32> {
 /// Whether the job's model stood on supports at the check and whether it was hollowed. A plate
 /// whose trees grow again on opening reports none, so a recipe's supports count as well.
 pub(super) fn stood_of(report: Option<&Value>) -> Stood {
-    let model = report.map_or(&Value::Null, |report| &report["models"][0]);
+    stood_in(report.map_or(&Value::Null, |report| &report["models"][0]))
+}
+
+fn stood_in(model: &Value) -> Stood {
     let contacts = model["supports"]["contacts"].as_u64().unwrap_or(0);
     let cavity_mm3 = model["hollow"]["cavity_mm3"].as_f64().unwrap_or(0.0);
     (contacts > 0, cavity_mm3 > 0.0)
+}
+
+/// Each object the check lists, with how it stood there: the pieces a cut left.
+pub(super) fn pieces_of(report: &Value) -> Vec<(ObjectId, Stood)> {
+    let models = report["models"].as_array().map_or(&[][..], Vec::as_slice);
+    (models.iter())
+        .filter_map(|model| {
+            let id = ObjectId(model["id"].as_u64()?);
+            Some((id, stood_in(model)))
+        })
+        .collect()
 }
 
 /// The printer's usable area of the check, its low corner and its size, mm.

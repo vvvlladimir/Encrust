@@ -205,9 +205,13 @@ fn drain(
         .apply(&edit, id, watch.stop)
         .map_err(|error| match error {
             ApplyError::NoSurface(_) => anyhow!("no surface near a --drain-at point to drill"),
-            ApplyError::OffAFace { at_mm, .. } => {
-                anyhow!("--drain-at {at_mm} is nearest an edge or corner, not a face, to drill")
-            }
+            ApplyError::OffAFace {
+                at_mm, mouth_mm, ..
+            } => anyhow!(
+                "--drain-at {at_mm} is nearest an edge or corner, at {mouth_mm}, not a face, to \
+                 drill: point at the middle of a face beside it, or let --drain-at auto or \
+                 --drill-cups choose"
+            ),
             other => said(other),
         })?;
     Ok(())

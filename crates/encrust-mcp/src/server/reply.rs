@@ -16,7 +16,25 @@ pub(super) struct Reply {
     pub(super) failed: bool,
 }
 
+/// How many risks an answer lists unless every one is asked: a long list costs the client more
+/// than it tells it, and `N.json` keeps the whole.
+const RISKS_SHOWN: usize = 12;
+
 pub(super) fn revised(revision: &Revision, outcome: &Outcome, note: Option<&str>) -> Reply {
+    revised_with(revision, outcome, note, false)
+}
+
+/// As `revised`, with every risk the check found where `every_risk`.
+pub(super) fn revised_with(
+    revision: &Revision,
+    outcome: &Outcome,
+    note: Option<&str>,
+    every_risk: bool,
+) -> Reply {
+    let mut report = read_short(&outcome.report);
+    if !every_risk {
+        keep_first_risks(&mut report, RISKS_SHOWN);
+    }
     Reply {
         body: json!({
             "job": revision.job,
@@ -25,10 +43,34 @@ pub(super) fn revised(revision: &Revision, outcome: &Outcome, note: Option<&str>
             "note": note,
             "compared": outcome.report.get("compared"),
             "exit_code": outcome.exit_code,
-            "report": read_short(&outcome.report),
+            "report": report,
         }),
         failed: false,
     }
+}
+
+/// Cuts `print.cured.risks` to the `most` that matter first — every risk but an island in the
+/// check's order, then the largest islands — and says how many were left out.
+fn keep_first_risks(report: &mut Value, most: usize) {
+    let Some(cured) = report.pointer_mut("/print/cured") else {
+        return;
+    };
+    let Some(risks) = cured.get_mut("risks").and_then(Value::as_array_mut) else {
+        return;
+    };
+    if risks.len() <= most {
+        return;
+    }
+    let is_island = |risk: &Value| risk["kind"] == "island";
+    let area = |risk: &Value| risk["area_mm2"].as_f64().unwrap_or(0.0);
+    let (mut islands, mut kept): (Vec<Value>, Vec<Value>) = risks.drain(..).partition(is_island);
+    islands.sort_by(|a, b| area(b).total_cmp(&area(a)));
+    kept.extend(islands);
+    let left_out = kept.len().saturating_sub(most);
+    kept.truncate(most);
+    *risks = kept;
+    cured["risks_left_out"] = json!(left_out);
+    cured["risks_note"] = json!("the largest first; `check` with `every_risk` lists them all");
 }
 
 /// A check as a client reads it: `compared` once, above it, and each model's supports by their
@@ -138,6 +180,39 @@ pub(super) fn answer(reply: Result<Reply>) -> CallToolResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_long_list_of_risks_keeps_every_other_kind_then_the_largest_islands() {
+        let island = |area: f64| json!({"kind": "island", "area_mm2": area});
+        let mut report = json!({"print": {"cured": {"risks": [
+            island(0.1), island(2.0), {"kind": "suction-cup", "area_mm2": 135.0},
+            island(0.5), {"kind": "lever"},
+        ]}}});
+
+        keep_first_risks(&mut report, 3);
+
+        let cured = &report["print"]["cured"];
+        let kinds: Vec<&str> = (cured["risks"].as_array().expect("risks"))
+            .iter()
+            .map(|risk| risk["kind"].as_str().expect("a kind"))
+            .collect();
+        assert_eq!(kinds, ["suction-cup", "lever", "island"], "{cured}");
+        assert_eq!(
+            cured["risks"][2]["area_mm2"], 2.0,
+            "the largest island: {cured}"
+        );
+        assert_eq!(cured["risks_left_out"], 2, "{cured}");
+    }
+
+    #[test]
+    fn a_short_list_of_risks_is_left_as_it_came() {
+        let mut report = json!({"print": {"cured": {"risks": [{"kind": "peel"}]}}});
+        let before = report.clone();
+
+        keep_first_risks(&mut report, 3);
+
+        assert_eq!(report, before, "nothing to leave out");
+    }
 
     #[test]
     fn a_check_is_answered_without_each_contact_or_a_second_comparison() {

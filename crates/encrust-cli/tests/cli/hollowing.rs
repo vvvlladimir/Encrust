@@ -697,6 +697,11 @@ fn a_drain_point_off_a_corner_is_refused() {
             "{}",
             stderr(&output)
         );
+        assert!(
+            stderr(&output).contains("--drill-cups"),
+            "the refusal says what to do instead: {}",
+            stderr(&output)
+        );
     }
     // The last two lie on a face, where the closest point lands a few ulps off the point.
     for face in ["-20,8,8", "8,8,3", "5.3,7.7,16", "7.77,0,3.33"] {

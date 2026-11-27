@@ -175,6 +175,18 @@ pub struct JobRef {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct CheckAt {
+    /// The id `start_job` returned.
+    pub job: String,
+    /// Counted from one; absent for the latest.
+    #[schemars(range(min = 1))]
+    pub revision: Option<u32>,
+    /// Lists every risk the check found; absent, the dozen that matter first, as every tool answers.
+    #[serde(default)]
+    pub every_risk: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct SetPose {
     pub job: String,
     /// Absent stands the model as its file does. A new pose clears drain points, not `auto`.

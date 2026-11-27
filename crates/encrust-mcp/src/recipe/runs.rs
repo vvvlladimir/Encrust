@@ -32,8 +32,10 @@ impl Recipe {
         }
         if self.prepare || self.steps_by.is_some() || self.fixes.is_some() {
             bail!(
-                "the autopilot, a recipe and fix_issues prepare every object; leave out `objects` \
-                 or take them back first"
+                "the autopilot, a recipe and fix_issues prepare every object, and a step here \
+                 names some (its `objects`, or points handed to the object they lie at): take \
+                 those back first, or answer the check by hand — `set_supports` with `at_mm` \
+                 under an island, `set_drains` with `at_mm` into a cup"
             );
         }
         let mut groups: Vec<(Vec<u64>, Vec<String>)> = Vec::new();

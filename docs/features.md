@@ -1115,7 +1115,10 @@ computer, checks it and writes the file. It asks you for the printer and resin; 
 say, it works on the standard printer's plate with stock resin numbers, so a cut it made
 there stays where it was once you name yours, and it writes no file before you have named
 both. Each check says where every model stands on the plate. After a cut, each piece is
-turned and lifted on its own, and supports asked for one piece keep the others'. It finds
+turned and lifted on its own, and supports asked for one piece keep the others'; a point
+given on a plate of pieces goes to the piece it lies at, and each step after the cut is built
+on the plate the step before left rather than cutting the model again. Each answer lists the
+dozen risks that matter first and how long the step took; `check` lists every risk. It finds
 the printers on your network itself before sending a file. The command line's flags are its
 tools': `set_shape` cuts with a
 joint of the size you ask or leaves the halves upright, labels in a font, splits, mirrors,

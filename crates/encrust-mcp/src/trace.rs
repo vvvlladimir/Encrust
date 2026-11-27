@@ -64,6 +64,23 @@ pub fn body_of(response: &Result<CallToolResponse, rmcp::ErrorData>) -> Value {
         .unwrap_or_default()
 }
 
+/// Writes into the answer's JSON how long the whole call took, every run of the command line in
+/// it: a report's own `seconds` counts its last run alone.
+pub fn stamp_took(response: &mut Result<CallToolResponse, rmcp::ErrorData>, took: Duration) {
+    let Ok(CallToolResponse::Complete(result)) = response else {
+        return;
+    };
+    let Some(ContentBlock::Text(text)) = result.content.first_mut() else {
+        return;
+    };
+    let Ok(Value::Object(mut body)) = serde_json::from_str::<Value>(&text.text) else {
+        return;
+    };
+    let tenths = (took.as_secs_f64() * 10.0).round() / 10.0;
+    body.insert("took_s".into(), json!(tenths));
+    text.text = Value::Object(body).to_string();
+}
+
 fn line_of(
     tool: &str,
     took: Duration,
@@ -103,6 +120,20 @@ mod tests {
             line,
             json!({ "tool": "set_pose", "ms": 1500, "failed": false, "job": "cube-1", "revision": 2 })
         );
+    }
+
+    #[test]
+    fn an_answer_says_how_long_the_whole_call_took() {
+        let answered = CallToolResult::success(vec![ContentBlock::text(
+            json!({ "job": "cube-1", "report": {"seconds": 1.0} }).to_string(),
+        )]);
+        let mut response = Ok(CallToolResponse::Complete(answered));
+
+        stamp_took(&mut response, Duration::from_millis(12_345));
+
+        let body = body_of(&response);
+        assert_eq!(body["took_s"], 12.3, "{body}");
+        assert_eq!(body["job"], "cube-1", "the rest stays: {body}");
     }
 
     #[test]

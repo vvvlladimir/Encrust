@@ -110,7 +110,8 @@ a plate of its own (ADR 0456, 0462): a revision whose every change is an edit is
 as that plate and its edits (`N.encrust`, `N.edits.json`), and handed to the window as edits,
 so what the user did there is in the next check; any other revision is shown as the plate its
 check wrote (ADR 0462). An editing tool writes the next revision and checks it; `revert` copies an old one forward;
-`report_print` appends what a print did. The cost: each check stages the model again from
+`report_print` appends what a print did. A plate a cut left in pieces is edited piece by piece
+on the plate kept (ADR 0464); any other revision no edit carries stages the model again from
 its file (ADR 0455). The connector keeps the same revisions in the page's own state, never
 on the server.
 

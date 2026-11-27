@@ -1140,6 +1140,98 @@ async fn with_no_window_a_revision_is_built_on_the_plate_the_last_one_kept() {
 }
 
 #[tokio::test]
+async fn with_no_window_a_cut_models_pieces_are_finished_on_the_plate_the_cut_kept() {
+    let dir = scratch("kept-pieces");
+    let model = dir.join("cube.stl");
+    write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
+    let client = serve_at_home(&encrust(), &dir.join("jobs"), &[], Some(&dir.join("home"))).await;
+    let job = start(&client, &model).await;
+    let cut =
+        json!({"job": job, "modelling": {"cut": {"axis": "z", "at_mm": 10.0}, "arrange": true}});
+    assert!(!failed(&call(&client, "set_shape", cut).await));
+
+    let hollowed = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+    )
+    .await;
+    let supported = call(
+        &client,
+        "set_supports",
+        json!({"job": job, "supports": {"profile": "auto", "cavity": true}}),
+    )
+    .await;
+
+    for (reply, number) in [(&hollowed, 3), (&supported, 4)] {
+        assert!(!failed(reply), "{}", answer(reply));
+        let kept = dir.join("jobs").join(&job);
+        assert!(
+            kept.join(format!("{number}.edits.json")).is_file(),
+            "revision {number} is the plate before it and its edits, not the cut staged anew"
+        );
+    }
+    let models = answer(&supported)["report"]["models"].clone();
+    let halves = models.as_array().expect("a model a half");
+    assert_eq!(halves.len(), 2, "{models}");
+    assert!(
+        halves.iter().all(|half| !half["hollow"].is_null()),
+        "both stay hollow under their supports: {models}"
+    );
+    let output = dir.join("cube.goo");
+    let written = call(
+        &client,
+        "write_file",
+        json!({"job": job, "output": output, "accept_defects": true}),
+    )
+    .await;
+    assert!(!failed(&written), "{}", answer(&written));
+    assert!(output.is_file(), "revision 4's plate is sliced");
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
+async fn a_point_given_with_no_object_goes_to_the_half_it_lies_on() {
+    let dir = scratch("points-by-object");
+    let (model, client) = cube_and_server(&dir).await;
+    let job = start(&client, &model).await;
+    let cut =
+        json!({"job": job, "modelling": {"cut": {"axis": "z", "at_mm": 10.0}, "arrange": true}});
+    assert!(!failed(&call(&client, "set_shape", cut).await));
+    let hollowed = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 2.0}}),
+    )
+    .await;
+    let first = answer(&hollowed)["report"]["models"][0].clone();
+    let bounds = &first["fit"]["bounds_mm"];
+    let mid = |axis: usize| {
+        let low = bounds[0][axis].as_f64().expect("a low corner");
+        let high = bounds[1][axis].as_f64().expect("a high corner");
+        f64::midpoint(low, high)
+    };
+    let top = [mid(0), mid(1), bounds[1][2].as_f64().expect("a top")];
+
+    let drained = call(
+        &client,
+        "set_drains",
+        json!({"job": job, "drains": {"diameter_mm": 3.0, "auto": true, "at_mm": [top]}}),
+    )
+    .await;
+    assert!(!failed(&drained), "{}", answer(&drained));
+    let more = &answer(&drained)["recipe"]["more_drains"];
+    assert_eq!(
+        more[0]["objects"],
+        json!([first["id"]]),
+        "{}",
+        answer(&drained)
+    );
+
+    client.cancel().await.expect("the server stops");
+}
+
+#[tokio::test]
 async fn a_jobs_steps_are_kept_as_a_recipe_of_the_users_and_one_that_would_not_run_is_not() {
     let dir = scratch("save-recipe");
     let model = dir.join("cube.stl");
@@ -1597,8 +1689,9 @@ async fn supports_asked_after_a_cut_the_window_holds_reach_it_as_the_plate_check
     let dir = scratch("window-cut-then-supports");
     let model = dir.join("cube.stl");
     write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
-    // The first revision shown; the plate and the cut; then the plate twice and the plate shown.
-    let (file, window) = cut_window(&dir, 6).await;
+    // The first revision shown; the plate and the cut; then the plate, for an undo, and the
+    // plate of pieces the supports were added on, shown.
+    let (file, window) = cut_window(&dir, 5).await;
     let jobs = dir.join("jobs");
     let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
     let job = start(&client, &model).await;
@@ -1626,7 +1719,7 @@ async fn supports_asked_after_a_cut_the_window_holds_reach_it_as_the_plate_check
     );
     let lines = window.await.expect("the window's task ends");
     assert_eq!(
-        lines[5]["revision"].as_u64(),
+        lines[4]["revision"].as_u64(),
         Some(3),
         "the window is shown the plate with the supports: {lines:?}"
     );

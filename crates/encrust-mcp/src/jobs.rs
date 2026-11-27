@@ -268,7 +268,8 @@ impl Jobs {
         let dir = self.dir(&revision.job).ok()?;
         let number = revision.number;
         let plate = dir.join(RevisionFile::Plate.of(number));
-        if !plate.is_file() || revision.recipe.is_project() {
+        // A plate of pieces is edited piece by piece (`kept_pieces`), never as one model.
+        if !plate.is_file() || revision.recipe.is_project() || revision.recipe.makes_pieces() {
             return None;
         }
         let object = match fs::read_to_string(dir.join(RevisionFile::Edits.of(number))) {
@@ -284,6 +285,14 @@ impl Jobs {
             Err(_) => ObjectId(1),
         };
         Some((plate, object))
+    }
+
+    /// The plate `revision` kept where its recipe left the model in pieces, which each later
+    /// edit is made on.
+    pub fn kept_pieces(&self, revision: &Revision) -> Option<PathBuf> {
+        let plate = (self.dir(&revision.job).ok()?).join(RevisionFile::Plate.of(revision.number));
+        let pieces = revision.recipe.makes_pieces() && !revision.recipe.is_project();
+        (pieces && plate.is_file()).then_some(plate)
     }
 
     /// Keeps the plate a check wrote at `from` as revision `number`'s `N.encrust`.

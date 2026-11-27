@@ -18,13 +18,14 @@ use crate::agents::Presence;
 use crate::findings::{MOST_MARKED, findings};
 use crate::jobs::Jobs;
 use crate::params::{
-    ComparePoses, CreateResin, FindPrinters, FixIssues, ImportResin, JobRef, ListProfiles,
+    CheckAt, ComparePoses, CreateResin, FindPrinters, FixIssues, ImportResin, JobRef, ListProfiles,
     ListRecipes, Model, PlateJobs, Render, ReportPrint, Revert, SaveRecipe, SendFile, SetDrains,
     SetHollow, SetMachine, SetPose, SetRepair, SetShape, SetSlicing, SetSupports, Start, UseRecipe,
     WriteFile, WriteTestPrint, absolute,
 };
+use crate::recipe::Recipe;
 use crate::runner::Cli;
-use crate::trace::{Trace, body_of};
+use crate::trace::{Trace, body_of, stamp_took};
 use crate::window::Window;
 
 mod after;
@@ -33,13 +34,14 @@ mod library;
 mod on_plate;
 mod plate_edits;
 mod plated;
+mod points;
 mod poses;
 mod reply;
 mod revise;
 mod shown;
 mod written;
 
-use reply::{answer, not_applied, reported, revised};
+use reply::{answer, not_applied, reported, revised_with};
 
 const INSTRUCTIONS: &str = include_str!("instructions.md");
 
@@ -226,9 +228,9 @@ impl Server {
         open_world_hint = false
     ))]
     async fn set_hollow(&self, Parameters(set): Parameters<SetHollow>, ctx: Context) -> Answer {
-        let edited = self.edit(&set.job, &ctx, |recipe| {
-            recipe.ask_hollow(set.hollow);
-            None
+        let edited = self.edit_on_latest(&set.job, &ctx, |recipe, latest| {
+            let report = self.jobs.report(latest).ok();
+            points::ask_by_object(recipe, set.hollow, report.as_ref(), Recipe::ask_hollow)
         });
         Ok(answer(edited.await))
     }
@@ -241,9 +243,9 @@ impl Server {
         open_world_hint = false
     ))]
     async fn set_drains(&self, Parameters(set): Parameters<SetDrains>, ctx: Context) -> Answer {
-        let edited = self.edit(&set.job, &ctx, |recipe| {
-            recipe.ask_drains(set.drains);
-            None
+        let edited = self.edit_on_latest(&set.job, &ctx, |recipe, latest| {
+            let report = self.jobs.report(latest).ok();
+            points::ask_by_object(recipe, set.drains, report.as_ref(), Recipe::ask_drains)
         });
         Ok(answer(edited.await))
     }
@@ -256,9 +258,9 @@ impl Server {
         open_world_hint = false
     ))]
     async fn set_supports(&self, Parameters(set): Parameters<SetSupports>, ctx: Context) -> Answer {
-        let edited = self.edit(&set.job, &ctx, |recipe| {
-            recipe.ask_supports(set.supports);
-            None
+        let edited = self.edit_on_latest(&set.job, &ctx, |recipe, latest| {
+            let report = self.jobs.report(latest).ok();
+            points::ask_by_object(recipe, set.supports, report.as_ref(), Recipe::ask_supports)
         });
         Ok(answer(edited.await))
     }
@@ -348,14 +350,14 @@ impl Server {
     /// Checks a revision as it would print: islands, peel, suction cups, trapped resin, fit,
     /// time and resin.
     #[tool(annotations(read_only_hint = true, open_world_hint = false))]
-    async fn check(&self, Parameters(at): Parameters<JobRef>, ctx: Context) -> Answer {
+    async fn check(&self, Parameters(at): Parameters<CheckAt>, ctx: Context) -> Answer {
         let checked = async {
             let revision = self.jobs.open(&at.job, at.revision)?;
             let against = self
                 .jobs
                 .against(&revision.job, revision.number.checked_sub(1));
             let outcome = self.estimate(&revision.recipe, &against, &ctx).await?;
-            Ok(revised(&revision, &outcome, None))
+            Ok(revised_with(&revision, &outcome, None, at.every_risk))
         };
         Ok(answer(checked.await))
     }
@@ -514,7 +516,9 @@ impl ServerHandler for Server {
         }
         let answered = body_of(&response)["job"].as_str().map(str::to_owned);
         self.presence.end(call, answered.or(named).as_deref());
-        self.trace.record(&tool, started.elapsed(), &response).await;
+        let took = started.elapsed();
+        self.trace.record(&tool, took, &response).await;
+        stamp_took(&mut response, took);
         response
     }
 
