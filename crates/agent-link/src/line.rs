@@ -20,6 +20,9 @@ pub struct WindowFile {
     pub port: u16,
     pub token: String,
     pub pid: u32,
+    /// The window's version, which the server holds against its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
 }
 
 /// What every line starts with: its schema and the window's token.

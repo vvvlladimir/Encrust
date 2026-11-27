@@ -5,6 +5,7 @@ mod agents;
 mod findings;
 mod jobs;
 mod params;
+mod prompts;
 mod recipe;
 mod runner;
 mod server;
@@ -67,25 +68,28 @@ fn parse(
     let mut agents = None;
     let mut app = None;
     while let Some(arg) = args.next() {
-        let mut value = || {
-            args.next()
-                .with_context(|| format!("{} takes a value; {USAGE}", arg.to_string_lossy()))
+        let mut value = || -> Result<Option<PathBuf>> {
+            let value = args
+                .next()
+                .with_context(|| format!("{} takes a value; {USAGE}", arg.to_string_lossy()))?;
+            Ok(given(value).map(PathBuf::from))
         };
         match arg.to_str() {
-            Some("--encrust") => program = value()?.into(),
-            Some("--jobs") => jobs = Some(PathBuf::from(value()?)),
-            Some("--trace") => trace = Some(PathBuf::from(value()?)),
-            Some("--window") => window = Some(Some(PathBuf::from(value()?))),
+            Some("--encrust") => program = value()?.unwrap_or(program),
+            Some("--jobs") => jobs = value()?,
+            Some("--trace") => trace = value()?,
+            Some("--window") => window = Some(value()?),
             Some("--no-window") => window = None,
-            Some("--agents") => agents = Some(PathBuf::from(value()?)),
-            Some("--app") => app = Some(PathBuf::from(value()?)),
+            Some("--agents") => agents = value()?,
+            Some("--app") => app = value()?,
             Some("--timeout-s") => {
-                let seconds = value()?;
-                let seconds: u64 = seconds
-                    .to_str()
-                    .and_then(|text| text.parse().ok())
-                    .with_context(|| format!("--timeout-s takes whole seconds; {USAGE}"))?;
-                timeout = Duration::from_secs(seconds);
+                if let Some(seconds) = value()? {
+                    let seconds: u64 = seconds
+                        .to_str()
+                        .and_then(|text| text.parse().ok())
+                        .with_context(|| format!("--timeout-s takes whole seconds; {USAGE}"))?;
+                    timeout = Duration::from_secs(seconds);
+                }
             }
             _ => bail!("unknown argument {}; {USAGE}", arg.to_string_lossy()),
         }
@@ -124,8 +128,16 @@ fn parse(
     Ok((Cli::new(program, timeout), Jobs::new(jobs), shown))
 }
 
+/// A flag's value, or none where it is empty or a `${...}` placeholder its client left unfilled:
+/// a bundle's setting the user never set reaches the server so (ADR 0455).
+fn given(value: OsString) -> Option<OsString> {
+    let text = value.to_string_lossy();
+    let unfilled = text.starts_with("${") && text.ends_with('}');
+    (!text.is_empty() && !unfilled).then_some(value)
+}
+
 /// The programs `show_in_window` starts the window by, in turn: `--app`, else the window beside
-/// this server, on the `PATH`, and where macOS installs it.
+/// this server, on the `PATH`, and where the installers of macOS and Windows put it.
 fn apps(app: Option<PathBuf>, server: &std::path::Path) -> Vec<PathBuf> {
     if let Some(app) = app {
         return vec![app];
@@ -142,5 +154,37 @@ fn apps(app: Option<PathBuf>, server: &std::path::Path) -> Vec<PathBuf> {
             "/Applications/Encrust.app/Contents/MacOS/encrust-gui",
         ));
     }
+    // The Windows installer's folder per user, which it puts on no `PATH`.
+    if let Some(local) = std::env::var_os("LOCALAPPDATA").filter(|_| cfg!(windows)) {
+        apps.push(PathBuf::from(local).join("Encrust").join(&name));
+    }
     apps
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_unfilled_or_empty_setting_is_no_value() {
+        assert_eq!(given("${user_config.app}".into()), None);
+        assert_eq!(given(OsString::new()), None);
+        assert_eq!(
+            given("/opt/encrust-gui".into()),
+            Some("/opt/encrust-gui".into())
+        );
+    }
+
+    #[test]
+    fn a_setting_left_unfilled_leaves_its_flag_unset() {
+        let args = [
+            "--no-window",
+            "--app",
+            "${user_config.app}",
+            "--timeout-s",
+            "${user_config.timeout_s}",
+        ];
+        let parsed = parse(args.into_iter().map(OsString::from));
+        assert!(parsed.is_ok(), "{:?}", parsed.err());
+    }
 }

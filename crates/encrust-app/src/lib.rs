@@ -10,6 +10,8 @@ mod arrange;
 mod autosave;
 mod boolean;
 mod camera;
+#[cfg(not(target_arch = "wasm32"))]
+mod chat_extension;
 mod check;
 mod cut;
 mod drain;

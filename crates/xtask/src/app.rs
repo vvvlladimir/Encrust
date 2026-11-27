@@ -100,7 +100,7 @@ pub(crate) fn run_tool(dir: &Path, tool: &str, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-fn path_arg(path: &Path) -> Result<&str> {
+pub(crate) fn path_arg(path: &Path) -> Result<&str> {
     path.to_str()
         .with_context(|| format!("{} is not UTF-8", path.display()))
 }

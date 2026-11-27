@@ -405,6 +405,10 @@ agents-delete-busy-tooltip = The agent is working on this job
 agents-ring-line = { $agent }: { $model }, { $detail }, { $time }
 # The same while the agent works on no model yet.
 agents-ring-busy = { $agent }, { $time }
+# A row under the agents when one's chat client extension is of another version than this window.
+agents-extension-update = Update the chat client extension
+agents-extension-version = Extension { $extension } · window { $window }
+agents-extension-update-tooltip = Download and open the extension of this window's version
 agents-follow = Follow agents
 agents-follow-tooltip = Run each revision an agent saves on the plate straight away
 
@@ -1108,7 +1112,7 @@ menu-open-test-print = Test prints
 menu-import-machine = Machine profile...
 menu-import-resin = Resin profile...
 menu-machine-and-resin = Machine and resin...
-# Downloads the extension that lets a chat client on this computer prepare models with Encrust; opening it installs it.
+# Downloads the extension that lets a chat client on this computer prepare models with Encrust, and opens it, which installs it.
 menu-chat-extension = Use with an AI chat client...
 menu-settings = Settings...
 menu-quit = Quit Encrust
@@ -2829,3 +2833,12 @@ hint-gizmo-steps = a handle in 1 mm and 15° steps
 ## panels/send_file.rs
 
 send-file-not-sliced = { $file } is not a sliced file Encrust can send
+
+## chat_extension.rs
+
+chat-extension-fetching = Downloading the chat client extension…
+chat-extension-opened = Opened the chat client extension from { $path }
+# After the error, where the user can download it by hand.
+chat-extension-failed = The chat client extension was not opened, download it from { $url }: { $error }
+chat-extension-write = cannot write { $path }
+chat-extension-open = cannot open { $path }

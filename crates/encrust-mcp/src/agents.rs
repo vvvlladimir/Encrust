@@ -55,6 +55,7 @@ impl Presence {
                     schema: AGENT_SCHEMA,
                     pid,
                     client: None,
+                    version: Some(env!("CARGO_PKG_VERSION").to_owned()),
                     started_s: now,
                     seen_s: now,
                     ended_s: None,

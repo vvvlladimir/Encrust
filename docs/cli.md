@@ -1048,17 +1048,23 @@ writes its version and these folders to stderr, which a client keeps in its log 
 client's name comes from each request's `_meta`, else from its handshake. A revision kept is run on
 the plate only while the window follows its agents; `show_in_window` hands one over marked
 to be shown, starting the window first where none answers — `--app PATH`, else `encrust-gui`
-beside the server, on the `PATH`, or in `/Applications/Encrust.app` — and waiting up to 30 s.
+beside the server, on the `PATH`, in `/Applications/Encrust.app` or in the Windows installer's
+`%LOCALAPPDATA%\Encrust` — and waiting up to 30 s. A flag's value that is empty or a `${…}`
+placeholder the client left unfilled counts as not given, as the extension's unset settings
+arrive. The server offers four prompts, read from the bundle's manifest: `prepare_for_print`,
+`prepare_miniature`, `exposure_test` and `failed_print`.
 
 ```sh
 cargo xtask mcpb                                        # target/mcpb/encrust-<os>-<arch>.mcpb
+cargo xtask mcpb --target universal-apple-darwin        # encrust-macos-universal.mcpb, both Macs
 ```
 
-The bundle carries both binaries for the platform it is built on, or for `--target`'s; a chat
-app that takes `.mcpb` extensions installs it by a double click or from its settings. Each
-release attaches one for each of its platforms,
-`releases/latest/download/encrust-<os>-<arch>.mcpb`, and the window's File → Use with an AI chat
-app downloads the one for its version (ADR 0455). Any other MCP client takes the server by hand
+The bundle carries both binaries for the platform it is built on, or for `--target`'s, with the
+icon and the settings for `--app` and `--timeout-s`; a chat app that takes `.mcpb` extensions
+installs it by a double click or from its settings. Each release attaches one for each of its
+platforms and one for every Mac, `releases/latest/download/encrust-<os>-<arch>.mcpb`, each with
+a `.minisig` of the release key; the window's File → Use with an AI chat client downloads the
+one for its version, checks it and opens it (ADR 0455). Any other MCP client takes the server by hand
 in its configuration, as its command; a client that times its tools out needs more than 60 s
 for a hollowed model, as in a TOML configuration:
 

@@ -64,7 +64,7 @@ on:
         type: string
         default: ""
       mcpb:
-        description: Chat-app extension (.mcpb), all six targets
+        description: Chat-app extension (.mcpb), all six targets and one for every Mac
         type: boolean
         default: true
       mcpb_ref:
@@ -266,13 +266,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `rust` is what rustup adds: the universal bundle joins both Mac architectures, for the
+        # site, which cannot tell one Mac from the other.
         include:
-          - { os: macos-latest, target: aarch64-apple-darwin }
-          - { os: macos-latest, target: x86_64-apple-darwin }
-          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
-          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc }
-          - { os: windows-11-arm, target: aarch64-pc-windows-msvc }
+          - { os: macos-latest, target: aarch64-apple-darwin, rust: aarch64-apple-darwin }
+          - { os: macos-latest, target: x86_64-apple-darwin, rust: x86_64-apple-darwin }
+          - os: macos-latest
+            target: universal-apple-darwin
+            rust: aarch64-apple-darwin x86_64-apple-darwin
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, rust: x86_64-unknown-linux-gnu }
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            rust: aarch64-unknown-linux-gnu
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, rust: x86_64-pc-windows-msvc }
+          - { os: windows-11-arm, target: aarch64-pc-windows-msvc, rust: aarch64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -287,7 +294,7 @@ jobs:
         shell: bash
         run: |
           rustup show
-          rustup target add ${{ matrix.target }}
+          rustup target add ${{ matrix.rust }}
 
       - name: Pack
         run: cargo xtask mcpb --target ${{ matrix.target }}
@@ -446,9 +453,11 @@ jobs:
 
   # One job holds the signing key, after every leg has uploaded, so the feed names every archive.
   # The trusted comment binds a signature to its version and file name, which the window checks;
-  # a signature cannot then be moved to another archive or replayed for an older release.
+  # a signature cannot then be moved to another archive or replayed for an older release. Each
+  # `.mcpb` is signed the same way for the window that fetches it, outside the feed; a failed
+  # `mcpb` job leaves only its bundles unsigned.
   feed:
-    needs: [draft, build]
+    needs: [draft, build, mcpb]
     if: >-
       !cancelled() && inputs.feed && needs.draft.result == 'success'
       && (needs.build.result == 'success' || needs.build.result == 'skipped')
@@ -501,6 +510,12 @@ jobs:
               --rawfile signature "$path.minisig" \
               --argjson size "$(stat -c %s "$path")" \
               '.[$platform] = {url: $url, signature: $signature, size: $size}' <<<"$platforms")
+          done
+          for path in dist/encrust-*.mcpb; do
+            [ -e "$path" ] || continue
+            bundle=$(basename "$path")
+            minisign -S -s "$key" -m "$path" -t "encrust $version $bundle"
+            minisign -V -p assets/update-key.pub -m "$path"
           done
           rm -f "$key"
 

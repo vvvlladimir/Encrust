@@ -165,6 +165,7 @@ fn write_file(file: &Path, port: u16, token: &str) -> Result<()> {
         port,
         token: token.to_owned(),
         pid: std::process::id(),
+        version: Some(env!("CARGO_PKG_VERSION").to_owned()),
     };
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);

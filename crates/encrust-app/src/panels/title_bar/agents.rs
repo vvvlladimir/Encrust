@@ -129,6 +129,12 @@ fn menu(ui: &mut egui::Ui, window: &mut Window) {
             pressed = Some(press);
         }
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if extension_row(ui, agents) {
+        ui.close();
+        let machine = &mut *window.machine;
+        machine.chat_extension.start(&mut machine.status);
+    }
     hairline(ui);
     let general = &mut window.machine.general;
     chooser_switch(ui, &mut general.follow_agents, &tr!("agents-follow"))
@@ -149,6 +155,31 @@ fn menu(ui: &mut egui::Ui, window: &mut Window) {
         Some(Pressed::Delete(id)) => window.machine.agents.delete(&id),
         None => {}
     }
+}
+
+/// A row offering the extension of this window's version when an agent's server is of another,
+/// answering whether it was pressed.
+#[cfg(not(target_arch = "wasm32"))]
+fn extension_row(ui: &mut egui::Ui, agents: &Agents) -> bool {
+    let Some(theirs) = agents.list.iter().find_map(Agent::other_version) else {
+        return false;
+    };
+    hairline(ui);
+    let detail = tr!(
+        "agents-extension-version",
+        extension = theirs.to_owned(),
+        window = env!("CARGO_PKG_VERSION")
+    );
+    let row = ChooserRow {
+        lead: Lead::Glyph(icon::UPDATE),
+        name: &tr!("agents-extension-update"),
+        detail: &detail,
+        aside: None,
+        chosen: false,
+    };
+    crate::ui::chooser_row(ui, &row)
+        .on_hover_text(tr!("agents-extension-update-tooltip"))
+        .clicked()
 }
 
 /// One job's row: the model, its revision and what is said of it, then a press hiding it
@@ -253,6 +284,7 @@ mod tests {
     fn agent(client: Option<&str>) -> Agent {
         Agent {
             client: client.map(str::to_owned),
+            version: None,
             started_s: 0,
             state: State::Idle,
             job: None,

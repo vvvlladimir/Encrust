@@ -124,14 +124,22 @@ a chat app that takes `.mcpb` extensions; other MCP clients take the same binary
 config. The files are the user's own paths and the printer is on the user's network.
 
 - **Built by the release.** `release.yml`'s `mcpb` job packs a bundle for each of its six
-  targets, validates its manifest with `mcpb validate` and attaches
-  `encrust-<os>-<arch>.mcpb` to the release, unsigned (ADR 0455). Its `mcpb_ref` packs a
-  branch onto a tag's draft, to try a bundle without a release.
-- **Downloaded from a button.** encrust.app's download page offers the bundle for the
-  visitor's system beside the installer; the window's File → Use with an AI chat client
-  downloads the one for its own version.
+  targets and one universal for every Mac, validates its manifest with `mcpb validate` and
+  attaches `encrust-<os>-<arch>.mcpb` to the release; `feed` signs each with the release key,
+  as the archives are, outside `latest.json`. Its `mcpb_ref` packs a branch onto a tag's
+  draft, to try a bundle without a release (ADR 0455).
+- **Installed from the window.** File → Use with an AI chat client fetches the bundle of the
+  window's version and system with its `.minisig`, refuses it unless the release key signed it
+  for that version and file, and opens it, which installs it in the chat app; a failure names
+  the release URL. encrust.app's download page lists the bundles of the release it pins, the
+  universal one for a Mac.
 - **Updated by a new download.** The extension directory no longer takes `.mcpb` listings, so
-  nothing updates it in place; the bundle reports its version in `instructions`.
+  nothing updates it in place. The window's file and each agent's carry their version: the
+  agents' list offers the window's extension to an agent of another, and the server tells the
+  model once a run.
+- **Set up by its settings and prompts.** The manifest's `user_config` names the window to
+  start and the time limit, a setting left unset reaching the server as a placeholder it
+  ignores; its `prompts` are the ready requests the server serves from the same file.
 - **No window needed.** Resins come from `import_resin` and the exposure test (step 15).
   When the window is open, each revision lands on a plate of its own (ADR 0462, `window-link.md`).
 

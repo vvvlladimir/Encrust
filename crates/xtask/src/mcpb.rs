@@ -9,16 +9,25 @@ use anyhow::{Context, Result, bail};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
-use crate::app::{run_tool, workspace_root};
+use crate::app::{path_arg, run_tool, workspace_root};
 
 const MANIFEST: &str = include_str!("../../encrust-mcp/bundle/manifest.json");
+
+/// The bundle for every Mac, both architectures in each binary, for a page that cannot tell
+/// which Mac it is on.
+const UNIVERSAL: &str = "universal-apple-darwin";
+const MAC_TARGETS: [&str; 2] = ["aarch64-apple-darwin", "x86_64-apple-darwin"];
+
+/// The Encrust icon, shown beside the extension in the chat app.
+const ICON: &[u8] = include_bytes!("../../../assets/icon/encrust-macos-512.png");
 
 /// The binaries a bundle carries, by package.
 const BINARIES: [(&str, &str); 2] = [("encrust-cli", "encrust"), ("encrust-mcp", "encrust-mcp")];
 
 #[derive(clap::Args)]
 pub struct Args {
-    /// The target triple to build for, as the release builds; the host's when absent.
+    /// The target triple to build for, as the release builds, or `universal-apple-darwin` for
+    /// both Mac architectures in one bundle; the host's when absent.
     #[arg(long)]
     pub target: Option<String>,
     /// Where the bundle is written; `target/mcpb/encrust-<os>-<arch>.mcpb` by default, the
@@ -31,32 +40,10 @@ pub fn run(args: &Args) -> Result<()> {
     let root = workspace_root()?;
     let target = args.target.clone().unwrap_or_else(host_triple);
     let platform = Platform::of(&target)?;
-    for (package, binary) in BINARIES {
-        let build = [
-            "build",
-            "--release",
-            "--locked",
-            "-p",
-            package,
-            "--bin",
-            binary,
-        ];
-        let targeted = ["--target", target.as_str()];
-        let asked: Vec<&str> = build
-            .into_iter()
-            .chain(
-                args.target
-                    .is_some()
-                    .then_some(targeted)
-                    .into_iter()
-                    .flatten(),
-            )
-            .collect();
-        run_tool(&root, "cargo", &asked)?;
-    }
-    let built = match &args.target {
-        Some(target) => root.join("target").join(target).join("release"),
-        None => root.join("target/release"),
+    let built = if target == UNIVERSAL {
+        universal(&root)?
+    } else {
+        build(&root, args.target.as_deref())?
     };
     let output = args.output.clone().unwrap_or_else(|| {
         root.join(format!(
@@ -73,13 +60,62 @@ pub fn run(args: &Args) -> Result<()> {
     Ok(())
 }
 
-/// Writes the bundle: the manifest for `platform` and each binary under `server/`, runnable.
+/// Builds both binaries for `target`, the host where none, and answers where they are.
+fn build(root: &Path, target: Option<&str>) -> Result<PathBuf> {
+    for (package, binary) in BINARIES {
+        let mut asked = vec![
+            "build",
+            "--release",
+            "--locked",
+            "-p",
+            package,
+            "--bin",
+            binary,
+        ];
+        asked.extend(
+            target
+                .map(|target| ["--target", target])
+                .into_iter()
+                .flatten(),
+        );
+        run_tool(root, "cargo", &asked)?;
+    }
+    Ok(match target {
+        Some(target) => root.join("target").join(target).join("release"),
+        None => root.join("target/release"),
+    })
+}
+
+/// Builds both Mac architectures and joins each binary into one that runs on either.
+fn universal(root: &Path) -> Result<PathBuf> {
+    let parts = MAC_TARGETS
+        .iter()
+        .map(|target| build(root, Some(target)))
+        .collect::<Result<Vec<_>>>()?;
+    let joined = root.join("target").join(UNIVERSAL).join("release");
+    fs::create_dir_all(&joined)?;
+    for (_, binary) in BINARIES {
+        let output = joined.join(binary);
+        let inputs: Vec<PathBuf> = parts.iter().map(|part| part.join(binary)).collect();
+        let mut asked = vec!["-create", "-output", path_arg(&output)?];
+        for input in &inputs {
+            asked.push(path_arg(input)?);
+        }
+        run_tool(root, "lipo", &asked)?;
+    }
+    Ok(joined)
+}
+
+/// Writes the bundle: the manifest for `platform`, its icon and each binary under `server/`,
+/// runnable.
 fn pack(output: &Path, built: &Path, platform: &Platform) -> Result<()> {
     let file =
         File::create(output).with_context(|| format!("cannot write {}", output.display()))?;
     let mut zip = ZipWriter::new(file);
     zip.start_file("manifest.json", SimpleFileOptions::default())?;
     zip.write_all(manifest(platform).as_bytes())?;
+    zip.start_file("icon.png", SimpleFileOptions::default())?;
+    zip.write_all(ICON)?;
     let runnable = SimpleFileOptions::default().unix_permissions(0o755);
     for (_, binary) in BINARIES {
         let name = format!("{binary}{}", platform.exe_suffix);
@@ -153,6 +189,7 @@ mod tests {
         assert_eq!(named("aarch64-apple-darwin"), "macos-aarch64 darwin");
         assert_eq!(named("x86_64-pc-windows-msvc"), "windows-x86_64 win32");
         assert_eq!(named("aarch64-unknown-linux-gnu"), "linux-aarch64 linux");
+        assert_eq!(named(UNIVERSAL), "macos-universal darwin");
         assert!(Platform::of("wasm32-unknown-unknown").is_err());
     }
 

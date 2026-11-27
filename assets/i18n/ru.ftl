@@ -406,6 +406,9 @@ agents-delete-tooltip = Удалить это задание и его реви�
 agents-delete-busy-tooltip = Агент работает над этим заданием
 agents-ring-line = { $agent }: { $model }, { $detail }, { $time }
 agents-ring-busy = { $agent }, { $time }
+agents-extension-update = Обновить расширение для чат-клиента
+agents-extension-version = Расширение { $extension } · окно { $window }
+agents-extension-update-tooltip = Скачать и открыть расширение той же версии, что и окно
 agents-follow = Следить за агентами
 agents-follow-tooltip = Сразу запускать на платформе каждую ревизию, которую сохраняет агент
 
@@ -2894,3 +2897,11 @@ hint-gizmo-steps = за ручку шагами по 1 мм и 15°
 ## panels/send_file.rs
 
 send-file-not-sliced = { $file } нельзя отправить: это не нарезанный файл
+
+## chat_extension.rs
+
+chat-extension-fetching = Скачивание расширения для чат-клиента…
+chat-extension-opened = Расширение для чат-клиента открыто из { $path }
+chat-extension-failed = Расширение для чат-клиента не открыто, скачайте его по ссылке { $url }: { $error }
+chat-extension-write = не удалось записать { $path }
+chat-extension-open = не удалось открыть { $path }

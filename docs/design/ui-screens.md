@@ -56,8 +56,8 @@ in code; a browser, the four alone) · Save, Save as · Slice to .ext (why when 
 all N plates, Send a sliced file (where the printer in hand sends over a network; its name
 in the tooltip, why when off) · Import ▸
 (Machine profile, Resin profile), Machine and resin, Use with an AI chat client (not in a browser;
-opens this version's extension for the system in the browser, ADR 0455), Settings · Quit (not
-in a browser).
+downloads this version's extension for the system, checks its signature and opens it, the status
+line saying so, ADR 0455), Settings · Quit (not in a browser).
 Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
 (the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate, Prepare for print (why when off) · Find. View:
 Frame view · CAMERA Perspective or Orthographic, the one in force ticked · SHOW Plate grid,
@@ -91,7 +91,10 @@ left edge, 300 wide, on `raised` with a window's shadow, a capital group name ov
   job standing on its own plate. Groups stand 8 apart.
   A press shows that revision on the job's own plate as one undo; a
   project's row opens the project, asking first about unsaved work. *Opening a model…* in a
-  line while an agent starts one. No ended agent and no earlier job is listed. Under a
+  line while an agent starts one. No ended agent and no earlier job is listed. Where a live
+  agent's server is of another version than the window, under a rule a row with the update
+  glyph, *Update the chat client extension* over both versions, does what the File menu's
+  item does and closes the chooser. Under a
   rule, *Follow agents* as a `switch` in line with the rows' names: on, each revision an
   agent keeps runs on the plate as it comes; flipping it, hiding or deleting leaves the
   chooser open.

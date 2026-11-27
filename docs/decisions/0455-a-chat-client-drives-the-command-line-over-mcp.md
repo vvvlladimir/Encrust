@@ -33,11 +33,18 @@ scored on one model by one rule.
   configuration of its own; `encrust-mcp --trace FILE` logs each tool call. Both are scored on
   the report — status, islands, cups, trapped pockets, resin, time — and a client matches the
   autopilot when nothing is worse and resin and time are within a tenth.
-- **Each release ships an `.mcpb` extension** per installer's platform,
-  `encrust-<os>-<arch>.mcpb`, packed by `cargo xtask mcpb --target` with the `zip` crate in a
-  release job of its own and unsigned: a chat app trusts only a code-signing certificate, whose
-  key lives in hardware a runner cannot reach. The window's File menu opens the one for its
-  version and system in the browser; opening it installs it in the chat app.
+- **Each release ships an `.mcpb` extension** per installer's platform and one universal for
+  every Mac, `encrust-<os>-<arch>.mcpb`, packed by `cargo xtask mcpb --target` with the `zip`
+  crate in a release job of its own. No `mcpb sign`: a chat app trusts only a code-signing
+  certificate, whose key lives in hardware a runner cannot reach. The release key signs each
+  bundle instead, as it signs the archives, and the window's File menu fetches the one of its
+  version and system, refuses it unless that signature holds, and opens it, which installs it:
+  no browser download, and the file is the release's. Its manifest carries the icon, the
+  `user_config` for the window to start and the time limit — a setting left unset arrives as
+  its placeholder, which the server takes as no value — and the `prompts` the server serves
+  from that same file. The window's file and each agent's carry their version, so an extension
+  older or newer than the window is named to the user by the window and to the model by the
+  server.
 
 ## Consequences
 

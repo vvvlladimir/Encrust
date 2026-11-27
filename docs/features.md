@@ -1103,8 +1103,12 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
 | `completions` | Shell completion for bash, zsh, fish, elvish, PowerShell. |
 
-**For a chat client:** each release carries an extension for a desktop AI chat app, downloaded from
-the release page or the window's File → Use with an AI chat client and installed by opening it.
+**For a chat client:** each release carries an extension for a desktop AI chat app, on the
+download page and the release page. The window's File → Use with an AI chat client downloads the
+one of its own version, refuses it unless the release key signed it, and opens it, which installs
+it; the agents' list offers it again when a chat client runs another version than the window.
+The extension's settings name the Encrust program to start and how long a step may run, and its
+ready requests prepare a model or a miniature, test a resin's exposure or read a failed print.
 `encrust-mcp` gives a desktop chat app, a coding agent or any other MCP client the
 command line as tools, so a language model prepares a model step by step on your
 computer, checks it and writes the file. It asks you for the printer and resin; until you

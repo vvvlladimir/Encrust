@@ -139,6 +139,7 @@ fn a_project_job_is_told_apart_and_no_folder_lists_nothing() {
 fn holding(id: &str) -> Agent {
     Agent {
         client: None,
+        version: None,
         started_s: 1,
         state: State::Idle,
         job: Some(Job {

@@ -16,6 +16,9 @@ pub struct AgentFile {
     /// The client's own name for itself, as it introduced itself: `code-agent`, say.
     #[serde(default)]
     pub client: Option<String>,
+    /// The server's version, which the window holds against its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
     pub started_s: u64,
     pub seen_s: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -7,14 +7,18 @@
   "long_description": "Encrust is an offline resin slicer. This extension lets your AI assistant drive it on your computer: every tool runs the encrust command line on your own files, profiles and printers on your network. Exposure comes from your own resin profiles only.",
   "author": { "name": "Encrust contributors" },
   "homepage": "https://encrust.app",
+  "documentation": "https://github.com/vvvlladimir/Encrust/blob/main/docs/cli.md",
+  "support": "https://github.com/vvvlladimir/Encrust/issues",
   "repository": { "type": "git", "url": "https://github.com/vvvlladimir/Encrust" },
   "license": "AGPL-3.0-only",
+  "icon": "icon.png",
+  "keywords": ["3d printing", "resin", "msla", "slicer", "supports"],
   "server": {
     "type": "binary",
     "entry_point": "server/encrust-mcp{{exe_suffix}}",
     "mcp_config": {
       "command": "${__dirname}/server/encrust-mcp{{exe_suffix}}",
-      "args": []
+      "args": ["--app", "${user_config.app}", "--timeout-s", "${user_config.timeout_s}"]
     }
   },
   "tools": [
@@ -47,5 +51,47 @@
     { "name": "find_printers", "description": "Finds the printers on your network" },
     { "name": "send_to_printer", "description": "Sends a written file to a printer on your network" }
   ],
+  "prompts": [
+    {
+      "name": "prepare_for_print",
+      "description": "Prepare a model for print, asking for the printer and resin",
+      "arguments": ["model", "purpose"],
+      "text": "Prepare ${arguments.model} for print on my resin printer. It is for: ${arguments.purpose}. Ask me which printer and resin I use first."
+    },
+    {
+      "name": "prepare_miniature",
+      "description": "Prepare a miniature by the miniatures recipe and show how it stands",
+      "arguments": ["model"],
+      "text": "Prepare the miniature ${arguments.model} for the table with the miniatures recipe. Show me how it stands before you write the file."
+    },
+    {
+      "name": "exposure_test",
+      "description": "Find the right exposure for a resin with a test print",
+      "text": "Help me find the right exposure for my resin: ask which printer and resin I use, then write an exposure test print."
+    },
+    {
+      "name": "failed_print",
+      "description": "Find out why a print failed, from its file's check",
+      "arguments": ["file", "what_went_wrong"],
+      "text": "My print of ${arguments.file} came out wrong: ${arguments.what_went_wrong}. Read it against the file's check and tell me what to change."
+    }
+  ],
+  "user_config": {
+    "app": {
+      "type": "file",
+      "title": "Encrust window",
+      "description": "The Encrust program to start when no window is open. Leave it empty where Encrust is installed in its usual place.",
+      "required": false
+    },
+    "timeout_s": {
+      "type": "number",
+      "title": "Time limit, s",
+      "description": "How long one step may run before it is stopped. A large hollow model needs more.",
+      "default": 1800,
+      "min": 60,
+      "max": 14400,
+      "required": false
+    }
+  },
   "compatibility": { "platforms": ["{{platform}}"] }
 }

@@ -387,6 +387,10 @@ impl SlicerApp {
         working |= machine.preview.poll(status);
         working |= machine.updates.poll(status);
         working |= machine.fetches.poll(status);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            working |= machine.chat_extension.poll(status);
+        }
         working |= tools.supports.poll(scene, status);
         working |= tools.hollow.poll(scene, status);
         working |= tools.relief.poll(scene, status);

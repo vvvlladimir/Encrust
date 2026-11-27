@@ -272,8 +272,8 @@ fn setup_items(ui: &mut egui::Ui, window: &mut Window) {
     }
     #[cfg(not(target_arch = "wasm32"))]
     if clicked(ui, &MenuRow::new(None, &tr!("menu-chat-extension"))) {
-        ui.ctx()
-            .open_url(egui::OpenUrl::new_tab(chat_extension_url()));
+        let machine = &mut *window.machine;
+        machine.chat_extension.start(&mut machine.status);
     }
     let settings = tr!("menu-settings");
     if clicked(
@@ -282,23 +282,6 @@ fn setup_items(ui: &mut egui::Ui, window: &mut Window) {
     ) {
         toggle_settings(window.machine);
     }
-}
-
-/// The chat-app extension of this version, for this system: the browser downloads it and
-/// opening it installs it (ADR 0455).
-#[cfg(not(target_arch = "wasm32"))]
-fn chat_extension_url() -> String {
-    let os = match std::env::consts::OS {
-        "macos" => "macos",
-        "windows" => "windows",
-        _ => "linux",
-    };
-    format!(
-        "{}/releases/download/v{}/encrust-{os}-{}.mcpb",
-        env!("CARGO_PKG_REPOSITORY"),
-        env!("CARGO_PKG_VERSION"),
-        std::env::consts::ARCH
-    )
 }
 
 /// The files opened lately, newest first, each with how long ago, and a way to forget them.

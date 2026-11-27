@@ -9,6 +9,7 @@ use crate::agents::{Agent, Job, State};
 fn waiting_on_a_cube() -> Agent {
     Agent {
         client: Some("code-agent".into()),
+        version: None,
         started_s: 0,
         state: State::Idle,
         job: Some(Job {

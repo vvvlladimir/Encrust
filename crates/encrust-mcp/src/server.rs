@@ -7,8 +7,9 @@ use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, Implementation, ServerCapabilities,
-    ServerConfig,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, GetPromptRequestParams,
+    GetPromptResponse, Implementation, ListPromptsResult, PaginatedRequestParams,
+    ServerCapabilities, ServerConfig,
 };
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
@@ -502,18 +503,43 @@ impl ServerHandler for Server {
             .as_ref()
             .and_then(|arguments| arguments.get("job")?.as_str().map(str::to_owned));
         let call = (self.presence).begin(client.as_deref(), &tool, named.as_deref());
-        let response = self
+        let mut response = self
             .tool_router
             .call(ToolCallContext::new(self, request, context))
             .await;
+        if let Ok(CallToolResponse::Complete(result)) = &mut response
+            && let Some(note) = self.window.version_note().await
+        {
+            result.content.push(ContentBlock::text(note));
+        }
         let answered = body_of(&response)["job"].as_str().map(str::to_owned);
         self.presence.end(call, answered.or(named).as_deref());
         self.trace.record(&tool, started.elapsed(), &response).await;
         response
     }
 
+    async fn list_prompts(
+        &self,
+        _: Option<PaginatedRequestParams>,
+        _: Context,
+    ) -> Result<ListPromptsResult, rmcp::ErrorData> {
+        Ok(ListPromptsResult::with_all_items(crate::prompts::list()))
+    }
+
+    async fn get_prompt(
+        &self,
+        request: GetPromptRequestParams,
+        _: Context,
+    ) -> Result<GetPromptResponse, rmcp::ErrorData> {
+        crate::prompts::get(&request.name, request.arguments.as_ref()).map(Into::into)
+    }
+
     fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+        let capabilities = ServerCapabilities::builder()
+            .enable_tools()
+            .enable_prompts()
+            .build();
+        ServerConfig::new(capabilities)
             .with_server_info(Implementation::new("encrust", env!("CARGO_PKG_VERSION")))
             .with_instructions(INSTRUCTIONS)
     }

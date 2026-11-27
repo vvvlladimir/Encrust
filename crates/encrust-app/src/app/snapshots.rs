@@ -304,7 +304,7 @@ fn the_chip_opening_its_machines_and_its_resins() {
 }
 
 /// The agents' ring beside the chip and the list it opens: one agent at work on its model,
-/// another waiting with its own (ADR 0462).
+/// another waiting with its own on an older extension, offered the window's (ADR 0462, 0455).
 #[test]
 fn the_agents_ring_opening_its_list() {
     use crate::agents::{Agent, Job, State};
@@ -318,6 +318,7 @@ fn the_agents_ring_opening_its_list() {
     };
     let working = Agent {
         client: Some("code-agent".into()),
+        version: None,
         started_s: 0,
         state: State::Working {
             tool: "check".into(),
@@ -328,6 +329,7 @@ fn the_agents_ring_opening_its_list() {
     };
     let waiting = Agent {
         client: Some("chat-app".into()),
+        version: Some("0.1.0".into()),
         started_s: 0,
         state: State::Idle,
         job: job("cube-1", "/m/cube.stl", 2, Some(true)),

@@ -3,6 +3,8 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use agent_link::{
@@ -35,12 +37,18 @@ const START_POLL: Duration = Duration::from_millis(500);
 pub struct Window {
     file: Option<PathBuf>,
     apps: Vec<PathBuf>,
+    /// Whether the model was told that the window is of another version, once a run.
+    told_version: Arc<AtomicBool>,
 }
 
 impl Window {
     /// The window `file` names, started where none answers by the first of `apps` that runs.
     pub fn new(file: Option<PathBuf>, apps: Vec<PathBuf>) -> Self {
-        Self { file, apps }
+        Self {
+            file,
+            apps,
+            told_version: Arc::default(),
+        }
     }
 
     /// Hands `revision` to the window marked `open`, so it is shown whether the window
@@ -133,10 +141,29 @@ impl Window {
         Some(answer.unwrap_or_else(|error| ApplyReply::refused(format!("{error:#}"))))
     }
 
+    /// What to tell the model, once a run, when the open window is of another version than
+    /// this server: the user brings the extension to the window's from its File menu.
+    pub async fn version_note(&self) -> Option<String> {
+        let window = self.read().await?.version?;
+        let ours = env!("CARGO_PKG_VERSION");
+        if window == ours || self.told_version.swap(true, Ordering::Relaxed) {
+            return None;
+        }
+        Some(format!(
+            "Note for the user: this Encrust extension is version {ours} and the Encrust \
+             window {window}. To match them, choose File → Use with an AI chat client in the \
+             window, which installs the extension of its version."
+        ))
+    }
+
+    async fn read(&self) -> Option<WindowFile> {
+        let text = tokio::fs::read_to_string(self.file.as_ref()?).await.ok()?;
+        serde_json::from_str(&text).ok()
+    }
+
     /// A connection to the window its file names, and the token it asks for.
     async fn connect(&self) -> Option<(TcpStream, String)> {
-        let text = tokio::fs::read_to_string(self.file.as_ref()?).await.ok()?;
-        let WindowFile { port, token, .. } = serde_json::from_str(&text).ok()?;
+        let WindowFile { port, token, .. } = self.read().await?;
         let connected = tokio::time::timeout(CONNECT_WAIT, TcpStream::connect(("127.0.0.1", port)));
         // A file left by a window that has closed names a port nobody listens on.
         let stream = connected.await.ok()?.ok()?;
@@ -242,5 +269,27 @@ mod tests {
             .await
             .expect_err("no window could be shown");
         assert!(format!("{error:#}").contains("open Encrust"), "{error:#}");
+    }
+
+    /// A window whose file says it is of `version`.
+    fn window_of(version: &str, name: &str) -> Window {
+        let path = file(name);
+        let said = json!({ "schema": 4, "port": 1, "token": "t", "pid": 1, "version": version });
+        std::fs::write(&path, said.to_string()).expect("the temp dir is writable");
+        Window::new(Some(path), Vec::new())
+    }
+
+    #[tokio::test]
+    async fn a_window_of_another_version_is_told_once() {
+        let window = window_of("0.0.1", "other-version");
+        let note = window.version_note().await.expect("a note the first time");
+        assert!(note.contains("0.0.1"), "{note}");
+        assert_eq!(window.version_note().await, None, "told once a run");
+    }
+
+    #[tokio::test]
+    async fn a_window_of_this_version_is_not_mentioned() {
+        let window = window_of(env!("CARGO_PKG_VERSION"), "same-version");
+        assert_eq!(window.version_note().await, None);
     }
 }

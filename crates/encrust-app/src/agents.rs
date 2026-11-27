@@ -40,6 +40,8 @@ pub struct Asked {
 pub struct Agent {
     /// The client's own name for itself: `code-agent`, say.
     pub client: Option<String>,
+    /// Its server's version, where its file says.
+    pub version: Option<String>,
     pub started_s: u64,
     pub state: State,
     /// The job in hand: the one its running tool names, else the latest it touched.
@@ -84,6 +86,15 @@ impl Job {
 }
 
 impl Agent {
+    /// Its server's version where it is not this window's, which the extension of the window's
+    /// own version would put right.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn other_version(&self) -> Option<&str> {
+        self.version
+            .as_deref()
+            .filter(|version| *version != env!("CARGO_PKG_VERSION"))
+    }
+
     /// Whether it starts a job that has no revision yet.
     pub fn opening(&self) -> bool {
         matches!(&self.state, State::Working { tool, job: None, .. } if tool == "start_job")
@@ -213,6 +224,7 @@ fn agent_of(said: &AgentFile, jobs: &Path, now_s: u64) -> Option<Agent> {
         .and_then(|working| working.job.as_ref());
     Some(Agent {
         client: said.client.clone(),
+        version: said.version.clone(),
         started_s: said.started_s,
         state,
         job: running
