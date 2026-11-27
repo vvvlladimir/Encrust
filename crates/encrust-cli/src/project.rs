@@ -215,20 +215,31 @@ fn saved_hollow(
     ))
 }
 
-/// What the supports `object` stands on as saved say of them, as `--supports` would have.
+/// What the supports `object` stands on as saved say of them, as `--supports` would have:
+/// trees a move dropped grow again from their points on opening, so those count.
 fn saved_supports(object: &ObjectState, model: &core_engine::Model) -> Option<SupportReport> {
     let held = &object.supports;
     let trees: Vec<_> = held.frozen.iter().chain(&held.grown).collect();
-    if trees.is_empty() {
+    let to_plate = object.transform.to_matrix();
+    let contacts: Vec<_> = (held.points.iter().map(|point| point.contact))
+        .chain(held.frozen.iter().flat_map(|tree| tree.contacts()))
+        .map(|contact| to_plate.transform_point3(contact))
+        .collect();
+    if contacts.is_empty() && model.supports.is_empty() {
         return None;
     }
+    let standing = if trees.is_empty() {
+        contacts.len()
+    } else {
+        trees.len()
+    };
     let lowest = placed_aabb(&model.mesh, model.transform).map_or(0.0, |bounds| bounds.mins.z);
     Some(SupportReport {
         lifted_mm: lowest.max(0.0),
-        contacts: trees.iter().flat_map(|tree| tree.contacts()).collect(),
-        standing: trees.len(),
+        contacts,
+        standing,
         unheld: Vec::new(),
-        trees: trees.len(),
+        trees: standing,
         faces: model.supports.iter().map(|mesh| mesh.faces.len()).sum(),
     })
 }
@@ -295,17 +306,13 @@ fn resin_of(id: &str, why: &str) -> Result<MaterialProfile> {
     Ok(entry.profile.clone())
 }
 
-/// The flags a project cannot take: a recipe and Check's answers, which prepare models as they
-/// come in, the islands it slices as saved, and models combined from files.
+/// The flags a project cannot take: a recipe, which prepares models as they come in, the
+/// islands it slices as saved, and models combined from files.
 pub fn refuse_for_projects(job: &JobArgs) -> Result<()> {
     job.hollow.check_flags()?;
     let refused = [
         ("--prepare", job.prepare),
         ("--recipe", job.recipe.is_some()),
-        (
-            "--support-islands, --drill-cups and --hold-necks",
-            job.fixes.step()?.is_some(),
-        ),
         ("--remove-islands", job.raster.remove_islands),
         ("--hanging-passes", job.raster.hanging_passes != 0),
         ("--combine", job.model.combine.is_some()),
@@ -333,6 +340,7 @@ pub fn shaped_by_flags(job: &JobArgs, arrange: bool) -> bool {
         || job.supports.supports.is_some()
         || job.supports.support_profile.is_some()
         || job.supports.support_cavity
+        || job.fixes.asked()
 }
 
 #[cfg(test)]

@@ -25,9 +25,14 @@ pub struct FixArgs {
 }
 
 impl FixArgs {
+    /// Whether any of Check's answers is asked for.
+    pub fn asked(&self) -> bool {
+        self.support_islands || self.drill_cups || self.hold_necks
+    }
+
     /// The `check` step these flags ask for, `None` for none.
     pub fn step(&self) -> Result<Option<Step>> {
-        if !(self.support_islands || self.drill_cups || self.hold_necks) {
+        if !self.asked() {
             return Ok(None);
         }
         let mut set = core_recipe::Settings::new();

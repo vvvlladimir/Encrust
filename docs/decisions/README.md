@@ -562,4 +562,5 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0460](0460-a-client-chooses-among-poses-the-engine-proved.md) | A client chooses among the poses the engine proved | Accepted |
 | [0461](0461-resin-recipes-and-print-failures-with-no-window.md) | A chat client sets up a resin, keeps a recipe and reads a failed print with no window | Accepted |
 | [0462](0462-the-window-lists-agents-and-shows-each-job-on-its-own-plate.md) | The window lists its agents and shows each job on a plate of its own | Accepted |
-| [0464](0464-a-chat-client-is-answered-short-and-a-cut-plate-is-edited-piece-by-piece.md) | Answer a chat client short, hand its points to their objects, and edit a cut plate piece by piece | Accepted |
+| [0464](0464-a-chat-client-is-answered-short-and-a-cut-plate-is-edited-piece-by-piece.md) | Answer a chat client short, hand its points to their objects, and edit a cut plate piece by piece | Accepted; `fix_issues` refused once points name objects is superseded by 0465 |
+| [0465](0465-check-s-answers-run-on-a-project-on-the-objects-named.md) | Run Check's answers on a project, on the objects `--only` names | Accepted |

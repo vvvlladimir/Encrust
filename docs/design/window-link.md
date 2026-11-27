@@ -38,7 +38,9 @@ writes one line of JSON and reads one back:
 is answered on a thread of its own, at most eight at once, so a line waiting on the window holds
 up no other (ADR 0462). A line with another token or schema, or a plate that is not there, is
 refused and never reaches the plate. The window takes the revision on its next frame and
-answers then, the server waiting 15 s for it; the plate is read on a thread aside and stood
+answers then. A tool's answer waits 2 s for it, `show_in_window` 15 s; past that the answer says
+`"shown": "pending"` and the window is handed the revision meanwhile, the server's next line
+to it waiting until it is taken, so lines arrive in the order sent; the plate is read on a thread aside and stood
 once read, a plate that does not read told on the status line. The tool's answer carries the
 window's as `window`:
 

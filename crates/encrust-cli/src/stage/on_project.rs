@@ -11,6 +11,8 @@ use super::document::Staging;
 use super::{Shaping, finished, laying, modelled, placed, repaired};
 use crate::args::JobArgs;
 use crate::pipeline::{Watch, saved_model_report};
+use crate::profiles::Chosen;
+use crate::recipe;
 
 /// `project`'s plate `plate` with every flag given made as edits of the objects they shape,
 /// then spread over the plate where `arrange`.
@@ -53,9 +55,36 @@ pub(crate) fn shaped(
     repaired::pressed(&mut staging, &entries, watch)?;
     modelled::modelled(&mut staging, &job.model, None, watch)?;
     finished::finished(&mut staging, &entries, (printer, drift_mm), watch)?;
+    staging = answered(staging, path, &machine, job, watch)?;
     placed::copied(&mut staging, &entries, watch)?;
     if arrange {
         laying::arranged(&mut staging, &entries, printer, watch)?;
     }
     Ok(staging.into_project())
+}
+
+/// `staging` with Check's answers the flags ask for, on the machine the run slices for.
+fn answered(
+    staging: Staging,
+    path: &Path,
+    machine: &core_engine::Machine,
+    job: &JobArgs,
+    watch: &Watch,
+) -> Result<Staging> {
+    if !job.fixes.asked() {
+        return Ok(staging);
+    }
+    let chosen = Chosen {
+        printer: Some(machine.printer.clone()),
+        material: machine.resin.clone(),
+        invented_exposure: false,
+    };
+    let layer_height_mm = (job.slicing.layer_height).unwrap_or(machine.resin.layer_height_mm);
+    let ctx = recipe::Ctx {
+        job,
+        chosen: &chosen,
+        layer_height_mm,
+        watch,
+    };
+    recipe::answered(staging, path, &ctx)
 }

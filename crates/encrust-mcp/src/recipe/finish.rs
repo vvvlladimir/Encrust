@@ -77,7 +77,8 @@ pub struct Drains {
     #[serde(default = "yes")]
     pub vent: bool,
     /// Plate mm where the user wants a hole, near the cavity's lowest place as it prints: the
-    /// surface nearest each is drilled.
+    /// surface nearest each is drilled. A call replaces the points given before: give them
+    /// again to keep them, as the answer's `recipe` lists them.
     #[serde(default)]
     pub at_mm: Vec<[f32; 3]>,
     /// Prints a plug for each hole beside the model.
@@ -139,7 +140,8 @@ pub struct Supports {
     /// Holds up the cavity's ceiling as well as the outside.
     #[serde(default)]
     pub cavity: bool,
-    /// Plate points nearest which a support is stood as well, mm, as `--support-at`.
+    /// Plate points nearest which a support is stood as well, mm, as `--support-at`. A call
+    /// replaces the points given before: give them again to keep them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub at_mm: Vec<[f32; 3]>,
     /// Stands only the supports at `at_mm`, none automatically.
@@ -164,7 +166,7 @@ pub struct Supports {
 
 /// Check's automatic answers, run on the plate once the rest is done, as `--support-islands`
 /// and the flags beside it.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Fixes {
     /// A support under every island, checking again up to three times.
     #[serde(default)]
@@ -175,10 +177,19 @@ pub struct Fixes {
     /// Supports under every weak neck, thick enough to hold it.
     #[serde(default)]
     pub hold_necks: bool,
+    /// The ids of the job's objects answered, as the check's `models[].id` lists them; the
+    /// others are left as they stand. Empty answers every one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub objects: Vec<u64>,
 }
 
 impl Fixes {
-    pub(super) fn push_flags(self, flags: &mut Vec<String>) {
+    /// Whether any answer is asked for.
+    pub fn asked(&self) -> bool {
+        self.support_islands || self.drill_cups || self.hold_necks
+    }
+
+    pub(super) fn push_flags(&self, flags: &mut Vec<String>) {
         for (asked, flag) in [
             (self.support_islands, "--support-islands"),
             (self.drill_cups, "--drill-cups"),

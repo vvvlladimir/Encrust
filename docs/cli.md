@@ -484,7 +484,13 @@ encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe bust
 
 Check's answers are flags too, run last on the plate as a `check` step whatever else runs
 (ADR 0459): `--support-islands` stands a support under every island and checks again, up to
-three times; `--drill-cups` vents every suction cup; `--hold-necks` holds every weak neck.
+three times; `--drill-cups` vents every suction cup; `--hold-necks` holds every weak neck. On a
+project they answer the plate as saved, and with `--only` the objects named alone, the others
+still weighed for what hangs from them (ADR 0465):
+
+```sh
+encrust estimate statue.encrust --only 2 --support-islands --hold-necks --project-out statue-held.encrust
+```
 
 A recipe's `check` step takes `drill_cups` and `hold_levers`, which vent every suction cup by the
 shortest way into its lowest point and hold every weak neck with as many supports as bring it
@@ -1097,7 +1103,7 @@ seam, shell and weld limits, faces flipped or dropped and shells dropped by numb
 and `set_slicing` — layer height, adaptive layers, exposure bands, anti-aliasing, greys, blur,
 islands removed, and `print`, exposure, motion and waits over the resin's — reach the rest of
 the command line's flags; `fix_issues` runs Check's answers as `--support-islands`,
-`--drill-cups` and `--hold-necks`; `plate_jobs` lays two jobs or more, each as its latest
+`--drill-cups` and `--hold-necks`, last, on the `objects` it names by `--only`; `plate_jobs` lays two jobs or more, each as its latest
 revision stands, on one plate with `--arrange`, checks it and, with `output`, writes it under
 `--strict` unless `accept_defects`, every job on one printer and resin.
 `set_hollow` takes the mode, precision, `keep_solid_at_mm`, `keep_solid_reach_mm` and

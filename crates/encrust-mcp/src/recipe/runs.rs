@@ -21,6 +21,7 @@ impl Recipe {
             || !self.more_hollow.is_empty()
             || !self.more_drains.is_empty()
             || !self.more_supports.is_empty()
+            || self.fixes.as_ref().is_some_and(|f| named(&f.objects))
     }
 
     /// The runs that stage this recipe, each its flags after the subcommand: one where every
@@ -30,12 +31,11 @@ impl Recipe {
         if !self.scoped() {
             return Ok(vec![self.flags()]);
         }
-        if self.prepare || self.steps_by.is_some() || self.fixes.is_some() {
+        if self.prepare || self.steps_by.is_some() {
             bail!(
-                "the autopilot, a recipe and fix_issues prepare every object, and a step here \
-                 names some (its `objects`, or points handed to the object they lie at): take \
-                 those back first, or answer the check by hand — `set_supports` with `at_mm` \
-                 under an island, `set_drains` with `at_mm` into a cup"
+                "the autopilot and a recipe prepare every object, and a step here names some \
+                 (its `objects`, or points handed to the object they lie at): take those back \
+                 first"
             );
         }
         let mut groups: Vec<(Vec<u64>, Vec<String>)> = Vec::new();
@@ -55,6 +55,7 @@ impl Recipe {
             more_drains: Vec::new(),
             supports: None,
             more_supports: Vec::new(),
+            fixes: None,
             ..self.clone()
         };
         let mut runs = vec![base.flags()];
@@ -72,6 +73,9 @@ impl Recipe {
             run.extend(flags);
             runs.push(run);
         }
+        if let Some(fixes) = self.fixes.as_ref().filter(|fixes| fixes.asked()) {
+            runs.push(self.answers_run(fixes));
+        }
         let arranged = self.modellings().any(|m| m.arrange);
         if arranged
             && let Some(last) = runs.last_mut()
@@ -80,6 +84,19 @@ impl Recipe {
             last.push("--arrange".into());
         }
         Ok(runs)
+    }
+
+    /// Check's answers on the plate the run before wrote, to the objects they name or every one
+    /// (ADR 0465).
+    fn answers_run(&self, fixes: &super::Fixes) -> Vec<String> {
+        let mut run = vec![PREVIOUS.to_owned()];
+        run.extend(self.machine_flags());
+        if !fixes.objects.is_empty() {
+            let ids: Vec<String> = fixes.objects.iter().map(u64::to_string).collect();
+            run.push(format!("--only={}", ids.join(",")));
+        }
+        fixes.push_flags(&mut run);
+        run
     }
 
     /// Whether the modelling names some objects, so the pose runs on its pieces after it

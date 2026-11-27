@@ -179,3 +179,32 @@ fn render_only_draws_the_object_named() {
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(picture.is_file());
 }
+
+#[test]
+fn a_project_read_back_reports_the_supports_each_object_stands_on() {
+    let cube = write_box_stl("only-tilted", 20.0, 12, 0);
+    let project = output_file("only-tilted.encrust");
+    let tilted = [
+        cube.to_str().unwrap(),
+        "--cut",
+        "z:10",
+        "--arrange",
+        "--rotate",
+        "40,30,0",
+        "--lift",
+        "3",
+        "--supports",
+        "auto",
+        "--project-out",
+        project.to_str().unwrap(),
+        "--json",
+    ];
+    succeeded(&run("estimate", &tilted));
+    let report = succeeded(&run("estimate", &[project.to_str().unwrap(), "--json"]));
+    let models = report["models"].as_array().expect("a model a half");
+    assert_eq!(models.len(), 2, "{report}");
+    for half in models {
+        let contacts = half["supports"]["contacts"].as_u64().unwrap_or(0);
+        assert!(contacts > 0, "a tilted half stands on supports: {half}");
+    }
+}

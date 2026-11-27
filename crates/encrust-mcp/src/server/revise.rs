@@ -16,7 +16,7 @@ use crate::runner::Outcome;
 /// What a job of a project answers with first.
 const PROJECT: &str = "a project the window saved: its models stand as saved, and each tool \
     shapes every one of them, or the ids its `objects` names, as `inspect_model` lists them; \
-    the autopilot, recipes and fix_issues prepare models from their files only.";
+    the autopilot and recipes prepare models from their files only.";
 
 /// `run`'s flags with the plate the run before wrote in the place left for it.
 fn after(run: Vec<String>, previous: Option<&std::path::Path>) -> Vec<String> {

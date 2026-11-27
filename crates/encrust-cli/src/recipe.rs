@@ -10,6 +10,7 @@ use core_recipe::{
     Decision, Metrics, OnFail, Plan, Setting, StepKind, decide, decide_forced, validate,
 };
 
+mod answered;
 mod folded;
 pub mod library;
 mod piece;
@@ -19,6 +20,7 @@ mod report;
 mod settings;
 mod steps;
 
+pub(crate) use answered::answered;
 pub use folded::folded;
 use piece::Piece;
 pub use prepared::Prepared;
@@ -115,6 +117,8 @@ struct Run<'a> {
     ctx: &'a Ctx<'a>,
     staging: Staging,
     pieces: Vec<Piece>,
+    /// The pieces the steps run on; the others are measured with the plate, never changed.
+    targets: Vec<usize>,
     saved: Option<Saved>,
 }
 
@@ -142,7 +146,7 @@ pub fn lay(
     check_sends(&asked.plan, ctx)?;
     let mut steps = asked.plan.recipe().steps.iter();
     let stands = steps.any(|step| step.enabled && step.kind == StepKind::Supports);
-    let pieces = (found.into_iter().zip(entries).enumerate())
+    let pieces: Vec<Piece> = (found.into_iter().zip(entries).enumerate())
         .filter_map(|(entry, (found, (path, shaping)))| {
             let id = staging.ids_of(entry).first().copied()?;
             Some(Piece::new(
@@ -159,6 +163,7 @@ pub fn lay(
         asked,
         ctx,
         staging,
+        targets: (0..pieces.len()).collect(),
         pieces,
         saved: None,
     };
@@ -260,7 +265,7 @@ impl Run<'_> {
         let kind = self.asked.plan.recipe().steps[index].kind;
         let mut runs = Vec::new();
         let mut stopped = None;
-        for id in 0..self.pieces.len() {
+        for id in self.targets.clone() {
             let metrics = self.metrics_of(&self.pieces[id]);
             let typed = forced(&self.pieces[id].shaping).any(|(typed, _)| typed == kind);
             let decide = if typed { decide_forced } else { decide };

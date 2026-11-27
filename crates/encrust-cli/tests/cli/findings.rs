@@ -263,3 +263,54 @@ fn support_islands_stands_a_support_under_the_island_the_check_finds() {
         "a support stands under it"
     );
 }
+
+#[test]
+fn support_islands_on_a_project_answers_the_objects_only_names_alone() {
+    let island_by_a_post = |name: &str, corner: f32| {
+        let at = |offset: f32| corner + offset;
+        write_boxes_stl(
+            name,
+            &[
+                ([at(0.0), at(0.0), 0.0], [at(3.0), at(3.0), 10.0]),
+                ([at(5.0), at(5.0), 5.0], [at(7.0), at(7.0), 8.0]),
+            ],
+        )
+    };
+    let first = island_by_a_post("island-only-first", 1.0);
+    let second = island_by_a_post("island-only-second", 11.0);
+    let project = output_file("island-only.encrust");
+    let (panel, resin) = (test_panel(), test_resin());
+    let machine = [
+        "--profile",
+        panel.to_str().unwrap(),
+        "--material",
+        resin.to_str().unwrap(),
+        "--layer-height",
+        "0.5",
+        "--json",
+    ];
+    let mut laid = vec![
+        "estimate",
+        first.to_str().unwrap(),
+        second.to_str().unwrap(),
+    ];
+    laid.extend(["--project-out", project.to_str().unwrap()]);
+    laid.extend(machine);
+    json_of(&laid);
+    let islands = |extra: &[&str]| {
+        let mut args = vec!["estimate", project.to_str().unwrap()];
+        args.extend(machine);
+        args.extend_from_slice(extra);
+        let report = json_of(&args);
+        report["print"]["cured"]["islands"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("the check counts islands: {report}"))
+    };
+    assert_eq!(islands(&[]), 2, "each model's block starts in mid-air");
+    assert_eq!(
+        islands(&["--only", "1", "--support-islands"]),
+        1,
+        "the second model's island is left as it was"
+    );
+    assert_eq!(islands(&["--support-islands"]), 0, "every island is held");
+}

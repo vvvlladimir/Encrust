@@ -216,6 +216,12 @@ pub fn stage(
         }
         Given::Projects(paths) => {
             project::refuse_for_projects(job)?;
+            if job.fixes.asked() {
+                bail!(
+                    "--support-islands, --drill-cups and --hold-necks answer one project's \
+                     plate; lay the projects together and save it first"
+                );
+            }
             let laid = project::laid_together(paths, arrange.then_some(job))?;
             let project = job.edits.applied(laid)?;
             project::stage_checked(&paths[0], &project, None, job, watch)

@@ -1,6 +1,6 @@
 # 0464. Answer a chat client short, hand its points to their objects, and edit a cut plate piece by piece
 
-- **Status:** Accepted
+- **Status:** Accepted; `fix_issues` refused once points name objects is superseded by 0465
 - **Date:** 2026-11-27
 
 ## Context

@@ -99,12 +99,20 @@ impl Staging {
     pub(crate) fn targets(&self, entry: usize) -> Vec<ObjectId> {
         (self.ids_of(entry).into_iter())
             .filter(|id| self.only.is_empty() || self.only.contains(id))
-            .filter(|&id| {
-                self.document
-                    .object(id)
-                    .is_some_and(|(state, _)| state.plate == self.plate && state.plug_of.is_none())
-            })
+            .filter(|&id| self.shapeable(id))
             .collect()
+    }
+
+    /// Every object of the plate worked on but a plug, whatever `--only` names.
+    pub(crate) fn on_plate(&self) -> Vec<ObjectId> {
+        (self.document.ids().into_iter())
+            .filter(|&id| self.shapeable(id))
+            .collect()
+    }
+
+    fn shapeable(&self, id: ObjectId) -> bool {
+        (self.document.object(id))
+            .is_some_and(|(state, _)| state.plate == self.plate && state.plug_of.is_none())
     }
 
     /// The objects every entry's flags shape, in plate order.

@@ -3,8 +3,8 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use agent_link::{
@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 use tokio::net::TcpStream;
+use tokio::task::JoinHandle;
 
 use crate::jobs::Revision;
 
@@ -23,6 +24,12 @@ use crate::jobs::Revision;
 const CONNECT_WAIT: Duration = Duration::from_secs(1);
 /// How long it may take to answer: its next frame, which a busy plate can hold up.
 const REPLY_WAIT: Duration = Duration::from_secs(15);
+/// How long a tool's answer waits for a revision to be shown; past it the window is handed it
+/// while the answer goes back.
+const SHOW_WAIT: Duration = Duration::from_secs(2);
+/// What a tool answers of a revision the window is still taking.
+const STILL_SHOWING: &str = "the window is busy drawing; it is handed the revision and shows it \
+    when free, before it is asked anything else";
 /// How long edits handed over may take to land, each a tool's job: longer than the window
 /// waits for them, so its answer always arrives.
 const APPLY_WAIT: Duration = Duration::from_mins(11);
@@ -39,6 +46,8 @@ pub struct Window {
     apps: Vec<PathBuf>,
     /// Whether the model was told that the window is of another version, once a run.
     told_version: Arc<AtomicBool>,
+    /// A revision handed over whose answer the tool did not wait for.
+    showing: Arc<Mutex<Option<JoinHandle<Result<Value>>>>>,
 }
 
 impl Window {
@@ -48,6 +57,7 @@ impl Window {
             file,
             apps,
             told_version: Arc::default(),
+            showing: Arc::default(),
         }
     }
 
@@ -99,7 +109,9 @@ impl Window {
 
     /// Hands `revision` and the `plate` its check wrote to the window, answering what it said or
     /// `None` with no window open; one not `open` shows only while the window follows agents.
+    /// One not `open` is answered after `SHOW_WAIT` at most, the window taking it meanwhile.
     pub async fn show(&self, revision: &Revision, plate: &Path, open: bool) -> Option<Value> {
+        self.settled().await;
         let (stream, token) = self.connect().await?;
         let show = Show {
             job: revision.job.clone(),
@@ -111,16 +123,38 @@ impl Window {
             open,
         };
         let line = signed(SHOW_SCHEMA, token, &show)?;
+        let mut asked = tokio::spawn(async move { ask(stream, &line, REPLY_WAIT).await });
+        let wait = if open { REPLY_WAIT } else { SHOW_WAIT };
+        let Ok(joined) = tokio::time::timeout(wait, &mut asked).await else {
+            *self.showing.lock().ok()? = Some(asked);
+            return Some(json!({ "shown": "pending", "why_not": STILL_SHOWING }));
+        };
+        let answer = joined
+            .context("the window's answer was lost")
+            .and_then(|asked| asked);
         Some(
-            ask(stream, &line, REPLY_WAIT)
-                .await
+            answer
                 .unwrap_or_else(|error| json!({ "shown": false, "why_not": format!("{error:#}") })),
         )
+    }
+
+    /// Waits for a revision handed over before to be taken, so the window takes every line in
+    /// the order sent.
+    async fn settled(&self) {
+        let pending = self
+            .showing
+            .lock()
+            .ok()
+            .and_then(|mut showing| showing.take());
+        if let Some(pending) = pending {
+            _ = pending.await;
+        }
     }
 
     /// The open window's plate as `job` builds on it: its file, version, the ids on it and the
     /// job's model there, or `None` with no window that hands it over (ADR 0456).
     pub async fn plate(&self, job: &str) -> Option<HandedPlate> {
+        self.settled().await;
         let (stream, token) = self.connect().await?;
         let line = signed(PLATE_SCHEMA, token, &PlateLine::plate_of(job))?;
         let answer = ask(stream, &line, REPLY_WAIT).await.ok()?;
@@ -129,6 +163,7 @@ impl Window {
 
     /// Hands `edits` built on the plate at `base_version` to the window, and its answer.
     pub async fn apply(&self, job: &str, edits: &[Edit], base_version: u64) -> Option<ApplyReply> {
+        self.settled().await;
         let (stream, token) = self.connect().await?;
         let line = signed(
             PLATE_SCHEMA,
@@ -259,6 +294,47 @@ mod tests {
         assert_eq!(line["plate"], PLATE);
         assert_eq!(line["schema"], 4);
         assert_eq!(line["open"], true);
+    }
+
+    #[tokio::test]
+    async fn a_busy_window_is_handed_the_revision_without_holding_the_answer_up() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("a free port");
+        let port = listener.local_addr().expect("bound").port();
+        let path = file("busy");
+        let found = json!({"schema": 4, "port": port, "token": "t0", "pid": 1});
+        std::fs::write(&path, found.to_string()).expect("the temp dir is writable");
+        let busy_for = SHOW_WAIT + Duration::from_secs(1);
+        let window = tokio::spawn(async move {
+            let mut kinds = Vec::new();
+            for answer in [b"{\"shown\":true}\n".as_slice(), b"{}\n".as_slice()] {
+                let (stream, _) = listener.accept().await.expect("the server connects");
+                let mut reader = BufReader::new(stream);
+                let mut line = String::new();
+                reader.read_line(&mut line).await.expect("a line");
+                let line: Value = serde_json::from_str(&line).expect("the line is JSON");
+                kinds.push(line.get("plate").is_some());
+                if kinds.len() == 1 {
+                    tokio::time::sleep(busy_for).await;
+                }
+                reader.get_mut().write_all(answer).await.expect("answered");
+            }
+            kinds
+        });
+        let window_link = Window::new(Some(path), Vec::new());
+        let started = Instant::now();
+        let answered = window_link.show(&revision(), Path::new(PLATE), false).await;
+        assert!(started.elapsed() < busy_for, "the answer did not wait");
+        assert_eq!(answered.expect("a window")["shown"], "pending");
+        _ = window_link.plate("cube-1").await;
+        assert!(
+            started.elapsed() >= busy_for,
+            "the next line waits for the show"
+        );
+        assert_eq!(
+            window.await.expect("the window's task ends"),
+            [true, false],
+            "the show, then the plate asked for, in that order"
+        );
     }
 
     #[tokio::test]

@@ -23,7 +23,8 @@ Each tool's description holds its own rules; these hold across them.
    Name the side that shows in `shown_at_mm`, and what no support may touch in
    `keep_clear_at_mm`.
 6. A hollow model needs a way out for its resin: `slicing.trapped` must be empty. Fix what the
-   check names; `fix_issues` does what the window's Check does.
+   check names; `fix_issues` does what the window's Check does, for the `objects` named. A
+   lever is held by `hold_necks`, not by a support at its point.
 7. `write_file` when the check is clean. Otherwise tell the user the defects, and pass
    `accept_defects` only when they accept them. Several models on one plate: a job each,
    then `plate_jobs`.

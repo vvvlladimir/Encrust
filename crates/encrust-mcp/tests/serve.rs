@@ -1228,6 +1228,18 @@ async fn a_point_given_with_no_object_goes_to_the_half_it_lies_on() {
         answer(&drained)
     );
 
+    let answers = json!({"support_islands": true, "drill_cups": true, "objects": [first["id"]]});
+    let fixed = call(&client, "fix_issues", json!({"job": job, "fixes": answers})).await;
+    assert!(
+        !failed(&fixed),
+        "Check's answers run on a plate whose steps name objects: {}",
+        answer(&fixed)
+    );
+    assert_eq!(
+        answer(&fixed)["recipe"]["fixes"]["objects"],
+        json!([first["id"]])
+    );
+
     client.cancel().await.expect("the server stops");
 }
 

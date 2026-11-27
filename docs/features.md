@@ -1124,7 +1124,8 @@ tools': `set_shape` cuts with a
 joint of the size you ask or leaves the halves upright, labels in a font, splits, mirrors,
 moves, copies and presses reliefs, `set_repair` mends, `set_slicing` sets the layers and,
 with numbers you or the resin's maker give, the exposure, motion and waits, and `fix_issues`
-answers what Check finds — islands supported, suction cups vented, weak necks held. Each
+answers what Check finds — islands supported, suction cups vented, weak necks held — on every
+model of the job or the ones it names, a cut model's halves among them. Each
 model is prepared in a job of its own; `plate_jobs` lays several on one plate, spread apart,
 checks it and writes them as one file.
 `compare_poses` shows the model the best few ways the engine found to stand it, each drawn
@@ -1204,7 +1205,8 @@ delay, waits and light power for one run over the resin's own numbers, as the wi
 settings do.
 
 **Check's answers:** `--support-islands`, `--drill-cups` and `--hold-necks` support the
-islands, vent the suction cups and hold the weak necks Check finds, as its Fix all does.
+islands, vent the suction cups and hold the weak necks Check finds, as its Fix all does — on a
+saved project too, and with `--only` on the models named alone.
 
 **Supports:** build to any support profile, size each support by what it holds as **Auto**
 does (`--supports auto`), and hold up a hollowed model's cavity as well as its outside

@@ -285,7 +285,7 @@ impl Recipe {
         if let Some(slicing) = &self.slicing {
             slicing.push_flags(&mut flags);
         }
-        if let Some(fixes) = self.fixes {
+        if let Some(fixes) = &self.fixes {
             fixes.push_flags(&mut flags);
         }
         flags

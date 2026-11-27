@@ -480,6 +480,7 @@ fn checks_answers_ride_on_their_flags() {
             support_islands: true,
             drill_cups: false,
             hold_necks: true,
+            objects: Vec::new(),
         }),
         ..plain()
     };
@@ -530,6 +531,55 @@ fn steps_naming_objects_run_on_the_plate_before_them_by_only() {
         "spread last: {:?}",
         runs[2]
     );
+}
+
+#[test]
+fn checks_answers_run_last_on_the_objects_they_name() {
+    let recipe = Recipe {
+        hollow: Some(Hollow {
+            wall_mm: 2.0,
+            objects: vec![2],
+            ..Hollow::default()
+        }),
+        fixes: Some(Fixes {
+            support_islands: true,
+            objects: vec![3],
+            ..Fixes::default()
+        }),
+        ..plain()
+    };
+    let runs = recipe
+        .runs()
+        .expect("answers run on a plate whose steps name objects");
+    let last = runs.last().expect("a run");
+    assert_eq!(
+        last[0], PREVIOUS,
+        "on the plate the run before wrote: {runs:?}"
+    );
+    for flag in ["--only=3", "--support-islands"] {
+        assert!(last.contains(&flag.to_owned()), "{flag} in {last:?}");
+    }
+    assert!(
+        !runs[..runs.len() - 1]
+            .concat()
+            .contains(&"--support-islands".to_owned()),
+        "answered once, last: {runs:?}"
+    );
+}
+
+#[test]
+fn checks_answers_for_one_object_stage_the_rest_first() {
+    let recipe = Recipe {
+        fixes: Some(Fixes {
+            drill_cups: true,
+            objects: vec![1],
+            ..Fixes::default()
+        }),
+        ..plain()
+    };
+    let runs = recipe.runs().expect("runs");
+    assert_eq!(runs.len(), 2, "the model, then its answers: {runs:?}");
+    assert!(runs[1].contains(&"--only=1".to_owned()), "{:?}", runs[1]);
 }
 
 #[test]
