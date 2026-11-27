@@ -1,10 +1,11 @@
 //! How `--orient` stood a model, and the other ways the search offered with what each printed
 //! (ADR 0458).
 
+use core_document::degrees_of;
 use core_geometry::Scalar;
 use serde::Serialize;
 
-use crate::pipeline::{OrientChoice, OrientSummary, rotate_degrees};
+use crate::pipeline::{OrientChoice, OrientSummary};
 
 #[derive(Debug, Serialize)]
 pub struct Oriented {
@@ -70,7 +71,7 @@ impl Choice {
     fn of(pick: usize, choice: &OrientChoice) -> Self {
         Self {
             pick,
-            rotate_deg: rotate_degrees(choice.rotation).to_array(),
+            rotate_deg: degrees_of(choice.rotation).to_array(),
             on_plate: choice.on_plate,
             offered: choice.offered,
             printed: choice.printout.map(|out| Printed {

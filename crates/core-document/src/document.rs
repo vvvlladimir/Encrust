@@ -5,7 +5,7 @@ use core_engine::project::{
     BuiltCavity, Group, HollowState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
     ObjectSupportState, Project, Summary, SupportState, assign_ids,
 };
-use core_engine::{Model, object_model};
+use core_engine::{Model, object_model, plate_models};
 use core_geometry::{Mesh, Orientation, Region, Transform, diagnose};
 
 use core_supports::{SupportPoint, SupportTree};
@@ -38,6 +38,7 @@ impl Document {
         assign_ids(&mut project.manifest.objects);
         let next_id = (project.manifest.objects.iter())
             .map(|object| object.id.0 + 1)
+            .chain(project.manifest.next_id.map(|next| next.0))
             .max()
             .unwrap_or(1);
         Self { project, next_id }
@@ -81,14 +82,20 @@ impl Document {
         supports.active
     }
 
-    /// The plate as a project file holds it, ids and all.
-    pub fn into_project(self) -> Project {
+    /// The plate as a project file holds it, ids and all, and the id the next object takes.
+    pub fn into_project(mut self) -> Project {
+        self.project.manifest.next_id = Some(ObjectId(self.next_id));
         self.project
     }
 
     /// Object `id` as a run cuts it, its supports under it; `None` off the plate.
     pub fn model(&self, id: ObjectId) -> Option<Model> {
         object_model(&self.project, self.index_of(id)?)
+    }
+
+    /// The models of the active plate as a run cuts them, in plate order.
+    pub fn plate_models(&self) -> Vec<Model> {
+        plate_models(&self.project, self.project.manifest.active_plate)
     }
 
     /// The object `id` names, with its meshes, if it is on the plate.
@@ -298,7 +305,7 @@ impl Document {
     }
 
     /// Takes the plugs laid for object `id` off the plate, answering their ids.
-    fn take_plugs_of(&mut self, id: ObjectId) -> Vec<ObjectId> {
+    pub(crate) fn take_plugs_of(&mut self, id: ObjectId) -> Vec<ObjectId> {
         let named = self
             .index_of(id)
             .and_then(|index| u32::try_from(index).ok());

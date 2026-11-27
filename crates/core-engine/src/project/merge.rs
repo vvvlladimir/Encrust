@@ -7,9 +7,8 @@ use printer_profiles::SupportProfile;
 
 use super::{Group, ObjectState, OwnSupportState, Project, assign_ids};
 
-/// Puts `from`'s models of the plate it was left on, plugs with them, on `plate` of `into` after
-/// what stands there; an id `into` holds gets the next free one and each support group joins
-/// `into`'s of its name, a new one where there is none.
+/// Puts `from`'s plate, plugs and all, on `plate` of `into` after what stands there, an object
+/// without its mesh left out; a taken id is renumbered, each group joins `into`'s of its name.
 pub fn insert(into: &mut Project, from: Project, plate: u32) {
     let Project {
         manifest, models, ..
@@ -24,7 +23,7 @@ pub fn insert(into: &mut Project, from: Project, plate: u32) {
         .raft
         .filter(|raft| into.manifest.supports.raft.as_ref() != Some(raft));
     let kept: Vec<usize> = (manifest.objects.iter().enumerate())
-        .filter(|(_, object)| object.plate == manifest.active_plate)
+        .filter(|(index, object)| object.plate == manifest.active_plate && *index < models.len())
         .map(|(index, _)| index)
         .collect();
     let first = into.manifest.objects.len();
@@ -39,9 +38,7 @@ pub fn insert(into: &mut Project, from: Project, plate: u32) {
         regroup(&mut state, &joined, theirs, &table);
         state.own_raft = state.own_raft.or(raft);
         into.manifest.objects.push(state);
-        if let Some(model) = models.get(index) {
-            into.models.push(model.clone());
-        }
+        into.models.push(models[index].clone());
     }
     assign_ids(&mut into.manifest.objects);
 }
@@ -121,6 +118,18 @@ mod tests {
         assert_eq!(ids.len(), 3, "no id taken twice: {ids:?}");
         assert_eq!(objects[2].plug_of, Some(1), "the plug follows its model");
         assert_eq!(into.models.len(), into.manifest.objects.len());
+    }
+
+    #[test]
+    fn an_object_whose_model_is_missing_is_left_out() {
+        let mut into = project(1);
+        let mut from = project(3);
+        from.models.truncate(2);
+
+        insert(&mut into, from, 0);
+
+        assert_eq!(into.models.len(), into.manifest.objects.len());
+        assert_eq!(into.manifest.objects.len(), 3, "the third has no model");
     }
 
     #[test]

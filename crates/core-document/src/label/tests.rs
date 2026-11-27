@@ -105,3 +105,19 @@ fn bytes_that_are_not_a_font_do_not_read() {
         Err(ApplyError::BadFont { path: Some(_), .. })
     ));
 }
+
+#[test]
+fn a_font_the_text_cannot_be_drawn_in_names_the_file_asked_for() {
+    let path = PathBuf::from("/fonts/mine.ttf");
+    let error = TextError::BadFont("no outline".to_owned());
+
+    let refused = text_error(error, CUBE, Some(&path));
+
+    assert_eq!(
+        refused,
+        ApplyError::BadFont {
+            path: Some(path),
+            reason: "no outline".to_owned()
+        }
+    );
+}

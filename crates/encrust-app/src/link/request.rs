@@ -4,8 +4,10 @@
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use agent_link::Show;
+use agent_link::{RevisionFile, Show, is_job_name};
 use anyhow::{Context, Result, anyhow, bail};
+
+use crate::i18n::tr;
 use core_engine::project::{Project, load};
 
 /// A revision with its plate read, ready to stand on the window's.
@@ -18,15 +20,28 @@ pub struct Shown {
 /// Revision `revision` of `job` as the server keeps it under `jobs`, to be shown: the model and
 /// the machine from the flags it stages with, and the plate its check wrote.
 pub fn of_job(jobs: &Path, job: &str, revision: u32) -> Result<Show> {
-    let dir = jobs.join(job);
-    if dir.join(format!("{revision}.edits.json")).is_file() {
-        bail!("revision {revision} of {job} was made on this plate, which holds it already");
+    if !is_job_name(job) {
+        bail!(tr!("link-no-job", job = job.to_owned()));
     }
-    let path = dir.join(format!("{revision}.args.json"));
-    let text =
-        std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-    let flags: Vec<String> = serde_json::from_str(&text)
-        .with_context(|| format!("revision {revision} of {job} does not read"))?;
+    let dir = jobs.join(job);
+    if dir.join(RevisionFile::Edits.of(revision)).is_file() {
+        bail!(tr!(
+            "link-revision-on-plate",
+            job = job.to_owned(),
+            revision = revision
+        ));
+    }
+    let path = dir.join(RevisionFile::Args.of(revision));
+    let text = std::fs::read_to_string(&path)
+        .with_context(|| tr!("error-cannot-read", path = path.display().to_string()))?;
+    let unreadable = || {
+        tr!(
+            "link-revision-unreadable",
+            job = job.to_owned(),
+            revision = revision
+        )
+    };
+    let flags: Vec<String> = serde_json::from_str(&text).with_context(unreadable)?;
     let flag = |names: [&str; 2]| {
         let value = flags.iter().find_map(|flag| {
             let (name, value) = flag.split_once('=')?;
@@ -37,21 +52,22 @@ pub fn of_job(jobs: &Path, job: &str, revision: u32) -> Result<Show> {
     Ok(Show {
         job: job.to_owned(),
         revision,
-        model: flags
-            .first()
-            .with_context(|| format!("revision {revision} of {job} names no model"))?
-            .into(),
+        model: flags.first().with_context(unreadable)?.into(),
         printer: flag(["--printer", "--profile"]),
         resin: flag(["--resin", "--material"]),
-        plate: dir.join(format!("{revision}.encrust")),
+        plate: dir.join(RevisionFile::Plate.of(revision)),
         open: true,
     })
 }
 
 /// `request` with its plate read.
 pub fn read(request: Show) -> Result<Shown> {
-    let project = load(&request.plate)
-        .with_context(|| format!("the revision's plate {}", request.plate.display()))?;
+    let project = load(&request.plate).with_context(|| {
+        tr!(
+            "error-cannot-read",
+            path = request.plate.display().to_string()
+        )
+    })?;
     Ok(Shown { request, project })
 }
 
@@ -71,7 +87,7 @@ impl Waiting {
             .spawn(move || drop(send.send(read(request))));
         if let Err(error) = spawned {
             let (send, failed) = mpsc::channel();
-            let _ = send.send(Err(anyhow!("the plate is not read: {error}")));
+            let _ = send.send(Err(anyhow!(error).context(tr!("link-plate-unread"))));
             return Self::Reading(failed);
         }
         Self::Reading(reading)
@@ -85,7 +101,7 @@ impl Waiting {
         match reading.try_recv() {
             Ok(read) => *self = Self::Read(Box::new(read?)),
             Err(TryRecvError::Empty) => return Ok(false),
-            Err(TryRecvError::Disconnected) => bail!("the plate's reading stopped"),
+            Err(TryRecvError::Disconnected) => bail!(tr!("link-plate-unread")),
         }
         Ok(true)
     }

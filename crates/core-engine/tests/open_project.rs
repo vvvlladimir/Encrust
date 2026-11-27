@@ -133,6 +133,7 @@ fn project() -> Project {
             plates: vec!["Plate 1".to_owned()],
             active_plate: 0,
             objects: vec![object("cube", &cube, Transform::default())],
+            next_id: None,
         },
         models: vec![ModelMeshes {
             source: Arc::new(cube),

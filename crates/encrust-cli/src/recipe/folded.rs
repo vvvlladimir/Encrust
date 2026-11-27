@@ -15,9 +15,8 @@ const FLAGS_ORDER: [StepKind; 5] = [
     StepKind::Supports,
 ];
 
-/// `plan`'s recipe with `shaping` folded in: a step a flag forces runs whatever its `when`, and
-/// a setting a flag gives replaces the step's own and every choice's. With no plan, a recipe of
-/// the steps the flags ask for alone.
+/// `plan`'s recipe, or the flags' steps alone, with `shaping` folded in: a step a flag forces runs
+/// whatever its `when`, a setting a flag gives replaces the step's own and every choice's.
 pub fn folded(plan: Option<&Plan>, shaping: &Shaping) -> Recipe {
     let Some(plan) = plan else {
         return of_flags(shaping);

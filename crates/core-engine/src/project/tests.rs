@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use super::*;
-use core_geometry::Vec3;
+use core_geometry::{Mat3, Vec3};
 use core_volume::InfillPattern;
 
 /// A plate of `objects` models, each hollowed, so every part of the format is in it:
@@ -54,6 +54,7 @@ pub(super) fn project(objects: usize) -> Project {
             plates: vec!["Plate 1".to_owned()],
             active_plate: 0,
             objects: (0..objects).map(object).collect(),
+            next_id: None,
         },
         models: (0..objects)
             .map(|_| ModelMeshes {

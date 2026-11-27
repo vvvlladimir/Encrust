@@ -5,7 +5,7 @@ use core_engine::project::{AutoSizing, Group, ObjectState};
 use core_engine::{SupportPlan, plan_of};
 use core_geometry::Transform;
 use core_supports::{ModelSupports, Need};
-use printer_profiles::{Catalogue, Raft, SupportProfile};
+use printer_profiles::{Catalogue, ProfileError, Raft, SupportProfile};
 
 use super::SupportsAsked;
 use crate::error::ApplyError;
@@ -44,7 +44,7 @@ pub(super) fn plan_for(
     profile: &SupportProfile,
 ) -> Result<SupportPlan, ApplyError> {
     let mut plan = match asked.profile {
-        Some(AUTO) => sized_plan((sizing, groups), profile)?,
+        Some(AUTO) => sized_plan(Catalogue::bundled(), (sizing, groups), profile)?,
         _ => plan_of(profile, None),
     };
     plan.cavity = asked.cavity;
@@ -52,19 +52,22 @@ pub(super) fn plan_for(
     Ok(plan)
 }
 
-/// Supports sized by `sizing`'s profile where the plate keeps one, else by the shipped
-/// catalogue's first; a shape is the plate's group of its name where there is one.
+/// Supports sized by `sizing`'s profile where the plate keeps one, else by the first of
+/// `catalogue`; a shape is the plate's group of its name where there is one.
 pub(super) fn sized_plan(
+    catalogue: Result<Catalogue, ProfileError>,
     (sizing, groups): (Option<&AutoSizing>, &[Group]),
     profile: &SupportProfile,
 ) -> Result<SupportPlan, ApplyError> {
-    let catalogue = Catalogue::bundled().map_err(|_| ApplyError::NoProfile(AUTO.into()))?;
+    let catalogue = catalogue.map_err(|error| ApplyError::BadCatalogue(error.to_string()))?;
     let kept = sizing.map(|sizing| sizing.profile.clone());
     let auto = kept
         .or_else(|| catalogue.autos().next().map(|entry| entry.profile.clone()))
         .ok_or_else(|| ApplyError::NoProfile(AUTO.into()))?;
-    let mut plan =
-        SupportPlan::sized(auto, &catalogue).map_err(|_| ApplyError::NoProfile(AUTO.into()))?;
+    let mut plan = SupportPlan::sized(auto, &catalogue).map_err(|error| match error {
+        ProfileError::Unknown { id, .. } => ApplyError::NoProfile(id),
+        other => ApplyError::BadCatalogue(other.to_string()),
+    })?;
     for shape in plan.profiles_mut() {
         if let Some(group) = groups.iter().find(|g| g.profile.name == shape.name) {
             *shape = group.profile.clone();

@@ -108,29 +108,11 @@ the model, printer, resin and each step's settings — that becomes `encrust` fl
 beside it the `core-recipe` its check ran. With the window followed, the window owns the job's plate,
 a plate of its own (ADR 0466, 0477): a revision whose every change is an edit is checked on it and kept
 as that plate and its edits (`N.encrust`, `N.edits.json`), and handed to the window as edits,
-so what the user did there is in the next check; any other revision the window runs by its
-recipe (ADR 0459). An editing tool writes the next revision and checks it; `revert` copies an old one forward;
+so what the user did there is in the next check; any other revision is shown as the plate its
+check wrote (ADR 0473). An editing tool writes the next revision and checks it; `revert` copies an old one forward;
 `report_print` appends what a print did. The cost: each check stages the model again from
 its file (ADR 0455). The connector keeps the same revisions in the page's own state, never
 on the server.
-
-## What main brought
-
-`main` built steps 1, 2 and 4 under its own records (0400, 0401, 0402) and went further; the
-merge kept main's, renumbered the branch's own after 0454 and left out what no longer fits:
-
-| Here | In main | Now |
-|---|---|---|
-| `--prepare` fills the flags left out | 0402, superseded by recipes (0403) | `--prepare` is `--recipe prepare`; `start_job` runs it |
-| a job's TOML "recipe" | `core-recipe`'s recipe | each revision keeps the `core-recipe` its check ran (ADR 0459) |
-| `--keep-solid X,Y,Z` | `--keep-solid` with blockers fitted to the model (0396) | main's; the branch's flag dropped |
-| `keep_clear_at_mm` points | painted `Shown` faces (0410, 0425), window only | both stand: kept clear for the search, painted for the supports (ADR 0460) |
-| the window replaying each revision | Prepare for print rebuilt on recipes, then one plate edited by one apply | step 8 again: the window takes a revision as edits of the plate it owns, and runs by its recipe only what no edit carries yet (ADR 0459, 0466) |
-
-Main also brings what the tools gain without new code: Check's issues located and fixed by
-the `fix-issues` recipe, cups vented by their thinnest wall, necks held by their stress, one
-cavity through parts at the thinnest wall asked for, Auto sized by what each tip holds, and
-release builds for ARM64 Windows and Linux (0454), which the extension ships for too.
 
 ## The transports
 
@@ -150,7 +132,7 @@ config. The files are the user's own paths and the printer is on the user's netw
 - **Updated by a new download.** Anthropic's directory no longer takes `.mcpb` listings, so
   nothing updates it in place; the bundle reports its version in `instructions`.
 - **No window needed.** Resins come from `import_resin` and the exposure test (step 15).
-  When the window is open, each revision's recipe runs on its plate (ADR 0459, `window-link.md`).
+  When the window is open, each revision lands on a plate of its own (ADR 0473, 0477, `window-link.md`).
 
 Claude on the web and on a phone runs no local program and gives an MCP App page no file
 from the chat; it is served once one of those changes.
@@ -172,7 +154,7 @@ tools and serves one MCP Apps page (SEP-1865), and does no geometry.
 - **The file out.** The page offers the printer file as a download. Sending to a printer is
   not offered: the browser cannot reach the user's network.
 
-Step 18 is a spike (commit 602ae603, its throwaway code since removed) that settles, in such a chat on the web and its desktop app, with a 20 MB STL:
+Step 18's spike settled, in such a chat on the web and its desktop app, with a 20 MB STL:
 the page can fetch the `download_url`; a prepare of a figure finishes within a minute on a
 laptop with no cross-origin isolation; the report reaches the model in the same turn; the
 file downloads. A failed answer stops the connector, and that chat's users go through a local MCP client,
@@ -239,7 +221,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 5–7 | The stdio server and its jobs, its tools and `.mcpb`, the bench | `encrust-mcp`, `encrust-cli` (done, ADR 0455, 0456) | — |
 | 11 | Poses offered and chosen, places kept clear, each check compared, a judge; supports by hand | (done, ADR 0457, 0458) | 6, 7 |
 | 12 | Merge main | (done) | — |
-| 8 | The open window owns the plate: a revision reaches it as edits, the rest by its recipe | `core-edit`, `core-document`, `encrust-cli`, `encrust-mcp`, `encrust-app` (done, ADR 0459, 0466, 0468) | 12 |
+| 8 | The open window owns the plate: a revision reaches it as edits, the rest as the plate its check wrote | `core-edit`, `core-document`, `encrust-cli`, `encrust-mcp`, `encrust-app` (done, ADR 0466, 0468, 0473) | 12 |
 | 13 | The side meant to be seen painted from the command line, `--shown-at X,Y,Z[:R]` | `core-engine`, `encrust-cli`, `encrust-mcp` (done, ADR 0460) | 12 |
 | 14 | Recipes chosen by purpose: `list_recipes`, `use_recipe`, the instructions ask what the print is for | `encrust-mcp` (done, ADR 0460) | 12 |
 | 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0460); a resin from a label's numbers by `create_resin` (done, ADR 0464) | 12 |
@@ -253,20 +235,6 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 10 | The MCP Apps page in Claude Desktop, the connector's page served locally | `encrust-mcp` | 19 |
 
 Order: 19 once the spike's live run answers; 21 grows with each; 9 and 10 last.
-
-## How the work is run
-
-- One integrator session owns this page, the interfaces between steps, the ADRs and the
-  merges.
-- A writer per step, in its own git worktree, briefed with the rules, the interface it
-  implements and the tests that accept it. Steps split along crate boundaries, so no two
-  writers touch one file.
-- A reviewer per step that is not its writer, holding the diff to `review.md`; its findings
-  go back to the writer, and the integrator settles what two disagree on.
-- Each worktree builds into its own `target/`, which costs a full build of disk and cores;
-  two writers at a time is the ceiling here, and each keeps to one cargo at a time. A
-  `target/` shared between worktrees reuses a build script's output across them: one that
-  embeds files by path (`printer-profiles`) then ships another checkout's files, or none.
 
 ## Open decisions
 

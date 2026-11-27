@@ -60,14 +60,10 @@ pub(super) fn pressed(
 
 /// Whether the flags edit the object before modelling, so what import read is read again.
 pub(super) fn reshaped(args: &ImportArgs) -> bool {
-    let transform = &args.transform;
     args.repair.is_some()
         || !mend_asked(args).is_empty()
         || args.relief_image.is_some()
-        || transform.scale.is_some()
-        || transform.rotate.is_some()
-        || transform.center
-        || transform.orient
+        || args.transform.places()
 }
 
 fn mend(
@@ -81,9 +77,6 @@ fn mend(
     if asked.is_empty() {
         return Ok(());
     }
-    let counts = staging
-        .mesh(object)
-        .map_or((0, 0), |mesh| (mesh.faces.len(), list_shells(&mesh).len()));
     let edit = Edit::Mend {
         object,
         flip_faces: asked.flip_faces,
@@ -93,7 +86,13 @@ fn mend(
     };
     let applied = (staging.apply(&edit, object, watch.stop)).map_err(|error| match error {
         ApplyError::Cancelled => said(error),
-        other => refused(&other, counts, args),
+        other => {
+            // A mend refused leaves the object as it was, so its counts are still the ones asked of.
+            let counts = staging
+                .mesh(object)
+                .map_or((0, 0), |mesh| (mesh.faces.len(), list_shells(&mesh).len()));
+            refused(&other, counts, args)
+        }
     })?;
     if let Report::Mended(edited) = applied.report {
         import.edited = Some(edited);

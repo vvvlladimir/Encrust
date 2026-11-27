@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use core_edit::{AUTO, Edit, ObjectId};
 use core_engine::project::{Group, ModelMeshes, ObjectState, SupportState, inner_faces};
-use core_engine::{NeedsAsked, ShownAt, SupportPlan, analysis_slicing, needs_on_both, shown_on};
+use core_engine::{
+    NeedSides, NeedsAsked, ShownAt, SupportPlan, analysis_slicing, needs_on_both, shown_on,
+};
 use core_geometry::{Bvh, Mat4, Mesh, Transform, Vec3, transform_mesh};
 use core_slicer::{PlaneSliceEngine, SliceEngine};
 use core_supports::{Blocked, ModelSupports, Need, Shown, SupportTree, WallSide, low_points};
@@ -82,26 +84,35 @@ pub(crate) fn apply_supports(
         wall: wall_outside(state, meshes, &bvh, into_model),
         read_painted: asked.clean_surface || !asked.shown_at.is_empty(),
     };
-    let stood = stand_asked(&mut supports, &on, asked.at_mm, (transform, group), id)?;
-    let needs = needs_asked(&on, &supports, (asked, &plan), (id, cancel))?;
-    stand_needs(
-        &mut supports,
-        &mut groups,
-        &plan,
-        (&needs, (transform, group)),
-    );
-    if cancel.asked() {
-        return Err(ApplyError::Cancelled);
-    }
+    let into = (&mut supports, &mut groups, group);
+    let placed = stand_all(into, &on, (asked, &plan), (id, cancel))?;
     let table = table_of(on.state, &groups, plate.raft);
     let grown = grown_trees(&mut supports, &on, (&bvh, &table));
-    let report = supported(&supports, (stood + needs.len(), grown.len()), transform);
+    let report = supported(&supports, (placed, grown.len()), transform);
     document.set_supports(id, (groups, group), (supports.points().to_vec(), grown));
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),
         report,
     })
+}
+
+/// Stands into `supports` the points asked in `group`, then the needs the plan finds, each in
+/// the group of its size, which `groups` gains where it has none; answers how many.
+fn stand_all(
+    (supports, groups, group): (&mut ModelSupports, &mut Vec<Group>, u16),
+    on: &PlacedModel<'_>,
+    (asked, plan): (&SupportsAsked<'_>, &SupportPlan),
+    (id, cancel): (ObjectId, Cancel<'_>),
+) -> Result<usize, ApplyError> {
+    let transform = on.state.transform;
+    let stood = stand_asked(supports, on, asked.at_mm, (transform, group), id)?;
+    let needs = needs_asked(on, supports, (asked, plan), (id, cancel))?;
+    stand_needs(supports, groups, plan, (&needs, (transform, group)));
+    if cancel.asked() {
+        return Err(ApplyError::Cancelled);
+    }
+    Ok(stood + needs.len())
 }
 
 /// The plate's groups with the one `asked` builds in, its number, and the plan it builds to.
@@ -238,8 +249,11 @@ fn found(
         side: on.wall.clone().map(|wall| WallSide { inside, ..wall }),
     };
     let mut tick = |_: usize| !cancel.asked();
-    let cavity = plan.cavity && on.wall.is_some();
-    let needs = needs_on_both(&asked, cavity, seeds, &mut tick)
+    let sides = NeedSides {
+        inside: plan.cavity && on.wall.is_some(),
+        strengthening: true,
+    };
+    let needs = needs_on_both(&asked, sides, seeds, &mut tick)
         .map_err(|error| failed(error.to_string()))?;
     if cancel.asked() {
         return Err(ApplyError::Cancelled);

@@ -61,9 +61,9 @@ fn a_cube_with_one_face_turned_is_closed_and_whole_again_once_that_face_is_flipp
     assert!(applied.added.is_empty() && applied.removed.is_empty());
     assert_eq!(
         applied.report,
-        Report::Mended(Mended {
+        Report::Mended(HandMended {
             faces_flipped: 1,
-            ..Mended::default()
+            ..HandMended::default()
         })
     );
 }
@@ -111,7 +111,7 @@ fn a_second_shell_is_no_shell_of_one_cube() {
 }
 
 #[test]
-fn a_bridge_of_an_edge_to_itself_is_refused_as_failed() {
+fn a_bridge_of_an_edge_to_itself_is_refused_naming_the_edges() {
     let mut document = Document::from_project(cube());
     let asked = MendAsked {
         bridge: vec![[[0, 1], [1, 0]]],
@@ -122,7 +122,14 @@ fn a_bridge_of_an_edge_to_itself_is_refused_as_failed() {
         .expect_err("an edge cannot be bridged to itself");
 
     assert!(
-        matches!(error, ApplyError::Failed { object: CUBE, .. }),
+        matches!(
+            error,
+            ApplyError::NoBridge {
+                object: CUBE,
+                edges: [[0, 1], [1, 0]],
+                ..
+            }
+        ),
         "{error:?}"
     );
 }

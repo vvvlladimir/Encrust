@@ -1,10 +1,10 @@
 //! The drain edits as the window carries them out: holes, the search for more, channels and
 //! plugs, each through the tool that does it for a hand.
 
-use core_document::{ApplyError, channel_in, hole_near};
+use core_document::{ApplyError, channel_in, hole_near, holes_in_raft};
 use core_edit::ObjectId;
-use core_geometry::{Bvh, Vec3};
-use core_volume::{DrainHole, HoleKind, HoleSize, hole_at};
+use core_geometry::Vec3;
+use core_volume::{HoleKind, HoleSize};
 
 use super::no_object;
 use crate::drain::{DrainTool, PlugsLaid};
@@ -56,18 +56,8 @@ fn drill_raft(
 ) -> Result<(), String> {
     let model = (window.doc.scene.get_mut(object)).ok_or_else(|| no_object(object))?;
     let raft = (model.supports.raft()).ok_or_else(|| ApplyError::NoRaft(object).to_string())?;
-    let bvh = Bvh::build(raft);
-    let mut holes = Vec::with_capacity(at_mm.len());
-    for near in at_mm {
-        let hole = hole_at(raft, &bvh, *near, size)
-            .ok_or_else(|| ApplyError::NoSurface(object).to_string())?;
-        let hole = DrainHole {
-            kind: HoleKind::Support,
-            ..hole
-        };
-        let own = hole.into_model(model.transform);
-        holes.push(own.ok_or_else(|| ApplyError::BadTransform(object).to_string())?);
-    }
+    let holes = holes_in_raft((raft, model.transform), at_mm, size, object)
+        .map_err(|error| error.to_string())?;
     for hole in holes {
         model.hollow.add_hole(hole);
     }

@@ -50,6 +50,13 @@ pub enum ApplyError {
     /// A shell number past the last shell of the object's mesh, counted from 1.
     #[error("object {object:?} has no shell {number}")]
     NoSuchShell { object: ObjectId, number: usize },
+    /// Two edges a bridge by hand cannot join, each by its two vertices; `reason` is the geometry's.
+    #[error("object {object:?} cannot bridge the edges {edges:?}: {reason}")]
+    NoBridge {
+        object: ObjectId,
+        edges: [[u32; 2]; 2],
+        reason: String,
+    },
     /// A relief picture that is missing or cannot be decoded.
     #[error("the picture {} could not be read: {reason}", path.display())]
     BadPicture { path: PathBuf, reason: String },
@@ -114,7 +121,7 @@ pub enum ApplyError {
     /// The run was stopped before it finished.
     #[error("the edit was cancelled")]
     Cancelled,
-    /// A split, part-off, combination, repair, bridge or relief failed in the geometry; `reason` is the geometry's own message.
+    /// A split, part-off, combination, repair or relief failed in the geometry; `reason` is the geometry's own message.
     #[error("the edit of object {object:?} failed: {reason}")]
     Failed { object: ObjectId, reason: String },
 }

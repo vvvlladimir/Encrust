@@ -7,7 +7,7 @@ use core_engine::SupportPlan;
 use core_engine::project::{ModelMeshes, ObjectState, supports_of};
 use core_geometry::{Bvh, Mesh};
 use core_supports::ModelSupports;
-use printer_profiles::SupportProfile;
+use printer_profiles::{Catalogue, SupportProfile};
 
 use super::groups::{sized_plan, table_of};
 use crate::document::Document;
@@ -72,7 +72,7 @@ pub(crate) fn orient_plan_of(
     };
     let kept = plate.sizing.as_ref().filter(|sizing| sizing.on);
     let sized = kept
-        .map(|sizing| sized_plan((Some(sizing), &plate.groups), active))
+        .map(|sizing| sized_plan(Catalogue::bundled(), (Some(sizing), &plate.groups), active))
         .transpose()?;
     Ok(Some(orient_plan(sized, active, active.raft)))
 }

@@ -5,7 +5,7 @@ use core_geometry::{Region, Vec3};
 use core_supports::SupportTree;
 use core_volume::{HollowMode, InfillSettings};
 
-use printer_profiles::Catalogue;
+use printer_profiles::{Catalogue, ProfileError, SupportProfile};
 
 use super::groups::sized_plan;
 use super::*;
@@ -447,7 +447,8 @@ fn auto_sizes_into_the_plates_group_of_a_shape_name_where_it_has_one() {
         profile: own,
     }];
 
-    let plan = sized_plan((None, &groups), &lightest).expect("the plan sizes");
+    let plan =
+        sized_plan(Ok(catalogue.clone()), (None, &groups), &lightest).expect("the plan sizes");
 
     let table = plan.table();
     assert!(
@@ -576,4 +577,14 @@ fn supports_asked_anew_after_a_turn_keep_no_contact_from_the_old_pose() {
             "every contact is on the new underside at z {lowest}, got {at}"
         );
     }
+}
+
+#[test]
+fn a_catalogue_that_cannot_be_read_is_its_own_error_not_a_missing_automatic_profile() {
+    let broken = Err(ProfileError::BadId { id: "x".to_owned() });
+
+    let error = sized_plan(broken, (None, &[]), &SupportProfile::default())
+        .expect_err("no catalogue, no sizes");
+
+    assert!(matches!(error, ApplyError::BadCatalogue(_)), "{error:?}");
 }

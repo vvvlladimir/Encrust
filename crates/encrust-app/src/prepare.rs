@@ -34,7 +34,7 @@ use run::Next;
 use start::start_on;
 #[cfg(test)]
 use start::start_with;
-pub use start::{blocker, busy, held_up, start};
+pub use start::{blocker, busy, held_up, start, tool_busy};
 use step::{Ended, Going};
 use work::Batch;
 

@@ -150,27 +150,26 @@ fn run_on(
 }
 
 /// The run holding up the cavity that a supports edit asking for it follows its outside run
-/// with: the object and whether `auto` sizes it.
-pub(super) fn inside_pass_of(edit: &Edit) -> Option<(ObjectId, bool)> {
+/// with: the object, whether `auto` sizes it, and whether it keeps off a clean surface.
+pub(super) fn inside_pass_of(edit: &Edit) -> Option<(ObjectId, bool, bool)> {
     match edit {
         Edit::Supports {
             object,
             profile,
             only_at: false,
             cavity: true,
+            clean_surface,
             ..
-        } => Some((*object, profile.as_deref() == Some(AUTO))),
+        } => Some((*object, profile.as_deref() == Some(AUTO), *clean_surface)),
         _ => None,
     }
 }
 
-/// Starts the panel's inside pass on `object`, which holds up its cavity.
+/// Starts the panel's inside pass on `object`, which holds up its cavity, as the edit asked.
 pub(super) fn start_inside(
     window: &mut Window,
-    object: ObjectId,
-    sized: bool,
+    (object, sized, clean): (ObjectId, bool, bool),
 ) -> Result<(), String> {
-    let clean = window.tools.orient.settings.clean_surface;
     run_on(window, object, (Side::Inside, sized), clean)
 }
 

@@ -27,7 +27,9 @@ pub use arrange::{NoFootprint, Spread, Standing, spread, standing_rect, turn_to_
 pub use combine::combined;
 pub use cut::{CutAsked, CutModel, axis_normal, cut, pieces};
 pub use document::{Document, ImportedModel};
-pub use drain::{SearchAsked, channel_in, drains_proven, hole_near, plate_under, spaced_plugs};
+pub use drain::{
+    SearchAsked, channel_in, drains_proven, hole_near, holes_in_raft, plate_under, spaced_plugs,
+};
 pub use error::ApplyError;
 pub use hollow::{NoRoom, blockers_along, settings_of, shell_from, shelled};
 pub use label::{LabelAsked, Lettering, label_prisms, labelled};
@@ -42,6 +44,6 @@ pub use placement::{
 };
 pub use plate_contents::mirrored;
 pub use relief::{ReliefAsked, Relieved, press_picture, read_picture, relieved};
-pub use repair::{MendAsked, Mended, mended, repair_settings, repaired};
-pub use split::{part_off_at, part_settings, split};
+pub use repair::{HandMended, MendAsked, mended, repair_settings, repaired};
+pub use split::{part_off_at, part_settings};
 pub use supports::{standing_meshes, support_near};

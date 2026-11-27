@@ -274,6 +274,19 @@ pub struct TransformArgs {
     pub placing: PlacingArgs,
 }
 
+impl TransformArgs {
+    /// Whether a flag moves, turns or sizes the model, its copies aside.
+    pub fn places(&self) -> bool {
+        self.scale.is_some()
+            || self.rotate.is_some()
+            || self.center
+            || self.orient
+            || self.lift.is_some()
+            || self.placing.mirror.is_some()
+            || self.placing.move_by.is_some()
+    }
+}
+
 /// Which repair `--repair` runs.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum RepairMethod {

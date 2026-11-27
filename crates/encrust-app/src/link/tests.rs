@@ -448,7 +448,8 @@ fn a_revision_the_user_asks_for_is_read_from_the_servers_jobs_and_shown() {
     bench.machine.agents.asked.push(ask(4));
     bench.run_to_end();
     assert!(
-        matches!(&bench.machine.status, Status::Error(why) if why.contains("holds it already")),
+        matches!(&bench.machine.status, Status::Error(why)
+            if *why == tr!("link-revision-on-plate", job = "cube-1", revision = 4)),
         "a revision made on this plate is there already: {:?}",
         bench.machine.status
     );

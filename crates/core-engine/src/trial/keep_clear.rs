@@ -1,11 +1,9 @@
 //! Places on a model a person asks no support to touch, as a lip or a face, and the poses
 //! ranked to leave them clear (ADR 0458).
 
-use core_geometry::{
-    Mesh, Quat, Scalar, Transform, Vec2, Vec3, center_over_plate, drop_to_plate, transform_mesh,
-};
+use core_geometry::{Mesh, Quat, Scalar, Vec2, Vec3};
 
-use super::Tried;
+use super::{Tried, turned_mid_plate};
 
 /// How far from a place kept clear a contact still touches it where none is asked, mm.
 pub const KEEP_CLEAR_RADIUS_MM: Scalar = 4.0;
@@ -28,12 +26,7 @@ impl KeepClear {
         at_mm: &[Vec3],
         radius_mm: Scalar,
     ) -> Option<Self> {
-        let turn = Transform {
-            rotation: seen,
-            ..Transform::default()
-        };
-        let bounds = transform_mesh(mesh, turn).aabb()?;
-        let offset = drop_to_plate(&bounds) + center_over_plate(&bounds, plate_mm.x, plate_mm.y);
+        let (_, offset) = turned_mid_plate(mesh, seen, plate_mm)?;
         let back = seen.inverse();
         Some(Self {
             at_mm: at_mm.iter().map(|at| back * (*at - offset)).collect(),

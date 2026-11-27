@@ -89,6 +89,7 @@ fn project_of(
         plates,
         active_plate,
         objects,
+        next_id: None,
     };
     Project {
         manifest,

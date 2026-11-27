@@ -1,9 +1,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use core_document::{ApplyError, part_off_at, split};
+use core_document::{ApplyError, part_off_at};
 use core_edit::ObjectId;
 use core_geometry::{Mesh, Vec3};
-use core_volume::{Cancel, PartSettings, PartedOff, Parts, Progress};
+use core_volume::{Cancel, PartSettings, PartedOff, Parts, Progress, parts};
 
 use crate::i18n::tr;
 use crate::job::{Worker, pooled};
@@ -40,7 +40,7 @@ pub fn spawn_split(request: SplitRequest) -> SplitJob {
 fn run(request: SplitRequest, stop: &AtomicBool, progress: &Progress) -> SplitOutcome {
     let asked = || stop.load(Ordering::Relaxed);
     let Some(at) = request.at else {
-        return SplitOutcome::Split(split(&request.placed, &request.settings));
+        return SplitOutcome::Split(parts(&request.placed, &request.settings));
     };
     match part_off_at(
         &request.placed,

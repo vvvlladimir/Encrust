@@ -19,6 +19,7 @@ mod raft;
 pub use auto::{SearchAsked, drains_proven, plate_under};
 use plugs::apply_plugs;
 pub use plugs::spaced_plugs;
+pub use raft::holes_in_raft;
 use raft::raft_holes;
 
 /// Past this, the point is off an edge or corner rather than over the face the hole is
@@ -126,22 +127,9 @@ pub(crate) fn apply_drain(
     if searching.auto && meshes.shell.is_none() {
         return Err(ApplyError::NoCavity(id));
     }
-    let bvh = Bvh::build(&meshes.source);
     let mut hollow = hollow_of(&state.hollow, meshes);
     let kept_holes = hollow.drains().len();
-    let mut holes = 0;
-    if kind == HoleKind::Support {
-        for hole in raft_holes(document, id, at_mm, size)? {
-            holes += usize::from(hollow.add_hole(hole));
-        }
-    } else {
-        for plate in at_mm {
-            let near = (*plate, Vec3::ZERO);
-            let on = (meshes.source.as_ref(), &bvh);
-            let hole = hole_near(on, state.transform, near, (size, kind), id)?;
-            holes += usize::from(hollow.add_hole(hole));
-        }
-    }
+    let mut holes = drill_asked(document, id, at_mm, (size, kind), &mut hollow)?;
     let (mut trapped, mut searched) = (0, None);
     if searching.auto {
         let on = (meshes.printed().as_ref(), &hollow, state.transform);
@@ -166,6 +154,33 @@ pub(crate) fn apply_drain(
             searched,
         },
     })
+}
+
+/// Adds to `hollow` the holes asked at `at_mm` on object `id`, into its raft for a support
+/// hole; answers how many went in, one an earlier hole takes in adding none.
+fn drill_asked(
+    document: &Document,
+    id: ObjectId,
+    at_mm: &[Vec3],
+    (size, kind): (HoleSize, HoleKind),
+    hollow: &mut ModelHollow,
+) -> Result<usize, ApplyError> {
+    let mut holes = 0;
+    if kind == HoleKind::Support {
+        for hole in raft_holes(document, id, at_mm, size)? {
+            holes += usize::from(hollow.add_hole(hole));
+        }
+        return Ok(holes);
+    }
+    let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
+    let bvh = Bvh::build(&meshes.source);
+    for plate in at_mm {
+        let near = (*plate, Vec3::ZERO);
+        let on = (meshes.source.as_ref(), &bvh);
+        let hole = hole_near(on, state.transform, near, (size, kind), id)?;
+        holes += usize::from(hollow.add_hole(hole));
+    }
+    Ok(holes)
 }
 
 /// Takes away the supports of object `id` whose tips the `drilled` holes (its own space) take

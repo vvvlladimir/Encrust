@@ -47,7 +47,7 @@ pub(crate) fn shaped(
         &mut staging,
         &mut found,
         &entries,
-        (&job.profile, printer),
+        (machine.printer_id.as_deref(), printer),
         watch,
     )?;
     repaired::pressed(&mut staging, &entries, watch)?;

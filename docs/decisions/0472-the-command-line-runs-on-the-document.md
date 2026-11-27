@@ -17,7 +17,7 @@ project, so the command line has both paths.
 
 ## Decision
 
-The command line's model pipeline is the document's (ADR 0466's phase 5). A run stages its
+The command line's model pipeline is the document's (continuing ADR 0466). A run stages its
 models into a `Document`, folds each shaping flag to an `Edit` in the window's order, carries
 out each by `apply`, and slices the project it leaves as a project input is sliced today. A
 recipe's plate steps are `edits_of` over the step's settings, the flags folded in, then

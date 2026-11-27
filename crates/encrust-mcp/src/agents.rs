@@ -22,8 +22,20 @@ pub const BEAT: Duration = Duration::from_secs(20);
 #[derive(Debug, Clone)]
 pub struct Presence {
     file: Option<PathBuf>,
-    said: Arc<Mutex<AgentFile>>,
+    said: Arc<Mutex<Said>>,
 }
+
+/// What the file says, and the calls in flight, the latest shown as its work.
+#[derive(Debug)]
+struct Said {
+    file: AgentFile,
+    calls: Vec<(Call, Working)>,
+    next: u64,
+}
+
+/// One tool call in flight, as [`Presence::begin`] answers it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Call(u64);
 
 impl Presence {
     /// This server's file in `dir`, written at once; the files of agents gone longer than a
@@ -38,15 +50,19 @@ impl Presence {
         });
         let presence = Self {
             file,
-            said: Arc::new(Mutex::new(AgentFile {
-                schema: AGENT_SCHEMA,
-                pid,
-                client: None,
-                started_s: now,
-                seen_s: now,
-                ended_s: None,
-                working: None,
-                jobs: Vec::new(),
+            said: Arc::new(Mutex::new(Said {
+                file: AgentFile {
+                    schema: AGENT_SCHEMA,
+                    pid,
+                    client: None,
+                    started_s: now,
+                    seen_s: now,
+                    ended_s: None,
+                    working: None,
+                    jobs: Vec::new(),
+                },
+                calls: Vec::new(),
+                next: 0,
             })),
         };
         presence.update(|_| ());
@@ -54,27 +70,32 @@ impl Presence {
     }
 
     /// A tool call begins, from `client`, on `job` where it names one.
-    pub fn begin(&self, client: Option<&str>, tool: &str, job: Option<&str>) {
-        self.update(|seen| {
+    pub fn begin(&self, client: Option<&str>, tool: &str, job: Option<&str>) -> Call {
+        let mut call = Call(0);
+        self.update(|said| {
             if let Some(client) = client {
-                seen.client = Some(client.to_owned());
+                said.file.client = Some(client.to_owned());
             }
-            seen.working = Some(Working {
+            call = Call(said.next);
+            said.next += 1;
+            let working = Working {
                 tool: tool.to_owned(),
                 job: job.map(str::to_owned),
-                since_s: seen.seen_s,
-            });
+                since_s: said.file.seen_s,
+            };
+            said.calls.push((call, working));
         });
+        call
     }
 
-    /// The call has been answered, about `job` where it was about one.
-    pub fn end(&self, job: Option<&str>) {
-        self.update(|seen| {
-            seen.working = None;
+    /// `call` has been answered, about `job` where it was about one.
+    pub fn end(&self, call: Call, job: Option<&str>) {
+        self.update(|said| {
+            said.calls.retain(|(running, _)| *running != call);
             if let Some(job) = job {
-                seen.jobs.retain(|kept| kept != job);
-                seen.jobs.insert(0, job.to_owned());
-                seen.jobs.truncate(MOST_JOBS);
+                said.file.jobs.retain(|kept| kept != job);
+                said.file.jobs.insert(0, job.to_owned());
+                said.file.jobs.truncate(MOST_JOBS);
             }
         });
     }
@@ -86,22 +107,23 @@ impl Presence {
 
     /// The client has gone; the file stays, for the window to list what was done.
     pub fn close(&self) {
-        self.update(|seen| {
-            seen.working = None;
-            seen.ended_s = Some(seen.seen_s);
+        self.update(|said| {
+            said.calls.clear();
+            said.file.ended_s = Some(said.file.seen_s);
         });
     }
 
     /// Changes what the file says, stamps it now and writes it whole. A file that cannot be
     /// written leaves the window without this agent, never the client without an answer.
-    fn update(&self, change: impl FnOnce(&mut AgentFile)) {
-        let mut seen = self.said.lock().unwrap_or_else(PoisonError::into_inner);
-        seen.seen_s = now_s();
-        change(&mut seen);
+    fn update(&self, change: impl FnOnce(&mut Said)) {
+        let mut said = self.said.lock().unwrap_or_else(PoisonError::into_inner);
+        said.file.seen_s = now_s();
+        change(&mut said);
+        said.file.working = said.calls.last().map(|(_, working)| working.clone());
         let Some(file) = &self.file else {
             return;
         };
-        let written = serde_json::to_vec(&*seen).map(|bytes| {
+        let written = serde_json::to_vec(&said.file).map(|bytes| {
             // Renamed into place, so the window never reads half a file.
             let partial = file.with_extension("json.part");
             fs::write(&partial, bytes).and_then(|()| fs::rename(&partial, file))
@@ -158,21 +180,36 @@ mod tests {
     fn an_agent_says_what_it_runs_and_keeps_the_jobs_it_touched_latest_first() {
         let dir = scratch("working");
         let presence = Presence::new(Some(dir.clone()));
-        presence.begin(Some("claude-code"), "set_hollow", Some("cube-1"));
+        let hollowing = presence.begin(Some("claude-code"), "set_hollow", Some("cube-1"));
         let working = read(&dir);
         assert_eq!(working["client"], "claude-code");
         assert_eq!(working["working"]["tool"], "set_hollow");
         assert_eq!(working["working"]["job"], "cube-1");
-        presence.end(Some("cube-1"));
-        presence.begin(None, "start_job", None);
-        presence.end(Some("bust-2"));
-        presence.end(Some("cube-1"));
+        presence.end(hollowing, Some("cube-1"));
+        let starting = presence.begin(None, "start_job", None);
+        presence.end(starting, Some("bust-2"));
+        let again = presence.begin(None, "render", Some("cube-1"));
+        presence.end(again, Some("cube-1"));
         let idle = read(&dir);
         assert!(idle.get("working").is_none(), "{idle}");
         assert_eq!(idle["jobs"], serde_json::json!(["cube-1", "bust-2"]));
         assert_eq!(idle["client"], "claude-code", "kept from the first call");
         presence.close();
         assert!(read(&dir)["ended_s"].is_u64());
+    }
+
+    #[test]
+    fn a_call_answered_while_another_runs_leaves_the_other_shown() {
+        let dir = scratch("overlapping");
+        let presence = Presence::new(Some(dir.clone()));
+        let first = presence.begin(None, "render", Some("cube-1"));
+        let second = presence.begin(None, "set_supports", Some("cube-1"));
+
+        presence.end(first, Some("cube-1"));
+
+        assert_eq!(read(&dir)["working"]["tool"], "set_supports");
+        presence.end(second, Some("cube-1"));
+        assert!(read(&dir).get("working").is_none());
     }
 
     #[test]

@@ -2,17 +2,12 @@
 
 use core_edit::ObjectId;
 use core_geometry::{Mesh, Scalar, Vec3, transform_mesh};
-use core_volume::{Cancel, PartSettings, PartedOff, Parts, VolumeError, part_off, parts};
+use core_volume::{Cancel, PartSettings, PartedOff, VolumeError, part_off, parts};
 
 use crate::apply::{Applied, Report};
 use crate::document::Document;
 use crate::error::ApplyError;
 use crate::piece::{Piece, Role};
-
-/// `placed`, a model where it stands on the plate, broken into its parts.
-pub fn split(placed: &Mesh, settings: &PartSettings) -> Parts {
-    parts(placed, settings)
-}
 
 /// The settings a split asks for: the default smallest part where `smallest_mm3` is unset.
 pub fn part_settings(smallest_mm3: Option<Scalar>) -> PartSettings {
@@ -44,7 +39,7 @@ pub(crate) fn apply_split(
     cancel: Cancel<'_>,
 ) -> Result<Applied, ApplyError> {
     let placed = placed_of(document, id, cancel)?;
-    let found = split(&placed, &part_settings(smallest_mm3));
+    let found = parts(&placed, &part_settings(smallest_mm3));
     let report = Report::Split {
         parts: found.parts.len(),
         joined: found.joined,

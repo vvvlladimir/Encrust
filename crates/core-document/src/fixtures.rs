@@ -8,10 +8,7 @@ use core_engine::project::{Project, load};
 use core_geometry::{Mesh, Transform, Vec3, cuboid};
 
 /// A project of version 4, before ids, holding one model named "cube".
-const CUBE: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../encrust-cli/tests/fixtures/cube.encrust"
-);
+const CUBE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/cube.encrust");
 
 /// The side of [`cube`]'s cube, millimetres.
 pub const SIDE_MM: f32 = 10.0;
@@ -33,11 +30,22 @@ pub fn cube_of(side_mm: f32) -> Project {
     project
 }
 
-/// [`cube`]'s plate round a single triangle, a sheet that encloses nothing.
+/// The top face alone of a cube `side_mm` on a side standing at the origin: a sheet that
+/// encloses nothing.
+pub fn sheet_of(side_mm: f32) -> Mesh {
+    let mut open = cuboid(Vec3::ZERO, Vec3::splat(side_mm));
+    let vertices = open.vertices.clone();
+    open.faces.retain(|face| {
+        face.iter()
+            .all(|at| vertices[*at as usize].z > side_mm / 2.0)
+    });
+    open
+}
+
+/// [`cube`]'s plate round [`sheet_of`] its side.
 pub fn sheet() -> Project {
     let mut project = cube();
-    let triangle = Mesh::new(vec![Vec3::ZERO, Vec3::X, Vec3::Y], vec![[0, 1, 2]]);
-    project.models[0].source = Arc::new(triangle);
+    project.models[0].source = Arc::new(sheet_of(SIDE_MM));
     project
 }
 

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use agent_link::{RevisionFile, is_job_name, revision_of};
 use anyhow::{Context, Result, bail};
 use core_edit::{Edit, ObjectId};
 use serde_json::{Value, json};
@@ -75,7 +76,7 @@ impl Jobs {
             Some(number) => number,
             None => self.latest(job)?,
         };
-        let path = self.dir(job)?.join(format!("{number}.toml"));
+        let path = self.dir(job)?.join(RevisionFile::Recipe.of(number));
         let text = fs::read_to_string(&path)
             .with_context(|| format!("job {job} has no revision {number}"))?;
         let recipe = toml::from_str(&text)
@@ -106,7 +107,7 @@ impl Jobs {
             1
         };
         fs::create_dir_all(&dir).with_context(|| format!("creating job {job}"))?;
-        let path = dir.join(format!("{number}.toml"));
+        let path = dir.join(RevisionFile::Recipe.of(number));
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -114,11 +115,12 @@ impl Jobs {
             .with_context(|| format!("revision {number} of job {job} was taken"))?;
         file.write_all(toml::to_string(&recipe)?.as_bytes())
             .with_context(|| format!("writing {}", path.display()))?;
-        let checked = dir.join(format!("{number}.json"));
+        let checked = dir.join(RevisionFile::Check.of(number));
         fs::write(&checked, report.to_string())
             .with_context(|| format!("writing {}", checked.display()))?;
-        // The flags beside it, so a bench draws the revision without reading a recipe.
-        let args = dir.join(format!("{number}.args.json"));
+        // The flags beside it, the model first, so a bench and the window read the revision
+        // without reading a recipe.
+        let args = dir.join(RevisionFile::Args.of(number));
         fs::write(&args, serde_json::to_string(&recipe.flags())?)
             .with_context(|| format!("writing {}", args.display()))?;
         if let Some(steps) = &steps {
@@ -135,7 +137,7 @@ impl Jobs {
 
     /// The file the check of revision `number` is kept in, if it is there.
     pub fn report_file(&self, job: &str, number: u32) -> Option<PathBuf> {
-        let file = self.dir(job).ok()?.join(format!("{number}.json"));
+        let file = self.dir(job).ok()?.join(RevisionFile::Check.of(number));
         file.is_file().then_some(file)
     }
 
@@ -201,7 +203,8 @@ impl Jobs {
             .collect()
     }
 
-    /// A file no other run writes, for the command line to write the steps of a check into.
+    /// A file no other run writes, for the command line to write the steps of a check into; one
+    /// left behind is overwritten by no other run, its name being this run's.
     pub fn scratch_steps(&self) -> Result<PathBuf> {
         static TAKEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let dir = self.root.join("scratch");
@@ -220,10 +223,10 @@ impl Jobs {
     pub fn shown_plate(&self, revision: &Revision) -> Result<PathBuf> {
         let dir = self.dir(&revision.job)?;
         let number = revision.number;
-        if dir.join(format!("{number}.edits.json")).is_file() {
+        if dir.join(RevisionFile::Edits.of(number)).is_file() {
             bail!("revision {number} was made on the window's plate, which holds it already");
         }
-        let plate = dir.join(format!("{number}.encrust"));
+        let plate = dir.join(RevisionFile::Plate.of(number));
         if !plate.is_file() {
             bail!("revision {number} keeps no plate for the window to show");
         }
@@ -235,8 +238,8 @@ impl Jobs {
     pub fn made_on_plate(&self, revision: &Revision) -> Option<PathBuf> {
         let dir = self.dir(&revision.job).ok()?;
         let number = revision.number;
-        let plate = dir.join(format!("{number}.encrust"));
-        let made = dir.join(format!("{number}.edits.json")).is_file() && plate.is_file();
+        let plate = dir.join(RevisionFile::Plate.of(number));
+        let made = dir.join(RevisionFile::Edits.of(number)).is_file() && plate.is_file();
         made.then_some(plate)
     }
 
@@ -248,7 +251,7 @@ impl Jobs {
         }
         let plate = self
             .dir(&revision.job)?
-            .join(format!("{}.encrust", revision.number));
+            .join(RevisionFile::Plate.of(revision.number));
         if !plate.is_file() {
             bail!(
                 "revision {} of {} keeps no plate",
@@ -264,11 +267,11 @@ impl Jobs {
     pub fn kept_base(&self, revision: &Revision) -> Option<(PathBuf, ObjectId)> {
         let dir = self.dir(&revision.job).ok()?;
         let number = revision.number;
-        let plate = dir.join(format!("{number}.encrust"));
+        let plate = dir.join(RevisionFile::Plate.of(number));
         if !plate.is_file() || revision.recipe.is_project() {
             return None;
         }
-        let object = match fs::read_to_string(dir.join(format!("{number}.edits.json"))) {
+        let object = match fs::read_to_string(dir.join(RevisionFile::Edits.of(number))) {
             Ok(text) => {
                 let edits: Vec<Edit> = serde_json::from_str(&text).ok()?;
                 if edits.iter().any(makes_pieces) {
@@ -285,7 +288,7 @@ impl Jobs {
 
     /// Keeps the plate a check wrote at `from` as revision `number`'s `N.encrust`.
     pub fn keep_plate(&self, job: &str, number: u32, from: &Path) -> Result<()> {
-        let path = self.dir(job)?.join(format!("{number}.encrust"));
+        let path = self.dir(job)?.join(RevisionFile::Plate.of(number));
         fs::rename(from, &path).with_context(|| format!("keeping {}", path.display()))
     }
 
@@ -316,14 +319,14 @@ impl Jobs {
         }
         let entries = fs::read_dir(&dir).with_context(|| format!("reading job {job}"))?;
         entries
-            .filter_map(|entry| revision_number(&entry.ok()?.path()))
+            .filter_map(|entry| revision_of(&entry.ok()?.path()))
             .max()
             .with_context(|| format!("job {job} has no revision"))
     }
 
     /// The edits revision `number` handed the open window, kept beside it as `N.edits.json`.
     pub fn keep_edits(&self, job: &str, number: u32, edits: &[Edit]) -> Result<()> {
-        let path = self.dir(job)?.join(format!("{number}.edits.json"));
+        let path = self.dir(job)?.join(RevisionFile::Edits.of(number));
         fs::write(&path, serde_json::to_string(edits)?)
             .with_context(|| format!("writing {}", path.display()))
     }
@@ -331,7 +334,7 @@ impl Jobs {
     /// Forgets the edits revision `number` handed the open window, which did not take them: the
     /// revision stands by its own plate again.
     pub fn forget_edits(&self, job: &str, number: u32) -> Result<()> {
-        let path = self.dir(job)?.join(format!("{number}.edits.json"));
+        let path = self.dir(job)?.join(RevisionFile::Edits.of(number));
         fs::remove_file(&path).with_context(|| format!("removing {}", path.display()))
     }
 
@@ -353,11 +356,7 @@ impl Jobs {
     /// A job's directory under the root. A name of anything but letters, digits, `-` and `_`
     /// is refused, so no name reaches outside it.
     fn dir(&self, job: &str) -> Result<PathBuf> {
-        let plain = !job.is_empty()
-            && job
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-        if !plain {
+        if !is_job_name(job) {
             bail!("{job:?} is not a job name; use the id start_job returned");
         }
         Ok(self.root.join(job))
@@ -399,13 +398,6 @@ fn window_name(number: u32) -> String {
 /// The file the steps of revision `number` are kept in.
 fn steps_name(number: u32) -> String {
     format!("{number}.recipe.toml")
-}
-
-fn revision_number(path: &Path) -> Option<u32> {
-    if path.extension()? != "toml" {
-        return None;
-    }
-    path.file_stem()?.to_str()?.parse().ok()
 }
 
 #[cfg(test)]

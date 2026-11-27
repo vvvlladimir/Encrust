@@ -9,7 +9,7 @@ use core_geometry::{
 use core_plate::PlateFit;
 use printer_profiles::PrinterProfile;
 
-use crate::edits::{Edited, describe as describe_edits};
+use crate::edits::describe as describe_edits;
 use crate::stats::MeshStats;
 
 /// Whether the model fits the machine it is meant for, and whether it stands inside it.
@@ -27,7 +27,7 @@ impl FitCheck {
     pub fn of(bounds: &Aabb, profile: &PrinterProfile) -> Self {
         let volume = &profile.build_volume;
         let [low, high] = profile.usable_area_mm();
-        let size = [high[0] - low[0], high[1] - low[1]];
+        let (_, size) = crate::stage::usable_area(profile);
         Self {
             printer: profile.name.clone(),
             usable_mm: [low, size],
@@ -83,7 +83,7 @@ pub struct ImportReport {
     /// Pairs of faces crossing each other, when `--intersections` asked for them.
     pub crossing_pairs: Option<usize>,
     /// What `--flip-faces`, `--drop-faces`, `--drop-shells` and `--bridge` did, when named.
-    pub edited: Option<Edited>,
+    pub edited: Option<core_document::HandMended>,
     /// The shells as import left the model, when `--shells` asked for them.
     pub shells: Option<Vec<Shell>>,
     pub fit: Option<FitCheck>,

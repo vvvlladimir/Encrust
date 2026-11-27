@@ -293,6 +293,19 @@ pub(crate) fn ranked_poses(
         raster_window: rayon::current_num_threads(),
         keep_clear: keep_clear.as_ref(),
     };
+    let printed = body.printed(&state.shown_painted);
+    let found = searched(&printed, &settings, &trial, (id, cancel))?;
+    Ok((found, z_lift_mm))
+}
+
+/// The poses the search `settings` ranks for `printed`, its best proved by `trial`, telling
+/// `cancel` its share done; `id` names the object in an error.
+fn searched(
+    printed: &Printed<'_>,
+    settings: &OrientSettings,
+    trial: &Trial<'_>,
+    (id, cancel): (ObjectId, Cancel<'_>),
+) -> Result<Vec<Choice>, ApplyError> {
     let told = |phase: Phase, done, total| {
         let share = phase.share(done, total);
         cancel.reached(
@@ -302,20 +315,15 @@ pub(crate) fn ranked_poses(
         );
         !cancel.asked()
     };
-    let found = orient_for_print(
-        &body.printed(&state.shown_painted),
-        &settings,
-        Some(&trial),
-        Watch::by(&told),
-    );
-    match found {
-        Err(EngineError::Orient(PlateError::Cancelled)) => Err(ApplyError::Cancelled),
-        Err(error) => Err(ApplyError::Failed {
-            object: id,
-            reason: error.to_string(),
-        }),
-        Ok(found) => Ok((found, z_lift_mm)),
-    }
+    orient_for_print(printed, settings, Some(trial), Watch::by(&told)).map_err(
+        |error| match error {
+            EngineError::Orient(PlateError::Cancelled) => ApplyError::Cancelled,
+            other => ApplyError::Failed {
+                object: id,
+                reason: other.to_string(),
+            },
+        },
+    )
 }
 
 /// One pose the search ranked, as an orient's report lists it.
@@ -362,7 +370,7 @@ pub(crate) fn apply_orient(
     };
     let at = (footing, choice.oriented.on_plate);
     let transform = stood_turned(state.transform, &meshes.source, rotation, at);
-    stand_at(document, id, transform);
+    stand_at(document, id, transform, cancel)?;
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),

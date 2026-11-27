@@ -28,8 +28,8 @@ Every tool runs the `encrust` command line; geometry is decided by its engine, n
    `top_contacts` are support marks on faces looking up. Pick one for a reason you can name and
    `set_pose` with that search and `pick`; the window stands it as an orient proved on the job's
    printer, the standard one where none was named. Points no support should touch go in
-   `keep_clear_at_mm`, plate mm as the latest revision stands. A new pose clears drain and support
-   points given by hand, which were on the old one, and stands the supports again for it: no
+   `keep_clear_at_mm`, plate mm as the latest revision stands. A new pose clears the drain, support
+   and kept-solid points given by hand, which were on the old one, and stands the supports again for it: no
    `set_supports` is needed after it.
 5. `set_hollow` only for a large, thick solid; a 2 mm wall is typical. A hollow model needs
    a way out for its resin: `open_floor`, or `set_drains` with `auto: true` (3 mm), which

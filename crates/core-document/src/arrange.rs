@@ -1,8 +1,10 @@
 //! Spreading the objects of a plate over its area, a model no slide fits turned the least that
 //! does (ADR 0418, `docs/design/document.md`).
 
+use core_edit::ObjectId;
 use core_geometry::{BoundingVolume, Mesh, Scalar, Transform, Vec2, placed_aabb};
 use core_plate::{ArrangeSettings, Arranged, Footprint, PlateArea, Rect, arrange, turned_onto};
+use core_volume::Cancel;
 use rayon::prelude::*;
 use thiserror::Error;
 
@@ -132,8 +134,45 @@ pub(crate) fn apply_arrange(
     document: &mut Document,
     (low_mm, plate_mm): ([Scalar; 2], [Scalar; 2]),
     clearance_mm: Scalar,
+    cancel: Cancel<'_>,
 ) -> Result<Applied, ApplyError> {
+    let settings = ArrangeSettings {
+        clearance_mm,
+        ..ArrangeSettings::default()
+    };
+    let low = Vec2::from_array(low_mm);
+    let area = PlateArea {
+        low_mm: low,
+        high_mm: low + Vec2::from_array(plate_mm),
+    };
     let ids = document.printable();
+    let Spread {
+        transforms,
+        arranged,
+        ..
+    } = spread_of(document, &ids, area, &settings)?;
+    let mut spread_out = document.clone();
+    for (id, transform) in ids.iter().zip(transforms) {
+        stand_at(&mut spread_out, *id, transform, cancel)?;
+    }
+    *document = spread_out;
+    Ok(Applied {
+        removed: Vec::new(),
+        added: Vec::new(),
+        report: Report::Arranged {
+            placed: arranged.placed.len(),
+            left_out: arranged.left_out.iter().map(|index| ids[*index]).collect(),
+        },
+    })
+}
+
+/// The objects `ids` spread over `area` as they stand with their supports.
+fn spread_of(
+    document: &Document,
+    ids: &[ObjectId],
+    area: PlateArea,
+    settings: &ArrangeSettings,
+) -> Result<Spread, ApplyError> {
     let built: Vec<_> = ids
         .par_iter()
         .map(|id| standing_meshes(document, *id))
@@ -148,33 +187,8 @@ pub(crate) fn apply_arrange(
             moved: Transform::default(),
         });
     }
-    let settings = ArrangeSettings {
-        clearance_mm,
-        ..ArrangeSettings::default()
-    };
-    let low = Vec2::from_array(low_mm);
-    let area = PlateArea {
-        low_mm: low,
-        high_mm: low + Vec2::from_array(plate_mm),
-    };
-    let Spread {
-        transforms,
-        arranged,
-        ..
-    } = spread(&mut standing, area, &settings)
-        .map_err(|NoFootprint(index)| ApplyError::NoFootprint(ids[index]))?;
-    drop(standing);
-    for (id, transform) in ids.iter().zip(transforms) {
-        stand_at(document, *id, transform);
-    }
-    Ok(Applied {
-        removed: Vec::new(),
-        added: Vec::new(),
-        report: Report::Arranged {
-            placed: arranged.placed.len(),
-            left_out: arranged.left_out.iter().map(|index| ids[*index]).collect(),
-        },
-    })
+    spread(&mut standing, area, settings)
+        .map_err(|NoFootprint(index)| ApplyError::NoFootprint(ids[index]))
 }
 
 #[cfg(test)]

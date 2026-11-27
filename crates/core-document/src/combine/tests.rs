@@ -3,7 +3,7 @@ use core_geometry::{Scalar, Vec3, cuboid, signed_volume, transform_mesh};
 
 use super::*;
 use crate::apply::apply;
-use crate::fixtures::{SIDE_MM, cube};
+use crate::fixtures::{SIDE_MM, cube, cubes_with_plug, sheet_of};
 
 /// What f32 sums over a cube's faces drift by, mm³.
 const VOLUME_MM3: Scalar = 1e-2;
@@ -119,12 +119,11 @@ fn a_stopped_run_is_cancelled_and_leaves_the_plate() {
 
 #[test]
 fn a_sheet_is_not_a_solid_for_the_exact_cut() {
-    let mut open = cuboid(Vec3::ZERO, Vec3::splat(SIDE_MM));
-    let vertices = open.vertices.clone();
-    open.faces
-        .retain(|face| face.iter().all(|at| vertices[*at as usize].z == SIDE_MM));
     let error = combined(
-        &[open, cuboid(Vec3::splat(5.0), Vec3::splat(20.0))],
+        &[
+            sheet_of(SIDE_MM),
+            cuboid(Vec3::splat(5.0), Vec3::splat(20.0)),
+        ],
         Boolean::Union,
         Some(Vec3::Z),
         Cancel::never(),
@@ -133,4 +132,22 @@ fn a_sheet_is_not_a_solid_for_the_exact_cut() {
     .expect_err("the first is a sheet");
 
     assert_eq!(error, ApplyError::NotSolid(FIRST));
+}
+
+#[test]
+fn the_plugs_of_every_object_combined_go_with_it_and_are_listed() {
+    const PLUG: ObjectId = ObjectId(3);
+    for objects in [vec![SECOND, FIRST], vec![FIRST, SECOND]] {
+        let mut document = Document::from_project(cubes_with_plug());
+        let edit = combine_edit(Op::Union, objects.clone());
+
+        let applied = apply(&mut document, &edit, Cancel::never()).expect("the cubes overlap");
+
+        assert!(
+            applied.removed.contains(&PLUG),
+            "combining {objects:?} lists the plug of the second cube: {:?}",
+            applied.removed
+        );
+        assert!(document.object(PLUG).is_none(), "combining {objects:?}");
+    }
 }

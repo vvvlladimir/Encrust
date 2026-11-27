@@ -170,11 +170,14 @@ fn write_file(file: &Path, port: u16, token: &str) -> Result<()> {
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    // Renamed into place, so a server never reads half a file; the token is the user's alone.
+    let partial = file.with_extension("json.part");
     let mut opened = options
-        .open(file)
-        .with_context(|| format!("writing {}", file.display()))?;
+        .open(&partial)
+        .with_context(|| format!("writing {}", partial.display()))?;
     opened.write_all(&serde_json::to_vec(&text)?)?;
-    Ok(())
+    drop(opened);
+    std::fs::rename(&partial, file).with_context(|| format!("writing {}", file.display()))
 }
 
 /// 128 bits from the hasher keys the standard library seeds from the system.

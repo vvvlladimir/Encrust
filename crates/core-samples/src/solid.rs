@@ -1,7 +1,7 @@
 //! Closed solids for the test prints, from primitives that need no boolean operation: parts
 //! overlap, and the slicer fills by positive winding, so what overlaps is united.
 
-use core_geometry::{Mesh, Vec2, Vec3};
+use core_geometry::{Mesh, Vec2, Vec3, cuboid, extrude, triangulate};
 
 /// How far a part sinks into what it stands on, mm, so that the two share a volume rather
 /// than only a face.
@@ -10,42 +10,35 @@ pub const EMBED: f32 = 0.2;
 /// A mesh put together from closed parts, each wound outwards.
 #[derive(Default)]
 pub struct Solid {
-    vertices: Vec<Vec3>,
-    faces: Vec<[u32; 3]>,
+    mesh: Mesh,
 }
 
 impl Solid {
     pub fn into_mesh(self) -> Mesh {
-        Mesh::new(self.vertices, self.faces)
+        self.mesh
     }
 
     /// A box from `min` to `max`, mm.
     pub fn cuboid(&mut self, min: Vec3, max: Vec3) {
-        let outline = [
-            Vec2::new(min.x, min.y),
-            Vec2::new(max.x, min.y),
-            Vec2::new(max.x, max.y),
-            Vec2::new(min.x, max.y),
-        ];
-        self.prism(&outline, min.z, max.z);
+        self.mesh.append(&cuboid(min, max));
     }
 
     /// A simple polygon, counter-clockwise seen from above, extruded from `bottom` to `top`.
     pub fn prism(&mut self, outline: &[Vec2], bottom: f32, top: f32) {
-        let (lower, upper) = self.rings(outline, bottom, top);
-        for [a, b, c] in ear_clip(outline) {
-            self.faces.push([lower + a, lower + c, lower + b]);
-            self.faces.push([upper + a, upper + b, upper + c]);
-        }
-        self.wall(lower, upper, outline.len() as u32, false);
+        let ring: Vec<u32> = (0..outline.len() as u32).collect();
+        let cap = triangulate(&ring, &[], outline);
+        let count = outline.len();
+        let (bottoms, tops) = (vec![bottom; count], vec![top; count]);
+        self.mesh
+            .append(&extrude(outline, &cap, Vec2::extend, &bottoms, &tops));
     }
 
     /// A polygon counter-clockwise in (x, z), extruded along Y from `y0` to `y1`.
     pub fn side_prism(&mut self, outline: &[Vec2], y0: f32, y1: f32) {
-        let start = self.vertices.len();
+        let start = self.mesh.vertices.len();
         self.prism(outline, -y1, -y0);
         // A quarter turn about X, which keeps every face wound outwards.
-        for vertex in &mut self.vertices[start..] {
+        for vertex in &mut self.mesh.vertices[start..] {
             *vertex = Vec3::new(vertex.x, -vertex.z, vertex.y);
         }
     }
@@ -61,11 +54,11 @@ impl Solid {
         for i in 0..n {
             let j = (i + 1) % n;
             let (oh, ih) = (outer_high, inner_high);
-            self.faces.push([oh + i, oh + j, ih + j]);
-            self.faces.push([oh + i, ih + j, ih + i]);
+            self.mesh.faces.push([oh + i, oh + j, ih + j]);
+            self.mesh.faces.push([oh + i, ih + j, ih + i]);
             let (ol, il) = (outer_low, inner_low);
-            self.faces.push([ol + i, il + j, ol + j]);
-            self.faces.push([ol + i, il + i, il + j]);
+            self.mesh.faces.push([ol + i, il + j, ol + j]);
+            self.mesh.faces.push([ol + i, il + i, il + j]);
         }
     }
 
@@ -83,10 +76,10 @@ impl Solid {
                 let (ai, aj) = (a[i % a.len()], a[j % a.len()]);
                 let (bi, bj) = (b[i % b.len()], b[j % b.len()]);
                 if ai != aj {
-                    self.faces.push([ai, aj, bj]);
+                    self.mesh.faces.push([ai, aj, bj]);
                 }
                 if bi != bj {
-                    self.faces.push([ai, bj, bi]);
+                    self.mesh.faces.push([ai, bj, bi]);
                 }
             }
         }
@@ -94,15 +87,16 @@ impl Solid {
 
     /// The vertices of one profile point turned round, or the one vertex it is on the axis.
     fn ring(&mut self, centre: Vec2, point: Vec2, segments: u32) -> Vec<u32> {
-        let start = self.vertices.len() as u32;
+        let start = self.mesh.vertices.len() as u32;
         // An arc computed down to the axis lands a hair off it; that is still the axis.
         if point.x <= 1e-4 {
-            self.vertices.push(centre.extend(point.y));
+            self.mesh.vertices.push(centre.extend(point.y));
             return vec![start];
         }
         for step in 0..segments {
             let around = Vec2::from_angle(std::f32::consts::TAU * step as f32 / segments as f32);
-            self.vertices
+            self.mesh
+                .vertices
                 .push((centre + around * point.x).extend(point.y));
         }
         (start..start + segments).collect()
@@ -110,9 +104,10 @@ impl Solid {
 
     /// The outline at `bottom` and again at `top`, answering where each copy starts.
     fn rings(&mut self, outline: &[Vec2], bottom: f32, top: f32) -> (u32, u32) {
-        let lower = self.vertices.len() as u32;
+        let lower = self.mesh.vertices.len() as u32;
         for z in [bottom, top] {
-            self.vertices
+            self.mesh
+                .vertices
                 .extend(outline.iter().map(|point| point.extend(z)));
         }
         (lower, lower + outline.len() as u32)
@@ -129,8 +124,8 @@ impl Solid {
             } else {
                 quad
             };
-            self.faces.push([first, second, third]);
-            self.faces.push([first, third, fourth]);
+            self.mesh.faces.push([first, second, third]);
+            self.mesh.faces.push([first, third, fourth]);
         }
     }
 }
@@ -202,40 +197,6 @@ pub fn stl(mesh: &Mesh) -> Vec<u8> {
         bytes.extend_from_slice(&[0; 2]);
     }
     bytes
-}
-
-/// Triangles covering a simple polygon wound counter-clockwise, as indices into it.
-fn ear_clip(outline: &[Vec2]) -> Vec<[u32; 3]> {
-    let mut left: Vec<u32> = (0..outline.len() as u32).collect();
-    let mut triangles = Vec::with_capacity(outline.len().saturating_sub(2));
-    while left.len() > 3 {
-        let n = left.len();
-        let corner = |k: usize| [left[(k + n - 1) % n], left[k], left[(k + 1) % n]];
-        let Some(ear) = (0..n).find(|&k| is_ear(outline, &left, corner(k))) else {
-            break;
-        };
-        triangles.push(corner(ear));
-        left.remove(ear);
-    }
-    if let [a, b, c] = left[..] {
-        triangles.push([a, b, c]);
-    }
-    triangles
-}
-
-/// Whether the corner turns left and no other vertex of the polygon lies within it.
-fn is_ear(outline: &[Vec2], left: &[u32], [a, b, c]: [u32; 3]) -> bool {
-    let at = |index: u32| outline[index as usize];
-    let turn = |p: Vec2, q: Vec2, r: Vec2| (q - p).perp_dot(r - p);
-    if turn(at(a), at(b), at(c)) <= 0.0 {
-        return false;
-    }
-    left.iter().filter(|p| ![a, b, c].contains(p)).all(|&p| {
-        let point = at(p);
-        turn(at(a), at(b), point) < 0.0
-            || turn(at(b), at(c), point) < 0.0
-            || turn(at(c), at(a), point) < 0.0
-    })
 }
 
 #[cfg(test)]

@@ -7,7 +7,6 @@ use printer_profiles::PrinterProfile;
 
 use super::Shaping;
 use crate::args::JobArgs;
-use crate::project;
 
 /// What the inputs on the command line are: models, one file describing a plate, or several
 /// projects laid on one plate.
@@ -51,12 +50,6 @@ fn extension_of(path: &Path) -> Option<String> {
     path.extension()
         .and_then(|extension| extension.to_str())
         .map(str::to_ascii_lowercase)
-}
-
-/// The flags a project cannot take, which prepare models as they come in.
-pub fn refuse_for_a_project(job: &JobArgs) -> Result<()> {
-    project::refuse_for_projects(job)?;
-    Ok(())
 }
 
 /// Flags that point at one spot on one model mean nothing across several; models `combined`

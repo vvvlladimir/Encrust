@@ -5,7 +5,7 @@ use core_document::{Footing, stood_turned};
 use core_engine::{KeepClear, SupportPlan};
 use core_geometry::{Adjacency, Mesh, Region, Scalar, Vec3};
 use core_plate::{OrientPreset, OrientSettings};
-use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, standard_machine};
+use printer_profiles::{Catalogue, MaterialProfile, PrinterProfile, machine_named};
 
 use crate::i18n::tr;
 use crate::job::{
@@ -75,7 +75,7 @@ pub fn proof_machine(slicing: &Slicing) -> Option<(PrinterProfile, MaterialProfi
         Some(printer) => Some((printer.clone(), slicing.material.clone())),
         None => Catalogue::bundled()
             .ok()
-            .and_then(|catalogue| standard_machine(&catalogue).ok()),
+            .and_then(|catalogue| machine_named(&catalogue, None, None).ok()),
     }
 }
 

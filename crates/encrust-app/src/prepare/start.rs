@@ -34,6 +34,11 @@ pub fn held_up(doc: &Doc, tools: &Tools, machine: &Machine) -> Option<String> {
 
 /// Whether a job that will land on the plate is running.
 pub fn busy(doc: &Doc, tools: &Tools, machine: &Machine) -> bool {
+    tool_busy(doc, tools) || doc.imports.is_busy() || machine.slicing.job.is_some()
+}
+
+/// Whether a tool's job that will change a model on the plate is running.
+pub fn tool_busy(doc: &Doc, tools: &Tools) -> bool {
     tools.orient.is_running()
         || tools.hollow.job.is_some()
         || tools.drain.job.is_some()
@@ -45,8 +50,7 @@ pub fn busy(doc: &Doc, tools: &Tools, machine: &Machine) -> bool {
         || tools.relief.is_busy()
         || tools.text.is_busy()
         || doc.repairs.is_busy()
-        || doc.imports.is_busy()
-        || machine.slicing.job.is_some()
+        || doc.repairs.hand.is_busy()
 }
 
 /// Starts preparing what a tool would act on now, the picked models or the whole plate, by

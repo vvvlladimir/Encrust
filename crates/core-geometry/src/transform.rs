@@ -80,7 +80,7 @@ impl Transform {
     /// What carries a surface normal onto the plate: the inverse transpose of [`Self::linear`],
     /// which keeps it square to the surface under a stretch.
     pub fn normal_matrix(self) -> Mat3 {
-        normal_matrix_of(self.linear())
+        self.linear().inverse().transpose()
     }
 
     fn linear_unstretched(self) -> Mat3 {
@@ -184,11 +184,6 @@ impl Transform {
     pub fn least_scale(self) -> Scalar {
         smallest_scale(self.linear())
     }
-}
-
-/// The inverse transpose of `linear`, for a surface normal; not finite where `linear` is flat.
-pub fn normal_matrix_of(linear: Mat3) -> Mat3 {
-    linear.inverse().transpose()
 }
 
 /// The least `linear` scales any length by, in whatever direction: its smallest singular

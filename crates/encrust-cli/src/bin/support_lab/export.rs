@@ -1,7 +1,6 @@
 //! Meshes written out to be opened beside each other: the supported model, and a marker
 //! at every place the bench names, one file per family so each can be coloured apart.
 
-use std::io::Write;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -120,19 +119,6 @@ pub fn append(mesh: &mut Mesh, other: &Mesh) {
 
 /// Binary STL, which every tool reads.
 pub fn stl(path: &Path, mesh: &Mesh) -> Result<()> {
-    let mut bytes = Vec::with_capacity(84 + 50 * mesh.faces.len());
-    bytes.extend_from_slice(&[0u8; 80]);
-    bytes.extend_from_slice(&(mesh.faces.len() as u32).to_le_bytes());
-    for triangle in mesh.triangles() {
-        let normal = triangle.normal_unnormalized().normalize_or_zero();
-        for v in [normal, triangle.a, triangle.b, triangle.c] {
-            for c in v.to_array() {
-                bytes.extend_from_slice(&c.to_le_bytes());
-            }
-        }
-        bytes.extend_from_slice(&[0, 0]);
-    }
-    std::fs::File::create(path)
-        .and_then(|mut file| file.write_all(&bytes))
+    std::fs::write(path, core_samples::stl(mesh))
         .with_context(|| format!("cannot write {}", path.display()))
 }

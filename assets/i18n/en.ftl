@@ -414,6 +414,13 @@ agents-follow-tooltip = Run each revision an agent saves on the plate straight a
 link-replaying = Showing revision { $revision } of the chat client's job { $job }
 # The name of the plate an agent's job stands on, when the model's name is a plate's already.
 link-plate-numbered = { $model } { $number }
+# A revision the user asked to see from the agents' list that was made by edits on the plate shown, so it is there already.
+link-revision-on-plate = revision { $revision } of the job { $job } was made on this plate and is on it already
+link-revision-unreadable = cannot read revision { $revision } of the job { $job }
+# The agents' list named a job whose folder name is not a job's.
+link-no-job = there is no job named { $job }
+# The system stopped the window from reading a revision's plate off the drawing thread.
+link-plate-unread = cannot read the revision's plate
 
 ## measure.rs
 

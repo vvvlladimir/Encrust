@@ -3,7 +3,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use crate::scene::Scene;
+use crate::scene::{Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::tool_settings::ToolSettings;
@@ -338,9 +338,16 @@ fn put_scene_back(scene: &mut Scene, previous: Scene) -> Scene {
 /// them, and hashing them would make one drag two entries on the stack.
 fn fingerprint(scene: &Scene) -> u64 {
     let mut hasher = DefaultHasher::new();
+    edited_fingerprint(scene).hash(&mut hasher);
+    scene.active_plate().hash(&mut hasher);
+    hasher.finish()
+}
+
+/// [`fingerprint`] but for which plate is shown, which looking round changes and editing need not.
+pub(crate) fn edited_fingerprint(scene: &Scene) -> u64 {
+    let mut hasher = DefaultHasher::new();
     scene.objects().len().hash(&mut hasher);
     scene.plates().hash(&mut hasher);
-    scene.active_plate().hash(&mut hasher);
 
     for object in scene.objects() {
         object.id.hash(&mut hasher);
@@ -394,43 +401,48 @@ fn fingerprint(scene: &Scene) -> u64 {
             }
             point.group.hash(&mut hasher);
         }
-        for blocker in object.hollow.blockers() {
-            for value in [
-                blocker.from.x,
-                blocker.from.y,
-                blocker.from.z,
-                blocker.to.x,
-                blocker.to.y,
-                blocker.to.z,
-                blocker.radius_mm,
-            ] {
-                value.to_bits().hash(&mut hasher);
-            }
-        }
-        let (drains, channels) = object.hollow.cut();
-        for drain in drains {
-            for value in [
-                drain.at.x,
-                drain.at.y,
-                drain.at.z,
-                drain.diameter_mm,
-                drain.depth_mm,
-            ] {
-                value.to_bits().hash(&mut hasher);
-            }
-        }
-        for channel in channels {
-            channel.points.len().hash(&mut hasher);
-            for point in &channel.points {
-                for value in [point.x, point.y, point.z] {
-                    value.to_bits().hash(&mut hasher);
-                }
-            }
-        }
-        object.hollow.pending().len().hash(&mut hasher);
+        hash_cavity(object, &mut hasher);
     }
 
     hasher.finish()
+}
+
+/// Hashes what the user placed in `object`'s cavity: walls kept solid, holes and channels.
+fn hash_cavity(object: &SceneObject, hasher: &mut DefaultHasher) {
+    for blocker in object.hollow.blockers() {
+        for value in [
+            blocker.from.x,
+            blocker.from.y,
+            blocker.from.z,
+            blocker.to.x,
+            blocker.to.y,
+            blocker.to.z,
+            blocker.radius_mm,
+        ] {
+            value.to_bits().hash(hasher);
+        }
+    }
+    let (drains, channels) = object.hollow.cut();
+    for drain in drains {
+        for value in [
+            drain.at.x,
+            drain.at.y,
+            drain.at.z,
+            drain.diameter_mm,
+            drain.depth_mm,
+        ] {
+            value.to_bits().hash(hasher);
+        }
+    }
+    for channel in channels {
+        channel.points.len().hash(hasher);
+        for point in &channel.points {
+            for value in [point.x, point.y, point.z] {
+                value.to_bits().hash(hasher);
+            }
+        }
+    }
+    object.hollow.pending().len().hash(hasher);
 }
 
 mod edits;

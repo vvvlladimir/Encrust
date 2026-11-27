@@ -40,9 +40,9 @@ pub use plate::{Model, Plate};
 pub use prepare::{Hollowing, PREPARE_REPAIR, hollowing, needs_repair};
 pub use run::{QUICK_CHECK_BIN, Run};
 pub use stand::{
-    ByHand, Lift, MERGE_NAMING_MM, NeedsAsked, ShownAt, Stood, SupportPlan, SupportShapes, ToStand,
-    merge_refusal, needs_on, needs_on_both, plan_of, planned_lift, shown_on, stand_at,
-    stand_seated, stand_under,
+    ByHand, Lift, NeedSides, NeedsAsked, ShownAt, Stood, SupportPlan, SupportShapes, ToStand,
+    merge_refusal, nearest_named, needs_on, needs_on_both, plan_of, planned_lift, shown_on,
+    stand_at, stand_seated, stand_under,
 };
 pub use strengthen::{Strengthened, Underside, WANTED_MARGIN, carried, strengthen};
 pub use trapped::trapped_in;

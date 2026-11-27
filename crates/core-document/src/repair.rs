@@ -55,7 +55,7 @@ impl MendAsked {
 
 /// What a mend by hand did.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Mended {
+pub struct HandMended {
     pub faces_flipped: usize,
     pub faces_added: usize,
     pub faces_dropped: usize,
@@ -64,7 +64,11 @@ pub struct Mended {
 
 /// Turns and bridges what `asked` names on `mesh`, then drops what it names; `object` names
 /// the model in an error, which leaves `mesh` half done.
-pub fn mended(mesh: &mut Mesh, asked: &MendAsked, object: ObjectId) -> Result<Mended, ApplyError> {
+pub fn mended(
+    mesh: &mut Mesh,
+    asked: &MendAsked,
+    object: ObjectId,
+) -> Result<HandMended, ApplyError> {
     let faces = mesh.faces.len();
     let flipped = faces_named(&asked.flip_faces, faces, object)?;
     let mut dropped = faces_named(&asked.drop_faces, faces, object)?;
@@ -79,15 +83,16 @@ pub fn mended(mesh: &mut Mesh, asked: &MendAsked, object: ObjectId) -> Result<Me
             dropped.set(*face as usize, true);
         }
     }
-    let mut done = Mended {
+    let mut done = HandMended {
         faces_flipped: flip_faces(mesh, &flipped),
         shells_dropped: numbers.len(),
-        ..Mended::default()
+        ..HandMended::default()
     };
     for &[a, b] in &asked.bridge {
-        done.faces_added += bridge(mesh, a, b).map_err(|error| ApplyError::Failed {
+        done.faces_added += bridge(mesh, a, b).map_err(|error| ApplyError::NoBridge {
             object,
-            reason: format!("bridge {}-{}:{}-{}: {error}", a[0], a[1], b[0], b[1]),
+            edges: [a, b],
+            reason: error.to_string(),
         })?;
     }
     done.faces_dropped = remove_faces(mesh, &dropped);

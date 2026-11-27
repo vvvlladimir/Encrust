@@ -165,7 +165,6 @@ impl Server {
             let _ = std::fs::remove_file(before);
         }
         let steps = std::fs::read_to_string(&out).ok();
-        // A scratch file left behind is overwritten by no other run: its name is this run's.
         let _ = std::fs::remove_file(&out);
         let outcome = outcome.inspect_err(|_| drop(std::fs::remove_file(&plate)))?;
         if !outcome.reported() {

@@ -18,7 +18,8 @@ pub struct Piece {
 /// What a new object is to the one it was made from, which a front end names it by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
-    /// The one half a cut kept, which keeps the model's name.
+    /// The model itself made anew, as a label writes it or the one half a cut keeps; it keeps
+    /// the model's name.
     Kept,
     Lower,
     Upper,

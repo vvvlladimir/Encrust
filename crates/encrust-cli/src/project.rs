@@ -1,6 +1,5 @@
-//! A `.encrust` project saved by the window, sliced a plate at a time. Flags that shape a model
-//! are refused; printer and resin are named by id only (ADR 0261) and flags may change them,
-//! and the print settings are theirs under what the flags set (ADR 0380).
+//! A `.encrust` project saved by the window, sliced a plate at a time, its objects shaped by the
+//! flags (ADR 0479); its printer and resin by id (ADR 0261), its settings under the flags' (0380).
 
 use std::path::{Path, PathBuf};
 
@@ -8,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use core_document::{Document, apply};
 use core_edit::Edit;
 use core_engine::project::{Manifest, ModelMeshes, ObjectState, Project, insert, load};
-use core_geometry::transform_mesh;
+use core_geometry::placed_aabb;
 use std::time::Duration;
 
 use crate::hollowing::HollowReport;
@@ -31,9 +30,9 @@ pub fn open(path: &Path) -> Result<Project> {
     load(path).with_context(|| format!("cannot open the project {}", path.display()))
 }
 
-/// The plate each of `paths` was left on, laid on one plate in the order given, the first's
-/// printer, resin and settings kept; spread over `arranged`'s usable plate where it is named.
-pub fn laid_together(paths: &[PathBuf], arranged: Option<&PrinterProfile>) -> Result<Project> {
+/// The plate each of `paths` was left on, laid on one in the order given, the first's settings
+/// kept; spread, where `arranged`, over the printer its flags or the first project name.
+pub fn laid_together(paths: &[PathBuf], arranged: Option<&JobArgs>) -> Result<Project> {
     let mut opened = paths.iter().map(|path| open(path));
     let first = opened.next().context("no project to lay on the plate")??;
     let mut laid = Project {
@@ -50,10 +49,11 @@ pub fn laid_together(paths: &[PathBuf], arranged: Option<&PrinterProfile>) -> Re
     for project in opened {
         insert(&mut laid, project?, 0);
     }
-    let Some(printer) = arranged else {
+    let Some(job) = arranged else {
         return Ok(laid);
     };
-    let (low_mm, plate_mm) = crate::stage::usable_area(printer);
+    let printer = machine(&laid.manifest, job)?.printer;
+    let (low_mm, plate_mm) = crate::stage::usable_area(&printer);
     let spread = Edit::Arrange {
         low_mm,
         plate_mm,
@@ -222,9 +222,7 @@ fn saved_supports(object: &ObjectState, model: &core_engine::Model) -> Option<Su
     if trees.is_empty() {
         return None;
     }
-    let lowest = transform_mesh(&model.mesh, model.transform)
-        .aabb()
-        .map_or(0.0, |bounds| bounds.mins.z);
+    let lowest = placed_aabb(&model.mesh, model.transform).map_or(0.0, |bounds| bounds.mins.z);
     Some(SupportReport {
         lifted_mm: lowest.max(0.0),
         contacts: trees.iter().flat_map(|tree| tree.contacts()).collect(),
@@ -322,21 +320,14 @@ pub fn refuse_for_projects(job: &JobArgs) -> Result<()> {
 pub fn shaped_by_flags(job: &JobArgs, arrange: bool) -> bool {
     let import = &job.import;
     let transform = &import.transform;
-    let placing = &transform.placing;
     arrange
         || !job.only.is_empty()
         || job.model.wanted()
         || import.repair.is_some()
         || !crate::edits::mend_asked(import).is_empty()
         || import.relief.is_some()
-        || transform.rotate.is_some()
-        || transform.scale.is_some()
-        || transform.center
-        || transform.orient
-        || transform.lift.is_some()
-        || placing.mirror.is_some()
-        || placing.move_by.is_some()
-        || placing.copies.is_some()
+        || transform.places()
+        || transform.placing.copies.is_some()
         || job.hollow.wanted()
         || job.hollow.cutting()
         || job.supports.supports.is_some()

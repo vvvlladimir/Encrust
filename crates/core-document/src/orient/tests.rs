@@ -212,7 +212,7 @@ fn a_lift_asked_for_is_the_lift_the_search_judges_by() {
 }
 
 #[test]
-fn a_kept_sizing_whose_shape_the_catalogue_lacks_is_no_profile() {
+fn a_kept_sizing_whose_shape_the_catalogue_lacks_names_that_shape() {
     let mut document = keeping_sizing(true);
     let mut project = cube();
     let sizing = document.support_state().sizing.clone().expect("kept");
@@ -224,7 +224,7 @@ fn a_kept_sizing_whose_shape_the_catalogue_lacks_is_no_profile() {
     let error = apply(&mut document, &orient(OrientAim::Auto, 0), Cancel::never())
         .expect_err("a sizing that cannot be sized is refused");
 
-    assert_eq!(error, ApplyError::NoProfile("auto".to_owned()));
+    assert_eq!(error, ApplyError::NoProfile("no-such-shape".to_owned()));
 }
 
 /// The box of the bar as it stands, as its low and high corners on the plate.

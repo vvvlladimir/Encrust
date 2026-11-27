@@ -4,7 +4,7 @@ use core_supports::{Blocked, Need, Shown, WallSide, generate_supports};
 
 use printer_profiles::{AUTO_SIZES, AutoProfile, SupportProfile};
 
-use super::{ByHand, SupportPlan, SupportShapes};
+use super::{SupportPlan, SupportShapes};
 use crate::error::EngineError;
 use crate::strengthen::{Underside, strengthen};
 
@@ -44,39 +44,37 @@ pub fn needs_on(
     Ok(needs)
 }
 
-/// Where the model needs holding up on its outside and, with `inside`, on its cavity, each side
-/// as `sides` asks it and held against the other's tips.
-pub fn needs_on_both<'a>(
-    sides: &dyn Fn(bool) -> NeedsAsked<'a>,
-    inside: bool,
-    held: &[Vec3],
-    tick: &mut dyn FnMut(usize) -> bool,
-) -> Result<Vec<Need>, EngineError> {
-    both_sides(sides, (inside, true), held, tick)
+/// Which sides of a hollow model's wall a run holds up, and whether it strengthens them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NeedSides {
+    /// The cavity as well as the outside.
+    pub inside: bool,
+    pub strengthening: bool,
 }
 
-/// [`needs_on_both`], the strengthening optional.
-pub(super) fn both_sides<'a>(
-    sides: &dyn Fn(bool) -> NeedsAsked<'a>,
-    (inside, strengthening): (bool, bool),
+/// Where the model needs holding up on its outside and, as `sides` asks, on its cavity, each side
+/// as `asked` puts it and held against the other's tips.
+pub fn needs_on_both<'a>(
+    asked: &dyn Fn(bool) -> NeedsAsked<'a>,
+    sides: NeedSides,
     held: &[Vec3],
     tick: &mut dyn FnMut(usize) -> bool,
 ) -> Result<Vec<Need>, EngineError> {
     let place = |side: bool, tick: &mut dyn FnMut(usize) -> bool| {
-        let mut asked = sides(side);
+        let mut asked = asked(side);
         let blocked = asked.blocked();
         placed_on(&asked, blocked.as_ref(), tick)
     };
     let mut needs = place(false, tick);
-    let mut cavity = if inside {
+    let mut cavity = if sides.inside {
         place(true, tick)
     } else {
         Vec::new()
     };
-    if strengthening {
+    if sides.strengthening {
         let contacts = |needs: &[Need]| needs.iter().map(|need| need.contact).collect::<Vec<_>>();
         let mut strengthen = |side: bool, needs: &mut Vec<Need>, others: &[Vec3]| {
-            let mut asked = sides(side);
+            let mut asked = asked(side);
             let blocked = asked.blocked();
             let held: Vec<Vec3> = held.iter().chain(others).copied().collect();
             strengthened_on(&asked, blocked.as_ref(), needs, &held, &mut || tick(0))
@@ -146,16 +144,10 @@ pub fn plan_of(
     sizing: Option<(&AutoProfile, &[SupportProfile; AUTO_SIZES + 1])>,
 ) -> SupportPlan {
     match sizing {
-        Some((auto, shapes)) => SupportPlan {
-            shapes: SupportShapes::Sized {
-                auto: Box::new(auto.clone()),
-                shapes: Box::new(shapes.clone()),
-            },
-            cavity: false,
-            merges: Vec::new(),
-            by_hand: ByHand::default(),
-            shown_at: Vec::new(),
-        },
+        Some((auto, shapes)) => SupportPlan::of_shapes(SupportShapes::Sized {
+            auto: Box::new(auto.clone()),
+            shapes: Box::new(shapes.clone()),
+        }),
         None => SupportPlan::of(profile.clone()),
     }
 }

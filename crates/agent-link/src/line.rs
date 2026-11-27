@@ -101,6 +101,7 @@ pub struct ShowReply {
 }
 
 impl ShowReply {
+    /// The revision is on its plate.
     pub fn taken() -> Self {
         Self {
             shown: true,
@@ -108,6 +109,7 @@ impl ShowReply {
         }
     }
 
+    /// The revision is not shown, for `why`.
     pub fn refused(why: impl Into<String>) -> Self {
         Self {
             shown: false,
@@ -149,6 +151,7 @@ pub struct ApplyReply {
 }
 
 impl ApplyReply {
+    /// Every edit landed.
     pub fn landed() -> Self {
         Self {
             applied: true,
@@ -158,6 +161,7 @@ impl ApplyReply {
         }
     }
 
+    /// None is left applied, for `why`.
     pub fn refused(why: impl Into<String>) -> Self {
         Self {
             applied: false,
@@ -167,6 +171,7 @@ impl ApplyReply {
         }
     }
 
+    /// None was applied: the plate moved on to `version`.
     pub fn stale(version: u64) -> Self {
         Self {
             applied: false,

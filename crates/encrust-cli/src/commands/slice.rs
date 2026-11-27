@@ -91,7 +91,7 @@ impl SliceCommand {
             [path] if stage::describes_a_project(path) => path,
             _ => bail!("--all-plates slices the plates of one project (.encrust)"),
         };
-        stage::refuse_for_a_project(&self.job)?;
+        crate::project::refuse_for_projects(&self.job)?;
         if project::shaped_by_flags(&self.job, self.plate.arrange) {
             bail!("--all-plates slices the plates as saved; shape one with --plate N first");
         }

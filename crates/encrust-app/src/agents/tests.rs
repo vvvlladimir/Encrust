@@ -168,6 +168,14 @@ fn a_hidden_job_stays_off_the_list_until_its_agent_takes_another() {
         .expect("the list is listening");
     agents.poll();
     assert_eq!(agents.list, [holding("cube-3")], "its next job is listed");
+    send.send(vec![holding("cube-1")])
+        .expect("the list is listening");
+    agents.poll();
+    assert_eq!(
+        agents.list,
+        [holding("cube-1")],
+        "taken up again, listed again"
+    );
 }
 
 #[test]

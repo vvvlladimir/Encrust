@@ -233,6 +233,13 @@ impl Recipe {
         flags
     }
 
+    /// The flags that stage `plate`, a plate this recipe's runs left, on its machine.
+    pub fn flags_on(&self, plate: &Path) -> Vec<String> {
+        let mut flags = vec![plate.display().to_string()];
+        flags.extend(self.machine_flags());
+        flags
+    }
+
     /// The flags after the subcommand that stage the model as this recipe says. Every value
     /// rides on its flag as `--flag=value`, so a negative number is never read as a flag.
     pub fn flags(&self) -> Vec<String> {

@@ -131,3 +131,51 @@ fn a_run_kept_solid_lays_a_ball_and_a_rod_on_and_the_object_keeps_them() {
         "a ball at the first point and a rod on to the second"
     );
 }
+
+#[test]
+fn a_hollowed_cube_scaled_twice_over_keeps_the_wall_it_was_hollowed_to() {
+    let mut document = Document::from_project(cube_of(20.0));
+    apply(&mut document, &walled(2.0), Cancel::never()).expect("the cube hollows");
+    let doubled = Edit::Scale {
+        object: CUBE,
+        factors: Vec3::splat(2.0),
+    };
+
+    apply(&mut document, &doubled, Cancel::never()).expect("the cube scales");
+
+    let (state, meshes) = document.object(CUBE).expect("the cube stays");
+    let shell = meshes.shell.as_ref().expect("the cube stays hollow");
+    let material = signed_volume(&core_geometry::transform_mesh(shell, state.transform));
+    let wanted = 40.0_f32.powi(3) - 36.0_f32.powi(3);
+    let tolerance = 4.0 * LATTICE_MM3;
+    assert!(
+        (material - wanted).abs() < tolerance,
+        "a 2 mm wall on a 40 mm cube leaves 40³ - 36³ = {wanted} mm³ within {tolerance}, got \
+         {material}"
+    );
+}
+
+#[test]
+fn an_open_floor_turned_over_opens_toward_the_plate_it_now_stands_on() {
+    let mut document = Document::from_project(cube_of(20.0));
+    let mut open = walled(2.0);
+    if let Edit::Hollow { settings, .. } = &mut open {
+        settings.open_floor = true;
+    }
+    apply(&mut document, &open, Cancel::never()).expect("the cube hollows");
+    let over = Edit::Rotate {
+        object: CUBE,
+        degrees: Vec3::new(180.0, 0.0, 0.0),
+    };
+
+    apply(&mut document, &over, Cancel::never()).expect("the cube turns");
+
+    let (state, _) = document.object(CUBE).expect("the cube stays");
+    let built = state.hollow.built.as_ref().expect("the cube stays hollow");
+    let toward = built.wall.open_toward.expect("the floor stays open");
+    let down = core_volume::plate_down(state.transform);
+    assert!(
+        toward.abs_diff_eq(down, 1e-4),
+        "the opening faces the plate, {down}, got {toward}"
+    );
+}

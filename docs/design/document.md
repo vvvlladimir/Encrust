@@ -55,14 +55,16 @@ that misses the object is `ApplyError::Missed`. The window runs the two steps on
 scale, a mirror kept, each about the object's centre of mass and then standing it on the plate;
 a factor not finite or above zero is `ApplyError::BadScale`. None of them adds or removes an
 object (`Report::Placed`). A placement that moves an object drops its grown trees to grow again
-where it stands and carries its frozen ones there as the window does (`supports::stand_at`). The window sets the transform at once through the same `placement`
+where it stands and carries its frozen ones there as the window does (`supports::stand_at`); a shell
+`ModelHollow::is_stale` there — resized under, or open toward another floor — is built again to
+its numbers, which the window leaves to its Rebuild. The window sets the transform at once through the same `placement`
 functions.
 
 `Orient { object, goal, max_tilt_deg, clean_surface, pick, plate_mm, low_mm, printer, resin, keep_clear_mm,
 keep_clear_radius_mm, keep_clear_seen_deg, lift_mm }` runs `--orient`'s search on the
 object as it stands (outer, shell, cuts, drain vents, what shows), judged on the plate's active
 support group and its best few printed on the shipped catalogue's `printer` and `resin`, the standard
-`elegoo-saturn-4-ultra` and the stock resin numbers where unset (`printer_profiles::standard_machine`; an id
+`elegoo-saturn-4-ultra` and the stock resin numbers where unset (`printer_profiles::machine_named`; an id
 the catalogue lacks is `ApplyError::NoPrinter` or `NoResin`, one it cannot read `BadCatalogue`), and stands the `pick`th pose, from 0
 (`Report::Oriented { rotate_deg }`): turned keeping the middle of its box over the same spot, slid onto the
 usable area `plate_mm` across from `low_mm` where it hangs off (none where unset), dropped onto the plate and lifted

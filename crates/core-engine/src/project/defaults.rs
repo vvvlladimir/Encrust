@@ -84,6 +84,7 @@ impl Manifest {
             plates: vec![FIRST_PLATE.to_owned()],
             active_plate: 0,
             objects: Vec::new(),
+            next_id: None,
         }
     }
 }

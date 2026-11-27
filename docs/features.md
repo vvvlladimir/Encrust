@@ -398,7 +398,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   wall solid, so the panel hides both.
 - **Bottom through** grows the wall inward like Inside and cuts away the floor the model
   stands on, so the resin runs out with no drain hole and the model shows the opening. It
-  follows the plate: turn the model and it asks to be hollowed again. Standing on the plate
+  follows the plate: turn the model and it asks to be hollowed again. On the command line
+  and through the agents' server a model scaled, or turned with its floor open, after it was
+  hollowed is hollowed again at once to the same wall. Standing on the plate
   the cavity stays sealed until the print comes off, so add a small vent near the top. On a
   model with holes in its surface the floor is still drawn, though the layers are open.
 - **Infill** inside the cavity, or leave it empty. Every pattern takes two numbers, the

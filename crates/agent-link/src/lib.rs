@@ -10,5 +10,7 @@ pub use line::{
     ApplyReply, HandedPlate, Header, PLATE_SCHEMA, PlateLine, SHOW_SCHEMA, Show, ShowReply, Signed,
     WindowFile, plate_refused,
 };
-pub use places::{AGENTS, JOBS, WINDOW_FILE, cache_dir};
+pub use places::{
+    AGENTS, JOBS, RevisionFile, WINDOW_FILE, cache_dir, is_job_name, latest_revision, revision_of,
+};
 pub use presence::{AGENT_SCHEMA, AgentFile, Working};

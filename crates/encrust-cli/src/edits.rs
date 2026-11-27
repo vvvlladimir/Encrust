@@ -4,7 +4,7 @@
 use std::str::FromStr;
 
 use anyhow::{Result, anyhow};
-use core_document::{ApplyError, MendAsked};
+use core_document::{ApplyError, HandMended, MendAsked};
 
 use crate::args::ImportArgs;
 
@@ -21,9 +21,6 @@ impl FromStr for BridgeEdges {
         Ok(Self(a, b))
     }
 }
-
-/// What the changes by hand did.
-pub use core_document::Mended as Edited;
 
 /// The changes by hand `args` name.
 pub fn mend_asked(args: &ImportArgs) -> MendAsked {
@@ -57,13 +54,17 @@ pub(crate) fn refused(
         ApplyError::NoSuchShell { number, .. } => {
             anyhow!("--drop-shells: there is no shell {number}; the model has {shells}")
         }
-        ApplyError::Failed { reason, .. } => anyhow!("--{reason}"),
+        ApplyError::NoBridge {
+            edges: [a, b],
+            reason,
+            ..
+        } => anyhow!("--bridge {}-{}:{}-{}: {reason}", a[0], a[1], b[0], b[1]),
         other => anyhow!("{other}"),
     }
 }
 
 /// What the changes by hand did, in the words the report says it in.
-pub fn describe(edited: &Edited) -> String {
+pub fn describe(edited: &HandMended) -> String {
     let said = |count: usize, verb: &str, noun: &str| {
         let plural = if count == 1 { "" } else { "s" };
         (count > 0).then(|| format!("{verb} {count} {noun}{plural}"))

@@ -16,7 +16,7 @@ use crate::piece::Role;
 use crate::placement::{moved, sized_to, turned_to};
 use crate::plate_contents::{delete, duplicate, mirrored};
 use crate::relief::{ReliefAsked, apply_relief};
-use crate::repair::{MendAsked, Mended, apply_mend, apply_repair};
+use crate::repair::{HandMended, MendAsked, apply_mend, apply_repair};
 use crate::split::{apply_part_off, apply_split};
 use crate::supports::{SupportsAsked, apply_merge, apply_supports, stand_at};
 
@@ -69,7 +69,7 @@ pub enum Report {
         wrapped: bool,
     },
     /// An object's faces were turned, bridged or dropped by hand.
-    Mended(Mended),
+    Mended(HandMended),
     /// A picture was pressed into an object's mesh.
     Relieved {
         /// The lattice it came out on, mm.
@@ -268,7 +268,7 @@ pub fn apply(
             low_mm,
             plate_mm,
             clearance_mm,
-        } => apply_arrange(document, (low_mm, plate_mm), clearance_mm),
+        } => apply_arrange(document, (low_mm, plate_mm), clearance_mm, cancel),
         Edit::Orient { object, .. } => {
             let asked = OrientAsked::of(edit).ok_or(ApplyError::NoObject(object))?;
             apply_orient(document, object, &asked, cancel)
@@ -276,7 +276,7 @@ pub fn apply(
         Edit::Move { object, .. }
         | Edit::Rotate { object, .. }
         | Edit::Scale { object, .. }
-        | Edit::Mirror { object, .. } => apply_placement(document, object, edit),
+        | Edit::Mirror { object, .. } => apply_placement(document, object, edit, cancel),
         Edit::Delete { object } => delete(document, object),
         Edit::Duplicate { object, offset_mm } => duplicate(document, object, offset_mm),
     }
@@ -287,8 +287,9 @@ fn apply_placement(
     document: &mut Document,
     id: ObjectId,
     edit: &Edit,
+    cancel: Cancel<'_>,
 ) -> Result<Applied, ApplyError> {
-    place(document, id, |transform, mesh| match *edit {
+    place(document, id, cancel, |transform, mesh| match *edit {
         Edit::Move { by_mm, .. } => Ok(moved(transform, by_mm)),
         Edit::Rotate { degrees, .. } => Ok(turned_to(transform, mesh, degrees)),
         Edit::Scale { factors, .. } => {
@@ -303,11 +304,12 @@ fn apply_placement(
 fn place(
     document: &mut Document,
     id: ObjectId,
+    cancel: Cancel<'_>,
     to: impl FnOnce(Transform, &Mesh) -> Result<Transform, ApplyError>,
 ) -> Result<Applied, ApplyError> {
     let (state, meshes) = document.object(id).ok_or(ApplyError::NoObject(id))?;
     let transform = to(state.transform, &meshes.source)?;
-    stand_at(document, id, transform);
+    stand_at(document, id, transform, cancel)?;
     Ok(Applied {
         removed: Vec::new(),
         added: Vec::new(),

@@ -500,14 +500,13 @@ impl ServerHandler for Server {
             .arguments
             .as_ref()
             .and_then(|arguments| arguments.get("job")?.as_str().map(str::to_owned));
-        self.presence
-            .begin(client.as_deref(), &tool, named.as_deref());
+        let call = (self.presence).begin(client.as_deref(), &tool, named.as_deref());
         let response = self
             .tool_router
             .call(ToolCallContext::new(self, request, context))
             .await;
         let answered = body_of(&response)["job"].as_str().map(str::to_owned);
-        self.presence.end(answered.or(named).as_deref());
+        self.presence.end(call, answered.or(named).as_deref());
         self.trace.record(&tool, started.elapsed(), &response).await;
         response
     }

@@ -1,19 +1,29 @@
 use core_edit::ObjectId;
+use core_engine::project::BuiltCavity;
 use core_geometry::{Bvh, Transform};
+use core_volume::Cancel;
 
 use super::groups::table_of;
 use super::kept_supports;
 use crate::document::Document;
+use crate::error::ApplyError;
+use crate::hollow::reshelled;
 
-/// Stands object `id` at `transform` with its supports carried there as the window's are: frozen
-/// trees replanted or thawed (ADR 0439), grown trees dropped to grow again where it now stands.
-pub(crate) fn stand_at(document: &mut Document, id: ObjectId, transform: Transform) {
+/// Stands object `id` at `transform`, frozen trees replanted or thawed (ADR 0439), grown ones
+/// dropped to grow again, and a shell stale there built again, as the window carries them.
+pub(crate) fn stand_at(
+    document: &mut Document,
+    id: ObjectId,
+    transform: Transform,
+    cancel: Cancel<'_>,
+) -> Result<(), ApplyError> {
     let Some((state, meshes)) = document.object(id) else {
-        return;
+        return Ok(());
     };
     if state.transform == transform {
-        return;
+        return Ok(());
     }
+    let shell = reshelled((state, meshes), transform, cancel, id)?;
     let kept = if state.supports.frozen.is_empty() {
         (state.supports.points.clone(), Vec::new(), Vec::new())
     } else {
@@ -32,4 +42,8 @@ pub(crate) fn stand_at(document: &mut Document, id: ObjectId, transform: Transfo
     };
     document.set_every_support(id, kept);
     document.set_transform(id, transform);
+    if let Some(shell) = shell {
+        document.set_built(id, BuiltCavity::of(&shell), shell.mesh);
+    }
+    Ok(())
 }

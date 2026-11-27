@@ -167,8 +167,7 @@ impl Staging {
 
     /// The models of the plate as a run cuts them, in the order of [`Self::ids`].
     pub(crate) fn models(&self) -> Vec<Model> {
-        let project = self.document.clone().into_project();
-        plate_models(&project, project.manifest.active_plate)
+        self.document.plate_models()
     }
 
     /// Object `id` as a run cuts it, its supports under it.
@@ -275,54 +274,14 @@ impl Staging {
             .filter(|object| object.printable_on(plate))
             .collect();
         let holders = holders_of(&project.manifest.objects, &on);
-        let mut found: Vec<Option<Found>> = found.into_iter().map(Some).collect();
-        let mut finished: HashMap<ObjectId, Finished> = finished.into_iter().collect();
-        let (mut parts, mut part_entries, mut owners) = (Vec::new(), Vec::new(), Vec::new());
-        let mut part_at = HashMap::new();
-        for (index, object) in on.iter().enumerate() {
-            if holders[index] != index {
-                continue;
-            }
-            let entry = entry_of.get(&object.id).copied().unwrap_or(0);
-            let pieces = on.iter().enumerate().filter(|(at, other)| {
-                holders[*at] == *at && entry_of.get(&other.id) == Some(&entry)
-            });
-            let path = &entries[entry.min(entries.len() - 1)].0;
-            let input = match pieces.count() {
-                1 => path.clone(),
-                _ => PathBuf::from(format!("{} #{}", path.display(), object.id.0)),
-            };
-            let (import, oriented) = found[entry]
-                .take()
-                .map_or((None, None), |(i, o)| (Some(i), o));
-            let oriented = self.oriented.remove(&object.id).or(oriented);
-            let done = finished.remove(&object.id).unwrap_or_default();
-            part_at.insert(index, parts.len());
-            parts.push(Part {
-                id: Some(object.id),
-                input,
-                import,
-                oriented,
-                standing: None,
-                hollow: done.hollow,
-                drains: done.drains,
-                supports: done.supports,
-                meets: Vec::new(),
-                prepared: None,
-                recipe: None,
-            });
-            part_entries.push(entry);
-        }
-        let mut stands_in: Vec<Option<Aabb>> = vec![None; parts.len()];
-        for (index, model) in models.iter().enumerate() {
-            let part = part_at[&holders[index]];
-            owners.push(part);
-            let merged = [stands_in[part], bounds(model)].into_iter().flatten();
-            stands_in[part] = merged.reduce(|one, other| one.merged(&other));
-        }
-        for (part, stands_in) in parts.iter_mut().zip(stands_in) {
-            part.standing = standing_of(stands_in, printer, part.supports.is_some(), talk);
-        }
+        let (mut parts, part_entries, part_at) = parts_of(
+            &on,
+            (&holders, &entry_of),
+            entries,
+            (found, finished),
+            &mut self.oriented,
+        );
+        let owners = stood(&mut parts, &models, (&holders, &part_at), (printer, talk));
         Ok(Laid {
             parts,
             models,
@@ -330,6 +289,77 @@ impl Staging {
             part_entries,
         })
     }
+}
+
+/// A part for each of `on` that is its own holder, what was found on it taken from the rest, and
+/// the entry each came from; where each holder's part is, by its place in `on`.
+fn parts_of(
+    on: &[&ObjectState],
+    (holders, entry_of): (&[usize], &HashMap<ObjectId, usize>),
+    entries: &[(PathBuf, Shaping)],
+    (found, finished): (Vec<Found>, Vec<(ObjectId, Finished)>),
+    oriented: &mut HashMap<ObjectId, OrientSummary>,
+) -> (Vec<Part>, Vec<usize>, HashMap<usize, usize>) {
+    let mut found: Vec<Option<Found>> = found.into_iter().map(Some).collect();
+    let mut finished: HashMap<ObjectId, Finished> = finished.into_iter().collect();
+    let held = |index: &usize| holders[*index] == *index;
+    let mut pieces: HashMap<usize, usize> = HashMap::new();
+    for (_, object) in on.iter().enumerate().filter(|(index, _)| held(index)) {
+        if let Some(entry) = entry_of.get(&object.id) {
+            *pieces.entry(*entry).or_default() += 1;
+        }
+    }
+    let (mut parts, mut part_entries, mut part_at) = (Vec::new(), Vec::new(), HashMap::new());
+    for (index, object) in on.iter().enumerate().filter(|(index, _)| held(index)) {
+        let entry = entry_of.get(&object.id).copied().unwrap_or(0);
+        let path = &entries[entry.min(entries.len() - 1)].0;
+        let input = match pieces.get(&entry) {
+            Some(1) => path.clone(),
+            _ => PathBuf::from(format!("{} #{}", path.display(), object.id.0)),
+        };
+        let (import, kept) = found[entry]
+            .take()
+            .map_or((None, None), |(i, o)| (Some(i), o));
+        let done = finished.remove(&object.id).unwrap_or_default();
+        part_at.insert(index, parts.len());
+        parts.push(Part {
+            id: Some(object.id),
+            input,
+            import,
+            oriented: oriented.remove(&object.id).or(kept),
+            standing: None,
+            hollow: done.hollow,
+            drains: done.drains,
+            supports: done.supports,
+            meets: Vec::new(),
+            prepared: None,
+            recipe: None,
+        });
+        part_entries.push(entry);
+    }
+    (parts, part_entries, part_at)
+}
+
+/// Checks where each of `parts` stands, its models and their supports as one box; answers the
+/// part each of `models` belongs to.
+fn stood(
+    parts: &mut [Part],
+    models: &[Model],
+    (holders, part_at): (&[usize], &HashMap<usize, usize>),
+    (printer, talk): (Option<&PrinterProfile>, bool),
+) -> Vec<usize> {
+    let mut stands_in: Vec<Option<Aabb>> = vec![None; parts.len()];
+    let mut owners = Vec::with_capacity(models.len());
+    for (index, model) in models.iter().enumerate() {
+        let part = part_at[&holders[index]];
+        owners.push(part);
+        let merged = [stands_in[part], bounds(model)].into_iter().flatten();
+        stands_in[part] = merged.reduce(|one, other| one.merged(&other));
+    }
+    for (part, stands_in) in parts.iter_mut().zip(stands_in) {
+        part.standing = standing_of(stands_in, printer, part.supports.is_some(), talk);
+    }
+    owners
 }
 
 /// For each of `on`, the place in `on` of the object whose part it counts with: its own, a

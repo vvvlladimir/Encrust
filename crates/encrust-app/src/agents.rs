@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use agent_link::{AGENTS, AgentFile, JOBS};
+use agent_link::{AGENTS, AgentFile, JOBS, RevisionFile, is_job_name, latest_revision};
 
 #[cfg(test)]
 mod tests;
@@ -131,6 +131,12 @@ impl Agents {
     pub fn poll(&mut self) {
         if let Some(read) = &self.read {
             while let Ok(list) = read.try_recv() {
+                // A job no agent holds any more is shown again once one takes it up.
+                let held = |id: &String| {
+                    list.iter()
+                        .any(|a| a.job.as_ref().is_some_and(|j| j.id == *id))
+                };
+                self.hidden.retain(held);
                 self.list = list;
                 self.list.retain(|agent| !hidden(agent, &self.hidden));
             }
@@ -224,17 +230,9 @@ fn hidden(agent: &Agent, hidden: &[String]) -> bool {
         .is_some_and(|job| hidden.contains(&job.id))
 }
 
-/// Whether `id` names a job folder and nothing outside `mcp-jobs/`.
-fn plain(id: &str) -> bool {
-    !id.is_empty()
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-}
-
 /// Takes the folder of job `id` under `jobs` away with every revision in it.
 pub fn remove_job(jobs: &Path, id: &str) -> std::io::Result<()> {
-    if !plain(id) {
+    if !is_job_name(id) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             format!("{id:?} is not a job's name"),
@@ -245,23 +243,14 @@ pub fn remove_job(jobs: &Path, id: &str) -> std::io::Result<()> {
 
 /// A job's latest revision, or `None` where its folder holds none.
 fn job(jobs: &Path, id: &str) -> Option<Job> {
-    if !plain(id) {
+    if !is_job_name(id) {
         return None;
     }
     let dir = jobs.join(id);
-    let revision = std::fs::read_dir(&dir)
-        .ok()?
-        .filter_map(|entry| {
-            let path = entry.ok()?.path();
-            (path.extension()? == "toml").then_some(())?;
-            path.file_stem()?.to_str()?.parse::<u32>().ok()
-        })
-        .max()?;
-    // The flags the revision stages with, the model first.
-    let flags: Vec<PathBuf> =
-        serde_json::from_slice(&std::fs::read(dir.join(format!("{revision}.args.json"))).ok()?)
-            .ok()?;
-    let clean = std::fs::read(dir.join(format!("{revision}.json")))
+    let revision = latest_revision(&dir)?;
+    let args = std::fs::read(dir.join(RevisionFile::Args.of(revision))).ok()?;
+    let flags: Vec<PathBuf> = serde_json::from_slice(&args).ok()?;
+    let clean = std::fs::read(dir.join(RevisionFile::Check.of(revision)))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
         .and_then(|report| report["status"].as_str().map(|status| status == "ok"));

@@ -37,7 +37,8 @@ pub fn combined(
     })
 }
 
-/// Replaces `ids` by the one object `op` makes of them, at the first's place.
+/// Replaces `ids` by the one object `op` makes of them, at the first's place; the plugs laid for
+/// any of them go too.
 pub(crate) fn apply_combine(
     document: &mut Document,
     ids: &[ObjectId],
@@ -65,8 +66,9 @@ pub(crate) fn apply_combine(
         return Err(ApplyError::Cancelled);
     }
     let made = combined(&placed, op, toward, cancel, *first)?;
-    let added = document.replace(*first, vec![Piece::sound(Role::Combined, made.mesh)]);
     let mut removed = vec![*first];
+    removed.extend(document.take_plugs_of(*first));
+    let added = document.replace(*first, vec![Piece::sound(Role::Combined, made.mesh)]);
     for id in rest {
         removed.extend(document.remove(*id));
     }

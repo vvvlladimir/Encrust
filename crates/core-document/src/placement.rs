@@ -89,11 +89,11 @@ pub fn onto_plate(min: Vec2, span: Vec2, plate: Vec2) -> Vec2 {
     Vec2::new(axis(min.x, span.x, plate.x), axis(min.y, span.y, plate.y))
 }
 
-/// The angles of `rotation` about X, then Y, then Z of the plate, degrees, as `Rotate` takes
-/// them; zero is added to each, so float dust never reads as a turn of minus nothing.
+/// The angles of `rotation` about X, then Y, then Z of the plate, degrees unrounded, as `Rotate`
+/// replays them; zero is added to each, so a turn of none never reads as minus nothing.
 pub fn degrees_of(rotation: Quat) -> Vec3 {
     let (x, y, z) = rotation.to_euler(EulerRot::XYZEx);
-    Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees()).round() + 0.0
+    Vec3::new(x.to_degrees(), y.to_degrees(), z.to_degrees()) + 0.0
 }
 
 /// `transform` with its scale set to `factors`, a mirror kept, about the centre of mass of `mesh`
@@ -138,6 +138,18 @@ mod tests {
             (by.z - -1.0).abs() < 1e-6,
             "6 mm up on a 1 mm raft lift is 5 mm over it, so 4 mm moves it down 1, got {}",
             by.z
+        );
+    }
+
+    #[test]
+    fn the_angles_of_a_turn_are_reported_to_a_fraction_of_a_degree() {
+        let turn = Vec3::new(30.3, -12.4, 0.2);
+
+        let read = degrees_of(euler_degrees(turn));
+
+        assert!(
+            read.abs_diff_eq(turn, 1e-3),
+            "(30.3, -12.4, 0.2) degrees replay as themselves, got {read}"
         );
     }
 

@@ -26,7 +26,7 @@ impl Server {
             bail!("{UNNAMED_MACHINE}");
         }
         let mut args = vec!["slice".to_owned()];
-        args.extend(self.staged(&revision));
+        args.extend(self.staged(&revision)?);
         args.push(format!("--output={}", write.output.display()));
         if !write.accept_defects {
             args.push("--strict".into());
@@ -66,7 +66,7 @@ impl Server {
         let size = render.size_px.unwrap_or(512).clamp(64, 1024);
         let marked = if render.mark_findings.unwrap_or(true) {
             let mut args = vec!["estimate".to_owned()];
-            args.extend(self.staged(&revision));
+            args.extend(self.staged(&revision)?);
             findings(&self.watched(&args, ctx).await?.report)
         } else {
             Vec::new()
@@ -74,7 +74,7 @@ impl Server {
         let dir = self.jobs.pictures_dir(&revision)?;
         let names: Vec<&str> = views.iter().map(|view| view.name()).collect();
         let mut args = vec!["render".to_owned()];
-        args.extend(self.staged(&revision));
+        args.extend(self.staged(&revision)?);
         args.push(format!("--view={}", names.join(",")));
         args.push(format!("--size={size}"));
         args.push(format!("--output={}", dir.display()));
@@ -101,16 +101,14 @@ impl Server {
     }
 
     /// The input and flags that stage `revision`: the plate it was made on, or the plate its
-    /// runs left where its steps name objects, else its recipe.
-    fn staged(&self, revision: &Revision) -> Vec<String> {
-        let made = self.jobs.made_on_plate(revision);
-        let left = (revision.recipe.scoped()).then(|| self.jobs.plate_of(revision).ok());
-        let Some(plate) = made.or(left.flatten()) else {
-            return revision.recipe.flags();
+    /// runs left where its steps name objects, which no flags stage alone; else its recipe.
+    fn staged(&self, revision: &Revision) -> Result<Vec<String>> {
+        let plate = match self.jobs.made_on_plate(revision) {
+            Some(plate) => plate,
+            None if revision.recipe.scoped() => self.jobs.plate_of(revision)?,
+            None => return Ok(revision.recipe.flags()),
         };
-        let mut flags = vec![plate.display().to_string()];
-        flags.extend(revision.recipe.machine_flags());
-        flags
+        Ok(revision.recipe.flags_on(&plate))
     }
 
     pub(super) async fn discovered(&self, find: FindPrinters, ctx: &Context) -> Result<Reply> {

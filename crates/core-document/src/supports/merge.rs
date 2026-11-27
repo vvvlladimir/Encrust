@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use core_edit::ObjectId;
-use core_engine::MERGE_NAMING_MM;
+use core_engine::nearest_named;
 use core_geometry::{Bvh, Vec3};
 use core_supports::{Placed, Profiles, SupportTree, merged};
 
@@ -88,16 +88,11 @@ fn picked_trees(
     Ok(picked)
 }
 
-/// The tree of `trees` (plate) carrying the contact nearest `at`, within `MERGE_NAMING_MM`.
+/// The tree of `trees` (plate) carrying the contact nearest `at`, within the merge's reach.
 pub fn support_near(trees: &[SupportTree], at: Vec3) -> Option<usize> {
-    (trees.iter().enumerate())
-        .flat_map(|(index, tree)| {
-            tree.contacts()
-                .map(move |contact| (index, contact.distance(at)))
-        })
-        .filter(|(_, distance)| *distance <= MERGE_NAMING_MM)
-        .min_by(|one, other| one.1.total_cmp(&other.1))
-        .map(|(index, _)| index)
+    let contacts = (trees.iter().enumerate())
+        .flat_map(|(index, tree)| tree.contacts().map(move |contact| (index, contact)));
+    nearest_named(contacts, at)
 }
 
 #[cfg(test)]

@@ -291,6 +291,29 @@ fn a_project_is_sliced_on_its_own() {
     );
 }
 
+#[test]
+fn projects_arranged_together_stand_on_the_printer_they_name() {
+    let named = |name: &str| {
+        let mut project = core_engine::project::load(&project_fixture()).expect("a fixture");
+        project.manifest.printer = Some("elegoo-saturn-4-ultra".to_owned());
+        let path = output_file(&format!("{name}.encrust"));
+        core_engine::project::save(&path, &project).expect("the temp dir is writable");
+        path
+    };
+    let (one, two) = (named("arranged-one"), named("arranged-two"));
+    let resin = test_resin();
+
+    let output = estimate(&[
+        one.to_str().unwrap(),
+        two.to_str().unwrap(),
+        "--arrange",
+        "--material",
+        resin.to_str().unwrap(),
+    ]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+}
+
 /// The cube fixture with a second plate, "Small parts", holding a copy of the cube.
 fn two_plate_project(name: &str) -> PathBuf {
     let load = || core_engine::project::load(&project_fixture()).expect("a fixture");

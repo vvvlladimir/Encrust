@@ -109,6 +109,7 @@ impl Server {
                 .check_edits(&base, &edits, &recipe, against, ctx)
                 .await?;
             if !outcome.reported() {
+                let _ = std::fs::remove_file(&written);
                 return Ok(not_applied(Some(latest), &outcome));
             }
             let answer = match base.version {
@@ -121,6 +122,7 @@ impl Server {
             if stale && rebuilt < REBUILDS {
                 rebuilt += 1;
                 if let Some(next) = self.rebased(latest, &recipe, checked).await {
+                    let _ = std::fs::remove_file(&written);
                     (base, edits) = next;
                     continue;
                 }
@@ -139,7 +141,10 @@ impl Server {
                 return Ok(not_taken(latest, &json!(window)));
             }
             let kept = (edits.as_slice(), written.as_path(), window);
-            return self.keep_on_plate((latest, recipe, note), kept, &outcome);
+            let reply = self.keep_on_plate((latest, recipe, note), kept, &outcome);
+            // Kept, the plate was moved into the job; anything left here was not.
+            let _ = std::fs::remove_file(&written);
+            return reply;
         }
     }
 
@@ -180,6 +185,9 @@ impl Server {
         args.push(format!("--project-out={}", written.display()));
         let outcome = self.watched(&args, ctx).await;
         let _ = std::fs::remove_file(&asked);
+        if outcome.is_err() {
+            let _ = std::fs::remove_file(&written);
+        }
         Ok((outcome?, written))
     }
 

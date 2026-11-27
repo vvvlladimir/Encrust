@@ -18,10 +18,11 @@ const SIZE_PX: u32 = 320;
 /// What the client is told of the points a new pose took away, which were on the old one.
 const DRAINS_CLEARED: &str =
     "the drain points were cleared: they were on the old pose; automatic drains stay";
-const SUPPORT_POINTS_CLEARED: &str = "the support points, shown points and merges given by hand \
-    were cleared: they were on the old pose; the supports stand again for the new one";
-const BOTH_CLEARED: &str = "the drain and support points given by hand were cleared: they were \
-    on the old pose; automatic drains stay and the supports stand again for the new one";
+const SUPPORT_POINTS_CLEARED: &str = "the support points, shown points, merges and walls kept \
+    solid given by hand were cleared: they were on the old pose; the supports stand again for the \
+    new one";
+const BOTH_CLEARED: &str = "the drain, support and kept-solid points given by hand were cleared: \
+    they were on the old pose; automatic drains stay and the supports stand again for the new one";
 
 /// Stands `recipe`'s model at `pose`, taking away the points given on the old one; answers
 /// what the client is told of them.
@@ -32,7 +33,11 @@ pub(super) fn turned(recipe: &mut Recipe, pose: Option<Pose>) -> Option<&'static
     let had_drains = cleared.contains(&true);
     let asked = recipe.supports.iter_mut().chain(&mut recipe.more_supports);
     let dropped: Vec<bool> = asked.map(Supports::drop_plate_points).collect();
-    let had_points = dropped.contains(&true);
+    let hollows = recipe.hollow.iter_mut().chain(&mut recipe.more_hollow);
+    let kept_solid: Vec<bool> = hollows
+        .map(|hollow| !std::mem::take(&mut hollow.keep_solid_at_mm).is_empty())
+        .collect();
+    let had_points = dropped.contains(&true) || kept_solid.contains(&true);
     recipe.pose = pose;
     match (had_drains, had_points) {
         (false, false) => None,
@@ -190,6 +195,24 @@ mod tests {
             },
             steps: None,
         }
+    }
+
+    #[test]
+    fn a_new_pose_clears_the_walls_kept_solid_at_points_of_the_old_one() {
+        let mut recipe = Recipe {
+            hollow: Some(crate::recipe::Hollow {
+                wall_mm: 2.0,
+                keep_solid_at_mm: vec![[1.0, 2.0, 3.0]],
+                ..crate::recipe::Hollow::default()
+            }),
+            ..Recipe::bare("/m.stl".into(), "p".into(), "r".into())
+        };
+
+        let said = turned(&mut recipe, None);
+
+        let hollow = recipe.hollow.expect("the hollow stays");
+        assert!(hollow.keep_solid_at_mm.is_empty(), "on the old pose");
+        assert_eq!(said, Some(SUPPORT_POINTS_CLEARED));
     }
 
     #[test]

@@ -40,9 +40,7 @@ mod repaired;
 mod room;
 
 use given::{Given, check_adaptive, given, refuse_idle_cavity};
-pub use given::{
-    describes_a_plate, describes_a_project, refuse_for_a_project, refuse_one_model_flags,
-};
+pub use given::{describes_a_plate, describes_a_project, refuse_one_model_flags};
 pub(crate) use room::cleared;
 
 /// What is done to one model on its way onto the plate.
@@ -204,7 +202,7 @@ pub fn stage(
             plate_file::stage(path, arrange, job, watch)
         }
         Given::Project(path) => {
-            refuse_for_a_project(job)?;
+            project::refuse_for_projects(job)?;
             let mut opened = project::open(path)?;
             let plate_index = match plate {
                 Some(number) => project::chosen_plate(&opened.manifest, number)?,
@@ -217,12 +215,8 @@ pub fn stage(
             project::stage_checked(path, &project, plate, job, watch)
         }
         Given::Projects(paths) => {
-            refuse_for_a_project(job)?;
-            let printer = job.profile.resolve()?.printer;
-            if arrange && printer.is_none() {
-                bail!("--arrange needs a printer to know the plate");
-            }
-            let laid = project::laid_together(paths, printer.as_ref().filter(|_| arrange))?;
+            project::refuse_for_projects(job)?;
+            let laid = project::laid_together(paths, arrange.then_some(job))?;
             let project = job.edits.applied(laid)?;
             project::stage_checked(&paths[0], &project, None, job, watch)
         }
@@ -462,9 +456,8 @@ pub(crate) fn standing_of(
     Some(check)
 }
 
-/// Refuses what the rest of the run cannot take: several pieces of one model for a recipe,
-/// which takes a model as one, halves of a cut standing on one another's spot, or an `--only`
-/// naming no object of the plate.
+/// Refuses what the run cannot take: one model's pieces for a recipe, a cut's halves on one
+/// spot, or an `--only` naming no object of the plate.
 fn check_pieces(
     staging: &Staging,
     entries: &[(PathBuf, Shaping)],

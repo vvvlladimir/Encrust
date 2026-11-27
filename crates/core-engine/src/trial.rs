@@ -357,6 +357,19 @@ pub fn print_out(
     print_held(printed, rotation, on_plate, trial, (None, None, shows))
 }
 
+/// `mesh` turned by `rotation`, and how far it then moves to stand centred on a plate `plate_mm`
+/// across, on z = 0; `None` for a mesh with no faces.
+fn turned_mid_plate(mesh: &Mesh, rotation: Quat, plate_mm: Vec2) -> Option<(Mesh, Vec3)> {
+    let turn = Transform {
+        rotation,
+        ..Transform::default()
+    };
+    let turned = transform_mesh(mesh, turn);
+    let bounds = turned.aabb()?;
+    let offset = drop_to_plate(&bounds) + center_over_plate(&bounds, plate_mm.x, plate_mm.y);
+    Some((turned, offset))
+}
+
 /// The same cured as coarse as `trial`, supports placed and islands counted as `print` prints;
 /// `steps` is told as each of the [`PRINT_STEPS`] ends, `shows` reads where contacts land.
 fn print_held(
@@ -367,17 +380,14 @@ fn print_held(
     (print, steps, shows): (Option<&Trial>, Option<&Pieces<'_>>, Option<&Shows>),
 ) -> Result<Printout, EngineError> {
     let told = || steps.map_or(Ok(()), Pieces::finish);
-    let turn = Transform {
-        rotation,
-        ..Transform::default()
-    };
-    let turned = transform_mesh(printed.shell.unwrap_or(printed.outer), turn);
-    let bounds = turned.aabb().ok_or(EngineError::EmptyPlate)?;
     let volume = &trial.printer.build_volume;
-    let offset = drop_to_plate(&bounds) + center_over_plate(&bounds, volume.x, volume.y);
+    let printed_mesh = printed.shell.unwrap_or(printed.outer);
+    let (turned, offset) = turned_mid_plate(printed_mesh, rotation, Vec2::new(volume.x, volume.y))
+        .ok_or(EngineError::EmptyPlate)?;
     let moved = Transform {
         translation: offset,
-        ..turn
+        rotation,
+        ..Transform::default()
     };
     let mut placed = transform_mesh(&turned, Transform::from_translation(offset));
     let mut cuts = printed.cuts.map(|cuts| transform_mesh(cuts, moved));

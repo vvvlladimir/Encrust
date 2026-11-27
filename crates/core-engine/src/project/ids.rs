@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use super::ObjectState;
 
-/// Identifies one object on a plate. Never reused while the plate is open, so a stale id resolves
-/// to nothing; a file opened again numbers on from its highest id.
+/// Identifies one object on a plate. Never reused, so a stale id resolves to nothing; a file
+/// opened again numbers on from the `next_id` it kept, else from its highest id.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
 )]

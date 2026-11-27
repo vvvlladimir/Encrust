@@ -21,6 +21,7 @@ pub enum View {
 }
 
 impl View {
+    /// Every view, in the order a command line lists them.
     pub const ALL: [Self; 7] = [
         Self::Iso,
         Self::Front,

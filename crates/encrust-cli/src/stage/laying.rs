@@ -61,11 +61,12 @@ pub(super) fn shaped(
     let centred = (combining && centred).then_some(printer);
     modelled::modelled(&mut staging, &job.model, centred, watch)?;
     if pieces {
+        let trial = catalogue_ids(&job.profile).0;
         placed::placed(
             &mut staging,
             &mut found,
             &late,
-            (&job.profile, printer),
+            (trial.as_deref(), printer),
             watch,
         )?;
     }
@@ -85,10 +86,13 @@ pub(crate) fn placed_by_edits(
         import.shells = with_shells.then(|| list_shells(mesh));
     }
     let pieces = meshes.into_iter().map(|mesh| vec![mesh]).collect();
-    let mut staging = Staging::of(pieces, &found, (entries, catalogue_ids(profile)));
+    let named = catalogue_ids(profile);
+    let trial = named.0.clone();
+    let mut staging = Staging::of(pieces, &found, (entries, named));
     let printer = chosen.printer.as_ref();
     repaired::repaired(&mut staging, &mut found, entries, watch)?;
-    placed::placed(&mut staging, &mut found, entries, (profile, printer), watch)?;
+    let placing = (trial.as_deref(), printer);
+    placed::placed(&mut staging, &mut found, entries, placing, watch)?;
     repaired::pressed(&mut staging, entries, watch)?;
     read_again_where_reshaped(&staging, &mut found, entries, printer)?;
     Ok((staging, found))

@@ -373,6 +373,47 @@ fn edits_left_when_the_user_moves_the_model_under_a_running_hollow_are_refused()
 }
 
 #[test]
+fn a_model_the_user_hides_under_a_running_hollow_stays_hidden_when_a_later_edit_fails() {
+    let file = scratch("hidden-under");
+    let mut bench = Bench::new(file.clone());
+    let cubes = with_cubes(&mut bench, &file, 2);
+    let (hollowed, other) = (cubes[0], cubes[1]);
+    let version = bench.doc.history.plate_version();
+    let state = HollowState {
+        thickness_mm: 1.0,
+        ..bench.tools.hollow.state.clone()
+    };
+    let hollow_then_miss = json!({"base_version": version,
+        "apply": [{"edit": "hollow", "object": hollowed.0, "settings": state},
+                  {"edit": "cut", "object": hollowed.0, "axis": "z", "at_mm": 50.0}]});
+    let line = asking(&file, hollow_then_miss);
+    let server = {
+        let file = file.clone();
+        std::thread::spawn(move || send(&file, &line))
+    };
+    let mut hidden = false;
+    while !server.is_finished() {
+        bench.frame();
+        if !hidden && bench.tools.hollow.job.is_some() {
+            let object = bench.doc.scene.get_mut(other).expect("the cube is there");
+            object.visible = false;
+            hidden = true;
+        }
+        std::thread::yield_now();
+    }
+    let reply = server.join().expect("the server's thread ends");
+    bench.run_to_end();
+
+    assert!(hidden, "the hollow ran for a frame at least");
+    assert_eq!(reply["applied"], false, "{reply}");
+    let object = bench.doc.scene.get(other).expect("hidden, not gone");
+    assert!(
+        !object.visible,
+        "the user's change is theirs to undo, not the agent's"
+    );
+}
+
+#[test]
 fn an_auto_drain_on_a_solid_cube_is_refused_for_want_of_a_cavity() {
     let file = scratch("drain-solid");
     let mut bench = Bench::new(file.clone());

@@ -1,5 +1,4 @@
-//! The placing flags as edits of each entry's object: a plate file's position, the scale, the
-//! orientation search, a turn, a mirror, centring, a move and the lift, in that order, and the
+//! The placing flags as edits of each entry's object, in the order `place` runs them, and the
 //! copies once the plate is finished (ADR 0472, 0478).
 
 use std::path::PathBuf;
@@ -13,7 +12,7 @@ use printer_profiles::{Catalogue, PrinterProfile};
 use super::document::{Staging, said};
 use super::finished::usable_area;
 use super::{Found, Shaping};
-use crate::args::{Goal, ProfileArgs, TransformArgs};
+use crate::args::{Goal, TransformArgs};
 use crate::pipeline::{OrientChoice, OrientSummary, Watch, with_bar};
 
 /// What import leaves to edits of the placing flags.
@@ -53,19 +52,19 @@ pub(super) fn split_at_pieces(entries: &[Entry]) -> (Vec<Entry>, Vec<Entry>) {
     (early.collect(), late.collect())
 }
 
-/// Scales, orients, turns and centres each entry's objects the flags shape; what the search
-/// chose is noted where import notes it.
+/// Scales, orients, turns and centres each entry's objects the flags shape, an orient proved on
+/// the catalogue printer `trial`; what the search chose is noted where import notes it.
 pub(super) fn placed(
     staging: &mut Staging,
     found: &mut [Found],
     entries: &[(PathBuf, Shaping)],
-    (profile, printer): (&ProfileArgs, Option<&PrinterProfile>),
+    (trial, printer): (Option<&str>, Option<&PrinterProfile>),
     watch: &Watch,
 ) -> Result<()> {
     for (entry, ((_, oriented), (_, shaping))) in found.iter_mut().zip(entries).enumerate() {
         let ids = staging.targets(entry);
         for &id in &ids {
-            place(staging, id, (shaping, oriented), (profile, printer), watch)?;
+            place(staging, id, (shaping, oriented), (trial, printer), watch)?;
             if let Some(summary) = oriented.take_if(|_| ids.len() > 1) {
                 staging.note_oriented(id, summary);
             }
@@ -79,7 +78,7 @@ fn place(
     staging: &mut Staging,
     id: ObjectId,
     (shaping, oriented): (&Shaping, &mut Option<OrientSummary>),
-    (profile, printer): (&ProfileArgs, Option<&PrinterProfile>),
+    (trial, printer): (Option<&str>, Option<&PrinterProfile>),
     watch: &Watch,
 ) -> Result<()> {
     if let Some(position) = shaping.position {
@@ -95,13 +94,7 @@ fn place(
     }
     if transform.orient {
         let supported = shaping.supports.is_some();
-        let summary = orient(
-            staging,
-            id,
-            (transform, profile),
-            (printer, supported),
-            watch,
-        )?;
+        let summary = orient(staging, id, (transform, trial), (printer, supported), watch)?;
         *oriented = Some(summary);
     }
     if let Some(degrees) = transform.rotate {
@@ -186,11 +179,11 @@ fn lift(staging: &mut Staging, object: ObjectId, lift_mm: f32, watch: &Watch) ->
 fn orient(
     staging: &mut Staging,
     object: ObjectId,
-    (transform, profile): (&TransformArgs, &ProfileArgs),
+    (transform, trial): (&TransformArgs, Option<&str>),
     (printer, supported): (Option<&PrinterProfile>, bool),
     watch: &Watch,
 ) -> Result<OrientSummary> {
-    let edit = orient_edit(object, (transform, profile), printer);
+    let edit = orient_edit(object, (transform, trial), printer);
     let report = searched(staging, &edit, object, watch)?;
     let summary = summary_of(report, transform, supported)?;
     if watch.talk {
@@ -209,10 +202,11 @@ fn orient(
     Ok(summary)
 }
 
-/// The search the flags ask, on the usable plate of `printer` where one is named.
+/// The search the flags ask, on the usable plate of `printer` where one is named, proved on the
+/// catalogue printer `trial`.
 fn orient_edit(
     object: ObjectId,
-    (transform, profile): (&TransformArgs, &ProfileArgs),
+    (transform, trial): (&TransformArgs, Option<&str>),
     printer: Option<&PrinterProfile>,
 ) -> Edit {
     let area = printer.map(usable_area);
@@ -225,7 +219,7 @@ fn orient_edit(
         pick: usize::from(transform.orient_pick.unwrap_or(1)).saturating_sub(1),
         plate_mm: area.map(|(_, size)| size),
         low_mm: area.map_or([0.0, 0.0], |(low, _)| low),
-        printer: shipped_printer(profile.printer.as_deref(), profile.profile.is_some()),
+        printer: shipped_printer(trial, false),
         resin: None,
         keep_clear_mm: transform.orient_keep_clear.clone(),
         keep_clear_radius_mm: Some(transform.orient_keep_clear_radius),
@@ -355,6 +349,26 @@ pub(super) fn centre(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(clap::Parser)]
+    struct Flags {
+        #[command(flatten)]
+        transform: TransformArgs,
+    }
+
+    #[test]
+    fn an_orient_is_proved_on_the_printer_the_run_stands_on_not_the_standard_one() {
+        use clap::Parser;
+        let flags = Flags::parse_from(["encrust", "--orient"]);
+        let named = "elegoo-mars-4-ultra";
+
+        let edit = orient_edit(ObjectId(1), (&flags.transform, Some(named)), None);
+
+        let Edit::Orient { printer, .. } = edit else {
+            panic!("an orient flag makes an orient edit");
+        };
+        assert_eq!(printer.as_deref(), Some(named), "a project's printer");
+    }
 
     #[test]
     fn a_rotate_that_tips_a_seated_model_stands_it_on_supports() {

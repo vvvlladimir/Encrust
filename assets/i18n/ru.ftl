@@ -413,6 +413,10 @@ agents-follow-tooltip = Сразу запускать на платформе к
 
 link-replaying = Показываю ревизию { $revision } задания чат-клиента { $job }
 link-plate-numbered = { $model } { $number }
+link-revision-on-plate = ревизия { $revision } задания { $job } сделана на этой платформе и уже на ней
+link-revision-unreadable = не удалось прочитать ревизию { $revision } задания { $job }
+link-no-job = задания { $job } нет
+link-plate-unread = не удалось прочитать платформу ревизии
 
 ## measure.rs
 

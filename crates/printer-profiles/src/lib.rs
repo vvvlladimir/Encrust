@@ -44,7 +44,7 @@ pub use printer::{
     AnycubicExtension, BuildVolume, Connection, Display, Firmware, NetworkMachine, OutputFormat,
     PhotonRevision, PrinterProfile, PwszExtension,
 };
-pub use standard::{STANDARD_PRINTER, machine_named, standard_machine};
+pub use standard::{STANDARD_PRINTER, machine_named};
 pub use stated::{
     stated_distance_mm, stated_pwm, stated_rests, stated_speed_mm_min, stated_wait_s,
 };

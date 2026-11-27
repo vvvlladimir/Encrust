@@ -26,12 +26,6 @@ pub struct OrientChoice {
     pub printout: Option<Printout>,
 }
 
-/// The angles `--rotate X,Y,Z` repeats `rotation` with, degrees. Zero is added to each, so
-/// float dust never reads as a turn of minus nothing.
-pub fn rotate_degrees(rotation: Quat) -> Vec3 {
-    degrees_of(rotation)
-}
-
 impl OrientSummary {
     /// How far the turn goes, degrees.
     pub fn degrees(&self) -> Scalar {
@@ -40,15 +34,16 @@ impl OrientSummary {
 
     /// The angles `--rotate X,Y,Z` repeats the turn with, degrees.
     pub fn rotate_degrees(&self) -> Vec3 {
-        rotate_degrees(self.rotation)
+        degrees_of(self.rotation)
     }
 
     /// The turn in words: its axis where that is one of the plate's own, and the flag that
     /// repeats it.
     pub(crate) fn describe(&self) -> String {
         let flag = {
-            let turn = self.rotate_degrees();
-            format!("--rotate {:.0},{:.0},{:.0}", turn.x, turn.y, turn.z)
+            // To a hundredth of a degree: whole degrees tilt a face meant to lie flat.
+            let turn = (self.rotate_degrees() * 100.0).round() / 100.0 + 0.0;
+            format!("--rotate {},{},{}", turn.x, turn.y, turn.z)
         };
         match self.axis_name() {
             Some(axis) => format!(

@@ -7,7 +7,7 @@ use crate::error::EngineError;
 
 /// How far from a support's contact a point may be and still name it, mm: a contact copied from
 /// `--json` at its printed precision, well inside the closest spacing of two contacts.
-pub const MERGE_NAMING_MM: Scalar = 0.5;
+const MERGE_NAMING_MM: Scalar = 0.5;
 
 /// `trees` (plate) with the supports each of `merges` names by their points' `contacts` joined
 /// into one, as the window's Merge into one joins them; the rest grow again beside them (ADR 0440).
@@ -56,13 +56,20 @@ pub(super) fn merged_near(
 
 /// The support of `trees` carrying the point of `contacts` nearest `at`, within [`MERGE_NAMING_MM`].
 fn named(trees: &[SupportTree], contacts: &[Vec3], at: Vec3) -> Option<usize> {
-    let (point, _) = (contacts.iter().enumerate())
-        .map(|(point, contact)| (point, contact.distance(at)))
-        .filter(|(_, distance)| *distance <= MERGE_NAMING_MM)
-        .min_by(|a, b| a.1.total_cmp(&b.1))?;
+    let point = nearest_named(contacts.iter().copied().enumerate(), at)?;
     trees
         .iter()
         .position(|tree| tree.points().any(|held| held == point))
+}
+
+/// The key of the place of `places` nearest `at`, plate mm, that is within [`MERGE_NAMING_MM`]
+/// of it: what a merge's point names.
+pub fn nearest_named(places: impl IntoIterator<Item = (usize, Vec3)>, at: Vec3) -> Option<usize> {
+    (places.into_iter())
+        .map(|(key, place)| (key, place.distance(at)))
+        .filter(|(_, distance)| *distance <= MERGE_NAMING_MM)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(key, _)| key)
 }
 
 /// What `why` says in an error a user reads.

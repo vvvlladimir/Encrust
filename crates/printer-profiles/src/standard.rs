@@ -23,13 +23,6 @@ pub fn machine_named(
     ))
 }
 
-/// The standard printer with the stock resin numbers.
-pub fn standard_machine(
-    catalogue: &Catalogue,
-) -> Result<(PrinterProfile, MaterialProfile), ProfileError> {
-    machine_named(catalogue, None, None)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -38,7 +31,8 @@ mod tests {
     fn the_standard_machine_is_the_standard_printer_with_stock_numbers_where_no_resin_ships() {
         let catalogue = Catalogue::bundled().expect("the shipped catalogue reads");
 
-        let (printer, material) = standard_machine(&catalogue).expect("the standard printer ships");
+        let (printer, material) =
+            machine_named(&catalogue, None, None).expect("the standard printer ships");
 
         let shipped = &catalogue
             .printer(STANDARD_PRINTER)

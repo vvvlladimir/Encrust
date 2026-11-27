@@ -52,7 +52,7 @@ impl Server {
                     continue;
                 };
                 let args = ["recipes".into(), "show".into(), "--".into(), id];
-                let shown = self.cli.run(&args).await;
+                let shown = self.watched(&args, ctx).await;
                 recipe["toml"] = shown.map_or(serde_json::Value::Null, |shown| {
                     shown.report["toml"].clone()
                 });
@@ -74,6 +74,9 @@ impl Server {
     /// The steps `revision`'s recipe runs, written out by a quick check of it: a revision made
     /// by edits on a plate was checked as that plate, which names no steps.
     async fn steps_of(&self, revision: &Revision, ctx: &Context) -> Result<Option<String>> {
+        if revision.recipe.scoped() {
+            bail!("a step for some objects only is no recipe: a recipe prepares every object");
+        }
         let out = self.jobs.scratch_steps()?;
         let mut args = vec!["estimate".to_owned()];
         args.extend(revision.recipe.flags());
@@ -83,7 +86,6 @@ impl Server {
         ]);
         self.watched(&args, ctx).await?;
         let steps = std::fs::read_to_string(&out).ok();
-        // A scratch file left behind is overwritten by no other run: its name is this run's.
         let _ = std::fs::remove_file(&out);
         Ok(steps)
     }
@@ -114,7 +116,6 @@ impl Server {
             file.display().to_string(),
         ];
         let outcome = self.watched(&args, ctx).await;
-        // A scratch file left behind is overwritten by no other run: its name is this run's.
         let _ = std::fs::remove_file(&file);
         let outcome = outcome?;
         Ok(reported(&outcome, outcome.report.clone()))

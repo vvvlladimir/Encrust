@@ -149,12 +149,8 @@ fn coarsened(rings: Vec<Vec<IVec3>>, carry: i32) -> Vec<Vec<IVec3>> {
         .collect()
 }
 
-/// The coarse field of nearest faces over the whole shell, ring by ring, so that a tile is
-/// only swept once the tiles between it and the surface are.
-///
-/// A tile reads every neighbour already swept, not only the last two rings: a coarse tile
-/// spans several rings, so a neighbour can be older than that. The shell is only ever
-/// resident as the carrier itself, which is the carry factor cubed smaller than it looks.
+/// The coarse field of nearest faces over the whole shell, ring by ring, a tile swept once the
+/// tiles between it and the surface are; see `docs/design/volume.md`, Seed, carry, refine.
 fn carry(
     faces: &Faces,
     bvh: &Bvh,

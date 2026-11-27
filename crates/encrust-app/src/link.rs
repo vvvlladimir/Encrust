@@ -184,6 +184,10 @@ impl Link {
     /// Stands the job's waiting revision on its own plate once nothing runs, a new plate
     /// where it has none: on the job's machine, its plate's objects in place of all there.
     fn show(&mut self, index: usize, window: &mut Window) {
+        // Edits landing hold the undo history open: a plate shown now would join or lose with them.
+        if self.applying.is_some() {
+            return;
+        }
         let followed = &mut self.followed[index];
         let Some(waiting) = followed.waiting.as_mut() else {
             return;

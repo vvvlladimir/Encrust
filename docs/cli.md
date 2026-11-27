@@ -579,8 +579,8 @@ encrust slice a.stl b.stl c.stl \
 ```
 
 Several projects (`.encrust`), each the plate it was left on, are laid on one plate, the first's
-printer, resin and settings kept, and `--arrange` spreads them; `--project-out` writes the plate
-they make (ADR 0478):
+printer, resin and settings kept, and `--arrange` spreads them over the plate of `--printer` or
+else the first's printer; `--project-out` writes the plate they make (ADR 0478):
 
 ```sh
 encrust slice bust.encrust base.encrust --printer elegoo-mars-4-ultra --resin my-grey \

@@ -100,8 +100,8 @@ pub fn label_prisms(
     object: ObjectId,
 ) -> Result<Lettering, ApplyError> {
     let font = font_of(asked.font.as_ref())?;
-    let shapes =
-        outline(&font, &asked.text, asked.height_mm).map_err(|error| text_error(error, object))?;
+    let refused = |error| text_error(error, object, asked.font.as_ref());
+    let shapes = outline(&font, &asked.text, asked.height_mm).map_err(refused)?;
     let bvh = Bvh::build(placed);
     let frame = frame_at(placed, &bvh, asked).ok_or(ApplyError::NoSurface(object))?;
     let settings = LabelSettings {
@@ -109,8 +109,8 @@ pub fn label_prisms(
         raised: asked.raised,
         follow_surface: asked.follow_surface,
     };
-    let written = label(&shapes, frame, placed, &bvh, Transform::default(), settings)
-        .map_err(|error| text_error(error, object))?;
+    let written =
+        label(&shapes, frame, placed, &bvh, Transform::default(), settings).map_err(refused)?;
     Ok(Lettering {
         prisms: written.prisms,
         raised: written.raised,
@@ -154,10 +154,14 @@ fn frame_at(placed: &Mesh, bvh: &Bvh, asked: &LabelAsked) -> Option<Frame> {
     Frame::on(nearest.point, normal, asked.angle_deg)
 }
 
-fn text_error(error: TextError, object: ObjectId) -> ApplyError {
+/// What `error` is to a label on `object` in the font file `font`, the bundled one where none.
+fn text_error(error: TextError, object: ObjectId, font: Option<&PathBuf>) -> ApplyError {
     match error {
         TextError::Blank => ApplyError::BlankLabel,
-        TextError::BadFont(reason) => ApplyError::BadFont { path: None, reason },
+        TextError::BadFont(reason) => ApplyError::BadFont {
+            path: font.cloned(),
+            reason,
+        },
         TextError::OffTheModel => ApplyError::NoSurface(object),
         other => ApplyError::Failed {
             object,

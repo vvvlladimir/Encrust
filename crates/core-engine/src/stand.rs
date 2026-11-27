@@ -20,9 +20,8 @@ mod needs;
 use lift::lift_of;
 pub use lift::{Lift, planned_lift};
 use merge::merged_near;
-pub use merge::{MERGE_NAMING_MM, merge_refusal};
-use needs::both_sides;
-pub use needs::{NeedsAsked, needs_on, needs_on_both, plan_of};
+pub use merge::{merge_refusal, nearest_named};
+pub use needs::{NeedSides, NeedsAsked, needs_on, needs_on_both, plan_of};
 
 /// What a run builds supports to: one profile, or the shapes an automatic profile sizes
 /// each support into by what it holds (ADR 0325).
@@ -70,10 +69,10 @@ pub struct ByHand {
 }
 
 impl SupportPlan {
-    /// Supports built to `profile` alone, outside only.
-    pub fn of(profile: SupportProfile) -> Self {
+    /// Supports built to `shapes`, outside only, nothing merged or placed by hand.
+    fn of_shapes(shapes: SupportShapes) -> Self {
         Self {
-            shapes: SupportShapes::One(Box::new(profile)),
+            shapes,
             cavity: false,
             merges: Vec::new(),
             by_hand: ByHand::default(),
@@ -81,19 +80,18 @@ impl SupportPlan {
         }
     }
 
+    /// Supports built to `profile` alone, outside only.
+    pub fn of(profile: SupportProfile) -> Self {
+        Self::of_shapes(SupportShapes::One(Box::new(profile)))
+    }
+
     /// Supports sized by `auto` into the shapes `catalogue` has for it, outside only.
     pub fn sized(auto: AutoProfile, catalogue: &Catalogue) -> Result<Self, ProfileError> {
         let shapes = auto.shapes_in(catalogue)?;
-        Ok(Self {
-            shapes: SupportShapes::Sized {
-                auto: Box::new(auto),
-                shapes: Box::new(shapes),
-            },
-            cavity: false,
-            merges: Vec::new(),
-            by_hand: ByHand::default(),
-            shown_at: Vec::new(),
-        })
+        Ok(Self::of_shapes(SupportShapes::Sized {
+            auto: Box::new(auto),
+            shapes: Box::new(shapes),
+        }))
     }
 
     /// The profile placement runs with: where supports go, how close, how far a model is
@@ -401,8 +399,11 @@ fn needs_under(
     let mut needs = if plan.by_hand.only {
         Vec::new()
     } else {
-        let cavity = (plan.cavity && inner.is_some(), strengthening);
-        both_sides(&asked, cavity, &[], &mut |_| true)?
+        let sides = NeedSides {
+            inside: plan.cavity && inner.is_some(),
+            strengthening,
+        };
+        needs_on_both(&asked, sides, &[], &mut |_| true)?
     };
     // A support placed by hand is built as sturdy as one steadying a part: it holds what the
     // user says, not a measured load.

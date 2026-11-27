@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use core_edit::ObjectId;
-use core_engine::project::{BuiltCavity, HollowState, hollow_of};
+use core_engine::project::{BuiltCavity, HollowState, ModelMeshes, ObjectState, hollow_of};
 use core_geometry::{Bvh, Mat3, Mesh, Scalar, Transform, Vec3};
 use core_volume::{
     BLOCKER_REACH_MM, Blocker, BlockerSize, Cancel, HollowMode, HollowSettings, Hollowed,
@@ -99,6 +99,43 @@ pub fn shelled(
     let field = cavity_field(mesh, bvh, settings, shape, cancel).map_err(failed)?;
     let hollowed = carve(mesh, &field, settings, cancel).map_err(failed)?;
     shell_from(hollowed, shape, settings.clone()).map_err(|NoRoom| ApplyError::NoRoom(object))
+}
+
+/// How far apart two directions to the plate, unit vectors, may lie and be the same floor:
+/// what a turn about the vertical leaves of float dust.
+const SAME_FLOOR: Scalar = 1e-4;
+
+/// Object `id`'s shell built again to stand at `transform` where the one standing is stale
+/// there, resized or open toward another floor; `None` where it fits or the object is solid.
+pub(crate) fn reshelled(
+    (state, meshes): (&ObjectState, &ModelMeshes),
+    transform: Transform,
+    cancel: Cancel<'_>,
+    id: ObjectId,
+) -> Result<Option<Shell>, ApplyError> {
+    let hollow = hollow_of(&state.hollow, meshes);
+    let Some(built) = hollow.asked() else {
+        return Ok(None);
+    };
+    let down = plate_down(transform);
+    let toward = |was: Vec3| {
+        if was.abs_diff_eq(down, SAME_FLOOR) {
+            was
+        } else {
+            down
+        }
+    };
+    let wanted = HollowSettings {
+        open_toward: built.open_toward.map(toward),
+        ..built.clone()
+    };
+    if !hollow.is_stale(&wanted, transform) {
+        return Ok(None);
+    }
+    let bvh = Bvh::build(&meshes.source);
+    let settings = hollow.asking(&wanted);
+    let shape = transform.unturned();
+    shelled((&meshes.source, &bvh), &settings, shape, cancel, id).map(Some)
 }
 
 /// Hollows the object `id` by `settings`, which it keeps as its own.

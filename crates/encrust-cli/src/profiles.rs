@@ -312,9 +312,8 @@ pub fn import_foreign(path: &Path, printer: Option<&str>) -> Result<(String, Str
     Ok((id, printer))
 }
 
-/// Keeps `resin`, the numbers its maker states, as a new resin of the user's set up on
-/// `printer` alone. Answers its id and what the printer advises against; a setting past what
-/// the printer takes is refused, as the window would not let it be typed.
+/// Keeps `resin`, its maker's numbers, as a new resin of the user's on `printer` alone, answering
+/// its id and what the printer advises against; a setting past the printer's limits is refused.
 pub fn new_resin(resin: MaterialProfile, printer: &str) -> Result<(String, Vec<String>)> {
     let mut catalogue = catalogue()?;
     let entry = catalogue

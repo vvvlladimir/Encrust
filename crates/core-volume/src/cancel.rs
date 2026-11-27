@@ -53,12 +53,15 @@ impl<'a> Cancel<'a> {
     }
 
     /// `done` of the `total` pieces of `step` are done, told from any thread in any order:
-    /// the count only moves on.
+    /// within a step the count only moves on, and a new step starts it again.
     pub fn reached(&self, step: Step, done: usize, total: usize) {
         if let Some(progress) = self.progress {
             progress.total.store(total, Relaxed);
-            progress.step.store(step as u8 + 1, Relaxed);
-            progress.done.fetch_max(done, Relaxed);
+            if progress.step.swap(step as u8 + 1, Relaxed) == step as u8 + 1 {
+                progress.done.fetch_max(done, Relaxed);
+            } else {
+                progress.done.store(done, Relaxed);
+            }
         }
     }
 
@@ -216,6 +219,21 @@ mod tests {
         assert!(
             (share - 0.98).abs() < 1e-6,
             "an uncounted step stands at its start"
+        );
+    }
+
+    #[test]
+    fn a_count_reached_on_a_new_step_starts_from_it_not_from_the_last_steps() {
+        let progress = Progress::default();
+        let run = Cancel::never().reporting(&progress);
+        run.reached(Step::Reading, 8, 10);
+        run.reached(Step::Combining, 2, 10);
+        assert_eq!(progress.read(), Some((Step::Combining, 2, 10)));
+        run.reached(Step::Combining, 1, 10);
+        assert_eq!(
+            progress.read(),
+            Some((Step::Combining, 2, 10)),
+            "within a step the count only moves on"
         );
     }
 
