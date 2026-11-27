@@ -11,7 +11,8 @@ name: Release
 # Each platform gets an installer people download and an archive the window's own update reads:
 # `.dmg`, `-setup.exe`, `.AppImage` and `.deb` from `cargo packager`, configured in
 # crates/encrust-app/Cargo.toml; Windows and Linux are built for x86_64 and ARM64 alike, and the
-# Microsoft Store gets one `.msixupload` bundling both Windows builds. Nothing is code-signed;
+# Microsoft Store gets one `.msixupload` bundling both Windows builds; each target also gets a
+# `.mcpb` for chat apps. Nothing is code-signed;
 # each archive is signed with the project's release key, and `latest.json` names them for the
 # window's update check. Publishing the draft is what makes that feed visible. See ADR-0160,
 # ADR-0162, ADR-0172, ADR-0286 and ADR-0454.
@@ -29,6 +30,8 @@ on:
       store: { type: boolean, default: true }
       web: { type: boolean, default: true }
       web_ref: { type: string, default: "" }
+      mcpb: { type: boolean, default: true }
+      mcpb_ref: { type: string, default: "" }
       feed: { type: boolean, default: true }
   workflow_dispatch:
     inputs:
@@ -58,6 +61,14 @@ on:
         default: true
       web_ref:
         description: Build the browser build from this branch or commit instead of the tag, to fix the site alone
+        type: string
+        default: ""
+      mcpb:
+        description: Chat-app extension (.mcpb), all six targets
+        type: boolean
+        default: true
+      mcpb_ref:
+        description: Pack the chat-app extension from this branch or commit instead of the tag, to try it alone
         type: string
         default: ""
       feed:
@@ -162,7 +173,7 @@ jobs:
       - name: Build
         run: >
           cargo build --release --locked --target ${{ matrix.target }}
-          -p encrust-app -p encrust-cli -p encrust-mcp
+          -p encrust-app -p encrust-cli
 
       # The profiles are compiled into printer-profiles, so the archive needs no asset directory.
       # The licences it does need: handing somebody the binary is what obliges us to pass on both
@@ -201,28 +212,6 @@ jobs:
           cargo packager --release --target ${{ matrix.target }} -p encrust-app
           -f ${{ matrix.formats }} -o "$GITHUB_WORKSPACE/packages"
 
-      # The chat-app extension: the command line and its MCP server in one `.mcpb`, named
-      # `encrust-<os>-<arch>.mcpb` as the archive is. Signed only where the certificate is set
-      # (ADR 0455).
-      - name: Pack the chat-app extension
-        if: matrix.installers
-        shell: bash
-        env:
-          TARGET: ${{ matrix.target }}
-          MCPB_CERT: ${{ secrets.MCPB_CERT }}
-          MCPB_KEY: ${{ secrets.MCPB_KEY }}
-        run: |
-          cargo xtask mcpb --target "$TARGET"
-          if [ -n "$MCPB_CERT" ] && [ -n "$MCPB_KEY" ]; then
-            printf '%s' "$MCPB_CERT" > "$RUNNER_TEMP/mcpb-cert.pem"
-            printf '%s' "$MCPB_KEY" > "$RUNNER_TEMP/mcpb-key.pem"
-            for bundle in target/mcpb/*.mcpb; do
-              npx --yes @anthropic-ai/mcpb@2.1.2 sign "$bundle" \
-                --cert "$RUNNER_TEMP/mcpb-cert.pem" --key "$RUNNER_TEMP/mcpb-key.pem"
-            done
-            rm "$RUNNER_TEMP/mcpb-cert.pem" "$RUNNER_TEMP/mcpb-key.pem"
-          fi
-
       # Names without the version, so `releases/latest/download/<name>` always works.
       - name: Attach them to the draft
         if: matrix.installers
@@ -248,7 +237,7 @@ jobs:
             cp "$path" "installers/$name"
           done
           ls installers
-          gh release upload "$TAG" "$ARCHIVE" installers/* target/mcpb/*.mcpb --clobber \
+          gh release upload "$TAG" "$ARCHIVE" installers/* --clobber \
             --repo "$GITHUB_REPOSITORY"
 
       # The Store takes both Windows architectures in one bundle, which the `store` job packs.
@@ -267,6 +256,62 @@ jobs:
           name: store-${{ matrix.target }}
           path: store/
           retention-days: 1
+
+  # The chat-app extension: the command line and its MCP server in one `.mcpb` per target, named
+  # as the archive is. A job of its own, so its failure holds back no installer and no feed;
+  # unsigned, as a key a chat app trusts lives in hardware a runner cannot reach (ADR 0455).
+  mcpb:
+    needs: draft
+    if: inputs.mcpb
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: macos-latest, target: x86_64-apple-darwin }
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { os: windows-11-arm, target: aarch64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.mcpb_ref || inputs.tag }}
+
+      - name: Linux windowing headers
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: ./.github/actions/linux-gui-deps
+
+      - name: Install the pinned toolchain
+        shell: bash
+        run: |
+          rustup show
+          rustup target add ${{ matrix.target }}
+
+      - name: Pack
+        run: cargo xtask mcpb --target ${{ matrix.target }}
+
+      # Against the schema of the tool a chat app unpacks the bundle with.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Validate the manifest
+        shell: bash
+        run: |
+          for bundle in target/mcpb/*.mcpb; do
+            npx --yes @anthropic-ai/mcpb@2.1.2 unpack "$bundle" "$RUNNER_TEMP/unpacked"
+            npx --yes @anthropic-ai/mcpb@2.1.2 validate "$RUNNER_TEMP/unpacked/manifest.json"
+          done
+
+      - name: Attach to the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: >
+          gh release upload "$TAG" target/mcpb/*.mcpb --clobber
+          --repo "$GITHUB_REPOSITORY"
 
   # The Store's package of the same binaries: an MSIX per architecture in one bundle, since a Store
   # app that once took a bundle takes nothing else. The Store signs it, so `store.yml` sends it there

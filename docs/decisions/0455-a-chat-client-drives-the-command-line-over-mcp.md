@@ -34,8 +34,9 @@ scored on one model by one rule.
   the report — status, islands, cups, trapped pockets, resin, time — and a client matches the
   autopilot when nothing is worse and resin and time are within a tenth.
 - **Each release ships an `.mcpb` extension** per installer's platform,
-  `encrust-<os>-<arch>.mcpb`, packed by `cargo xtask mcpb --target` with the `zip` crate and
-  signed where `MCPB_CERT` and `MCPB_KEY` are set. The window's File menu opens the one for its
+  `encrust-<os>-<arch>.mcpb`, packed by `cargo xtask mcpb --target` with the `zip` crate in a
+  release job of its own and unsigned: a chat app trusts only a code-signing certificate, whose
+  key lives in hardware a runner cannot reach. The window's File menu opens the one for its
   version and system in the browser; opening it installs it in the chat app.
 
 ## Consequences

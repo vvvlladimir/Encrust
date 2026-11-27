@@ -11,13 +11,10 @@
   "license": "AGPL-3.0-only",
   "server": {
     "type": "binary",
-    "entry_point": "server/encrust-mcp",
+    "entry_point": "server/encrust-mcp{{exe_suffix}}",
     "mcp_config": {
-      "command": "${__dirname}/server/encrust-mcp",
-      "args": [],
-      "platform_overrides": {
-        "win32": { "command": "${__dirname}/server/encrust-mcp.exe", "args": [] }
-      }
+      "command": "${__dirname}/server/encrust-mcp{{exe_suffix}}",
+      "args": []
     }
   },
   "tools": [

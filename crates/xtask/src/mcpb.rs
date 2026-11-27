@@ -32,7 +32,15 @@ pub fn run(args: &Args) -> Result<()> {
     let target = args.target.clone().unwrap_or_else(host_triple);
     let platform = Platform::of(&target)?;
     for (package, binary) in BINARIES {
-        let build = ["build", "--release", "-p", package, "--bin", binary];
+        let build = [
+            "build",
+            "--release",
+            "--locked",
+            "-p",
+            package,
+            "--bin",
+            binary,
+        ];
         let targeted = ["--target", target.as_str()];
         let asked: Vec<&str> = build
             .into_iter()
@@ -70,11 +78,8 @@ fn pack(output: &Path, built: &Path, platform: &Platform) -> Result<()> {
     let file =
         File::create(output).with_context(|| format!("cannot write {}", output.display()))?;
     let mut zip = ZipWriter::new(file);
-    let manifest = MANIFEST
-        .replace("{{version}}", env!("CARGO_PKG_VERSION"))
-        .replace("{{platform}}", platform.manifest);
     zip.start_file("manifest.json", SimpleFileOptions::default())?;
-    zip.write_all(manifest.as_bytes())?;
+    zip.write_all(manifest(platform).as_bytes())?;
     let runnable = SimpleFileOptions::default().unix_permissions(0o755);
     for (_, binary) in BINARIES {
         let name = format!("{binary}{}", platform.exe_suffix);
@@ -85,6 +90,14 @@ fn pack(output: &Path, built: &Path, platform: &Platform) -> Result<()> {
     }
     zip.finish()?;
     Ok(())
+}
+
+/// The manifest of a bundle for `platform` alone, its server named as that system runs it.
+fn manifest(platform: &Platform) -> String {
+    MANIFEST
+        .replace("{{version}}", env!("CARGO_PKG_VERSION"))
+        .replace("{{platform}}", platform.manifest)
+        .replace("{{exe_suffix}}", platform.exe_suffix)
 }
 
 /// A target as a bundle names it: the release's words for its system and architecture, and
@@ -141,5 +154,15 @@ mod tests {
         assert_eq!(named("x86_64-pc-windows-msvc"), "windows-x86_64 win32");
         assert_eq!(named("aarch64-unknown-linux-gnu"), "linux-aarch64 linux");
         assert!(Platform::of("wasm32-unknown-unknown").is_err());
+    }
+
+    #[test]
+    fn a_windows_manifest_starts_the_exe_and_leaves_no_placeholder() {
+        let windows = manifest(&Platform::of("aarch64-pc-windows-msvc").expect("a release target"));
+        assert!(windows.contains(r#""entry_point": "server/encrust-mcp.exe""#));
+        assert!(windows.contains(r#""command": "${__dirname}/server/encrust-mcp.exe""#));
+        assert!(!windows.contains("{{"), "a placeholder left in:\n{windows}");
+        let macos = manifest(&Platform::of("x86_64-apple-darwin").expect("a release target"));
+        assert!(macos.contains(r#""command": "${__dirname}/server/encrust-mcp","#));
     }
 }

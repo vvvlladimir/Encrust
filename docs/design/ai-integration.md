@@ -123,9 +123,10 @@ platform (`server.type = "binary"`, `cargo xtask mcpb`). Double-clicking it inst
 a chat app that takes `.mcpb` extensions; other MCP clients take the same binary from their
 config. The files are the user's own paths and the printer is on the user's network.
 
-- **Built by the release.** `release.yml` packs a bundle for each of its six targets after
-  the build and attaches `encrust-<os>-<arch>.mcpb` to the release, signed with `mcpb sign`
-  where the certificate is set (ADR 0455).
+- **Built by the release.** `release.yml`'s `mcpb` job packs a bundle for each of its six
+  targets, validates its manifest with `mcpb validate` and attaches
+  `encrust-<os>-<arch>.mcpb` to the release, unsigned (ADR 0455). Its `mcpb_ref` packs a
+  branch onto a tag's draft, to try a bundle without a release.
 - **Downloaded from a button.** encrust.app's download page offers the bundle for the
   visitor's system beside the installer; the window's File → Use with an AI chat client
   downloads the one for its own version.
