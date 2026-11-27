@@ -78,7 +78,7 @@ fn build(root: &Path, target: Option<&str>) -> Result<PathBuf> {
                 .into_iter()
                 .flatten(),
         );
-        run_tool(root, "cargo", &asked)?;
+        crate::build_id::cargo_build(root, &asked)?;
     }
     Ok(match target {
         Some(target) => root.join("target").join(target).join("release"),

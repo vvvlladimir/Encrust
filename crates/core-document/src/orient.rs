@@ -6,7 +6,7 @@ use std::sync::Arc;
 use core_edit::{Edit, ObjectId, OrientAim};
 use core_engine::project::{ModelMeshes, ObjectState, hollow_of};
 use core_engine::{
-    Choice, EngineError, KEEP_CLEAR_RADIUS_MM, KeepClear, SupportPlan, Trial, orient_for_print,
+    Choice, EngineError, KEEP_CLEAR_RADIUS_MM, KeepClear, SupportPlan, Trial, orient_for_print_kept,
 };
 use core_geometry::{Mesh, Scalar, Transform, Vec2, Vec3, transform_mesh};
 use core_plate::{OrientGoal, OrientPreset, OrientSettings, Phase, PlateError, Printed, Watch};
@@ -294,17 +294,18 @@ pub(crate) fn ranked_poses(
         keep_clear: keep_clear.as_ref(),
     };
     let printed = body.printed(&state.shown_painted);
-    let found = searched(&printed, &settings, &trial, (id, cancel))?;
+    let kept = document.kept_poses();
+    let found = searched(&printed, &settings, &trial, (id, kept, cancel))?;
     Ok((found, z_lift_mm))
 }
 
 /// The poses the search `settings` ranks for `printed`, its best proved by `trial`, telling
-/// `cancel` its share done; `id` names the object in an error.
+/// `cancel` its share done, kept in and read from `kept`; `id` names the object in an error.
 fn searched(
     printed: &Printed<'_>,
     settings: &OrientSettings,
     trial: &Trial<'_>,
-    (id, cancel): (ObjectId, Cancel<'_>),
+    (id, kept, cancel): (ObjectId, Option<&std::path::Path>, Cancel<'_>),
 ) -> Result<Vec<Choice>, ApplyError> {
     let told = |phase: Phase, done, total| {
         let share = phase.share(done, total);
@@ -315,15 +316,15 @@ fn searched(
         );
         !cancel.asked()
     };
-    orient_for_print(printed, settings, Some(trial), Watch::by(&told)).map_err(
-        |error| match error {
+    orient_for_print_kept(kept, printed, settings, Some(trial), Watch::by(&told)).map_err(|error| {
+        match error {
             EngineError::Orient(PlateError::Cancelled) => ApplyError::Cancelled,
             other => ApplyError::Failed {
                 object: id,
                 reason: other.to_string(),
             },
-        },
-    )
+        }
+    })
 }
 
 /// One pose the search ranked, as an orient's report lists it.

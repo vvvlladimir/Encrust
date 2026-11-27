@@ -13,6 +13,7 @@ mod fixes;
 mod hollowing;
 mod json;
 mod keep_solid;
+mod kept_poses;
 mod meeting;
 mod modelling;
 mod placing;

@@ -1128,8 +1128,10 @@ answers what Check finds — islands supported, suction cups vented, weak necks 
 model of the job or the ones it names, a cut model's halves among them. Each
 model is prepared in a job of its own; `plate_jobs` lays several on one plate, spread apart,
 checks it and writes them as one file.
-`compare_poses` shows the model the best few ways the engine found to stand it, each drawn
-with what it prints, and the model picks one for what the print is — keeping supports off a
+`compare_poses` shows the model the best few ways the engine found to stand it, searching once
+for the numbers and every picture, and `set_pose` takes the one chosen without searching again — nor does the window when it
+stands the model that way;
+each drawn with what it prints, and the model picks one for what the print is — keeping supports off a
 face you named, say, which the search then ranks first. A model on supports that the agent
 stands a new way gets its supports again for that pose, none left over from the old one. Every step it takes is set against
 the step before and the autopilot's own preparation, so it can undo one that made the print

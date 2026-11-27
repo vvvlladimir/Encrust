@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use core_edit::ObjectId;
@@ -30,6 +31,8 @@ pub struct Document {
     project: Project,
     /// The id the next object made takes, above every one the document has held.
     next_id: u64,
+    /// The folder an orient's search is kept in and read from, none for none (ADR 0466).
+    kept_poses: Option<PathBuf>,
 }
 
 impl Document {
@@ -41,7 +44,21 @@ impl Document {
             .chain(project.manifest.next_id.map(|next| next.0))
             .max()
             .unwrap_or(1);
-        Self { project, next_id }
+        Self {
+            project,
+            next_id,
+            kept_poses: None,
+        }
+    }
+
+    /// Keeps every orient's search in `folder` and reads one asked again from it.
+    pub fn keep_poses_in(&mut self, folder: Option<PathBuf>) {
+        self.kept_poses = folder;
+    }
+
+    /// The folder searches are kept in, if any.
+    pub(crate) fn kept_poses(&self) -> Option<&std::path::Path> {
+        self.kept_poses.as_deref()
     }
 
     /// The plate of `models` as imported and placed, on `manifest`'s first plate, ids from 1.

@@ -61,7 +61,7 @@ fn build(root: &Path, release: bool) -> Result<()> {
     for (package, binary) in [("encrust-app", "encrust-gui"), ("encrust-cli", "encrust")] {
         let mut build = vec!["build", "-p", package, "--bin", binary];
         build.extend(profile);
-        run_tool(root, "cargo", &build)?;
+        crate::build_id::cargo_build(root, &build)?;
     }
     let mut package = vec!["packager", "-p", "encrust-app", "-f", "app"];
     package.extend(profile);

@@ -2,6 +2,7 @@
 
 mod app;
 mod arch;
+mod build_id;
 mod hygiene;
 mod i18n;
 mod licenses;

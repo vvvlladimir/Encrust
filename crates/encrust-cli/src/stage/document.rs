@@ -59,7 +59,8 @@ impl Staging {
         for plan in held {
             hold(&mut manifest.supports, plan);
         }
-        let document = Document::of_models(manifest, objects);
+        let mut document = Document::of_models(manifest, objects);
+        document.keep_poses_in(crate::kept_poses::folder());
         let only = (entries.first()).map_or_else(Vec::new, |(_, shaping)| shaping.only.clone());
         Self {
             document,
@@ -73,7 +74,8 @@ impl Staging {
     /// A project's plate to be edited by the flags, every object of it the one entry's; the
     /// flags work on `plate` and on the objects `only` names, every one when it is empty.
     pub(crate) fn of_project(project: Project, plate: u32, only: Vec<ObjectId>) -> Self {
-        let document = Document::from_project(project);
+        let mut document = Document::from_project(project);
+        document.keep_poses_in(crate::kept_poses::folder());
         let owners = document.ids().into_iter().map(|id| (id, 0)).collect();
         Self {
             document,

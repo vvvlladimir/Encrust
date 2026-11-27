@@ -164,3 +164,36 @@ fn inspect_stands_a_model_the_way_its_orientation_search_does() {
         "the shortest print lays the 30 mm bar on its widest face, 10 mm tall, got {height_mm}"
     );
 }
+
+#[test]
+fn a_search_kept_by_one_run_answers_the_next_alike() {
+    let kept = output_dir("kept-poses");
+    let path = write_leaning_box_stl("kept-poses", 10.0, 8.0, 12, 0);
+    let panel = panel();
+    let args = [
+        "estimate",
+        path.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "0.5",
+        "--center",
+        "--orient",
+        "--orient-choices",
+        "3",
+        "--json",
+    ];
+    let run = || {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_encrust"))
+            .args(args)
+            .env("ENCRUST_POSE_CACHE", &kept)
+            .output()
+            .expect("the encrust binary runs");
+        assert!(output.status.success(), "{}", stderr(&output));
+        json(&output)["models"][0]["oriented"]["choices"].clone()
+    };
+    let searched = run();
+    let files = std::fs::read_dir(&kept).map_or(0, Iterator::count);
+    assert_eq!(files, 1, "the search is kept in the folder named");
+    assert_eq!(run(), searched, "the next run reads the same choices");
+}

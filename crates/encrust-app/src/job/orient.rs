@@ -1,8 +1,9 @@
-use std::sync::Arc;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+use std::sync::{Arc, LazyLock};
 
 use core_document::Body;
-use core_engine::{KeepClear, SupportPlan, Trial, orient_for_print};
+use core_engine::{KeepClear, SupportPlan, Trial, kept_poses_folder, orient_for_print_kept};
 use core_geometry::{Mesh, Quat, Region, Transform, Vec3};
 use core_plate::{OrientSettings, Phase, Printed, Watch};
 #[cfg(test)]
@@ -18,6 +19,10 @@ use crate::scene::{ObjectId, Scene, SceneObject};
 mod seen;
 
 use seen::Seen;
+
+/// Where searches are kept, shared with the command line built beside the window (ADR 0466).
+static KEPT_POSES: LazyLock<Option<PathBuf>> =
+    LazyLock::new(|| kept_poses_folder(agent_link::cache_dir().as_deref()));
 
 /// One model to find an orientation for, owned so that it can cross to the worker thread.
 #[derive(Clone)]
@@ -226,7 +231,8 @@ fn choose(
         raster_window: worker_threads(),
         keep_clear,
     });
-    let chosen = orient_for_print(printed, settings, trial.as_ref(), watch)
+    let kept = KEPT_POSES.as_deref();
+    let chosen = orient_for_print_kept(kept, printed, settings, trial.as_ref(), watch)
         .map_err(|error| error.to_string())?;
     Ok(chosen
         .iter()

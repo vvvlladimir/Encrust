@@ -14,7 +14,7 @@ const BOTTOM_BAND_MM: Scalar = 0.5;
 
 /// What an orientation costs the print, each term in its own unit; lower total ranks better. Terms
 /// are made dimensionless before weighing; see `docs/design/orientation.md`.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Score {
     /// Downward-facing area past the overhang angle, weighted by how far past it goes,
     /// square millimetres.

@@ -385,6 +385,10 @@ given in plate mm as the model stood turned by `--orient-keep-clear-turn X,Y,Z` 
 left out) and centred on z = 0: with a printer, the sound poses whose supports touch fewest
 points within `--orient-keep-clear-radius` (4 mm) are ranked first, and a pose with a cup, a
 tearing pull or an overflow never above a sound one (ADR 0460).
+A release build keeps each search under the user's cache (`poses/v1`, a folder per build, which
+the window built beside it shares), so a run asking the same search of the same model again —
+another pick, a render of it — reads it in place of searching (ADR 0466). `ENCRUST_POSE_CACHE`
+names another folder, or `off` for none.
 
 ```sh
 encrust estimate bust.stl --printer elegoo-mars-4-ultra --supports auto --orient \

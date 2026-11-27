@@ -81,6 +81,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # One id for every binary of the release, so the window and the command line share the
+  # orientation searches each keeps (ADR 0466).
+  ENCRUST_BUILD_ID: ${{ github.sha }}
 
 jobs:
   # One job owns the draft, so the build legs never race over it. It also refuses a tag naming

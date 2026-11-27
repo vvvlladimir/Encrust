@@ -90,7 +90,7 @@ pub struct Trial<'a> {
 }
 
 /// What a pose costs once it is supported, cut and cured.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Printout {
     pub contacts: usize,
     /// The resin in the supports, millilitres, as the plate's summary counts it.
@@ -167,7 +167,7 @@ pub struct Tried {
 }
 
 /// One way to stand a model, and what it printed where it was printed to be judged.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Choice {
     pub oriented: Oriented,
     pub printout: Option<Printout>,

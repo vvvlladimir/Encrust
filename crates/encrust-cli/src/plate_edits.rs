@@ -42,6 +42,7 @@ impl EditArgs {
     /// `project` with `--edits` carried out on it, written to `--project-out` where asked.
     pub fn applied(&self, project: Project) -> Result<Project> {
         let mut document = Document::from_project(project);
+        document.keep_poses_in(crate::kept_poses::folder());
         each_edit(&self.listed()?, |edit| {
             apply(&mut document, edit, Cancel::never())?;
             Ok(())

@@ -8,6 +8,7 @@ mod drains;
 mod error;
 mod file_name;
 mod held;
+mod kept_poses;
 mod open;
 mod outputs;
 mod plate;
@@ -34,6 +35,7 @@ pub use held::{
     CupVent, Hanging, Unvented, cup_vents, held_by_shape, island_floors, island_holds, lever_holds,
     neck_profile,
 };
+pub use kept_poses::{KEPT_POSES, KEPT_POSES_ENV, kept_poses_folder, orient_for_print_kept};
 pub use open::{Machine, Opening, object_model, open_plate, plate_models};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
