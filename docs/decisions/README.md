@@ -56,6 +56,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0388](0388-the-update-feed-dates-its-release-and-sizes-each-archive.md) | Date the release and size each archive in the update feed | Accepted |
 | [0286](0286-the-windows-build-also-ships-through-the-microsoft-store.md) | The Windows build also ships through the Microsoft Store | Accepted; the manual upload replaced by `store.yml`, the Store copy hearing of no update amended by 0292, the package bundled with ARM64 by 0454 |
 | [0454](0454-windows-and-linux-also-ship-for-arm64.md) | Windows and Linux also ship for ARM64, and the Store takes a bundle | Accepted |
+| [0463](0463-a-trial-tag-is-drafted-as-a-prerelease.md) | Draft a trial tag as a prerelease, made on the branch the run starts from | Accepted |
 | [0292](0292-the-store-copy-asks-the-store-for-its-update.md) | The Store copy asks the Store for its update and sends the user there | Accepted |
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Superseded by 0273 |
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |

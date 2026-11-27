@@ -7,6 +7,8 @@ name: Release
 # Called by `release-please.yml` once it has tagged the release, never by the tag itself: a tag
 # pushed with GITHUB_TOKEN raises no event, so `on: push: tags` would simply never fire. The manual
 # trigger rebuilds a tag, or only the parts ticked, and makes the draft if the tag has no release.
+# A trial tag, the version with a suffix (`v0.9.0-try1`), is made on the branch the run is started
+# from and drafted as a prerelease, which no feed, site or `releases/latest` ever names (ADR 0463).
 #
 # Each platform gets an installer people download and an archive the window's own update reads:
 # `.dmg`, `-setup.exe`, `.AppImage` and `.deb` from `cargo packager`, configured in
@@ -31,12 +33,14 @@ on:
       web: { type: boolean, default: true }
       web_ref: { type: string, default: "" }
       mcpb: { type: boolean, default: true }
-      mcpb_ref: { type: string, default: "" }
       feed: { type: boolean, default: true }
   workflow_dispatch:
     inputs:
       tag:
-        description: The tag to build, for example v0.1.0. A tag with no release gets a draft.
+        description: >-
+          The tag to build, for example v0.1.0; a tag with no release gets a draft. A trial tag,
+          the version in Cargo.toml with a suffix such as v0.9.0-try1, is made on the branch above
+          and drafted as a prerelease.
         required: true
         type: string
       macos:
@@ -67,10 +71,6 @@ on:
         description: Chat-app extension (.mcpb), all six targets and one for every Mac
         type: boolean
         default: true
-      mcpb_ref:
-        description: Pack the chat-app extension from this branch or commit instead of the tag, to try it alone
-        type: string
-        default: ""
       feed:
         description: Sign the update archives on the release and rewrite latest.json
         type: boolean
@@ -91,6 +91,20 @@ jobs:
     outputs:
       matrix: ${{ steps.legs.outputs.matrix }}
     steps:
+      # Only a trial tag is made here: a release's own tag is release-please's to make.
+      - name: Make a trial tag that does not exist yet
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1 && exit 0
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$ ]] || {
+            echo "no tag $TAG; a trial tag is the version with a suffix, such as v0.9.0-try1" >&2
+            exit 1
+          }
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null
+          echo "made $TAG on $GITHUB_REF_NAME at $GITHUB_SHA"
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
@@ -100,8 +114,9 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           crate=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
-          test "$crate" = "${TAG#v}" || {
-            echo "tag $TAG does not match Cargo.toml version $crate" >&2
+          version="${TAG#v}"
+          [ "$version" = "$crate" ] || [ "${version%%-*}" = "$crate" ] || {
+            echo "tag $TAG does not match Cargo.toml version $crate; a trial tag is v$crate-<suffix>" >&2
             exit 1
           }
 
@@ -113,7 +128,9 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && exit 0
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
+          trial=()
+          [[ "$TAG" == *-* ]] && trial=(--prerelease)
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft "${trial[@]}" \
             --title "$TAG" --generate-notes
 
       # The build legs the ticked boxes ask for. The Windows legs also run for the Store alone,
@@ -125,7 +142,7 @@ jobs:
         run: |
           matrix=$(jq -c --argjson on "$ON" '{include: [.[]
               | .installers = $on[.platform]
-              | .store = (.platform == "windows" and $on.store)
+              | .store = (.platform == "windows" and $on.store and ($on.tag | contains("-") | not))
               | select(.installers or .store)]}' <<'EOF'
           [
             {"platform": "macos", "os": "macos-latest", "target": "aarch64-apple-darwin",
@@ -284,7 +301,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.mcpb_ref || inputs.tag }}
+          ref: ${{ inputs.tag }}
 
       - name: Linux windowing headers
         if: startsWith(matrix.os, 'ubuntu')
@@ -323,9 +340,12 @@ jobs:
   # The Store's package of the same binaries: an MSIX per architecture in one bundle, since a Store
   # app that once took a bundle takes nothing else. The Store signs it, so `store.yml` sends it there
   # and nobody installs it from the release page. A failure costs only this file (ADR 0286, 0454).
+  # None for a trial tag, whose suffix an MSIX version cannot carry.
   store:
     needs: [draft, build]
-    if: ${{ !cancelled() && inputs.store && needs.draft.result == 'success' }}
+    if: >-
+      !cancelled() && inputs.store && needs.draft.result == 'success'
+      && !contains(inputs.tag, '-')
     continue-on-error: true
     runs-on: windows-latest
     steps:

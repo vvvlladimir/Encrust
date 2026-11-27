@@ -126,8 +126,8 @@ config. The files are the user's own paths and the printer is on the user's netw
 - **Built by the release.** `release.yml`'s `mcpb` job packs a bundle for each of its six
   targets and one universal for every Mac, validates its manifest with `mcpb validate` and
   attaches `encrust-<os>-<arch>.mcpb` to the release; `feed` signs each with the release key,
-  as the archives are, outside `latest.json`. Its `mcpb_ref` packs a branch onto a tag's
-  draft, to try a bundle without a release (ADR 0455).
+  as the archives are, outside `latest.json`. A trial tag tries them without a release
+  (ADR 0455, 0463).
 - **Installed from the window.** File → Use with an AI chat client fetches the bundle of the
   window's version and system with its `.minisig`, refuses it unless the release key signed it
   for that version and file, and opens it, which installs it in the chat app; a failure names
