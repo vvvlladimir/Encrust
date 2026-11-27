@@ -227,7 +227,7 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0461); a resin from a label's numbers by `create_resin` | 12 |
 | 16 | After the print: `report_print`, `print-failures.md` and the command line reading it | `encrust-cli`, `encrust-mcp` (done, ADR 0461) | 12 |
 | 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `encrust-cli`, `encrust-mcp` (done, ADR 0461) | 14 |
-| 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | the spike, removed after 602ae603 (built; a prepare in an unisolated page measured at 20 s for a 175k-face figure; the rest waits on a run in a web chat) | 12 |
+| 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | the spike, since removed (built; a prepare in an unisolated page measured at 20 s for a 175k-face figure; the rest waits on a run in a web chat) | 12 |
 | 19 | `web-engine` prepares, checks and draws; the connector and its page | `web-engine`, a new crate | 18 |
 | 20 | The extension shipped: bundles in `release.yml`, signed where the certificate is set, File → Use with an AI chat client | `.github`, `xtask`, `encrust-app` (done, ADR 0455); the site's button is the site's | 12, 15 |
 | 21 | The bench's sets per use, and their prints | `agent-lab` | 13–17 |

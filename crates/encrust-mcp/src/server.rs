@@ -157,8 +157,8 @@ impl Server {
         Ok(answer(edited.await))
     }
 
-    /// Keeps a job's way of preparing, or one the user described, as a recipe of their own,
-    /// which the window then runs as Prepare for print with no chat; answers with its id.
+    /// Keeps a job's way of preparing, or one the user described, as their own recipe the window
+    /// runs as Prepare for print; answers with its id, or why it would not run.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -174,8 +174,8 @@ impl Server {
         Ok(answer(self.inspect(model, &ctx).await))
     }
 
-    /// Starts preparing a model for the printer and resin the user named, and checks it as it
-    /// stands.
+    /// Starts preparing a model, or a project the window saved as it was saved, for the printer
+    /// and resin the user named, and checks it as it stands.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -185,7 +185,8 @@ impl Server {
         Ok(answer(self.start(start, &ctx).await))
     }
 
-    /// Sets how the model stands — the orientation search, or a turn — and checks the result.
+    /// Sets how the model stands — the search, a `pick` of it, or a turn — and checks it; a new
+    /// pose drops the points given by hand on the old one and stands the supports anew.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -202,8 +203,8 @@ impl Server {
         Ok(answer(edited.await))
     }
 
-    /// The search's best ways to stand the model, each with what it prints and drawn, to
-    /// choose one by what the model is; `set_pose` with `pick` takes it.
+    /// The search's best ways to stand the model, each drawn with what it prints, `top_contacts`
+    /// being marks on faces looking up; `set_pose` with `pick` takes one.
     #[tool(annotations(read_only_hint = true, open_world_hint = false))]
     async fn compare_poses(
         &self,
@@ -216,7 +217,8 @@ impl Server {
             .unwrap_or_else(|error| answer(Err(error))))
     }
 
-    /// Sets the model's cavity and infill, or none, and checks for resin left trapped.
+    /// Sets the model's cavity and infill, or none — for a large, thick solid, a 2 mm wall
+    /// typical — and checks for resin left trapped.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -230,7 +232,8 @@ impl Server {
         Ok(answer(edited.await))
     }
 
-    /// Sets the drain holes that let resin out of the cavity, and checks what stays trapped.
+    /// Sets the holes that let resin out of the cavity, and checks what stays trapped; `render`
+    /// with `bottom` shows them.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -244,7 +247,8 @@ impl Server {
         Ok(answer(edited.await))
     }
 
-    /// Sets the supports the model stands on, and checks what is left hanging.
+    /// Sets the supports the model stands on, `cavity` for a hollow one, and checks what is left
+    /// hanging.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -412,8 +416,8 @@ impl Server {
             .unwrap_or_else(|error| answer(Err(error))))
     }
 
-    /// What a print of the job did, as the user saw it: each symptom's likely causes read
-    /// against the check of the revision printed, each with the edit to try; kept with the job.
+    /// What a print of the job did, as the user saw it: each symptom's likely causes, likeliest
+    /// first, read against the check of the revision printed, each with the edit to try.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -427,8 +431,8 @@ impl Server {
         Ok(answer(self.after_print(print, &ctx).await))
     }
 
-    /// Shows a revision on the plate of the user's Encrust window, starting the window if it
-    /// is closed: when the user asks to see or adjust the model there.
+    /// Shows a revision on a plate of its own in the user's Encrust window, started if closed, when
+    /// they ask to see or adjust it; a followed window's changes and undos reach your next step.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -449,7 +453,8 @@ impl Server {
         Ok(answer(self.discovered(find, &ctx).await))
     }
 
-    /// Sends a written file to a printer on the local network, and starts it if asked.
+    /// Sends a written file to a printer on the local network when the user asks for that
+    /// printer, and starts it only as `start` allows.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = true,
@@ -511,5 +516,22 @@ impl ServerHandler for Server {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("encrust", env!("CARGO_PKG_VERSION")))
             .with_instructions(INSTRUCTIONS)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::INSTRUCTIONS;
+
+    #[test]
+    fn the_instructions_fit_what_a_client_keeps() {
+        // A client was seen cutting a server's instructions at about 4 KB; what is past the cut
+        // never reaches the model, so a tool's own rules go in its description.
+        const MOST_BYTES: usize = 3500;
+        assert!(
+            INSTRUCTIONS.len() <= MOST_BYTES,
+            "instructions are {} bytes, expected at most {MOST_BYTES}",
+            INSTRUCTIONS.len()
+        );
     }
 }

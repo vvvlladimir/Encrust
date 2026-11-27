@@ -60,8 +60,8 @@ pub struct Hollow {
     /// From 0 to 1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub infill_density: Option<f32>,
-    /// The ids of the job's objects this shapes, as `inspect_model` lists them on its plate;
-    /// every one when empty.
+    /// The ids of the job's objects this shapes, as the check's `models[].id` lists them; the
+    /// others keep what they had. Empty shapes every one, replacing what each was given.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub objects: Vec<u64>,
 }
@@ -76,7 +76,8 @@ pub struct Drains {
     /// With `auto`, a vent high on each pocket as well, so air can follow the resin out.
     #[serde(default = "yes")]
     pub vent: bool,
-    /// Plate millimetres, from the plate's front left corner: the surface nearest each is drilled.
+    /// Plate mm where the user wants a hole, near the cavity's lowest place as it prints: the
+    /// surface nearest each is drilled.
     #[serde(default)]
     pub at_mm: Vec<[f32; 3]>,
     /// Prints a plug for each hole beside the model.
@@ -110,8 +111,8 @@ pub struct Drains {
     /// The channels' diameter, mm; 2 when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_mm: Option<f32>,
-    /// The ids of the job's objects this shapes, as `inspect_model` lists them on its plate;
-    /// every one when empty.
+    /// The ids of the job's objects this shapes, as the check's `models[].id` lists them; the
+    /// others keep what they had. Empty shapes every one, replacing what each was given.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub objects: Vec<u64>,
 }
@@ -155,8 +156,8 @@ pub struct Supports {
     /// group's points are joined into one tree, as `--merge-supports`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub merge_at_mm: Vec<Vec<[f32; 3]>>,
-    /// The ids of the job's objects this shapes, as the check's `models[].id` lists them;
-    /// every one when empty. Naming some keeps the supports asked before for the others.
+    /// The ids of the job's objects this shapes, as the check's `models[].id` lists them; the
+    /// others keep what they had. Empty shapes every one, replacing what each was given.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub objects: Vec<u64>,
 }
