@@ -33,8 +33,8 @@ scored on one model by one rule.
   configuration of its own; `encrust-mcp --trace FILE` logs each tool call. Both are scored on
   the report — status, islands, cups, trapped pockets, resin, time — and a client matches the
   autopilot when nothing is worse and resin and time are within a tenth.
-- **Each release ships an `.mcpb` extension** per installer's platform and one universal for
-  every Mac, `encrust-<os>-<arch>.mcpb`, packed by `cargo xtask mcpb --target` with the `zip`
+- **Each release ships an `.mcpb` extension**: one universal for every Mac, its binaries holding
+  both architectures, and one per Windows and Linux processor, `encrust-<os>-<arch>.mcpb`, packed by `cargo xtask mcpb --target` with the `zip`
   crate in a release job of its own. No `mcpb sign`: a chat app trusts only a code-signing
   certificate, whose key lives in hardware a runner cannot reach. The release key signs each
   bundle instead, as it signs the archives, and the window's File menu fetches the one of its

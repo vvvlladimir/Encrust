@@ -1061,8 +1061,9 @@ cargo xtask mcpb --target universal-apple-darwin        # encrust-macos-universa
 
 The bundle carries both binaries for the platform it is built on, or for `--target`'s, with the
 icon and the settings for `--app` and `--timeout-s`; a chat app that takes `.mcpb` extensions
-installs it by a double click or from its settings. Each release attaches one for each of its
-platforms and one for every Mac, `releases/latest/download/encrust-<os>-<arch>.mcpb`, each with
+installs it by a double click or from its settings. Each release attaches one for every Mac,
+`encrust-macos-universal.mcpb`, and one for each Windows and Linux processor,
+`releases/latest/download/encrust-<os>-<arch>.mcpb`, each with
 a `.minisig` of the release key; the window's File → Use with an AI chat client downloads the
 one for its version, checks it and opens it (ADR 0455). Any other MCP client takes the server by hand
 in its configuration, as its command; a client that times its tools out needs more than 60 s

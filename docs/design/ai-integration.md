@@ -123,8 +123,8 @@ platform (`server.type = "binary"`, `cargo xtask mcpb`). Double-clicking it inst
 a chat app that takes `.mcpb` extensions; other MCP clients take the same binary from their
 config. The files are the user's own paths and the printer is on the user's network.
 
-- **Built by the release.** `release.yml`'s `mcpb` job packs a bundle for each of its six
-  targets and one universal for every Mac, validates its manifest with `mcpb validate` and
+- **Built by the release.** `release.yml`'s `mcpb` job packs one universal bundle for every Mac
+  and one for each Windows and Linux processor, validates its manifest with `mcpb validate` and
   attaches `encrust-<os>-<arch>.mcpb` to the release; `feed` signs each with the release key,
   as the archives are, outside `latest.json`. A trial tag tries them without a release
   (ADR 0455, 0463).

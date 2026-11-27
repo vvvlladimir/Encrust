@@ -75,14 +75,14 @@ impl ChatExtension {
     }
 }
 
-/// The bundle's name on the release: `encrust-<os>-<arch>.mcpb`, as `cargo xtask mcpb` names it.
+/// The bundle's name on the release, as `cargo xtask mcpb` names it: one for every Mac, else
+/// `encrust-<os>-<arch>.mcpb`.
 pub fn file_name() -> String {
-    let os = match std::env::consts::OS {
-        "macos" => "macos",
-        "windows" => "windows",
-        _ => "linux",
-    };
-    format!("encrust-{os}-{}.mcpb", std::env::consts::ARCH)
+    match std::env::consts::OS {
+        "macos" => "encrust-macos-universal.mcpb".to_owned(),
+        "windows" => format!("encrust-windows-{}.mcpb", std::env::consts::ARCH),
+        _ => format!("encrust-linux-{}.mcpb", std::env::consts::ARCH),
+    }
 }
 
 /// Where this version's release serves `file`.
@@ -132,14 +132,19 @@ mod tests {
             name.starts_with("encrust-") && name.ends_with(".mcpb"),
             "{name}"
         );
-        assert!(name.contains(std::env::consts::ARCH), "{name}");
+        let arch = if cfg!(target_os = "macos") {
+            "universal"
+        } else {
+            std::env::consts::ARCH
+        };
+        assert!(name.contains(arch), "{name}");
     }
 
     #[test]
     fn its_signature_is_fetched_beside_it_from_this_version() {
-        let url = release_url("encrust-macos-aarch64.mcpb.minisig");
+        let url = release_url("encrust-macos-universal.mcpb.minisig");
         let expected = format!(
-            "/releases/download/v{}/encrust-macos-aarch64.mcpb.minisig",
+            "/releases/download/v{}/encrust-macos-universal.mcpb.minisig",
             env!("CARGO_PKG_VERSION")
         );
         assert!(url.ends_with(&expected), "{url}");

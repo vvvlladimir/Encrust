@@ -68,7 +68,7 @@ on:
         type: string
         default: ""
       mcpb:
-        description: Chat-app extension (.mcpb), all six targets and one for every Mac
+        description: Chat-app extension (.mcpb), one for every Mac and one a Windows and Linux processor
         type: boolean
         default: true
       feed:
@@ -283,11 +283,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `rust` is what rustup adds: the universal bundle joins both Mac architectures, for the
-        # site, which cannot tell one Mac from the other.
+        # `rust` is what rustup adds. A Mac takes one bundle joining both architectures, as a
+        # binary can there; Windows and Linux have no such binary, so a bundle a processor.
         include:
-          - { os: macos-latest, target: aarch64-apple-darwin, rust: aarch64-apple-darwin }
-          - { os: macos-latest, target: x86_64-apple-darwin, rust: x86_64-apple-darwin }
           - os: macos-latest
             target: universal-apple-darwin
             rust: aarch64-apple-darwin x86_64-apple-darwin
