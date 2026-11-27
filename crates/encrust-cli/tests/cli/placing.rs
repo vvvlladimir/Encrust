@@ -1,5 +1,5 @@
 //! `--mirror`, `--move` and `--copies`: the window's Position moves, each an edit of the
-//! project written (ADR 0478).
+//! project written (ADR 0459).
 
 use core_engine::project::{Project, load};
 use core_geometry::Transform;

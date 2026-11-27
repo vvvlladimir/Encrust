@@ -1,6 +1,6 @@
 //! This server as one agent the open window lists: a file of its own in the agents' folder
 //! saying which client drives it, what it is doing and the jobs it touched
-//! (`docs/design/window-link.md`, ADR 0465).
+//! (`docs/design/window-link.md`, ADR 0462).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -180,9 +180,9 @@ mod tests {
     fn an_agent_says_what_it_runs_and_keeps_the_jobs_it_touched_latest_first() {
         let dir = scratch("working");
         let presence = Presence::new(Some(dir.clone()));
-        let hollowing = presence.begin(Some("claude-code"), "set_hollow", Some("cube-1"));
+        let hollowing = presence.begin(Some("code-agent"), "set_hollow", Some("cube-1"));
         let working = read(&dir);
-        assert_eq!(working["client"], "claude-code");
+        assert_eq!(working["client"], "code-agent");
         assert_eq!(working["working"]["tool"], "set_hollow");
         assert_eq!(working["working"]["job"], "cube-1");
         presence.end(hollowing, Some("cube-1"));
@@ -193,7 +193,7 @@ mod tests {
         let idle = read(&dir);
         assert!(idle.get("working").is_none(), "{idle}");
         assert_eq!(idle["jobs"], serde_json::json!(["cube-1", "bust-2"]));
-        assert_eq!(idle["client"], "claude-code", "kept from the first call");
+        assert_eq!(idle["client"], "code-agent", "kept from the first call");
         presence.close();
         assert!(read(&dir)["ended_s"].is_u64());
     }

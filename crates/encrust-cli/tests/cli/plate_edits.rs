@@ -1,4 +1,4 @@
-//! `--edits` on a project, and `--project-out` writing the plate they leave (ADR 0466).
+//! `--edits` on a project, and `--project-out` writing the plate they leave (ADR 0456).
 
 use std::fs;
 use std::path::{Path, PathBuf};

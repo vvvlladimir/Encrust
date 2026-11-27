@@ -210,19 +210,19 @@ mod tests {
 
     #[test]
     fn an_agent_is_named_before_its_command() {
-        let agent = Agent::parse("sonnet=claude -p --mcp-config {mcp_config} {prompt}")
-            .expect("well formed");
-        assert_eq!(agent.name, "sonnet");
+        let agent =
+            Agent::parse("fast=chat -p --mcp-config {mcp_config} {prompt}").expect("well formed");
+        assert_eq!(agent.name, "fast");
         assert_eq!(
             agent.words,
-            ["claude", "-p", "--mcp-config", "{mcp_config}", "{prompt}"]
+            ["chat", "-p", "--mcp-config", "{mcp_config}", "{prompt}"]
         );
     }
 
     #[test]
     fn an_agent_with_no_command_is_refused() {
-        assert!(Agent::parse("sonnet=").is_err());
-        assert!(Agent::parse("claude -p").is_err());
+        assert!(Agent::parse("fast=").is_err());
+        assert!(Agent::parse("chat -p").is_err());
     }
 
     #[test]

@@ -1,5 +1,5 @@
 //! One project's models put on a plate of another, as the window stands a revision beside what
-//! stands and the command line lays several projects on one plate (ADR 0473, 0478).
+//! stands and the command line lays several projects on one plate (ADR 0462, 0459).
 
 use std::collections::BTreeSet;
 

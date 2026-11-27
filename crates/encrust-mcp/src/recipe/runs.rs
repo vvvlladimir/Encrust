@@ -1,6 +1,6 @@
 //! A recipe whose steps name some of the job's objects, staged as several runs of the command
 //! line: the model first, then each group of steps on the plate the run before wrote, by
-//! `--only` (ADR 0479).
+//! `--only` (ADR 0458).
 
 use anyhow::{Result, bail};
 
@@ -81,7 +81,7 @@ impl Recipe {
     }
 
     /// Whether the modelling names some objects, so the pose runs on its pieces after it
-    /// (ADR 0481).
+    /// (ADR 0458).
     fn models_some(&self) -> bool {
         self.modellings().any(|m| !m.objects.is_empty())
     }

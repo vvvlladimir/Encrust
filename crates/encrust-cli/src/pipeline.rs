@@ -95,7 +95,7 @@ pub fn slice_one(
 }
 
 /// Loads, welds and checks the model and says what import found; all a run asks after that,
-/// from a repair to a turn, is an edit of the plate (ADR 0472).
+/// from a repair to a turn, is an edit of the plate (ADR 0458).
 pub fn import(
     input: &Path,
     args: &ImportArgs,

@@ -1,5 +1,5 @@
 //! The file each server keeps in `agents/`: who drives it, what it runs and the jobs it touched
-//! (ADR 0465, 0476).
+//! (ADR 0462).
 
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +13,7 @@ pub struct AgentFile {
     pub schema: u32,
     #[serde(default)]
     pub pid: u32,
-    /// The client's own name for itself, as it introduced itself: `claude-code`, say.
+    /// The client's own name for itself, as it introduced itself: `code-agent`, say.
     #[serde(default)]
     pub client: Option<String>,
     pub started_s: u64,
@@ -42,7 +42,7 @@ mod tests {
 
     #[test]
     fn a_file_without_schema_pid_or_jobs_reads_as_an_idle_agent() {
-        let text = r#"{"client": "claude-code", "started_s": 1, "seen_s": 2}"#;
+        let text = r#"{"client": "code-agent", "started_s": 1, "seen_s": 2}"#;
         let read: AgentFile = serde_json::from_str(text).expect("an older file reads");
         assert_eq!((read.schema, read.pid, read.jobs.len()), (0, 0, 0));
         assert!(read.working.is_none());

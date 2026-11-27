@@ -1,5 +1,5 @@
 //! The steps a recipe runs on one model at a time, each the edits `core_recipe::edits_of` makes
-//! of it carried out on the plate's document, with what the flags give laid over (ADR 0470, 0472).
+//! of it carried out on the plate's document, with what the flags give laid over (ADR 0456, 0458).
 
 use std::time::Instant;
 

@@ -1,5 +1,5 @@
 //! `--edits` carried out through `core-document`'s apply, on a project or on models after their
-//! flags, and `--project-out` writing the plate they leave (ADR 0466, 0472).
+//! flags, and `--project-out` writing the plate they leave (ADR 0456, 0458).
 
 use std::path::{Path, PathBuf};
 

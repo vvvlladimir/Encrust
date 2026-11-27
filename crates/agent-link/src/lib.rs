@@ -1,6 +1,6 @@
 //! What `encrust-mcp` and the open window say to each other, and where they keep it: the lines
 //! of the window link, the file each agent keeps and the folders under the user's cache
-//! (ADR 0486, `docs/design/window-link.md`).
+//! (ADR 0455, `docs/design/window-link.md`).
 
 mod line;
 mod places;

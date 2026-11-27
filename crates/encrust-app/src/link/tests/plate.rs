@@ -1,5 +1,5 @@
 //! Schema 3: the plate handed to the server, and edits applied while it is the version they
-//! were built on (ADR 0466).
+//! were built on (ADR 0456).
 
 use std::sync::Arc;
 

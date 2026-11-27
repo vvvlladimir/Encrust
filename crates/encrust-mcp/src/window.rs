@@ -44,7 +44,7 @@ impl Window {
     }
 
     /// Hands `revision` to the window marked `open`, so it is shown whether the window
-    /// follows its agents or not, starting the window first where none answers (ADR 0465).
+    /// follows its agents or not, starting the window first where none answers (ADR 0462).
     pub async fn show_now(&self, revision: &Revision, plate: &Path) -> Result<(Value, bool)> {
         if self.file.is_none() {
             bail!("this server was started with --no-window");
@@ -111,7 +111,7 @@ impl Window {
     }
 
     /// The open window's plate as `job` builds on it: its file, version, the ids on it and the
-    /// job's model there, or `None` with no window that hands it over (ADR 0466).
+    /// job's model there, or `None` with no window that hands it over (ADR 0456).
     pub async fn plate(&self, job: &str) -> Option<HandedPlate> {
         let (stream, token) = self.connect().await?;
         let line = signed(PLATE_SCHEMA, token, &PlateLine::plate_of(job))?;

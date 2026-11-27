@@ -1,5 +1,5 @@
-//! `cargo xtask mcpb`: the MCP server and the command line it drives in one `.mcpb` bundle for
-//! Claude Desktop, for one platform. See `docs/decisions/0455` and `0461`.
+//! `cargo xtask mcpb`: the MCP server and the command line it drives in one `.mcpb` bundle a
+//! chat app installs, for one platform. See `docs/decisions/0455`.
 
 use std::fs::{self, File};
 use std::io::Write as _;
@@ -106,7 +106,7 @@ impl Platform {
         } else if triple.contains("linux") {
             ("linux", "linux", "")
         } else {
-            bail!("Claude Desktop runs on no {triple}");
+            bail!("no .mcpb bundle is made for {triple}");
         };
         Ok(Self {
             os,

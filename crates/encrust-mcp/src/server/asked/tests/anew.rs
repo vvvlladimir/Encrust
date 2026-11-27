@@ -1,4 +1,4 @@
-//! Supports stood again from nothing after a new pose (ADR 0482).
+//! Supports stood again from nothing after a new pose (ADR 0460).
 
 use super::*;
 

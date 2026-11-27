@@ -1,5 +1,5 @@
 //! How `--orient` stood a model, and the other ways the search offered with what each printed
-//! (ADR 0458).
+//! (ADR 0460).
 
 use core_document::degrees_of;
 use core_geometry::Scalar;

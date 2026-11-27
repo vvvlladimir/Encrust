@@ -1,5 +1,5 @@
 //! The hollow flags as the numbers a `Hollow` edit carries, and its report as the command line
-//! says it (ADR 0472).
+//! says it (ADR 0458).
 
 use std::time::Duration;
 

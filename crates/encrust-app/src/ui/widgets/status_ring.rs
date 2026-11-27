@@ -1,6 +1,6 @@
 //! A round status beside the print chip: a track, an arc for the share done or spinning while
 //! there is no share, a glyph or the percent in the middle, and a count in a disc at its
-//! corner. The printers' ring and the agents' (ADR 0264, 0465).
+//! corner. The printers' ring and the agents' (ADR 0264, 0462).
 
 use egui::{Align2, Color32, Pos2, Rect, Shape, Stroke, pos2, vec2};
 

@@ -1,5 +1,5 @@
 //! The placing flags as edits of each entry's object, in the order `place` runs them, and the
-//! copies once the plate is finished (ADR 0472, 0478).
+//! copies once the plate is finished (ADR 0458, 0459).
 
 use std::path::PathBuf;
 

@@ -464,8 +464,7 @@ impl Server {
     }
 }
 
-/// The client's own name for itself: from the request's `_meta`, else its handshake, else
-/// `claude-code` where the processes it starts are marked so, as it may send neither.
+/// The client's own name for itself: from the request's `_meta`, else its handshake.
 fn client_name(context: &Context) -> Option<String> {
     context
         .meta
@@ -476,9 +475,6 @@ fn client_name(context: &Context) -> Option<String> {
                 .peer
                 .peer_info()
                 .map(|info| info.client_info.name.clone())
-        })
-        .or_else(|| {
-            (std::env::var("CLAUDECODE").as_deref() == Ok("1")).then(|| "claude-code".to_owned())
         })
 }
 

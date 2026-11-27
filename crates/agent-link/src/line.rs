@@ -7,9 +7,9 @@ use core_edit::{Edit, ObjectId};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-/// The schema of a revision handed over as its plate (ADR 0473).
+/// The schema of a revision handed over as its plate (ADR 0462).
 pub const SHOW_SCHEMA: u64 = 4;
-/// The schema that asks for the plate and applies edits to it (ADR 0466).
+/// The schema that asks for the plate and applies edits to it (ADR 0456).
 pub const PLATE_SCHEMA: u64 = 3;
 
 /// What the open window writes to say where it listens and the token a line must carry; its
@@ -52,7 +52,7 @@ pub struct Show {
     /// The `.encrust` its check wrote, which the window puts on its plate.
     pub plate: PathBuf,
     /// Shown whether the window follows its agents or not: the client asked for it, or the
-    /// user did (ADR 0465).
+    /// user did (ADR 0462).
     #[serde(default)]
     pub open: bool,
 }
@@ -138,7 +138,7 @@ pub fn plate_refused(why: impl Into<String>) -> Value {
 }
 
 /// What the window says of edits handed over: all landed, none applied as the plate moved on to
-/// `version`, or none left applied for `why_not` (ADR 0483).
+/// `version`, or none left applied for `why_not` (ADR 0462).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplyReply {
     pub applied: bool,

@@ -201,10 +201,10 @@ jobs:
           cargo packager --release --target ${{ matrix.target }} -p encrust-app
           -f ${{ matrix.formats }} -o "$GITHUB_WORKSPACE/packages"
 
-      # The Claude Desktop extension: the command line and its MCP server in one `.mcpb`, named
+      # The chat-app extension: the command line and its MCP server in one `.mcpb`, named
       # `encrust-<os>-<arch>.mcpb` as the archive is. Signed only where the certificate is set
-      # (ADR 0461).
-      - name: Pack the Claude Desktop extension
+      # (ADR 0455).
+      - name: Pack the chat-app extension
         if: matrix.installers
         shell: bash
         env:

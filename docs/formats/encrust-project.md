@@ -60,7 +60,7 @@ hold no built geometry or diagnostics.
 | `cut.joints` | how a cut's halves are joined and what each kind is set to (ADR 0306); absent in older files and read as a plain cut |
 | `plates`, `active_plate` | one name per build plate, and the one the project was left on |
 | `objects[]` | name, plate, `Transform`, visibility, the import summary, and what each tool placed |
-| `objects[].id` | the object's id, unique on the plate and kept across saves, which an edit names it by (ADR 0466); absent in older files, and a repeated one, read as the next free id |
+| `objects[].id` | the object's id, unique on the plate and kept across saves, which an edit names it by (ADR 0456); absent in older files, and a repeated one, read as the next free id |
 | `next_id` | the id the next object made takes, so one deleted is never given again; absent in older files, and in those the window writes, and read as one past the highest id present |
 | `objects[].supports.grown` | every tree the automatic run grew, in the model's own space |
 | `objects[].supports.grown[].landing.pad_offset` | how far a tree's pad stands off its trunk on the plate, on `frozen` trees too (ADR 0239); absent in older files and read as none |

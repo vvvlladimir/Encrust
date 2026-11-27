@@ -266,7 +266,7 @@ mod tests {
                 skipped: None,
                 autopilot: prepared(autopilot_islands),
                 agents: vec![AgentRow {
-                    agent: "sonnet".into(),
+                    agent: "fast".into(),
                     prepared: prepared(0),
                     tool_calls: 4,
                     failed_calls: 0,
@@ -289,7 +289,7 @@ mod tests {
             changes,
             [Change::Fell {
                 model: "cube".into(),
-                agent: "sonnet".into()
+                agent: "fast".into()
             }]
         );
         assert!(changes[0].regressed());

@@ -1,5 +1,5 @@
 //! Check's automatic answers as flags: a `check` step run last, as Fix all runs it, so a run
-//! with them goes through the recipe's steps (ADR 0478).
+//! with them goes through the recipe's steps (ADR 0459).
 
 use anyhow::Result;
 use core_recipe::{Condition, Retry, Setting, Step, StepKind};

@@ -1,5 +1,5 @@
 //! A revision made of edits, checked on the open window's plate with what the user did there,
-//! and kept as that plate and its edits (ADR 0466, `docs/design/window-link.md`).
+//! and kept as that plate and its edits (ADR 0456, `docs/design/window-link.md`).
 
 use std::path::PathBuf;
 

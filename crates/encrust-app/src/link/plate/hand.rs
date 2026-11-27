@@ -1,4 +1,4 @@
-//! The job's plate written for a server to build its edits on (ADR 0466, 0477).
+//! The job's plate written for a server to build its edits on (ADR 0456, 0462).
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;

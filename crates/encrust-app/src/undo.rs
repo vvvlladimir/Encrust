@@ -75,7 +75,7 @@ pub struct History {
     /// Every change since the hold began waits to be one entry, see [`Self::hold`].
     held: bool,
     /// How many times the plate has changed by an entry recorded, undone or redone: the
-    /// version the window link answers with (ADR 0466).
+    /// version the window link answers with (ADR 0456).
     plate_version: u64,
 }
 

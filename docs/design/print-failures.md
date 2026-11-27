@@ -1,7 +1,7 @@
 # After a failed print
 
 What a failed print most likely came from, for `encrust diagnose` and the `report_print`
-tool (ADR 0463). The map is `crates/encrust-cli/src/diagnose/failures.toml`; this page says
+tool (ADR 0461). The map is `crates/encrust-cli/src/diagnose/failures.toml`; this page says
 how it is read and how to improve it.
 
 ## Symptoms, not photos

@@ -1,5 +1,5 @@
 //! Places on a model a person asks no support to touch, as a lip or a face, and the poses
-//! ranked to leave them clear (ADR 0458).
+//! ranked to leave them clear (ADR 0460).
 
 use core_geometry::{Mesh, Quat, Scalar, Vec2, Vec3};
 

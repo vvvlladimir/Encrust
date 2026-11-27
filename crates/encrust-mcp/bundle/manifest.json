@@ -4,7 +4,7 @@
   "display_name": "Encrust",
   "version": "{{version}}",
   "description": "Prepare a 3D model for an MSLA resin printer: orient, hollow, drain, support, check and write the printer file.",
-  "long_description": "Encrust is an offline resin slicer. This extension lets Claude drive it on your computer: every tool runs the encrust command line on your own files, profiles and printers on your network. Exposure comes from your own resin profiles only.",
+  "long_description": "Encrust is an offline resin slicer. This extension lets your AI assistant drive it on your computer: every tool runs the encrust command line on your own files, profiles and printers on your network. Exposure comes from your own resin profiles only.",
   "author": { "name": "Encrust contributors" },
   "homepage": "https://encrust.app",
   "repository": { "type": "git", "url": "https://github.com/vvvlladimir/Encrust" },

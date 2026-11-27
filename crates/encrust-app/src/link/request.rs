@@ -71,7 +71,7 @@ pub fn read(request: Show) -> Result<Shown> {
     Ok(Shown { request, project })
 }
 
-/// A revision to show: its plate being read off the drawing thread, then read (ADR 0483).
+/// A revision to show: its plate being read off the drawing thread, then read (ADR 0462).
 #[derive(Debug)]
 pub enum Waiting {
     Reading(Receiver<Result<Shown>>),

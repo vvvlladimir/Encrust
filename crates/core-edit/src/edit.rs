@@ -252,7 +252,7 @@ pub enum Edit {
         /// Reads the side painted shown in the file, as the window's Clean surface does.
         #[serde(default)]
         clean_surface: bool,
-        /// Takes every support of `object` away first, as after a new pose (ADR 0482).
+        /// Takes every support of `object` away first, as after a new pose (ADR 0460).
         #[serde(default)]
         anew: bool,
     },

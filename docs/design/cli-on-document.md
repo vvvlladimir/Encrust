@@ -1,8 +1,8 @@
 # The command line on the document
 
 The command line prepares models the way the window does: staged into one `Document`, each
-shaping flag folded to an `Edit`, every edit carried out by `core_document::apply` (ADR 0472,
-continuing ADR 0466). The window is the reference (ADR 0471); this page maps each
+shaping flag folded to an `Edit`, every edit carried out by `core_document::apply` (ADR 0458,
+continuing ADR 0456). The window is the reference (ADR 0457); this page maps each
 flag to its edit.
 
 ## The run
@@ -27,7 +27,7 @@ steps: see [The recipe executor](#the-recipe-executor).
 ## Every flag
 
 What the front end works out, from the machine it knows, goes into an edit as a final number
-(ADR 0471). A steer changes how the run goes, not the plate.
+(ADR 0457). A steer changes how the run goes, not the plate.
 
 | Flag | Becomes |
 |---|---|

@@ -1,5 +1,5 @@
 //! Which object is which on a plate, kept across saves so an edit can name its object
-//! (ADR 0466).
+//! (ADR 0456).
 
 use std::collections::HashSet;
 

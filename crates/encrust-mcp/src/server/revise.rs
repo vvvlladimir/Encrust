@@ -126,7 +126,7 @@ impl Server {
     }
 
     /// A check of `recipe` and the steps it ran, as the command line wrote them out, and the
-    /// plate it left where it only places its model (ADR 0466).
+    /// plate it left where it only places its model (ADR 0456).
     pub(super) async fn checked(
         &self,
         recipe: &Recipe,
@@ -250,7 +250,7 @@ impl Server {
 }
 
 /// The printer and resin a call names, both or neither: none is the standard printer with the
-/// stock resin (ADR 0475).
+/// stock resin (ADR 0457).
 pub(super) fn machine_of(
     printer: Option<String>,
     resin: Option<String>,

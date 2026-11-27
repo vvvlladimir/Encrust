@@ -1,6 +1,6 @@
 # The plate document
 
-One plate, edited one way by the window, the command line and `encrust-mcp` (ADR 0466).
+One plate, edited one way by the window, the command line and `encrust-mcp` (ADR 0456).
 
 ## Crates
 
@@ -87,7 +87,7 @@ by `core_volume::parts` (the default smallest part where unset), a part-off by
 `core_volume::part_off` into the part and the rest. A split that finds one body and no scrap
 joined or dropped is a no-op: the object keeps its id and `Report::Split` says so. Errors map
 as `NoNeck | NotOnModel` to `ApplyError::NoNeck`, a stopped run to `Cancelled`, any other to
-`Failed`. `apply` takes a `core_volume::Cancel` (ADR 0466's `Run`).
+`Failed`. `apply` takes a `core_volume::Cancel` (ADR 0456's `Run`).
 
 `Delete { object }` removes the object and the plugs laid for it. `Duplicate { object,
 offset_mm }` puts a copy with all its state and meshes right after it, under a new id, a plug
@@ -172,11 +172,11 @@ objects named by `Role::Plug(n)` and marked `plug_of` it, in place of those laid
 `removed` names (`Report::Plugged`). They stand in a row (`laid_beside`) where the window's tool
 moves each to the nearest free spot (`nearest_free`). `gap_mm` is the final gap in plate mm,
 no resin drift added or taken off here; the window stores the gap plus its resin's drift, which
-its tool takes off again, and `edits_of` takes the drift off the default (ADR 0471). The window
-starts its plugs job. The search reads the analysis step (ADR 0471).
+its tool takes off again, and `edits_of` takes the drift off the default (ADR 0457). The window
+starts its plugs job. The search reads the analysis step (ADR 0457).
 
 `Supports { object, profile, at_mm, only_at, cavity, shown_at, clean_surface, anew }` stands supports under one
-object; `anew` clears its points and frozen trees first, its painted regions kept (ADR 0482). `profile` is the plate's group of that name, else a shipped preset
+object; `anew` clears its points and frozen trees first, its painted regions kept (ADR 0460). `profile` is the plate's group of that name, else a shipped preset
 (`SupportProfile::shipped`), the active group where unset; neither is `NoProfile`. A preset becomes
 a group of the plate where none carries its name; the group named becomes the active one (as the
 panel takes a profile up), and the contacts go into it. A profile of a user's folder reaches an
@@ -193,7 +193,7 @@ by `supports_of`; `needs_on` (core-engine's one needs step) reads its printed su
 blocked and shown regions, its contacts, the `at_mm` points among them, as seeds and, on a hollow one, the outside of the wall; the
 `at_mm` points (the surface nearest each) stand before the run and each need is added after, the trees grown by `Growth::grow` and
 kept as `ObjectSupportState::grown` (`Report::Supported`). `only_at` places the points alone. The
-run reads the model at the analysis step (ADR 0471). The window starts its automatic
+run reads the model at the analysis step (ADR 0457). The window starts its automatic
 run on that object alone, adding to what stands.
 
 `Report::Supported` gives every contact, plate mm, the tips standing and each contact no tree carries
@@ -204,7 +204,7 @@ naming one support `OneSupportToMerge`, a tree the model or the plate refuses `M
 
 `Arrange { low_mm, plate_mm, clearance_mm }` spreads every visible object of the active plate over
 the usable area (the plate less its inset) `plate_mm` across from its corner `low_mm`, zero where
-unset; the front end that knows the machine works both out (ADR 0471). Each object is one footprint with its supports and raft as `supports_of`
+unset; the front end that knows the machine works both out (ADR 0457). Each object is one footprint with its supports and raft as `supports_of`
 meshes them (`Standing`, `pack`; the window's Arrange packs through the same `pack`). An object no
 slide fits is first turned the least that does (`turn_to_fit`, ADR 0418); the margin is
 `ArrangeSettings`' default. The supports regrow where the object now stands, so the edit moves

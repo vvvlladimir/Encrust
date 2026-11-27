@@ -119,7 +119,7 @@ pub enum Pose {
         #[schemars(skip)]
         keep_clear_seen_deg: Option<[f32; 3]>,
         /// The turn the search chose, the server's: kept once checked, so a later revision stands
-        /// the model so again rather than searching anew (ADR 0485).
+        /// the model so again rather than searching anew (ADR 0460).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[schemars(skip)]
         stood_deg: Option<[f32; 3]>,
@@ -203,13 +203,13 @@ impl Recipe {
     }
 
     /// Whether the user named a printer and resin; a job with neither runs on the standard
-    /// printer and stock resin until it is written (ADR 0475).
+    /// printer and stock resin until it is written (ADR 0457).
     pub fn names_a_machine(&self) -> bool {
         !self.printer.is_empty()
     }
 
     /// The printer and resin flags; where the user named neither, the standard machine, so a
-    /// plate point means one place before and after they do (ADR 0481); a project keeps its own.
+    /// plate point means one place before and after they do (ADR 0457); a project keeps its own.
     fn machine_named(&self) -> Vec<String> {
         if !self.names_a_machine() {
             return (!self.is_project())

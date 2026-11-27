@@ -1,5 +1,5 @@
 //! The agents' ring beside the print chip and the list it opens: each chat client's agent with
-//! the model in its hand, a press showing it on the plate (ADR 0465, 0476, `ui-screens.md`).
+//! the model in its hand, a press showing it on the plate (ADR 0462, `ui-screens.md`).
 
 use crate::agents::{Agent, Agents, Asked, Job, State};
 use crate::files::Handed;
@@ -238,11 +238,9 @@ fn client_names(list: &[Agent]) -> Vec<String> {
         .collect()
 }
 
-/// A client's own name for itself as its maker writes it; one it did not give is an agent.
+/// A client's own name for itself; one it did not give is an agent.
 fn client_name(client: Option<&str>) -> String {
     match client {
-        Some("claude-code") => "Claude Code".to_owned(),
-        Some("claude-ai") => "Claude Desktop".to_owned(),
         Some(name) if !name.is_empty() => name.to_owned(),
         _ => tr!("agents-unnamed"),
     }
@@ -262,16 +260,16 @@ mod tests {
     }
 
     #[test]
-    fn a_client_is_named_as_its_maker_names_it_and_a_second_one_numbered() {
+    fn a_client_is_named_as_it_names_itself_and_a_second_one_numbered() {
         let list = [
-            agent(Some("claude-code")),
-            agent(Some("claude-ai")),
-            agent(Some("claude-code")),
+            agent(Some("code-agent")),
+            agent(Some("chat-app")),
+            agent(Some("code-agent")),
             agent(Some("my-bench")),
         ];
         assert_eq!(
             client_names(&list),
-            ["Claude Code", "Claude Desktop", "Claude Code 2", "my-bench"]
+            ["code-agent", "chat-app", "code-agent 2", "my-bench"]
         );
     }
 
@@ -293,7 +291,7 @@ mod tests {
 
     #[test]
     fn the_ring_says_what_each_agent_there_does() {
-        let mut working = agent(Some("claude-code"));
+        let mut working = agent(Some("code-agent"));
         working.state = State::Working {
             tool: "check".into(),
             job: Some("cube-1".into()),
@@ -311,7 +309,7 @@ mod tests {
         let lines: Vec<&str> = said.lines().collect();
         assert_eq!(lines.len(), 2, "{said}");
         assert!(
-            lines[0].starts_with("Claude Code · working: cube, Revision 3 · checking, "),
+            lines[0].starts_with("code-agent · working: cube, Revision 3 · checking, "),
             "{said}"
         );
         assert_eq!(lines[1], "Agent · waiting");

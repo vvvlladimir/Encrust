@@ -1,5 +1,5 @@
 //! Schema 3 of the window link: the job's plate handed to a server as it stands, and the edits
-//! it built on it applied there while the window is still that version (ADR 0466, 0477).
+//! it built on it applied there while the window is still that version (ADR 0456, 0462).
 
 use std::collections::VecDeque;
 use std::sync::mpsc::Sender;
@@ -127,7 +127,7 @@ pub fn advance(applying: &mut Option<Applying>, window: &mut Window) -> bool {
     }
 }
 
-/// Puts the plate back as the edits found it, recording nothing, and answers why (ADR 0483).
+/// Puts the plate back as the edits found it, recording nothing, and answers why (ADR 0462).
 fn taken_back(applying: &mut Option<Applying>, window: &mut Window, why: String) -> bool {
     let doc = &mut *window.doc;
     (doc.history).abandon(&mut doc.scene, window.tools, &mut window.machine.slicing);

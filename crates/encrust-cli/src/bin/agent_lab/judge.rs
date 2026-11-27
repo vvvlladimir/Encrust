@@ -1,5 +1,5 @@
 //! Each preparation drawn, the autopilot's and a client's, and a judge of its own — another
-//! command, so no model grades its own work — asked which prints better (ADR 0458).
+//! command, so no model grades its own work — asked which prints better (ADR 0460).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

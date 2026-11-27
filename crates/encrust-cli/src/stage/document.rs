@@ -1,5 +1,5 @@
 //! Models staged as the window holds them, one `Document` object per piece, edited by the
-//! flags folded to edits (ADR 0472, `docs/design/cli-on-document.md`).
+//! flags folded to edits (ADR 0458, `docs/design/cli-on-document.md`).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

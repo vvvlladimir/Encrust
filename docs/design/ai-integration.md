@@ -1,7 +1,7 @@
 # AI integration
 
 How a language model takes a model from its file to a checked printer file through Encrust,
-with no window open: from Claude Desktop through a local extension, from a web chat that
+with no window open: from a desktop chat app through a local extension, from a web chat that
 reaches only remote servers through a connector whose work runs in the user's browser, or from the window's own panel. The engine
 computes on the user's machine in every case; nothing that reads a model runs on encrust.app.
 The server is ADR 0455; the rest is the plan.
@@ -30,7 +30,7 @@ orchestrates; every geometric choice — a pose, a wall, a hole, a tip — is th
 strict check decides when the work is done.
 
 ```
- Claude Desktop, Claude Code, an MCP client ── stdio ──> encrust-mcp ──┐
+ a chat app, a coding agent, any MCP client ── stdio ──> encrust-mcp ──┐
                                         └── or into the open window ───┤
  the window's agent panel (step 9) ── in process ───────────────────────┤
                                                                        v
@@ -54,7 +54,7 @@ a crate of its own when the window's panel or the connector needs it too.
 |---|---|---|---|
 | `list_profiles` | printers, the user's resins, support profiles | `profiles list` | read |
 | `inspect_model` | a file's size, shells, defects, what a repair would do | `inspect` | read |
-| `start_job` | a job for a model, on the printer and resin named or the standard ones (ADR 0475), checked as it stands | `estimate`, `--standard-machine` with none named (ADR 0481) | creates a job |
+| `start_job` | a job for a model, on the printer and resin named or the standard ones (ADR 0457), checked as it stands | `estimate`, `--standard-machine` with none named (ADR 0457) | creates a job |
 | `set_pose` | the orientation search, one of its ways or a turn; places kept clear; clears the drains | `--orient`, `--orient-pick`, `--orient-keep-clear`, `--rotate` | edits |
 | `compare_poses` | the search's best ways, each with what it prints and drawn | `estimate --orient-choices`, `render --orient-pick` | read |
 | `set_hollow` | the wall, infill, open floor | `--hollow` and its flags | edits |
@@ -66,7 +66,7 @@ a crate of its own when the window's panel or the connector needs it too.
 | `render` | pictures from each side, the check's findings marked | `render --mark` | read |
 | `find_printers` | the printers on the user's network that answer, each with its address | `printer discover` | read |
 | `send_to_printer` | the file to a printer on the user's network | `printer send` | outward |
-| `show_in_window` | a revision on the open window's plate, the window started if closed (ADR 0465) | — | edits the window |
+| `show_in_window` | a revision on the open window's plate, the window started if closed (ADR 0462) | — | edits the window |
 | `set_supports` `shown_at_mm` (step 13) | the side meant to be seen, painted round plate points | `--shown-at` | edits |
 | `list_recipes`, `use_recipe` (step 14) | the recipes with their steps; one for the job, by the user's purpose | `recipes list`, `recipes show`, `--recipe` | read, edits |
 | `import_resin` (step 15) | a resin from a sliced file or another slicer's export | `profiles import` | creates a profile |
@@ -83,7 +83,7 @@ is located (ADR 0400), so the next call can act on it.
 ### Better than the autopilot
 
 A client beats the autopilot only by what it knows and the engine does not: what the model
-is. So it chooses, and the engine proves (ADR 0458). `compare_poses` lays the search's
+is. So it chooses, and the engine proves (ADR 0460). `compare_poses` lays the search's
 finalists side by side, each printed on a trial and drawn; the client picks one for a reason
 it can state, and names the places no support should touch — a face, a lip — which the proof
 ranks first. Each check answers with `compared`, set against the revision before and the
@@ -96,7 +96,7 @@ finds the one printed. The client reads the user's words or photo and names symp
 fixed list — the part off the plate, a layer split, a hole or a crater, a support pulled
 from the model, a mark on a face, a crack in a hollow print. `encrust diagnose` reads each,
 against that revision's report, to the step that likely caused it and the change to try
-([print-failures.md](print-failures.md), ADR 0463); the change is an edit like any other,
+([print-failures.md](print-failures.md), ADR 0461); the change is an edit like any other,
 checked and compared. The map is data the command line reads, not the model's memory, so
 it is tested and improved by prints rather than by prompts.
 
@@ -106,35 +106,35 @@ MCP 2026-07-28 is stateless: no session, any request on any instance. A call the
 names its job, a directory in the user's cache of numbered revisions, each a TOML file —
 the model, printer, resin and each step's settings — that becomes `encrust` flags, and
 beside it the `core-recipe` its check ran. With the window followed, the window owns the job's plate,
-a plate of its own (ADR 0466, 0477): a revision whose every change is an edit is checked on it and kept
+a plate of its own (ADR 0456, 0462): a revision whose every change is an edit is checked on it and kept
 as that plate and its edits (`N.encrust`, `N.edits.json`), and handed to the window as edits,
 so what the user did there is in the next check; any other revision is shown as the plate its
-check wrote (ADR 0473). An editing tool writes the next revision and checks it; `revert` copies an old one forward;
+check wrote (ADR 0462). An editing tool writes the next revision and checks it; `revert` copies an old one forward;
 `report_print` appends what a print did. The cost: each check stages the model again from
 its file (ADR 0455). The connector keeps the same revisions in the page's own state, never
 on the server.
 
 ## The transports
 
-### Claude Desktop: an extension in one download
+### A desktop chat app: an extension in one download
 
 `encrust-mcp` as a binary over stdio, packed with `encrust` as an `.mcpb` bundle per
 platform (`server.type = "binary"`, `cargo xtask mcpb`). Double-clicking it installs it in
-Claude Desktop; Claude Code and other MCP clients take the same binary from their
+a chat app that takes `.mcpb` extensions; other MCP clients take the same binary from their
 config. The files are the user's own paths and the printer is on the user's network.
 
 - **Built by the release.** `release.yml` packs a bundle for each of its six targets after
   the build and attaches `encrust-<os>-<arch>.mcpb` to the release, signed with `mcpb sign`
-  where the certificate is set (ADR 0461).
+  where the certificate is set (ADR 0455).
 - **Downloaded from a button.** encrust.app's download page offers the bundle for the
-  visitor's system beside the installer; the window's File → Use with Claude Desktop
+  visitor's system beside the installer; the window's File → Use with an AI chat client
   downloads the one for its own version.
-- **Updated by a new download.** Anthropic's directory no longer takes `.mcpb` listings, so
+- **Updated by a new download.** The extension directory no longer takes `.mcpb` listings, so
   nothing updates it in place; the bundle reports its version in `instructions`.
 - **No window needed.** Resins come from `import_resin` and the exposure test (step 15).
-  When the window is open, each revision lands on a plate of its own (ADR 0473, 0477, `window-link.md`).
+  When the window is open, each revision lands on a plate of its own (ADR 0462, `window-link.md`).
 
-Claude on the web and on a phone runs no local program and gives an MCP App page no file
+A chat on the web or on a phone runs no local program and gives an MCP App page no file
 from the chat; it is served once one of those changes.
 
 ### A web chat: a connector whose page computes
@@ -170,12 +170,12 @@ threads the window already uses, never on the page's thread in a browser. Its pr
 
 | Provider | Needs | In the window | Over MCP |
 |---|---|---|---|
-| A Claude subscription | Claude Desktop or Claude Code | no: Anthropic lets no other product sign in with it | yes, the extension |
+| A chat subscription with a desktop app | its desktop app or coding agent | no: its maker lets no other product sign in with it | yes, the extension |
 | Another chat subscription | its web chat for the connector, or its local MCP client | only through a sign-in its maker offers to apps, once its terms are read | the connector, or its client locally |
-| An API key | Anthropic or any compatible service | yes, the key in the system's keychain | yes |
+| An API key | a model provider or any compatible service | yes, the key in the system's keychain | yes |
 | A local model | a local model server | yes, no key and no account | yes |
 
-The window never borrows a client's login token, nor drives an installed Claude Code as
+The window never borrows a client's login token, nor drives an installed coding agent as
 its engine: neither is a route its maker offers. A small local model calls tools less
 reliably, which the autopilot covers: it asks the model only what the engine cannot settle.
 
@@ -191,7 +191,7 @@ reliably, which the autopilot covers: it asks the model only what the engine can
 
 ## How quality is measured
 
-`agent-lab` (ADR 0456; `docs/cli.md`) prepares each model by the autopilot and by each
+`agent-lab` (ADR 0455; `docs/cli.md`) prepares each model by the autopilot and by each
 client under test, run as its own command against `encrust-mcp`, and scores both on the
 check's report — status, islands, suction cups, trapped pockets, contacts with no room,
 resin, print time — with the client's tool calls from the server's trace and its tokens from
@@ -218,21 +218,21 @@ score; a score that the prints contradict is fixed before any prompt is tuned.
 | Step | What | Where | After |
 |---|---|---|---|
 | 1–4 | Located findings, drains proposed, views with markers, the autopilot | engine and command line (done; main's 0400–0403) | — |
-| 5–7 | The stdio server and its jobs, its tools and `.mcpb`, the bench | `encrust-mcp`, `encrust-cli` (done, ADR 0455, 0456) | — |
-| 11 | Poses offered and chosen, places kept clear, each check compared, a judge; supports by hand | (done, ADR 0457, 0458) | 6, 7 |
+| 5–7 | The stdio server and its jobs, its tools and `.mcpb`, the bench | `encrust-mcp`, `encrust-cli` (done, ADR 0455) | — |
+| 11 | Poses offered and chosen, places kept clear, each check compared, a judge; supports by hand | (done, ADR 0459, 0460) | 6, 7 |
 | 12 | Merge main | (done) | — |
-| 8 | The open window owns the plate: a revision reaches it as edits, the rest as the plate its check wrote | `core-edit`, `core-document`, `encrust-cli`, `encrust-mcp`, `encrust-app` (done, ADR 0466, 0468, 0473) | 12 |
-| 13 | The side meant to be seen painted from the command line, `--shown-at X,Y,Z[:R]` | `core-engine`, `encrust-cli`, `encrust-mcp` (done, ADR 0460) | 12 |
-| 14 | Recipes chosen by purpose: `list_recipes`, `use_recipe`, the instructions ask what the print is for | `encrust-mcp` (done, ADR 0460) | 12 |
-| 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0460); a resin from a label's numbers by `create_resin` (done, ADR 0464) | 12 |
-| 16 | After the print: `report_print`, `print-failures.md` and the command line reading it | `encrust-cli`, `encrust-mcp` (done, ADR 0463) | 12 |
-| 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `encrust-cli`, `encrust-mcp` (done, ADR 0462) | 14 |
+| 8 | The open window owns the plate: a revision reaches it as edits, the rest as the plate its check wrote | `core-edit`, `core-document`, `encrust-cli`, `encrust-mcp`, `encrust-app` (done, ADR 0456, 0462) | 12 |
+| 13 | The side meant to be seen painted from the command line, `--shown-at X,Y,Z[:R]` | `core-engine`, `encrust-cli`, `encrust-mcp` (done, ADR 0459) | 12 |
+| 14 | Recipes chosen by purpose: `list_recipes`, `use_recipe`, the instructions ask what the print is for | `encrust-mcp` (done, ADR 0461) | 12 |
+| 15 | Resin with no window: `import_resin`; `encrust test-print`, the window's test prints moved into `core-samples` | `core-samples`, `encrust-cli`, `encrust-mcp` (done, ADR 0461); a resin from a label's numbers by `create_resin` | 12 |
+| 16 | After the print: `report_print`, `print-failures.md` and the command line reading it | `encrust-cli`, `encrust-mcp` (done, ADR 0461) | 12 |
+| 17 | `save_recipe`: a job's revisions or a description as a validated recipe | `encrust-cli`, `encrust-mcp` (done, ADR 0461) | 14 |
 | 18 | The connector's spike: file in, a prepare in the page, report to the model, file out | the spike, removed after 602ae603 (built; a prepare in an unisolated page measured at 20 s for a 175k-face figure; the rest waits on a run in a web chat) | 12 |
 | 19 | `web-engine` prepares, checks and draws; the connector and its page | `web-engine`, a new crate | 18 |
-| 20 | The extension shipped: bundles in `release.yml`, signed where the certificate is set, File → Use with Claude Desktop | `.github`, `xtask`, `encrust-app` (done, ADR 0461); the site's button is the site's | 12, 15 |
+| 20 | The extension shipped: bundles in `release.yml`, signed where the certificate is set, File → Use with an AI chat client | `.github`, `xtask`, `encrust-app` (done, ADR 0455); the site's button is the site's | 12, 15 |
 | 21 | The bench's sets per use, and their prints | `agent-lab` | 13–17 |
 | 9 | The window's agent panel and its providers; the catalogue moves down | `encrust-app` | 12 |
-| 10 | The MCP Apps page in Claude Desktop, the connector's page served locally | `encrust-mcp` | 19 |
+| 10 | The MCP Apps page in a desktop chat app, the connector's page served locally | `encrust-mcp` | 19 |
 
 Order: 19 once the spike's live run answers; 21 grows with each; 9 and 10 last.
 
@@ -242,5 +242,5 @@ Order: 19 once the spike's live run answers; 21 grows with each; 9 and 10 last.
    once its terms for apps are confirmed.
 2. **The connector's server** (before step 19, an ADR): where it is hosted on a free tier,
    and in what language; it sees a file's URL, never its bytes.
-3. **Photos** (settled by ADR 0463): the client names symptoms from the fixed list, and no
+3. **Photos** (settled by ADR 0461): the client names symptoms from the fixed list, and no
    image reaches the engine.

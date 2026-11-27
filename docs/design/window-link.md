@@ -1,14 +1,14 @@
 # The window link
 
 How `encrust-mcp` hands each revision it keeps to an open window, so a chat client's steps
-land in the viewport and on the undo stack (ADR 0473; the plan is `ai-integration.md`).
+land in the viewport and on the undo stack (ADR 0462; the plan is `ai-integration.md`).
 
 ## Finding the window
 
 A window on the desktop listens on a free port of `127.0.0.1` and writes `window.json` in the
 user's cache directory — `ProjectDirs("", "", "Encrust").cache_dir()`, beside the server's
 `mcp-jobs` — readable by the user alone. Both sides take the lines, the files and these names
-from `agent-link` (ADR 0486):
+from `agent-link` (ADR 0455):
 
 ```json
 {"schema": 4, "port": 50123, "token": "9f0c…32 hex digits", "pid": 4242}
@@ -22,7 +22,7 @@ file, or a port nobody answers on, is no window, and the tool answers as it did 
 ## One revision
 
 Each check of a model the server runs passes `--project-out`, and the plate written is kept
-as `N.encrust` beside the revision's `N.toml` (ADR 0473); `--recipe-out` keeps the recipe it
+as `N.encrust` beside the revision's `N.toml` (ADR 0462); `--recipe-out` keeps the recipe it
 ran as `N.recipe.toml` for `save_recipe`. After it keeps a revision, the server connects,
 writes one line of JSON and reads one back:
 
@@ -33,7 +33,7 @@ writes one line of JSON and reads one back:
 
 `printer` and `resin` are catalogue ids or TOML paths, as the job holds them. Each connection
 is answered on a thread of its own, at most eight at once, so a line waiting on the window holds
-up no other (ADR 0483). A line with another token or schema, or a plate that is not there, is
+up no other (ADR 0462). A line with another token or schema, or a plate that is not there, is
 refused and never reaches the plate. The window takes the revision on its next frame and
 answers then, the server waiting 15 s for it; the plate is read on a thread aside and stood
 once read, a plate that does not read told on the status line. The tool's answer carries the
@@ -49,7 +49,7 @@ holds it.
 
 ## The plate and its edits (schema 3)
 
-The open window owns the plate (ADR 0466), each job's a plate of its own (ADR 0477);
+The open window owns the plate (ADR 0456), each job's a plate of its own (ADR 0462);
 `schema` in its file is the highest line it reads. A server asks for its job's plate as it
 stands:
 
@@ -77,7 +77,7 @@ builds its edits on that file and hands them back with the version:
 Edits on a plate still at `base_version` run one after another on the job's plate, shown as
 each starts, as the tools' own jobs, and are answered once all have landed, within 10 min (the
 server waits 11): all of them one undo entry. One that does not land stops the rest, the plate
-is put back as the edits found it, and the answer says why (ADR 0483). The server then keeps no
+is put back as the edits found it, and the answer says why (ADR 0462). The server then keeps no
 revision of them; a revision checked by its flags before its edits were handed over is shown
 by its plate instead, the answer's `then_shown`. A plate the user changes while edits land is
 left as they left it, one undo entry, and answered with why. A plate that moved on is answered
@@ -128,10 +128,10 @@ does not answer for it.
 
 Each server keeps a file of its own in `agents/` beside `mcp-jobs/`, named for its process
 and start, written whole — into a `.part` file, then renamed — on each tool call and every
-20 s (ADR 0465):
+20 s (ADR 0462):
 
 ```json
-{"schema": 1, "pid": 4242, "client": "claude-code", "started_s": 1763460000,
+{"schema": 1, "pid": 4242, "client": "code-agent", "started_s": 1763460000,
  "seen_s": 1763460125, "working": {"tool": "set_hollow", "job": "cube-18e4…",
  "since_s": 1763460120}, "jobs": ["cube-18e4…", "bust-18e3…"]}
 ```
@@ -143,11 +143,11 @@ saying. A file whose `seen_s` is a week old is taken away by the next server tha
 
 The window reads the folder every 2 s off its drawing thread and lists the agents in the
 agents' ring beside the print chip (`ui-screens.md`, Top bar): each live agent with the job in
-its hand — the one `working` names, else the first of `jobs` (ADR 0476) — by its latest
+its hand — the one `working` names, else the first of `jobs` (ADR 0462) — by its latest
 revision — the highest `N.toml` — whose model is the first of `N.args.json` and whose
 verdict is `N.json`'s `status`. An ended agent, one with no job and a job no agent names
 are not listed, nor a job the user hid; one deleted from the list loses its folder
-(ADR 0480). A press on a job builds the same line the server sends from
+(ADR 0462). A press on a job builds the same line the server sends from
 `N.args.json` (`--printer` or `--profile`, `--resin` or `--material`) and `N.encrust`,
 marked `open`, and takes it as one handed over; one made on the plate is said to be there.
 

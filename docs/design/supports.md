@@ -265,7 +265,7 @@ that appeared from nowhere (ADR 0029).
 Generate ─> SupportJob ─> slice each model ─> generate_supports ─> contacts ─> ObjectSupports::add
 ```
 
-Each visible model is cut on its own at the analysis step (ADR 0471), so a contact
+Each visible model is cut on its own at the analysis step (ADR 0457), so a contact
 belongs to its model and travels with it (ADR 0028). The job reports progress and cancels
 like the slicing job (ADR 0018). Supports already under the model are handed in as seeds:
 they hold what is near them and are never moved, so a run only adds.

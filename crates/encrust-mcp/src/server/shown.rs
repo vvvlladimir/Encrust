@@ -1,5 +1,5 @@
 //! `show_in_window`: a revision on the open window's plate because the client asked, the
-//! window started where none answers (ADR 0465).
+//! window started where none answers (ADR 0462).
 
 use anyhow::{Result, bail};
 use serde_json::json;

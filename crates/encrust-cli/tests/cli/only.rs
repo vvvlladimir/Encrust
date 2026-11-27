@@ -1,5 +1,5 @@
 //! The objects of a plate by id: listed by `inspect`, shaped by `--only` or every one, on a
-//! project as on models, and drawn alone by `render --only` (ADR 0479).
+//! project as on models, and drawn alone by `render --only` (ADR 0458).
 
 use std::path::{Path, PathBuf};
 

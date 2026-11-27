@@ -1,5 +1,5 @@
 //! `--recipe-out`: the recipe a run takes a model through, each flag typed for it written into
-//! the steps it shapes, so another front end runs the same steps (ADR 0459).
+//! the steps it shapes, so another front end runs the same steps (ADR 0461).
 
 use core_recipe::{Plan, Recipe, Resolved, Setting, Step, StepKind};
 

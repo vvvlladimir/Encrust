@@ -37,7 +37,7 @@ pub struct Revision {
     /// Counted from one.
     pub number: u32,
     pub recipe: Recipe,
-    /// The `core-recipe` file its check ran, the flags folded in (ADR 0459); what `save_recipe`
+    /// The `core-recipe` file its check ran, the flags folded in (ADR 0461); what `save_recipe`
     /// keeps.
     pub steps: Option<String>,
 }

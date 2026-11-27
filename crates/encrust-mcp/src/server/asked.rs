@@ -1,5 +1,5 @@
 //! What a revision asks of the plate beyond the one before it, as edits of the job's model
-//! (ADR 0466): mended, repaired, pressed, sized, turned, labelled, split, cut, then finished.
+//! (ADR 0456): mended, repaired, pressed, sized, turned, labelled, split, cut, then finished.
 
 use core_edit::{Edit, ObjectId, OrientAim, bridge_edges};
 use serde_json::{Value, json};

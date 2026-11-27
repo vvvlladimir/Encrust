@@ -47,7 +47,7 @@ pub struct SupportPlan {
     /// Contacts placed by hand, as the window's Edit mode places them.
     pub by_hand: ByHand,
     /// The side meant to be seen, painted round points as the window's Clean surface brush
-    /// paints it, where contacts stand sparser and lightest (ADR 0425, 0460).
+    /// paints it, where contacts stand sparser and lightest (ADR 0425, 0459).
     pub shown_at: Vec<ShownAt>,
 }
 

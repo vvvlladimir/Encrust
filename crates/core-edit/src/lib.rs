@@ -1,5 +1,5 @@
 //! What is asked of a plate, as data: one [`Edit`] per action, carried out by
-//! `core-document` (ADR 0466, `docs/design/document.md`).
+//! `core-document` (ADR 0456, `docs/design/document.md`).
 
 mod bridge;
 pub mod defaults;

@@ -161,7 +161,7 @@ pub struct General {
     pub autosave: bool,
     /// How large the interface is drawn, in percent of the system's own size.
     pub interface_scale_percent: u16,
-    /// Whether each revision an agent keeps is run on the plate as it comes (ADR 0465).
+    /// Whether each revision an agent keeps is run on the plate as it comes (ADR 0462).
     pub follow_agents: bool,
 }
 

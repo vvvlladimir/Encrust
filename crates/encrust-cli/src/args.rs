@@ -53,7 +53,7 @@ pub struct ProfileArgs {
     pub set: ResinSet,
 
     /// Checks on the standard printer with the stock resin numbers, as a chat client's job does
-    /// until the user names theirs (ADR 0481); no file is written on it.
+    /// until the user names theirs (ADR 0457); no file is written on it.
     #[arg(long, conflicts_with_all = ["profile", "printer", "material", "resin"])]
     pub standard_machine: bool,
 }

@@ -55,8 +55,8 @@ Test prints ▸ (Crustling with Download, its percentage or STL as keys, then th
 in code; a browser, the four alone) · Save, Save as · Slice to .ext (why when off), Slice
 all N plates, Send a sliced file (where the printer in hand sends over a network; its name
 in the tooltip, why when off) · Import ▸
-(Machine profile, Resin profile), Machine and resin, Use with Claude Desktop (not in a browser;
-opens this version's extension for the system in the browser, ADR 0461), Settings · Quit (not
+(Machine profile, Resin profile), Machine and resin, Use with an AI chat client (not in a browser;
+opens this version's extension for the system in the browser, ADR 0455), Settings · Quit (not
 in a browser).
 Edit: Undo, Redo · Select all, Deselect, Duplicate (why when off), Remove, Move to plate ▸
 (the plate in hand ticked) · Arrange plate (why when off), Auto-orient plate, Prepare for print (why when off) · Find. View:
@@ -81,13 +81,13 @@ left edge, 300 wide, on `raised` with a window's shadow, a capital group name ov
   washed and ticked; under a rule, *Add a resin*, opening Machine and resin on the
   machine's resins.
 
-- *The agents* (ADR 0465, 0476), the same chooser under the agents' ring: a capital group a
+- *The agents* (ADR 0462), the same chooser under the agents' ring: a capital group a
   live agent with a model in hand — its client's name, a second of one client numbered — at
   work first; under each, one row, the job in hand: model glyph, the model's name without
   its extension over *Revision n* and the check's verdict, or what the agent does to it now
   with an `accent` dot; at the right, two 26 quiet squares: `X` hiding the job until its
   agent takes another, and the bin deleting its folder by a second press, dimmed while the
-  agent works on it (ADR 0480); the name and detail cut before them. No row is ticked, every
+  agent works on it (ADR 0462); the name and detail cut before them. No row is ticked, every
   job standing on its own plate. Groups stand 8 apart.
   A press shows that revision on the job's own plate as one undo; a
   project's row opens the project, asking first about unsaved work. *Opening a model…* in a
@@ -103,7 +103,7 @@ The ring is 32 across, filled clockwise with the current print's fraction in the
 what the printer is doing, the percent in its middle and a count badge when more than one
 printer answers.
 
-The agents' ring stands 6 right of the printers' (ADR 0465), 32 across, while an agent has a
+The agents' ring stands 6 right of the printers' (ADR 0462), 32 across, while an agent has a
 model in hand or opens one: the robot glyph in `text_mid` on a `line` track, a quarter arc in
 `accent` going round while one works, a count badge past one. On hover a line an agent: its
 name and state, and while it works the model, what it does to it and for how long. A press
@@ -267,7 +267,7 @@ track. With no stack it reads *No layers*.
   more* for several; a sliced file's rebuild counts its layers then its surface, a mesh's
   read runs its bar, and Cancel drops every import under way. Prepare for print's is
   *Preparing for print:* and its step, only in Preview, where the Prepare row is not shown.
-  A chat client's revision run on the plate (ADR 0459) is the same run, after *Showing
+  A chat client's revision run on the plate (ADR 0462) is the same run, after *Showing
   revision N of the chat client's job J* in the status line.
   Drain holes taken out and plugs cut are one card: *Reading the model for its holes and
   plugs*, then *Cutting N plugs*, then *Drilling the holes*, at the share of whichever is least

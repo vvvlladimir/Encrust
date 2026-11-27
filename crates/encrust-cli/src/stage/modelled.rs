@@ -1,5 +1,5 @@
 //! The modelling flags as edits of the plate, in the order they shape: combine, label, cut,
-//! then split or part-off each piece (ADR 0312, 0472).
+//! then split or part-off each piece (ADR 0312, 0458).
 
 use anyhow::{Context, Result, anyhow, bail};
 use core_document::{ApplyError, Report};

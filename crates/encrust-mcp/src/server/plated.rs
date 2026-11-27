@@ -1,5 +1,5 @@
 //! Several jobs laid on one plate, checked together and written as one printer file, each
-//! prepared in its own job first (ADR 0478).
+//! prepared in its own job first (ADR 0459).
 
 use anyhow::{Result, bail};
 use serde_json::json;

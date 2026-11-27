@@ -553,35 +553,11 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0257](0257-what-an-edit-sets-off-is-part-of-it.md) | Record what an edit sets off as part of it, and do it again after an undo | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Superseded by 0294 |
-| [0455](0455-a-language-model-drives-the-command-line-over-mcp.md) | A language model drives the command line over MCP, a job of TOML revisions at a time | Proposed |
-| [0456](0456-a-model-is-benched-through-its-own-client-against-the-autopilot.md) | Bench a language model through its own client, against the autopilot | Proposed |
-| [0457](0457-the-command-line-places-supports-by-hand.md) | Place supports by hand on the command line | Proposed |
-| [0458](0458-a-client-chooses-among-poses-the-engine-proved.md) | A client chooses among the poses the engine proved, and is held to its own last step | Proposed |
-| [0459](0459-a-revision-is-a-recipe-the-open-window-runs.md) | A job's revision is a recipe, which the open window runs | Superseded by 0473 |
-| [0460](0460-a-chat-client-names-what-shows-and-brings-the-resin-with-no-window.md) | A chat client names what shows, picks the recipe and brings the resin, with no window | Proposed |
-| [0461](0461-each-release-ships-the-claude-desktop-extension.md) | Each release ships the Claude Desktop extension, one per installer's platform | Proposed |
-| [0462](0462-a-chat-client-keeps-a-way-of-preparing-as-a-recipe.md) | A chat client keeps a way of preparing as a recipe the engine checked | Proposed |
-| [0463](0463-a-failed-print-is-read-against-its-check.md) | A failed print is read against the check of the file printed | Proposed |
-| [0464](0464-a-chat-client-makes-a-resin-from-its-makers-numbers.md) | A chat client makes a resin from its maker's numbers, held to the printer's limits | Proposed |
-| [0465](0465-the-window-lists-agents-and-shows-their-work-when-asked.md) | The window lists its agents and shows their work when asked | Proposed; what the ring lists narrowed by 0476, a plate per job by 0477 |
-| [0466](0466-one-plate-document-is-edited-by-one-apply-and-the-open-window-owns-it.md) | One plate document is edited by one apply, and the open window owns it | Accepted; the window's Prepare for print keeps its own jobs (0470); the plate handed is the job's own (0477) |
-| [0467](0467-the-document-reaches-the-cores-its-edits-run-on.md) | The document reaches the cores its edits run on | Accepted |
-| [0468](0468-supports-are-grown-the-windows-way-for-every-front-end.md) | Supports are grown the window's way for every front end | Accepted |
-| [0469](0469-the-document-arranges-a-plate-through-core-plate.md) | The document arranges a plate through core-plate | Accepted |
-| [0470](0470-a-recipes-plate-step-is-an-edit.md) | A recipe's plate step is an edit | Accepted |
-| [0471](0471-model-analysis-at-one-step.md) | Model analysis runs at one step, and an edit knows no printer or resin | Accepted; what an edit knows of a machine stated as one rule by 0475 |
-| [0472](0472-the-command-line-runs-on-the-document.md) | The command line runs on the document | Accepted |
-| [0473](0473-a-revision-is-shown-by-the-plate-its-check-wrote.md) | A revision is shown by the plate its check wrote | Accepted; on the job's own plate (0477) |
-| [0474](0474-a-lift-is-a-placement-on-every-front-end.md) | A lift is a placement on every front end | Proposed |
-| [0475](0475-a-job-runs-on-the-standard-machine-until-it-is-written.md) | A job runs on the standard machine until it is written | Accepted; checked on it by `--standard-machine` (0481) |
-| [0476](0476-the-agents-ring-lists-only-the-work-in-hand.md) | The agents' ring lists only the work in hand | Proposed; a job hidden or deleted from it by 0480 |
-| [0477](0477-an-agents-job-stands-on-a-plate-of-its-own.md) | An agent's job stands on a plate of its own in the window | Proposed |
-| [0478](0478-the-command-line-and-the-agents-server-reach-the-windows-model-work.md) | The command line and the agents' server reach the window's model work | Proposed; a plate's objects by id (0479) |
-| [0479](0479-the-command-line-shapes-a-plates-objects-by-id.md) | The command line shapes a plate's objects by id | Proposed |
-| [0480](0480-a-job-is-hidden-or-deleted-from-the-agents-list.md) | A job is hidden or deleted from the agents' list | Proposed |
-| [0481](0481-a-job-with-no-machine-is-checked-on-the-standard-one.md) | A job with no machine is checked on the standard one, and cut pieces are shaped after the cut | Proposed |
-| [0482](0482-a-new-pose-stands-the-supports-anew.md) | A new pose from a client stands the supports anew | Proposed |
-| [0483](0483-edits-handed-to-the-window-land-whole-or-not-at-all.md) | Edits handed to the window land whole or not at all | Proposed |
-| [0484](0484-a-step-for-some-objects-keeps-the-others-steps.md) | A step for some objects keeps the others' steps | Proposed |
-| [0485](0485-a-searched-pose-is-kept-as-its-turn.md) | A searched pose is kept as its turn | Proposed |
-| [0486](0486-the-window-and-its-agents-server-share-agent-link.md) | The window and its agents' server share agent-link | Proposed |
+| [0455](0455-a-chat-client-drives-the-command-line-over-mcp.md) | A chat client drives the command line over MCP: jobs of revisions, a bench, an extension per release, `agent-link` | Accepted |
+| [0456](0456-one-plate-document-is-edited-by-one-apply-and-the-open-window-owns-it.md) | One plate document is edited by one apply, and the open window owns it | Accepted |
+| [0457](0457-a-plate-knows-no-machine-and-is-analysed-at-one-step.md) | A plate knows no machine, is analysed at one step, and is checked on the standard one | Accepted |
+| [0458](0458-the-command-line-runs-on-the-document-and-shapes-objects-by-id.md) | The command line runs on the document and shapes a plate's objects by id | Accepted |
+| [0459](0459-the-command-line-and-the-server-reach-the-windows-model-work.md) | The command line and the server reach the window's model work | Accepted |
+| [0460](0460-a-client-chooses-among-poses-the-engine-proved.md) | A client chooses among the poses the engine proved | Accepted |
+| [0461](0461-resin-recipes-and-print-failures-with-no-window.md) | A chat client sets up a resin, keeps a recipe and reads a failed print with no window | Accepted |
+| [0462](0462-the-window-lists-agents-and-shows-each-job-on-its-own-plate.md) | The window lists its agents and shows each job on a plate of its own | Accepted |

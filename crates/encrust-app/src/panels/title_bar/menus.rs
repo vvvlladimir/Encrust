@@ -271,9 +271,9 @@ fn setup_items(ui: &mut egui::Ui, window: &mut Window) {
         open_machines(window.machine);
     }
     #[cfg(not(target_arch = "wasm32"))]
-    if clicked(ui, &MenuRow::new(None, &tr!("menu-claude-desktop"))) {
+    if clicked(ui, &MenuRow::new(None, &tr!("menu-chat-extension"))) {
         ui.ctx()
-            .open_url(egui::OpenUrl::new_tab(claude_extension_url()));
+            .open_url(egui::OpenUrl::new_tab(chat_extension_url()));
     }
     let settings = tr!("menu-settings");
     if clicked(
@@ -284,10 +284,10 @@ fn setup_items(ui: &mut egui::Ui, window: &mut Window) {
     }
 }
 
-/// The Claude Desktop extension of this version, for this system: the browser downloads it and
-/// opening it installs it (ADR 0461).
+/// The chat-app extension of this version, for this system: the browser downloads it and
+/// opening it installs it (ADR 0455).
 #[cfg(not(target_arch = "wasm32"))]
-fn claude_extension_url() -> String {
+fn chat_extension_url() -> String {
     let os = match std::env::consts::OS {
         "macos" => "macos",
         "windows" => "windows",

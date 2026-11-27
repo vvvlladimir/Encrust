@@ -1,5 +1,5 @@
 //! Hollowing, drains, channels, plugs and supports as edits of each entry's object, in the
-//! window's order: holes stand where the object does, supports grow under it after (ADR 0472).
+//! window's order: holes stand where the object does, supports grow under it after (ADR 0458).
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;

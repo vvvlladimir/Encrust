@@ -87,7 +87,7 @@ showcase = []
 fontdb.workspace = true
 ureq = { workspace = true, features = ["rustls"] }
 rfd.workspace = true
-# What the window and encrust-mcp say to each other, and where; see docs/decisions/0486.
+# What the window and encrust-mcp say to each other, and where; see docs/decisions/0455.
 agent-link.workspace = true
 
 # The window buttons macOS draws, set on the top bar's centre line, and the application menu;

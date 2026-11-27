@@ -47,21 +47,21 @@ fn an_agent_at_work_is_listed_first_with_the_job_its_tool_names() {
         &dir,
         "1-100.json",
         &json!({
-            "client": "claude-ai", "started_s": 100, "seen_s": 990, "jobs": ["bust-2"],
+            "client": "chat-app", "started_s": 100, "seen_s": 990, "jobs": ["bust-2"],
         }),
     );
     agent(
         &dir,
         "2-200.json",
         &json!({
-            "client": "claude-code", "started_s": 200, "seen_s": 980,
+            "client": "code-agent", "started_s": 200, "seen_s": 980,
             "working": {"tool": "check", "job": "cube-1", "since_s": 970},
             "jobs": ["bust-2", "cube-1"],
         }),
     );
     let agents = listed(&dir, 1000);
     assert_eq!(agents.len(), 2);
-    assert_eq!(agents[0].client.as_deref(), Some("claude-code"));
+    assert_eq!(agents[0].client.as_deref(), Some("code-agent"));
     assert_eq!(
         agents[0].state,
         State::Working {

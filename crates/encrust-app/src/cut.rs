@@ -109,7 +109,7 @@ impl CutTool {
     }
 
     /// Starts the cut `asked` describes on one model, as [`CutTool::start`] does, whatever the
-    /// panel is set to: what an edit handed over the window link asks (ADR 0466).
+    /// panel is set to: what an edit handed over the window link asks (ADR 0456).
     pub fn start_asked(&mut self, scene: &Scene, id: ObjectId, asked: CutAsked) -> Result<()> {
         let object = scene
             .get(id)
@@ -207,7 +207,7 @@ impl CutTool {
     }
 
     /// Starts the split of one model into `settings`' parts, or the part at plate point `at` cut
-    /// off, whatever the panel is set to, as an edit over the window link asks (ADR 0466).
+    /// off, whatever the panel is set to, as an edit over the window link asks (ADR 0456).
     pub fn start_split_asked(
         &mut self,
         scene: &Scene,

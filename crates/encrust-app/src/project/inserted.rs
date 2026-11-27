@@ -1,5 +1,5 @@
 //! A project's objects put on the plate beside what stands, as the window shows a revision of
-//! a chat client's job by the plate its check wrote (ADR 0473).
+//! a chat client's job by the plate its check wrote (ADR 0462).
 
 use core_engine::project::{Group, ObjectState, Project, regroup};
 

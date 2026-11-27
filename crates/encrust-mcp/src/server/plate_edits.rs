@@ -1,5 +1,5 @@
 //! What a client asks of the plate handed to the open window as edits of it, and an undone cut
-//! carried back into the job (ADR 0466, `docs/design/window-link.md`).
+//! carried back into the job (ADR 0456, `docs/design/window-link.md`).
 
 use agent_link::ApplyReply;
 use core_edit::{Edit, ObjectId};
@@ -49,7 +49,7 @@ impl Server {
     }
 
     /// Hands what `revision` asks beyond the one before to the open window as edits of the job's
-    /// model; `None` for one no edit carries, shown by its check's plate instead (ADR 0473).
+    /// model; `None` for one no edit carries, shown by its check's plate instead (ADR 0462).
     pub(super) async fn edits_in_window(
         &self,
         revision: &Revision,

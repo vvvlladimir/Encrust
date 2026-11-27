@@ -1,5 +1,5 @@
 //! The objects of a saved plate as `inspect` lists them: the ids `--only` takes, and what each
-//! is and where it stands (ADR 0479).
+//! is and where it stands (ADR 0458).
 
 use std::fmt;
 

@@ -1103,9 +1103,9 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
 | `completions` | Shell completion for bash, zsh, fish, elvish, PowerShell. |
 
-**For a chat client:** each release carries an extension for Claude Desktop, downloaded from
-the release page or the window's File → Use with Claude Desktop and installed by opening it.
-`encrust-mcp` gives Claude Desktop, Claude Code or any other MCP client the
+**For a chat client:** each release carries an extension for a desktop AI chat app, downloaded from
+the release page or the window's File → Use with an AI chat client and installed by opening it.
+`encrust-mcp` gives a desktop chat app, a coding agent or any other MCP client the
 command line as tools, so a language model prepares a model step by step on your
 computer, checks it and writes the file. It asks you for the printer and resin; until you
 say, it works on the standard printer's plate with stock resin numbers, so a cut it made
@@ -1125,7 +1125,7 @@ with what it prints, and the model picks one for what the print is — keeping s
 face you named, say, which the search then ranks first. A model on supports that the agent
 stands a new way gets its supports again for that pose, none left over from the old one. Every step it takes is set against
 the step before and the autopilot's own preparation, so it can undo one that made the print
-worse. The window lists every agent — Claude Code, Claude Desktop — in a robot's ring beside the
+worse. The window lists every agent — each chat client by the name it gives — in a robot's ring beside the
 print chip, there while an agent has a model in hand and turning while it works, each with
 the model it works on and what the check found — no history; a job can be hidden from the
 list or, once its agent is not working on it, deleted with its revisions; a click

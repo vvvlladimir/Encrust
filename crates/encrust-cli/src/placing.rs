@@ -1,5 +1,5 @@
 //! The window's Position moves the other placing flags leave out: a mirror, a move by a
-//! distance and copies, each an edit `stage/placed.rs` makes (ADR 0478).
+//! distance and copies, each an edit `stage/placed.rs` makes (ADR 0459).
 
 use core_edit::Axis;
 use core_geometry::Vec3;

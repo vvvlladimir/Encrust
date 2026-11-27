@@ -1,5 +1,5 @@
 //! `--orient-choices`, `--orient-pick` and `--orient-keep-clear`: the search's best ways to
-//! stand a model, one of them taken, and places kept off the supports (ADR 0458).
+//! stand a model, one of them taken, and places kept off the supports (ADR 0460).
 
 use std::path::PathBuf;
 

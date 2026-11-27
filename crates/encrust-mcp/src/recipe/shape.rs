@@ -178,7 +178,7 @@ impl From<Axis> for core_edit::Axis {
 
 impl Cut {
     /// The cut as an edit of `object` on a plate, its halves laid on their cut faces unless
-    /// left upright, as `--cut` does (ADR 0466).
+    /// left upright, as `--cut` does (ADR 0456).
     pub fn edit(&self, object: ObjectId) -> Edit {
         Edit::Cut {
             object,

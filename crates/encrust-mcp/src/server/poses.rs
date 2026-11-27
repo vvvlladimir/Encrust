@@ -1,5 +1,5 @@
 //! The search's best ways to stand a model laid side by side, each with what it prints and
-//! drawn, for a client to choose by what the model is (ADR 0458).
+//! drawn, for a client to choose by what the model is (ADR 0460).
 
 use anyhow::{Context as _, Result, bail};
 use rmcp::model::{CallToolResult, ContentBlock};
@@ -74,7 +74,7 @@ impl Server {
             drains.at_mm.clear();
         }
         let count = compare.count.unwrap_or(COUNT).clamp(2, 8);
-        // The search runs in the first run, before any step naming some objects (ADR 0479).
+        // The search runs in the first run, before any step naming some objects (ADR 0458).
         let flags = recipe.runs()?.swap_remove(0);
         let mut args = vec!["estimate".to_owned()];
         args.extend(flags.iter().cloned());

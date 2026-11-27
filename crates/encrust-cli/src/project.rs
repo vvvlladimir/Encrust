@@ -1,5 +1,5 @@
 //! A `.encrust` project saved by the window, sliced a plate at a time, its objects shaped by the
-//! flags (ADR 0479); its printer and resin by id (ADR 0261), its settings under the flags' (0380).
+//! flags (ADR 0458); its printer and resin by id (ADR 0261), its settings under the flags' (0380).
 
 use std::path::{Path, PathBuf};
 

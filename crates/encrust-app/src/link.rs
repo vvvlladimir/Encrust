@@ -1,5 +1,5 @@
 //! The window as `encrust-mcp`'s viewport: each job stands on a plate of its own as the plate its
-//! check wrote, in place of its last, one undo each (ADR 0473, 0477, `window-link.md`).
+//! check wrote, in place of its last, one undo each (ADR 0462, `window-link.md`).
 
 mod line;
 mod listen;
@@ -29,7 +29,7 @@ pub struct Link {
     followed: Vec<Followed>,
     /// Where the server keeps its jobs, beside the window's file.
     jobs: PathBuf,
-    /// Edits a server handed over, being applied one after another (ADR 0466).
+    /// Edits a server handed over, being applied one after another (ADR 0456).
     applying: Option<plate::Applying>,
 }
 
@@ -97,7 +97,7 @@ impl Link {
     }
 
     /// Answers one line: a revision is taken to show, the plate handed over or edits applied
-    /// as ADR 0466 does, all only while the window follows its agents.
+    /// as ADR 0456 does, all only while the window follows its agents.
     fn answer(&mut self, line: Line, reply: Sender<Value>, follow: bool, window: &mut Window) {
         let refused = |why: &str| serde_json::to_value(ShowReply::refused(why));
         match line {

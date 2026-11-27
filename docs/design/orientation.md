@@ -287,7 +287,7 @@ for a column, the pose fails auto, as a cup would. All are ranked
 by the rule above on what they printed — support resin, newtons, millimetres of stack —
 and `prove` answers every finalist with what decided its place, `core_plate::rulings`.
 
-Places a person asks no support to touch (`KeepClear`, ADR 0458) are counted on each trial:
+Places a person asks no support to touch (`KeepClear`, ADR 0460) are counted on each trial:
 the contacts within a radius of a point. The ranked finalists are then sorted, stably, by
 whether they lose the print and then by that count, so a pose touching fewer comes first
 unless it has a cup, a tearing pull or an overflow a sounder one has not. A pick past the

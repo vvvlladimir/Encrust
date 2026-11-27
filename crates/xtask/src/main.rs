@@ -33,7 +33,7 @@ enum Command {
     Licenses(licenses::Args),
     /// Builds the window as a macOS app bundle macOS lets onto the local network, and opens it.
     App(app::Args),
-    /// Packs the MCP server and the command line into a `.mcpb` bundle for Claude Desktop.
+    /// Packs the MCP server and the command line into a `.mcpb` bundle a chat app installs.
     Mcpb(mcpb::Args),
     /// Lists, as Fluent to paste and translate, the window's messages a language lacks.
     I18n(i18n::Args),

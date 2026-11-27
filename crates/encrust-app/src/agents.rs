@@ -1,5 +1,5 @@
 //! The agents the window lists: each live `encrust-mcp` that keeps its file in `agents/` and
-//! has a model in hand, read from `mcp-jobs/` (ADR 0465, 0476, `docs/design/window-link.md`).
+//! has a model in hand, read from `mcp-jobs/` (ADR 0462, `docs/design/window-link.md`).
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
@@ -38,7 +38,7 @@ pub struct Asked {
 /// One server, by the client that drives it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Agent {
-    /// The client's own name for itself: `claude-code`, say.
+    /// The client's own name for itself: `code-agent`, say.
     pub client: Option<String>,
     pub started_s: u64,
     pub state: State,

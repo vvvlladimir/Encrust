@@ -94,7 +94,7 @@ impl Default for Scene {
             active: 0,
             selected: Vec::new(),
             anchor: None,
-            // Nought is the id a project file written before ids reads as (ADR 0466).
+            // Nought is the id a project file written before ids reads as (ADR 0456).
             next_id: 1,
         }
     }
@@ -199,7 +199,7 @@ impl Scene {
         self.insert_as(ObjectId(self.next_id), imported)
     }
 
-    /// Adds a model under `id`, as a project file keeps it (ADR 0466), or under the next
+    /// Adds a model under `id`, as a project file keeps it (ADR 0456), or under the next
     /// identifier where `id` is unset or taken; selects it and returns the identifier.
     pub fn insert_as(&mut self, id: ObjectId, imported: Imported) -> ObjectId {
         let id = if id == ObjectId::UNSET || self.get(id).is_some() {
