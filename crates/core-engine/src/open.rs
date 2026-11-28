@@ -62,20 +62,22 @@ pub fn open_plate(
     machine: &Machine,
     opening: &Opening,
 ) -> Result<Plate, EngineError> {
+    let models = plate_models(project, opening.plate);
+    open_plate_of(models, project, machine, opening)
+}
+
+/// As [`open_plate`], with the plate's `models` made already, in plate order.
+pub fn open_plate_of(
+    models: Vec<Model>,
+    project: &Project,
+    machine: &Machine,
+    opening: &Opening,
+) -> Result<Plate, EngineError> {
     let manifest = &project.manifest;
     let material = match machine.printer_id.as_deref() {
         Some(id) => machine.resin.starting_point(id),
         None => machine.resin.clone(),
     };
-
-    let table = support_table(manifest);
-    let models = manifest
-        .objects
-        .iter()
-        .zip(&project.models)
-        .filter(|(object, _)| object.printable_on(opening.plate))
-        .map(|(object, meshes)| model(object, meshes, &table, manifest.supports.raft))
-        .collect();
 
     let slicing = &manifest.slicing;
     Ok(Plate {
@@ -97,6 +99,30 @@ pub fn open_plate(
         raster_window: opening.raster_window,
         created_unix_s: opening.created_unix_s,
     })
+}
+
+/// The models printed on `plate` of `project`, standing where the file has them, for a caller
+/// that picks its own machine.
+pub fn plate_models(project: &Project, plate: u32) -> Vec<Model> {
+    let manifest = &project.manifest;
+    let table = support_table(manifest);
+    (manifest.objects.iter())
+        .zip(&project.models)
+        .filter(|(object, _)| object.printable_on(plate))
+        .map(|(object, meshes)| model(object, meshes, &table, manifest.supports.raft))
+        .collect()
+}
+
+/// Object `index` of `project` as a run cuts it, its supports under it.
+pub fn object_model(project: &Project, index: usize) -> Option<Model> {
+    let manifest = &project.manifest;
+    let (object, meshes) = (manifest.objects.get(index)?, project.models.get(index)?);
+    Some(model(
+        object,
+        meshes,
+        &support_table(manifest),
+        manifest.supports.raft,
+    ))
 }
 
 /// The profile of every support group, the first of which everything falls back to.

@@ -1,5 +1,5 @@
 use egui::{
-    Align, Align2, Color32, Frame, Id, Layout, Rect, RichText, Sense, Ui, UiBuilder, WidgetInfo,
+    Align, Color32, Frame, Id, Layout, Rect, RichText, Sense, Ui, UiBuilder, WidgetInfo,
     WidgetType, vec2,
 };
 
@@ -182,20 +182,30 @@ fn rename_field(
 /// A name over the line that says more about it, drawn from `left_center`: a machine over
 /// its maker and the file it is sliced into.
 pub fn two_lines(painter: &egui::Painter, left_center: egui::Pos2, title: &str, detail: &str) {
+    two_lines_in(painter, left_center, (title, detail), f32::INFINITY);
+}
+
+/// The same two lines, each cut with an ellipsis at `room_px`; answers whether one was cut.
+pub fn two_lines_in(
+    painter: &egui::Painter,
+    left_center: egui::Pos2,
+    (title, detail): (&str, &str),
+    room_px: f32,
+) -> bool {
     let colors = theme::colors();
     let (title_at, detail_at) = (left_center - vec2(0.0, 8.0), left_center + vec2(0.0, 9.0));
-    painter.text(
-        title_at,
-        Align2::LEFT_CENTER,
-        title,
-        theme::label(),
-        colors.text_high,
-    );
-    painter.text(
-        detail_at,
-        Align2::LEFT_CENTER,
-        detail,
-        theme::small(),
-        colors.text_low,
-    );
+    let lines = [
+        (title, title_at, theme::label(), colors.text_high),
+        (detail, detail_at, theme::small(), colors.text_low),
+    ];
+    let mut cut = false;
+    for (text, at, font, ink) in lines {
+        let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font, ink);
+        job.wrap = egui::text::TextWrapping::truncate_at_width(room_px.max(0.0));
+        let galley = painter.layout_job(job);
+        cut |= galley.elided;
+        let top_left = at - vec2(0.0, galley.size().y / 2.0);
+        painter.galley(top_left, galley, ink);
+    }
+    cut
 }

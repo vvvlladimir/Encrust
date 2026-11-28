@@ -213,11 +213,19 @@ impl Slots<'_> {
 }
 
 fn mesh_tree(slots: &mut Slots, tree: &SupportTree, profiles: Profiles, placed: &Placed) {
+    let firsts: Vec<usize> = slots.0.iter().map(|mesh| mesh.vertices.len()).collect();
     for body in bodies(tree, profiles, placed) {
         sweep(slots.of(body.group), &body.tube);
     }
     let profile = profiles.of(tree.group());
     stand_on(slots.of(tree.group()), &drawn(tree, profile), profile);
+    // An end sunk into a model resting on the plate would pass under it: the plate stops it,
+    // as it stops what prints.
+    for (mesh, first) in slots.0.iter_mut().zip(firsts) {
+        for vertex in &mut mesh.vertices[first..] {
+            vertex.z = vertex.z.max(0.0);
+        }
+    }
 }
 
 /// `tree` as it is drawn: a lone tip whose pillar is shorter than its head is one tube from the

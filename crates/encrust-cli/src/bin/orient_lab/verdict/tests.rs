@@ -15,6 +15,7 @@ fn printout(contacts: usize) -> Printout {
         hanging: 0,
         top_contacts: 0,
         seen_contacts: 0.0,
+        kept_clear_touched: 0,
         layers: 100,
         stack_mm: 5.0,
         pull_n: contacts as f64,

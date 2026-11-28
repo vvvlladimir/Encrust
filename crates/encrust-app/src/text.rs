@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 
 use anyhow::Result;
+use core_document::{LabelAsked, Lettering, label_prisms};
 use core_geometry::{Mesh, PlacedHit, Scalar, transform_mesh};
 use core_text::{
     Font, Frame, LABEL_DEPTH_MM, LETTER_HEIGHT_MM, Label, LabelSettings, Shape, TextError, label,
     outline,
 };
-use core_volume::Boolean;
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::tr;
@@ -245,20 +245,38 @@ impl TextTool {
         let label = self
             .label_at(object, hit)
             .map_err(|error| anyhow::anyhow!(reason(&error)))?;
-        let mut placed = vec![transform_mesh(&object.mesh, object.transform)];
-        placed.extend(label.prisms);
+        let placed = transform_mesh(&object.mesh, object.transform);
+        let lettering = Lettering {
+            prisms: label.prisms,
+            raised: label.raised,
+            normal: hit.normal,
+        };
+        self.start_stamp(object, &placed, lettering);
+        Ok(())
+    }
+
+    /// Writes `asked` on `id` as an edit from the link does: the letters are laid here, the
+    /// stamp is a job off the drawing thread.
+    pub fn stamp_asked(&mut self, scene: &Scene, id: ObjectId, asked: &LabelAsked) -> Result<()> {
+        let object = scene
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!(tr!("text-nothing-under")))?;
+        let placed = transform_mesh(&object.mesh, object.transform);
+        let lettering = label_prisms(&placed, asked, id)?;
+        self.start_stamp(object, &placed, lettering);
+        Ok(())
+    }
+
+    fn start_stamp(&mut self, object: &SceneObject, placed: &Mesh, lettering: Lettering) {
+        // Lettering must not remesh the model it is written on.
+        let method = Method::ExactToward(lettering.normal);
+        let (placed, op) = lettering.stamp(placed);
         self.job = Some(BooleanJob::spawn(BooleanRequest {
             taken: vec![Taken::of(object)],
             placed,
-            op: if label.raised {
-                Boolean::Union
-            } else {
-                Boolean::Difference
-            },
-            // Lettering must not remesh the model it is written on.
-            method: Method::ExactToward(hit.normal),
+            op,
+            method,
         }));
-        Ok(())
     }
 
     /// Lands a finished stamp in the scene. Returns whether one is still going, or the
@@ -389,9 +407,12 @@ mod tests {
                 .expect("the text stands on the cube");
             let mut models = vec![transform_mesh(&object.mesh, object.transform)];
             models.extend(label.prisms);
-            let combined =
-                core_volume::combine(&models, Boolean::Union, core_volume::Cancel::never())
-                    .expect("the letters combine with the cube");
+            let combined = core_volume::combine(
+                &models,
+                core_volume::Boolean::Union,
+                core_volume::Cancel::never(),
+            )
+            .expect("the letters combine with the cube");
             assert_eq!(
                 combined.voxel_mm, None,
                 "following the surface {follow_surface}: every letter is a closed solid"

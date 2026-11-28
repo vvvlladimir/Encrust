@@ -23,6 +23,8 @@ pub use feed::{Note, NoteGroup, Offer, Version};
 pub(crate) use install::fetch_counted;
 pub use install::{from_store, sweep};
 pub use progress::{Progress, Step};
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use verify::{trusted_comment, verify_release};
 
 /// How long one look at the feed holds before the next is due, seconds: a day.
 const CHECK_EVERY_S: u64 = 24 * 60 * 60;

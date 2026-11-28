@@ -1,18 +1,15 @@
 //! The ring left of the print chip: the current printer's progress in the colour of its state.
 //! A press opens that printer or the list of printers. See `docs/decisions/0264`.
 
-use egui::{Align2, Pos2, RichText, Sense, Shape, Stroke, pos2, vec2};
+use egui::{Align2, Pos2, RichText, Sense, pos2, vec2};
 
 use super::{Light, colour_of, face, left};
 use crate::i18n::tr;
 use crate::network::{Network, Reading, Target};
 use crate::panels::Window;
 pub use crate::ui::theme::layout::printer_card_ring::GAP;
-use crate::ui::theme::layout::printer_card_ring::{ROW_H, ROW_W, SIZE, SMALL, TRACK_W};
-use crate::ui::{focus_ring, icon, theme};
-
-/// Share of a turn the arc spans while a print runs without a count yet.
-const SPINNER_SHARE: f32 = 0.25;
+use crate::ui::theme::layout::printer_card_ring::{ROW_H, ROW_W, SIZE, SMALL};
+use crate::ui::{RingLook, focus_ring, icon, paint_ring, ring_badge, theme};
 
 /// Draws the ring when the window knows any printer, and answers the width it took.
 pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> f32 {
@@ -37,7 +34,7 @@ pub fn ui(ui: &mut egui::Ui, window: &mut Window) -> f32 {
     let hovered = response.hovered();
     paint(ui, rect.center(), SIZE / 2.0 - 2.0, &look, hovered);
     if count > 1 {
-        badge(ui, rect, count);
+        ring_badge(ui, rect, count);
     }
     focus_ring(ui, &response, theme::R_CONTROL);
     response.widget_info(|| {
@@ -87,83 +84,23 @@ impl Look {
 /// The track, the arc over it, and in the middle the share done or the printer glyph.
 fn paint(ui: &egui::Ui, center: Pos2, radius: f32, look: &Look, hovered: bool) {
     let colors = theme::colors();
-    let painter = ui.painter();
-    if hovered {
-        painter.circle_filled(center, radius + 2.0, colors.hover);
-    }
     let colour = colour_of(look.light);
-    let track = match look.light {
-        Light::Ready => colour.gamma_multiply(0.45),
-        Light::Working | Light::Held | Light::Down | Light::Unknown => colors.line,
+    let ring = RingLook {
+        glyph: icon::PRINTER,
+        glyph_tint: if look.light == Light::Down {
+            colors.text_low
+        } else {
+            colors.text_mid
+        },
+        track: match look.light {
+            Light::Ready => colour.gamma_multiply(0.45),
+            Light::Working | Light::Held | Light::Down | Light::Unknown => colors.line,
+        },
+        arc: colour,
+        share: look.progress,
+        spinning: look.spinning,
     };
-    painter.circle_stroke(center, radius - TRACK_W / 2.0, Stroke::new(TRACK_W, track));
-    let arc = if look.spinning {
-        let turn = crate::ui::theme::motion::spin(ui.ctx()).unwrap_or(0.0);
-        Some((turn, SPINNER_SHARE))
-    } else {
-        look.progress.map(|share| (0.0, share))
-    };
-    if let Some((from, share)) = arc {
-        let points = arc_points(center, radius - TRACK_W / 2.0, from, share);
-        painter.add(Shape::line(points, Stroke::new(TRACK_W, colour)));
-    }
-    match look.progress {
-        Some(share) if radius > SMALL / 2.0 => {
-            painter.text(
-                center,
-                Align2::CENTER_CENTER,
-                format!("{:.0}", share * 100.0),
-                theme::figures(10.0),
-                colors.text_high,
-            );
-        }
-        _ => {
-            painter.text(
-                center,
-                Align2::CENTER_CENTER,
-                icon::PRINTER,
-                theme::icon(radius * 0.85),
-                if look.light == Light::Down {
-                    colors.text_low
-                } else {
-                    colors.text_mid
-                },
-            );
-        }
-    }
-}
-
-/// How many printers the list holds, in a small disc at the ring's corner.
-fn badge(ui: &egui::Ui, rect: egui::Rect, count: usize) {
-    let colors = theme::colors();
-    let at = rect.right_top() + vec2(-4.0, 5.0);
-    ui.painter().circle_filled(at, 6.5, colors.raised);
-    ui.painter()
-        .circle_stroke(at, 6.5, Stroke::new(1.0, colors.line));
-    ui.painter().text(
-        at,
-        Align2::CENTER_CENTER,
-        count.to_string(),
-        theme::figures(9.0),
-        colors.text_high,
-    );
-}
-
-/// Points along a circle from `from` of a turn, clockwise from the top, for `share` of
-/// a turn; enough of them that the arc reads as round at the ring's size.
-fn arc_points(center: Pos2, radius: f32, from: f32, share: f32) -> Vec<Pos2> {
-    let share = share.clamp(0.0, 1.0);
-    let steps = ((share * 64.0).ceil() as usize).max(1);
-    (0..=steps)
-        .map(|step| {
-            let turn = from + share * step as f32 / steps as f32;
-            let angle = turn * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
-            pos2(
-                center.x + radius * angle.cos(),
-                center.y + radius * angle.sin(),
-            )
-        })
-        .collect()
+    paint_ring(ui, center, radius, &ring, hovered);
 }
 
 /// The line the ring says on hover: the printer and what it is doing.
@@ -304,32 +241,5 @@ mod tests {
         let network = one_board();
         let silent = Look::of(&network, &Target::Sdcp(&network.printers[0]));
         assert!(silent.progress.is_none() && !silent.spinning);
-    }
-
-    #[test]
-    fn an_arc_starts_at_the_top_and_runs_clockwise_for_its_share() {
-        let center = pos2(0.0, 0.0);
-        let quarter = arc_points(center, 10.0, 0.0, 0.25);
-        let first = quarter.first().expect("an arc has points");
-        let last = quarter.last().expect("an arc has points");
-        assert!(
-            (first.x).abs() < 1e-4 && (first.y + 10.0).abs() < 1e-4,
-            "top: {first:?}"
-        );
-        assert!(
-            (last.x - 10.0).abs() < 1e-4 && last.y.abs() < 1e-4,
-            "right: {last:?}"
-        );
-    }
-
-    #[test]
-    fn a_share_past_the_whole_is_drawn_as_the_whole() {
-        let center = pos2(0.0, 0.0);
-        let whole = arc_points(center, 10.0, 0.0, 1.5);
-        let (first, last) = (whole[0], whole[whole.len() - 1]);
-        assert!(
-            (first - last).length() < 1e-3,
-            "a full turn closes on itself"
-        );
     }
 }

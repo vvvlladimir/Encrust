@@ -10,6 +10,23 @@ use std::sync::Arc;
 use crate::i18n::tr;
 use core_format::ReadSeek;
 
+/// Hands `path` to the program the system opens it with: a folder to the file manager, a
+/// file to the app its kind belongs to.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn open_with_system(path: &Path) -> io::Result<()> {
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(opener)
+        .arg(path)
+        .spawn()
+        .map(drop)
+}
+
 /// A file given to the window by a dialog or a drop.
 #[derive(Debug, Clone)]
 pub enum Handed {

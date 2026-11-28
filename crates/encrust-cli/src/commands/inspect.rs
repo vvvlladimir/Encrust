@@ -7,11 +7,13 @@ use crate::args::{ImportArgs, ProfileArgs};
 use crate::batch::ModelReport;
 use crate::commands::GlobalArgs;
 use crate::exit::Exit;
-use crate::{json, pipeline, profiles};
+use crate::plate_objects::plate_objects;
+use crate::{json, pipeline};
 
 #[derive(clap::Args, Debug)]
 pub struct InspectCommand {
-    /// Mesh to look at: `.stl`, `.obj` or `.3mf`.
+    /// Mesh to look at: `.stl`, `.obj` or `.3mf`; a project (`.encrust`) lists its objects
+    /// by the ids `--only` takes.
     pub input: PathBuf,
 
     #[command(flatten)]
@@ -35,13 +37,16 @@ pub struct InspectCommand {
 
 impl InspectCommand {
     pub fn run(&self, global: &GlobalArgs) -> Result<Exit> {
-        let chosen = profiles::resolve(&self.profile.selection())?;
+        if crate::stage::describes_a_project(&self.input) {
+            return self.list_objects(global);
+        }
+        let chosen = self.profile.resolve()?;
         let started = Instant::now();
         let asked = pipeline::Inspect {
             intersections: self.intersections,
             shells: self.shells,
         };
-        let report = pipeline::inspect(&self.input, &self.import, &chosen, asked)?;
+        let report = pipeline::inspect(&self.input, &self.import, (&self.profile, &chosen), asked)?;
         if global.json {
             json::print(&ModelReport::inspected(&report, started.elapsed()))?;
         } else if !global.quiet {
@@ -52,5 +57,27 @@ impl InspectCommand {
         } else {
             Exit::Success
         })
+    }
+
+    /// Lists the project's objects, one a line, or as `objects` in JSON.
+    fn list_objects(&self, global: &GlobalArgs) -> Result<Exit> {
+        let project = crate::project::open(&self.input)?;
+        let objects = plate_objects(&project);
+        if global.json {
+            json::print(&serde_json::json!({
+                "input": self.input.display().to_string(),
+                "objects": objects,
+            }))?;
+        } else if !global.quiet {
+            println!(
+                "{}
+  id   name                         where",
+                self.input.display()
+            );
+            for object in &objects {
+                print!("{object}");
+            }
+        }
+        Ok(Exit::Success)
     }
 }

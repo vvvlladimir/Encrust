@@ -7,11 +7,14 @@ name: Release
 # Called by `release-please.yml` once it has tagged the release, never by the tag itself: a tag
 # pushed with GITHUB_TOKEN raises no event, so `on: push: tags` would simply never fire. The manual
 # trigger rebuilds a tag, or only the parts ticked, and makes the draft if the tag has no release.
+# A trial tag, the version with a suffix (`v0.9.0-try1`), is made on the branch the run is started
+# from and drafted as a prerelease, which no feed, site or `releases/latest` ever names (ADR 0463).
 #
 # Each platform gets an installer people download and an archive the window's own update reads:
 # `.dmg`, `-setup.exe`, `.AppImage` and `.deb` from `cargo packager`, configured in
 # crates/encrust-app/Cargo.toml; Windows and Linux are built for x86_64 and ARM64 alike, and the
-# Microsoft Store gets one `.msixupload` bundling both Windows builds. Nothing is code-signed;
+# Microsoft Store gets one `.msixupload` bundling both Windows builds; each target also gets a
+# `.mcpb` for chat apps. Nothing is code-signed;
 # each archive is signed with the project's release key, and `latest.json` names them for the
 # window's update check. Publishing the draft is what makes that feed visible. See ADR-0160,
 # ADR-0162, ADR-0172, ADR-0286 and ADR-0454.
@@ -29,11 +32,15 @@ on:
       store: { type: boolean, default: true }
       web: { type: boolean, default: true }
       web_ref: { type: string, default: "" }
+      mcpb: { type: boolean, default: true }
       feed: { type: boolean, default: true }
   workflow_dispatch:
     inputs:
       tag:
-        description: The tag to build, for example v0.1.0. A tag with no release gets a draft.
+        description: >-
+          The tag to build, for example v0.1.0; a tag with no release gets a draft. A trial tag,
+          the version in Cargo.toml with a suffix such as v0.9.0-try1, is made on the branch above
+          and drafted as a prerelease.
         required: true
         type: string
       macos:
@@ -60,6 +67,10 @@ on:
         description: Build the browser build from this branch or commit instead of the tag, to fix the site alone
         type: string
         default: ""
+      mcpb:
+        description: Chat-app extension (.mcpb), one for every Mac and one a Windows and Linux processor
+        type: boolean
+        default: true
       feed:
         description: Sign the update archives on the release and rewrite latest.json
         type: boolean
@@ -70,6 +81,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # One id for every binary of the release, so the window and the command line share the
+  # orientation searches each keeps (ADR 0466).
+  ENCRUST_BUILD_ID: ${{ github.sha }}
 
 jobs:
   # One job owns the draft, so the build legs never race over it. It also refuses a tag naming
@@ -80,6 +94,20 @@ jobs:
     outputs:
       matrix: ${{ steps.legs.outputs.matrix }}
     steps:
+      # Only a trial tag is made here: a release's own tag is release-please's to make.
+      - name: Make a trial tag that does not exist yet
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1 && exit 0
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$ ]] || {
+            echo "no tag $TAG; a trial tag is the version with a suffix, such as v0.9.0-try1" >&2
+            exit 1
+          }
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null
+          echo "made $TAG on $GITHUB_REF_NAME at $GITHUB_SHA"
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
@@ -89,8 +117,9 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           crate=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
-          test "$crate" = "${TAG#v}" || {
-            echo "tag $TAG does not match Cargo.toml version $crate" >&2
+          version="${TAG#v}"
+          [ "$version" = "$crate" ] || [ "${version%%-*}" = "$crate" ] || {
+            echo "tag $TAG does not match Cargo.toml version $crate; a trial tag is v$crate-<suffix>" >&2
             exit 1
           }
 
@@ -102,7 +131,9 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && exit 0
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
+          trial=()
+          [[ "$TAG" == *-* ]] && trial=(--prerelease)
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft "${trial[@]}" \
             --title "$TAG" --generate-notes
 
       # The build legs the ticked boxes ask for. The Windows legs also run for the Store alone,
@@ -114,7 +145,7 @@ jobs:
         run: |
           matrix=$(jq -c --argjson on "$ON" '{include: [.[]
               | .installers = $on[.platform]
-              | .store = (.platform == "windows" and $on.store)
+              | .store = (.platform == "windows" and $on.store and ($on.tag | contains("-") | not))
               | select(.installers or .store)]}' <<'EOF'
           [
             {"platform": "macos", "os": "macos-latest", "target": "aarch64-apple-darwin",
@@ -226,7 +257,8 @@ jobs:
             cp "$path" "installers/$name"
           done
           ls installers
-          gh release upload "$TAG" "$ARCHIVE" installers/* --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" "$ARCHIVE" installers/* --clobber \
+            --repo "$GITHUB_REPOSITORY"
 
       # The Store takes both Windows architectures in one bundle, which the `store` job packs.
       - name: Collect the Store's binaries
@@ -245,12 +277,76 @@ jobs:
           path: store/
           retention-days: 1
 
+  # The chat-app extension: the command line and its MCP server in one `.mcpb` per target, named
+  # as the archive is. A job of its own, so its failure holds back no installer and no feed;
+  # unsigned, as a key a chat app trusts lives in hardware a runner cannot reach (ADR 0455).
+  mcpb:
+    needs: draft
+    if: inputs.mcpb
+    strategy:
+      fail-fast: false
+      matrix:
+        # `rust` is what rustup adds. A Mac takes one bundle joining both architectures, as a
+        # binary can there; Windows and Linux have no such binary, so a bundle a processor.
+        include:
+          - os: macos-latest
+            target: universal-apple-darwin
+            rust: aarch64-apple-darwin x86_64-apple-darwin
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, rust: x86_64-unknown-linux-gnu }
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            rust: aarch64-unknown-linux-gnu
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, rust: x86_64-pc-windows-msvc }
+          - { os: windows-11-arm, target: aarch64-pc-windows-msvc, rust: aarch64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Linux windowing headers
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: ./.github/actions/linux-gui-deps
+
+      - name: Install the pinned toolchain
+        shell: bash
+        run: |
+          rustup show
+          rustup target add ${{ matrix.rust }}
+
+      - name: Pack
+        run: cargo xtask mcpb --target ${{ matrix.target }}
+
+      # Against the schema of the tool a chat app unpacks the bundle with.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Validate the manifest
+        shell: bash
+        run: |
+          for bundle in target/mcpb/*.mcpb; do
+            npx --yes @anthropic-ai/mcpb@2.1.2 unpack "$bundle" "$RUNNER_TEMP/unpacked"
+            npx --yes @anthropic-ai/mcpb@2.1.2 validate "$RUNNER_TEMP/unpacked/manifest.json"
+          done
+
+      - name: Attach to the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: >
+          gh release upload "$TAG" target/mcpb/*.mcpb --clobber
+          --repo "$GITHUB_REPOSITORY"
+
   # The Store's package of the same binaries: an MSIX per architecture in one bundle, since a Store
   # app that once took a bundle takes nothing else. The Store signs it, so `store.yml` sends it there
   # and nobody installs it from the release page. A failure costs only this file (ADR 0286, 0454).
+  # None for a trial tag, whose suffix an MSIX version cannot carry.
   store:
     needs: [draft, build]
-    if: ${{ !cancelled() && inputs.store && needs.draft.result == 'success' }}
+    if: >-
+      !cancelled() && inputs.store && needs.draft.result == 'success'
+      && !contains(inputs.tag, '-')
     continue-on-error: true
     runs-on: windows-latest
     steps:
@@ -378,9 +474,11 @@ jobs:
 
   # One job holds the signing key, after every leg has uploaded, so the feed names every archive.
   # The trusted comment binds a signature to its version and file name, which the window checks;
-  # a signature cannot then be moved to another archive or replayed for an older release.
+  # a signature cannot then be moved to another archive or replayed for an older release. Each
+  # `.mcpb` is signed the same way for the window that fetches it, outside the feed; a failed
+  # `mcpb` job leaves only its bundles unsigned.
   feed:
-    needs: [draft, build]
+    needs: [draft, build, mcpb]
     if: >-
       !cancelled() && inputs.feed && needs.draft.result == 'success'
       && (needs.build.result == 'success' || needs.build.result == 'skipped')
@@ -433,6 +531,12 @@ jobs:
               --rawfile signature "$path.minisig" \
               --argjson size "$(stat -c %s "$path")" \
               '.[$platform] = {url: $url, signature: $signature, size: $size}' <<<"$platforms")
+          done
+          for path in dist/encrust-*.mcpb; do
+            [ -e "$path" ] || continue
+            bundle=$(basename "$path")
+            minisign -S -s "$key" -m "$path" -t "encrust $version $bundle"
+            minisign -V -p assets/update-key.pub -m "$path"
           done
           rm -f "$key"
 

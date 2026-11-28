@@ -155,9 +155,10 @@ impl Measured {
         self.layer_mm = thickness_mm;
         let below = self.below.as_ref().map(|(below, _)| below);
         self.cups.push(index, &layer, below, thickness_mm);
+        // The bottom block's long exposure cures through to the plate: all of it is held there.
         let carried = match self.below.take() {
-            None => self.on_plate(&layer),
-            Some((below, under)) => self.carry(index, &layer, &below, &under),
+            Some((below, under)) if index >= self.held => self.carry(index, &layer, &below, &under),
+            _ => self.on_plate(&layer),
         };
         // The layer below is kept as cured, islands and all, so that what stands on an
         // island is not taken for one in turn.

@@ -4,7 +4,8 @@ use std::num::NonZeroU8;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
-use core_engine::SupportPlan;
+use core_edit::defaults::{SHOWN_RADIUS_MM, lattice_precision};
+use core_engine::{ByHand, ShownAt, SupportPlan};
 use core_format::ExposureRange;
 use core_geometry::{
     DEFAULT_SEAM_TOLERANCE, DEFAULT_SMALLEST_SHELL_MM2, DEFAULT_WELD_TOLERANCE, MendMethod, Scalar,
@@ -14,15 +15,23 @@ use core_plate::{OrientGoal, OrientPreset};
 use core_raster::GreyRange;
 use core_slicer::{AdaptiveSettings, WINDOW_LAYERS};
 use core_volume::Tiling;
-use printer_profiles::SupportProfile;
+use printer_profiles::{STANDARD_PRINTER, SupportProfile};
 
+use crate::fixes::FixArgs;
 use crate::hollowing::HollowArgs;
 use crate::modelling::ModelArgs;
-use crate::profiles::Selection;
+use crate::placing::PlacingArgs;
+use crate::plate_edits::EditArgs;
+use crate::profiles::{Chosen, Selection};
 use crate::raster_report::parse_grey_range;
 use crate::report::{parse_exposure_band, parse_rotation, parse_scale};
+use crate::resin_set::ResinSet;
 use crate::sliced_file::CtbRevision;
 use crate::supports::{MergePoints, merge_points};
+
+mod orient_pick;
+
+pub use orient_pick::OrientPick;
 
 /// Which printer to check against and which resin to expose with.
 #[derive(Debug, Default, clap::Args)]
@@ -43,12 +52,41 @@ pub struct ProfileArgs {
     /// Resin from the catalogue, by id. Its numbers are retuned for the chosen printer.
     #[arg(long, value_name = "ID")]
     pub resin: Option<String>,
+
+    #[command(flatten)]
+    pub set: ResinSet,
+
+    /// Checks on the standard printer with the stock resin numbers, as a chat client's job does
+    /// until the user names theirs (ADR 0457); no file is written on it.
+    #[arg(long, conflicts_with_all = ["profile", "printer", "material", "resin"])]
+    pub standard_machine: bool,
 }
 
 impl ProfileArgs {
+    /// The printer and resin named, the resin's numbers typed for this run in place of its own.
+    pub fn resolve(&self) -> Result<Chosen> {
+        let mut chosen = crate::profiles::resolve(&self.selection())?;
+        self.set.apply(&mut chosen.material);
+        chosen.invented_exposure &= !self.standard_machine;
+        Ok(chosen)
+    }
+
+    /// The catalogue printer named, the standard one with `--standard-machine`.
+    pub fn printer_id(&self) -> Option<&str> {
+        (self.printer.as_deref()).or(self.standard_machine.then_some(STANDARD_PRINTER))
+    }
+
+    /// Refuses `--standard-machine` where a file is written: its exposure nobody measured.
+    pub fn refuse_standard_machine(&self) -> Result<()> {
+        if self.standard_machine {
+            bail!("--standard-machine only checks: name the printer and the resin the file is for");
+        }
+        Ok(())
+    }
+
     pub fn selection(&self) -> Selection<'_> {
         Selection {
-            printer_id: self.printer.as_deref(),
+            printer_id: self.printer_id(),
             printer_path: self.profile.as_deref(),
             resin_id: self.resin.as_deref(),
             resin_path: self.material.as_deref(),
@@ -165,7 +203,7 @@ pub struct ImportArgs {
 
     /// How fine the lattice --relief and --hollow are cut on, 0 to 1. Not the layer height:
     /// the outside of the model never passes through the lattice.
-    #[arg(long, value_name = "0..1", default_value_t = 0.5)]
+    #[arg(long, value_name = "0..1", default_value_t = lattice_precision())]
     pub precision: Scalar,
 }
 
@@ -184,6 +222,11 @@ pub struct TransformArgs {
     #[arg(long)]
     pub center: bool,
 
+    /// Stand the model this high off the plate once placed, mm, room for supports under it;
+    /// an --orient on supports stands its poses at it too.
+    #[arg(long, value_name = "MM")]
+    pub lift: Option<f32>,
+
     /// Turn the model the way it prints best, at its --scale and before anything else.
     #[arg(long)]
     pub orient: bool,
@@ -200,6 +243,52 @@ pub struct TransformArgs {
     /// How far --orient may turn the model from the way its file stands it, degrees.
     #[arg(long, value_name = "DEG", requires = "orient")]
     pub max_tilt: Option<Scalar>,
+
+    /// Report the search's best N ways to stand the model, each with what it prints.
+    #[arg(long, value_name = "N", requires = "orient",
+          value_parser = clap::value_parser!(u16).range(1..=16))]
+    pub orient_choices: Option<u16>,
+
+    /// Stand the model the Nth way the search ranks, counted from one, not the first; `ID:N`
+    /// gives object ID its own way, as `inspect` lists ids, beside an `N` for the rest.
+    #[arg(long, value_name = "N|ID:N,...", requires = "orient", value_parser = orient_pick::parse)]
+    pub orient_pick: Option<OrientPick>,
+
+    /// Keep supports off the surface near this point, plate mm as the model stands turned by
+    /// --orient-keep-clear-turn and centred on z = 0. Repeat for more.
+    #[arg(long, value_name = "X,Y,Z", value_parser = crate::hollowing::point,
+          allow_hyphen_values = true, requires = "orient")]
+    pub orient_keep_clear: Vec<Vec3>,
+
+    /// The turn, degrees around X, Y and Z, the --orient-keep-clear points were given in.
+    #[arg(long, value_name = "X,Y,Z", value_parser = parse_rotation, allow_hyphen_values = true,
+          requires = "orient_keep_clear")]
+    pub orient_keep_clear_turn: Option<Vec3>,
+
+    /// How far from a --orient-keep-clear point a support still touches it, mm.
+    #[arg(
+        long,
+        value_name = "MM",
+        default_value_t = 4.0,
+        requires = "orient_keep_clear"
+    )]
+    pub orient_keep_clear_radius: Scalar,
+
+    #[command(flatten)]
+    pub placing: PlacingArgs,
+}
+
+impl TransformArgs {
+    /// Whether a flag moves, turns or sizes the model, its copies aside.
+    pub fn places(&self) -> bool {
+        self.scale.is_some()
+            || self.rotate.is_some()
+            || self.center
+            || self.orient
+            || self.lift.is_some()
+            || self.placing.mirror.is_some()
+            || self.placing.move_by.is_some()
+    }
 }
 
 /// Which repair `--repair` runs.
@@ -278,6 +367,46 @@ pub struct SupportArgs {
     /// Merge into one does: X,Y,Z;X,Y,Z, plate mm as `--json` lists them. Repeatable.
     #[arg(long = "merge-supports", value_name = "X,Y,Z;X,Y,Z", value_parser = merge_points, allow_hyphen_values = true)]
     pub merge_supports: Vec<MergePoints>,
+    /// Stand a support under the surface nearest this point as well, plate mm as the model
+    /// prints, lift included, as a click in the window's Edit mode does. Repeat for more.
+    #[arg(long, value_name = "X,Y,Z", value_parser = crate::hollowing::point,
+          allow_hyphen_values = true)]
+    pub support_at: Vec<Vec3>,
+
+    /// Stand only the supports --support-at places, none automatically.
+    #[arg(long, requires = "support_at")]
+    pub support_only_at: bool,
+
+    /// Paint the faces within R mm (4) of this point as the side meant to be seen, as the
+    /// window's Clean surface brush does: contacts there stand sparser and lightest. Plate mm
+    /// as the model prints, lift included. Repeat for more strokes.
+    #[arg(long, value_name = "X,Y,Z[:R]", value_parser = shown_at, allow_hyphen_values = true)]
+    pub shown_at: Vec<ShownAt>,
+}
+
+/// `T` as its flags leave it when none is typed.
+pub(crate) fn untyped<T: clap::Args + clap::FromArgMatches>() -> Result<T> {
+    let command = T::augment_args(clap::Command::new("untyped").no_binary_name(true));
+    let matches = command.try_get_matches_from(std::iter::empty::<&str>())?;
+    Ok(T::from_arg_matches(&matches)?)
+}
+
+/// `X,Y,Z` or `X,Y,Z:R`, a point and the radius painted round it.
+fn shown_at(text: &str) -> Result<ShownAt, String> {
+    let (point, radius) = match text.split_once(':') {
+        Some((point, radius)) => (point, Some(radius)),
+        None => (text, None),
+    };
+    let at_mm = crate::hollowing::point(point)?;
+    let radius_mm = match radius {
+        Some(radius) => radius
+            .parse::<Scalar>()
+            .ok()
+            .filter(|mm| *mm > 0.0 && mm.is_finite())
+            .ok_or_else(|| format!("{radius} is not a radius in mm above 0"))?,
+        None => SHOWN_RADIUS_MM,
+    };
+    Ok(ShownAt { at_mm, radius_mm })
 }
 
 impl SupportArgs {
@@ -296,6 +425,16 @@ impl SupportArgs {
         if plan.is_none() && !self.merge_supports.is_empty() {
             bail!("--merge-supports merges the supports --supports stands, and none is asked for");
         }
+        if plan.is_none() && !self.shown_at.is_empty() {
+            bail!(
+                "--shown-at paints where supports stand, and neither --supports nor --support-profile was given"
+            );
+        }
+        if plan.is_none() && !self.support_at.is_empty() {
+            bail!(
+                "--support-at stands supports, and neither --supports nor --support-profile was given"
+            );
+        }
         Ok(plan.map(|plan| SupportPlan {
             cavity: self.support_cavity,
             merges: self
@@ -303,6 +442,11 @@ impl SupportArgs {
                 .iter()
                 .map(|merge| merge.0.clone())
                 .collect(),
+            by_hand: ByHand {
+                at_mm: self.support_at.clone(),
+                only: self.support_only_at,
+            },
+            shown_at: self.shown_at.clone(),
             ..plan
         }))
     }
@@ -415,6 +559,9 @@ pub struct JobArgs {
     pub model: ModelArgs,
 
     #[command(flatten)]
+    pub edits: EditArgs,
+
+    #[command(flatten)]
     pub hollow: HollowArgs,
 
     #[command(flatten)]
@@ -425,6 +572,19 @@ pub struct JobArgs {
 
     #[command(flatten)]
     pub raster: RasterArgs,
+
+    #[command(flatten)]
+    pub fixes: FixArgs,
+
+    /// Shape only the objects of the plate with these ids, as `inspect` lists them; every
+    /// object when left out.
+    #[arg(long, value_name = "ID,...", value_delimiter = ',')]
+    pub only: Vec<u64>,
+
+    /// Read every finishing flag's points (`--drain-at` to `--merge-supports`) in the model's
+    /// own frame, so a point stays on the model wherever an edit before it moves it.
+    #[arg(long)]
+    pub points_in_object: bool,
 
     /// Prepare each model as the engine's defaults would: repair it if it has defects, orient
     /// it, hollow, drain and hold up its cavity where a wall saves resin, and stand it on

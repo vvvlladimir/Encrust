@@ -3,7 +3,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use crate::scene::Scene;
+use crate::scene::{Scene, SceneObject};
 use crate::slicing::Slicing;
 use crate::state::Tools;
 use crate::tool_settings::ToolSettings;
@@ -74,6 +74,9 @@ pub struct History {
     chosen: u64,
     /// Every change since the hold began waits to be one entry, see [`Self::hold`].
     held: bool,
+    /// How many times the plate has changed by an entry recorded, undone or redone: the
+    /// version the window link answers with (ADR 0456).
+    plate_version: u64,
 }
 
 impl Default for History {
@@ -88,6 +91,7 @@ impl Default for History {
             tools: None,
             chosen: 0,
             held: false,
+            plate_version: 0,
         }
     }
 }
@@ -139,12 +143,23 @@ impl History {
     /// Puts one entry on the stack, dropping the oldest when it is full, and with it the
     /// branch an undo had opened.
     fn record(&mut self, step: Step) {
+        self.plate_changed(step.scene().is_some());
         self.past.push_back((self.next, step));
         self.next += 1;
         if self.past.len() > DEPTH {
             self.past.pop_front();
         }
         self.future.clear();
+    }
+
+    /// Raises the plate's version where `changed`, so a plate a server built on reads as gone.
+    fn plate_changed(&mut self, changed: bool) {
+        self.plate_version += u64::from(changed);
+    }
+
+    /// The plate's version: raised by every recorded change of the plate, its undo and redo.
+    pub fn plate_version(&self) -> u64 {
+        self.plate_version
     }
 
     /// The number the next edit is recorded under: a run started now is asked for by it.
@@ -164,14 +179,19 @@ impl History {
         asked_by: u64,
         mut change: impl FnMut(&mut Scene) -> T,
     ) -> T {
+        let before = fingerprint(scene);
         if self.held {
-            return change(scene);
+            let answer = change(scene);
+            self.plate_changed(fingerprint(scene) != before);
+            return answer;
         }
-        let caught_up = fingerprint(scene) == self.fingerprint;
+        let caught_up = before == self.fingerprint;
         if let Some(index) = self.past.iter().position(|(id, _)| *id == asked_by) {
             self.carry_since(index, caught_up, &mut change);
         }
         let answer = change(scene);
+        // What lands joins an edit already counted, yet the plate a server built on is gone.
+        self.plate_changed(fingerprint(scene) != before);
         if caught_up {
             self.settle(scene);
         }
@@ -225,6 +245,7 @@ impl History {
         let Some((id, previous)) = self.past.pop_back() else {
             return false;
         };
+        self.plate_changed(previous.scene().is_some());
         let held = self.put_back(previous, scene, tools, slicing);
         self.follow_up(scene, tools);
         self.future.push((id, held));
@@ -239,6 +260,7 @@ impl History {
         let Some((id, next)) = self.future.pop() else {
             return false;
         };
+        self.plate_changed(next.scene().is_some());
         let held = self.put_back(next, scene, tools, slicing);
         self.follow_up(scene, tools);
         self.past.push_back((id, held));
@@ -316,9 +338,16 @@ fn put_scene_back(scene: &mut Scene, previous: Scene) -> Scene {
 /// them, and hashing them would make one drag two entries on the stack.
 fn fingerprint(scene: &Scene) -> u64 {
     let mut hasher = DefaultHasher::new();
+    edited_fingerprint(scene).hash(&mut hasher);
+    scene.active_plate().hash(&mut hasher);
+    hasher.finish()
+}
+
+/// [`fingerprint`] but for which plate is shown, which looking round changes and editing need not.
+pub(crate) fn edited_fingerprint(scene: &Scene) -> u64 {
+    let mut hasher = DefaultHasher::new();
     scene.objects().len().hash(&mut hasher);
     scene.plates().hash(&mut hasher);
-    scene.active_plate().hash(&mut hasher);
 
     for object in scene.objects() {
         object.id.hash(&mut hasher);
@@ -372,43 +401,48 @@ fn fingerprint(scene: &Scene) -> u64 {
             }
             point.group.hash(&mut hasher);
         }
-        for blocker in object.hollow.blockers() {
-            for value in [
-                blocker.from.x,
-                blocker.from.y,
-                blocker.from.z,
-                blocker.to.x,
-                blocker.to.y,
-                blocker.to.z,
-                blocker.radius_mm,
-            ] {
-                value.to_bits().hash(&mut hasher);
-            }
-        }
-        let (drains, channels) = object.hollow.cut();
-        for drain in drains {
-            for value in [
-                drain.at.x,
-                drain.at.y,
-                drain.at.z,
-                drain.diameter_mm,
-                drain.depth_mm,
-            ] {
-                value.to_bits().hash(&mut hasher);
-            }
-        }
-        for channel in channels {
-            channel.points.len().hash(&mut hasher);
-            for point in &channel.points {
-                for value in [point.x, point.y, point.z] {
-                    value.to_bits().hash(&mut hasher);
-                }
-            }
-        }
-        object.hollow.pending().len().hash(&mut hasher);
+        hash_cavity(object, &mut hasher);
     }
 
     hasher.finish()
+}
+
+/// Hashes what the user placed in `object`'s cavity: walls kept solid, holes and channels.
+fn hash_cavity(object: &SceneObject, hasher: &mut DefaultHasher) {
+    for blocker in object.hollow.blockers() {
+        for value in [
+            blocker.from.x,
+            blocker.from.y,
+            blocker.from.z,
+            blocker.to.x,
+            blocker.to.y,
+            blocker.to.z,
+            blocker.radius_mm,
+        ] {
+            value.to_bits().hash(hasher);
+        }
+    }
+    let (drains, channels) = object.hollow.cut();
+    for drain in drains {
+        for value in [
+            drain.at.x,
+            drain.at.y,
+            drain.at.z,
+            drain.diameter_mm,
+            drain.depth_mm,
+        ] {
+            value.to_bits().hash(hasher);
+        }
+    }
+    for channel in channels {
+        channel.points.len().hash(hasher);
+        for point in &channel.points {
+            for value in [point.x, point.y, point.z] {
+                value.to_bits().hash(hasher);
+            }
+        }
+    }
+    object.hollow.pending().len().hash(hasher);
 }
 
 mod edits;

@@ -270,6 +270,11 @@ fn setup_items(ui: &mut egui::Ui, window: &mut Window) {
     if clicked(ui, &MenuRow::new(Some(icon::PRINTER), &machines)) {
         open_machines(window.machine);
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if clicked(ui, &MenuRow::new(None, &tr!("menu-chat-extension"))) {
+        let machine = &mut *window.machine;
+        machine.chat_extension.start(&mut machine.status);
+    }
     let settings = tr!("menu-settings");
     if clicked(
         ui,

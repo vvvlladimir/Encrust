@@ -155,3 +155,14 @@ fn a_record_carrying_the_old_wrap_lattice_still_reads() {
         "the lattice is dropped, the rest kept"
     );
 }
+
+#[test]
+fn a_fresh_window_starts_at_the_cores_defaults() {
+    let fresh = ToolSettings::of(&Tools::default(), &Slicing::default());
+
+    assert_eq!(fresh.slicing, SlicingState::default());
+    assert_eq!(fresh.supports, SupportState::default());
+    assert_eq!(fresh.hollow, HollowState::default());
+    assert_eq!(fresh.drain, DrainState::default());
+    assert_eq!(fresh.cut, CutState::default());
+}

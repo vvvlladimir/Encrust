@@ -65,6 +65,48 @@ fn a_cut_box_joined_by_dowels_is_laid_out_in_pieces() {
 }
 
 #[test]
+fn a_cut_left_upright_with_sized_dowels_needs_no_arrange() {
+    let path = write_box_stl("model-cut-upright", 16.0, 12, 0);
+    let (output, _) = shaped(
+        "cut-upright",
+        &[&path],
+        &[
+            "--cut",
+            "z:8",
+            "--cut-upright",
+            "--joint",
+            "dowels",
+            "--peg-size",
+            "3:5",
+            "--joint-clearance",
+            "0.15",
+        ],
+    );
+    succeeded(&output);
+    assert!(stdout(&output).contains("Cut: "), "{}", stdout(&output));
+}
+
+#[test]
+fn a_joint_size_that_is_no_size_is_refused() {
+    let path = write_box_stl("model-cut-bad-peg", 16.0, 12, 0);
+    let (output, _) = shaped(
+        "cut-bad-peg",
+        &[&path],
+        &[
+            "--cut",
+            "z:8",
+            "--arrange",
+            "--joint",
+            "pins",
+            "--peg-size",
+            "0:5",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("above nought"));
+}
+
+#[test]
 fn a_cut_without_arrange_is_refused_rather_than_stacked() {
     let path = write_box_stl("model-cut-stacked", 16.0, 12, 0);
     let (output, _) = shaped("cut-stacked", &[&path], &["--cut", "z:8"]);
@@ -118,4 +160,75 @@ fn a_label_on_several_models_not_combined_is_refused() {
     );
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("--combine"));
+}
+
+#[test]
+fn models_combined_and_centred_are_joined_where_their_files_put_them_then_centred_as_one() {
+    let big = write_box_stl("model-centred-big", 16.0, 12, 0);
+    let beside = write_boxes_stl(
+        "model-centred-beside",
+        &[([10.0, 0.0, 0.0], [20.0, 10.0, 10.0])],
+    );
+    let panel = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/project-panel.toml");
+    let out = output_dir("combined-centred");
+    let output = slice(&[
+        big.to_str().unwrap(),
+        beside.to_str().unwrap(),
+        "--profile",
+        panel.to_str().unwrap(),
+        "--layer-height",
+        "1",
+        "--combine",
+        "union",
+        "--center",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    succeeded(&output);
+    // 2.5 mm up: the 16 mm square and the 4 x 10 mm the box beside it reaches past, 296 mm².
+    let lit = lit_pixels(&out, 2);
+    assert!(
+        (lit as f32 - 7_400.0).abs() / 7_400.0 < 0.02,
+        "joined as the files place them, 7 400 pixels at a 0.2 mm pitch, got {lit}"
+    );
+}
+
+#[test]
+fn each_piece_of_a_cut_is_searched_and_lifted_on_its_own() {
+    let path = write_box_stl("model-cut-lifted", 16.0, 12, 0);
+    let out = output_file("model-cut-lifted.encrust");
+    let output = estimate(&[
+        "--json",
+        path.to_str().expect("a UTF-8 path"),
+        "--standard-machine",
+        "--center",
+        "--cut=x:109.44",
+        "--arrange",
+        "--orient",
+        "--lift=5",
+        "--project-out",
+        out.to_str().expect("a UTF-8 path"),
+    ]);
+    succeeded(&output);
+    let report = json(&output);
+    let models = report["models"].as_array().expect("a model a piece");
+    assert_eq!(models.len(), 2, "the cube cut in two");
+    for model in models {
+        assert!(
+            model["oriented"].is_object(),
+            "each piece searched, got {model}"
+        );
+    }
+    let inspected = json(&encrust(&[
+        "--json",
+        "inspect",
+        out.to_str().expect("a UTF-8 path"),
+    ]));
+    for object in inspected["objects"].as_array().expect("the pieces") {
+        let lowest = object["min_mm"][2].as_f64().expect("a height");
+        assert!(
+            (lowest - 5.0).abs() < 1e-3,
+            "each piece 5 mm up, got {lowest}"
+        );
+    }
 }

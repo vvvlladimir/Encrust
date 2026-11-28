@@ -1,12 +1,13 @@
 //! What a run writes down as JSON: one report per model and one over a whole batch.
 //! Every number a farm would gate on is a field here, not prose.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Result;
 use core_analysis::{Measured, RiskKind, equivalent_disc_mm};
-use core_geometry::Scalar;
+use core_geometry::{Scalar, Transform};
 use serde::Serialize;
 
 use crate::estimate::Estimate;
@@ -19,11 +20,13 @@ use crate::stage::Part;
 mod drains;
 mod import;
 mod located;
+mod oriented;
 
 use drains::AutoDrains;
 pub use import::{Fit, Model, Repair};
 use import::{fit_of, model_of, repair_of};
 use located::{Frame, RiskAt, TrappedAt};
+pub use oriented::Oriented;
 
 /// One model's run, from its file to what came out.
 #[derive(Debug, Serialize)]
@@ -64,6 +67,10 @@ pub struct EstimateReport {
     pub input: Vec<String>,
     pub status: Status,
     pub seconds: f64,
+    /// The seconds each stage of the run took, summed by stage: `import:read`, `edit:hollow`,
+    /// `check`, ...; the stages left out took no time worth a millisecond.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub stages_s: BTreeMap<String, f64>,
     pub models: Vec<PartReport>,
     pub slicing: Slicing,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -95,6 +102,7 @@ impl EstimateReport {
                 .collect(),
             status: status_of(parts.iter().all(Part::is_clean) && estimate.is_clean()),
             seconds: took.as_secs_f64(),
+            stages_s: BTreeMap::new(),
             models: parts.iter().map(PartReport::of).collect(),
             slicing: Slicing::of(&estimate.slice),
             print: estimate.print.as_ref().map(|print| PrintReport {
@@ -120,6 +128,9 @@ impl EstimateReport {
 /// What was done to one model on its way onto the plate.
 #[derive(Debug, Serialize)]
 pub struct PartReport {
+    /// The object it is on the plate, as `--only` names it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<u64>,
     pub input: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<Model>,
@@ -144,6 +155,26 @@ pub struct PartReport {
     /// What each step of `--recipe` decided for it, and read to decide.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recipe: Option<RecipeRun>,
+    /// What carries a point between the model's own frame and the plate's, for a client that
+    /// keeps points on the model (`--points-in-object`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame: Option<Placed>,
+}
+
+/// Where a model stands, as two 4x4 matrices in column order, plate mm.
+#[derive(Debug, Serialize)]
+pub struct Placed {
+    pub to_plate: [Scalar; 16],
+    pub from_plate: [Scalar; 16],
+}
+
+impl Placed {
+    fn of(placed: Transform) -> Option<Self> {
+        Some(Self {
+            to_plate: placed.to_matrix().to_cols_array(),
+            from_plate: placed.inverse_matrix()?.to_cols_array(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -155,15 +186,6 @@ pub enum Status {
     /// a model that does not fit the plate.
     Unclean,
     Failed,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Oriented {
-    pub degrees: Scalar,
-    /// The angles `--rotate X,Y,Z` repeats the turn with, degrees.
-    pub rotate_deg: [Scalar; 3],
-    pub peak_section_mm2: Scalar,
-    pub overhang_mm2: Scalar,
 }
 
 #[derive(Debug, Serialize)]
@@ -198,6 +220,8 @@ pub struct Slicing {
     /// Each of those pockets, located.
     pub trapped: Vec<TrappedAt>,
     pub open_contours: usize,
+    /// How much wider a hole-and-part fit prints with the run's resin, mm a side.
+    pub fit_drift_mm: Scalar,
 }
 
 /// What the written masks cure, and the layers that pull hardest on the film. Layers
@@ -228,6 +252,9 @@ pub struct Cured {
     pub likely_fails_layer: Option<usize>,
     /// Every risk counted above, located, in print order.
     pub risks: Vec<RiskAt>,
+    /// Layers that reached past the panel and were cut off the mask; absent when none did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clipped_layers: Option<usize>,
 }
 
 impl Cured {
@@ -254,6 +281,7 @@ impl Cured {
             islands_removed_layers: measured.removed_layers(),
             likely_fails_layer: measured.worst().map(|risk| risk.layer + 1),
             risks: frame.risks(measured),
+            clipped_layers: None,
         }
     }
 }
@@ -262,23 +290,19 @@ impl PartReport {
     pub fn of(part: &Part) -> Self {
         let import = part.import.as_ref();
         Self {
+            id: part.id.map(|id| id.0),
             input: part.input.display().to_string(),
             model: import.map(model_of),
             repair: import.map(repair_of),
             fit: part.fit().map(fit_of),
-            oriented: part.oriented.as_ref().map(|found| Oriented {
-                degrees: found.degrees(),
-                rotate_deg: found.rotate_degrees().to_array(),
-                peak_section_mm2: found.peak_mm2,
-                overhang_mm2: found.overhang_mm2,
-            }),
+            oriented: part.oriented.as_ref().map(Oriented::of),
             hollow: part.hollow.as_ref().map(|report| Hollow {
                 wall_mm: report.wall().0,
                 cavity_mm3: report.cavity_mm3(),
             }),
-            auto_drains: part.drains.as_ref().map(|drained| {
+            auto_drains: part.drains.as_ref().map(|searched| {
                 let lifted_mm = part.supports.as_ref().map_or(0.0, |found| found.lifted_mm);
-                AutoDrains::of(drained, lifted_mm)
+                AutoDrains::of(searched, part.placed, lifted_mm)
             }),
             supports: part.supports.as_ref().map(|report| Supports {
                 lifted_mm: report.lifted_mm,
@@ -301,11 +325,13 @@ impl PartReport {
                 .collect(),
             prepared: part.prepared.clone(),
             recipe: part.recipe.clone(),
+            frame: part.placed.and_then(Placed::of),
         }
     }
 
     fn named(input: &Path) -> Self {
         Self {
+            id: None,
             input: input.display().to_string(),
             model: None,
             repair: None,
@@ -317,6 +343,7 @@ impl PartReport {
             meets: Vec::new(),
             prepared: None,
             recipe: None,
+            frame: None,
         }
     }
 }
@@ -335,6 +362,7 @@ impl Slicing {
                 .max(0.0),
             trapped: slice.trapped().iter().map(TrappedAt::from).collect(),
             open_contours: slice.open_contours(),
+            fit_drift_mm: slice.fit_drift_mm,
         }
     }
 }
@@ -346,11 +374,14 @@ fn cured_of(outcome: &Outcome) -> Option<Cured> {
             panel: &raster.settings,
             plan: outcome.slice.plan(),
         };
-        Cured::of(&raster.measured, frame)
+        Cured {
+            clipped_layers: (raster.clipped_layers > 0).then_some(raster.clipped_layers),
+            ..Cured::of(&raster.measured, frame)
+        }
     })
 }
 
-fn status_of(clean: bool) -> Status {
+pub(crate) fn status_of(clean: bool) -> Status {
     if clean { Status::Ok } else { Status::Unclean }
 }
 
@@ -545,6 +576,7 @@ mod tests {
                 trapped_mm3: 0.0,
                 trapped: Vec::new(),
                 open_contours: 0,
+                fit_drift_mm: 0.0,
             }),
             cured: Some(Cured {
                 resin_mm3,
@@ -561,6 +593,7 @@ mod tests {
                 islands_removed_layers: 0,
                 likely_fails_layer: None,
                 risks: Vec::new(),
+                clipped_layers: None,
             }),
         }
     }

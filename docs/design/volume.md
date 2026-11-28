@@ -100,7 +100,9 @@ rather than a value. Seven and not three, or a face waiting in a corner of the b
 never step in. Tiles come in the walk's rings, and the whole shell is then swept once more,
 because a tile only sees the faces already in its block and one can be stranded in a
 neighbour of the same ring; that second pass skips a tile whose halo offers no voxel on its
-border a nearer face, since nothing else can move it. Only two rings are kept as halo.
+border a nearer face, since nothing else can move it. A tile reads every neighbour already swept: a coarse tile spans several rings, so the one it
+waits on can be older than the last two. The shell is only ever resident as the carrier
+itself, the carry factor cubed smaller than the stored lattice.
 
 The carrier is `FAR_CARRY` = 4 times coarser instead where the whole band lies past what
 that carrier is trusted for, `3 · 4 · voxel < |iso| - band` — a 2 mm wall from about

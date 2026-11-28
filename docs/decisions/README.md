@@ -56,6 +56,7 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0388](0388-the-update-feed-dates-its-release-and-sizes-each-archive.md) | Date the release and size each archive in the update feed | Accepted |
 | [0286](0286-the-windows-build-also-ships-through-the-microsoft-store.md) | The Windows build also ships through the Microsoft Store | Accepted; the manual upload replaced by `store.yml`, the Store copy hearing of no update amended by 0292, the package bundled with ARM64 by 0454 |
 | [0454](0454-windows-and-linux-also-ship-for-arm64.md) | Windows and Linux also ship for ARM64, and the Store takes a bundle | Accepted |
+| [0463](0463-a-trial-tag-is-drafted-as-a-prerelease.md) | Draft a trial tag as a prerelease, made on the branch the run starts from | Accepted |
 | [0292](0292-the-store-copy-asks-the-store-for-its-update.md) | The Store copy asks the Store for its update and sends the user there | Accepted |
 | [0173](0173-a-pull-request-runs-linux-and-main-runs-the-rest.md) | A pull request runs Linux, and main runs the rest | Superseded by 0273 |
 | [0174](0174-a-plate-is-a-crate-live-and-written-down.md) | A plate is a crate, live and written down | Accepted |
@@ -553,3 +554,15 @@ Grouped by what the decision governs; the number is still the order it was taken
 | [0257](0257-what-an-edit-sets-off-is-part-of-it.md) | Record what an edit sets off as part of it, and do it again after an undo | Accepted |
 | [0193](0193-the-window-reads-its-own-input-before-egui-does.md) | The window reads its own input before egui does | Accepted; Tab and the keys of a focused control are superseded by 0229 |
 | [0202](0202-an-opened-file-closes-when-the-plate-changes.md) | An opened sliced file closes when the plate changes | Superseded by 0294 |
+| [0455](0455-a-chat-client-drives-the-command-line-over-mcp.md) | A chat client drives the command line over MCP: jobs of revisions, a bench, an extension per release, `agent-link` | Accepted; a process a call is superseded by 0467 |
+| [0456](0456-one-plate-document-is-edited-by-one-apply-and-the-open-window-owns-it.md) | One plate document is edited by one apply, and the open window owns it | Accepted |
+| [0457](0457-a-plate-knows-no-machine-and-is-analysed-at-one-step.md) | A plate knows no machine, is analysed at one step, and is checked on the standard one | Accepted |
+| [0458](0458-the-command-line-runs-on-the-document-and-shapes-objects-by-id.md) | The command line runs on the document and shapes a plate's objects by id | Accepted |
+| [0459](0459-the-command-line-and-the-server-reach-the-windows-model-work.md) | The command line and the server reach the window's model work | Accepted |
+| [0460](0460-a-client-chooses-among-poses-the-engine-proved.md) | A client chooses among the poses the engine proved | Accepted |
+| [0461](0461-resin-recipes-and-print-failures-with-no-window.md) | A chat client sets up a resin, keeps a recipe and reads a failed print with no window | Accepted |
+| [0462](0462-the-window-lists-agents-and-shows-each-job-on-its-own-plate.md) | The window lists its agents and shows each job on a plate of its own | Accepted |
+| [0464](0464-a-chat-client-is-answered-short-and-a-cut-plate-is-edited-piece-by-piece.md) | Answer a chat client short, hand its points to their objects, and edit a cut plate piece by piece | Accepted; `fix_issues` refused once points name objects is superseded by 0465, the piece-by-piece edits by 0467 |
+| [0465](0465-check-s-answers-run-on-a-project-on-the-objects-named.md) | Run Check's answers on a project, on the objects `--only` names | Accepted |
+| [0466](0466-an-orientation-search-is-kept-on-disk-by-what-it-was-asked.md) | Keep an orientation search on disk by the hash of what it was asked | Accepted |
+| [0467](0467-a-chat-client-s-server-drives-one-encrust-serve-that-keeps-each-step.md) | A chat client's server drives one `encrust serve` that keeps each step by its hash | Accepted |

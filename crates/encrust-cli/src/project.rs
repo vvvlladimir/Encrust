@@ -1,25 +1,105 @@
-//! A `.encrust` project saved by the window, sliced a plate at a time. Flags that shape a model
-//! are refused; printer and resin are named by id only (ADR 0261) and flags may change them,
-//! and the print settings are theirs under what the flags set (ADR 0380).
+//! A `.encrust` project saved by the window, sliced a plate at a time, its objects shaped by the
+//! flags (ADR 0458); its printer and resin by id (ADR 0261), its settings under the flags' (0380).
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
-use core_engine::project::{Manifest, Project, load};
-use core_engine::{Machine, Opening, open_plate};
+use core_document::{Document, apply};
+use core_edit::Edit;
+use core_engine::project::{Manifest, ModelMeshes, ObjectState, Project, insert, load};
+use core_geometry::placed_aabb;
+use std::time::Duration;
+
+use crate::hollowing::HollowReport;
+use crate::supports::SupportReport;
+use core_engine::{Machine, Model, Opening, object_model, open_plate_of, plate_models};
 use core_format::ExposurePlan;
+use core_volume::Cancel;
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use crate::args::JobArgs;
-use crate::pipeline::{cutting_of, overrides_of, raster_window, warn_if_grey_ignored};
+use crate::meeting;
+use crate::pipeline::{Watch, cutting_of, overrides_of, raster_window, warn_if_grey_ignored};
 use crate::profiles::catalogue;
 use crate::report::FitCheck;
 use crate::sliced_file::now_unix_s;
-use crate::stage::{Part, Staged, bounds};
+use crate::stage::{Part, Seed, Staged, bounds, print_off_the_plate};
+use crate::steps::{Key, plate_key};
+
+/// A project to stage from, with its key where a server keeps steps: the plate this server
+/// wrote to `path` where the file is still as written, else the file as read.
+pub(crate) fn opened(path: &Path, watch: &Watch) -> Result<(Project, Seed)> {
+    let Some(steps) = &watch.steps else {
+        return Ok((open(path)?, None));
+    };
+    if let Some((key, document)) = steps.written(path) {
+        return Ok((document.into_project(), Some((Arc::clone(steps), key))));
+    }
+    let project = open(path)?;
+    let seed = (steps.file_key(path).ok())
+        .map(|file| (Arc::clone(steps), Key::of(&[b"project"]).with(file)));
+    Ok((project, seed))
+}
+
+/// The models `plate` of `project` prints, each as a server made it before where `seed` names
+/// the plate it keeps.
+fn models_of(project: &Project, plate: u32, seed: &Seed) -> Vec<Model> {
+    let Some((steps, _)) = seed else {
+        return plate_models(project, plate);
+    };
+    let supports = &project.manifest.supports;
+    (project
+        .manifest
+        .objects
+        .iter()
+        .zip(&project.models)
+        .enumerate())
+    .filter(|(_, (object, _))| object.printable_on(plate))
+    .filter_map(|(index, (object, meshes))| {
+        steps.model((object, meshes, supports), || object_model(project, index))
+    })
+    .collect()
+}
 
 /// Opens a project to stage its plates from.
 pub fn open(path: &Path) -> Result<Project> {
-    load(path).with_context(|| format!("cannot open the project {}", path.display()))
+    crate::spent::timed("project:read", || load(path))
+        .with_context(|| format!("cannot open the project {}", path.display()))
+}
+
+/// The plate each of `paths` was left on, laid on one in the order given, the first's settings
+/// kept; spread, where `arranged`, over the printer its flags or the first project name.
+pub fn laid_together(paths: &[PathBuf], arranged: Option<&JobArgs>) -> Result<Project> {
+    let mut opened = paths.iter().map(|path| open(path));
+    let first = opened.next().context("no project to lay on the plate")??;
+    let mut laid = Project {
+        manifest: Manifest {
+            plates: vec![first.manifest.plates[first.manifest.active_plate as usize].clone()],
+            active_plate: 0,
+            objects: Vec::new(),
+            ..first.manifest.clone()
+        },
+        models: Vec::new(),
+        preview: None,
+    };
+    insert(&mut laid, first, 0);
+    for project in opened {
+        insert(&mut laid, project?, 0);
+    }
+    let Some(job) = arranged else {
+        return Ok(laid);
+    };
+    let printer = machine(&laid.manifest, job)?.printer;
+    let (low_mm, plate_mm) = crate::stage::usable_area(&printer);
+    let spread = Edit::Arrange {
+        low_mm,
+        plate_mm,
+        clearance_mm: core_edit::defaults::arrange_clearance_mm(),
+    };
+    let mut document = Document::from_project(laid);
+    apply(&mut document, &spread, Cancel::never()).context("arranging the projects")?;
+    Ok(document.into_project())
 }
 
 /// The plates holding a model to print, by index and name, as the window slices them all.
@@ -73,13 +153,41 @@ fn saved_plate(path: &Path, manifest: &Manifest) -> u32 {
     active
 }
 
+/// `plate` of `project`, counted from one, staged, with what stands off the plate said.
+pub(crate) fn stage_checked(
+    path: &Path,
+    (project, seed): (&Project, &Seed),
+    plate: Option<u32>,
+    job: &JobArgs,
+    watch: &Watch,
+) -> Result<Staged> {
+    let plate = plate
+        .map(|number| chosen_plate(&project.manifest, number))
+        .transpose()?;
+    let mut staged =
+        crate::spent::timed("stage:project", || stage(path, project, plate, (job, seed)))?;
+    if watch.talk {
+        print_off_the_plate(&staged.parts);
+    }
+    let owners: Vec<usize> = (0..staged.models.len()).collect();
+    crate::spent::timed("stage:meeting", || {
+        meeting::mark(&mut staged.parts, &staged.models, &owners, watch.talk);
+    });
+    Ok(staged)
+}
+
 /// Stages `plate` of the project, or the plate it was left on.
-pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) -> Result<Staged> {
-    refuse_shaping_flags(job)?;
+pub(crate) fn stage(
+    path: &Path,
+    project: &Project,
+    plate: Option<u32>,
+    (job, seed): (&JobArgs, &Seed),
+) -> Result<Staged> {
     let manifest = &project.manifest;
     let plate = plate.unwrap_or_else(|| saved_plate(path, manifest));
     let machine = machine(manifest, job)?;
-    let built = open_plate(
+    let built = open_plate_of(
+        models_of(project, plate, seed),
         project,
         &machine,
         &Opening {
@@ -96,31 +204,35 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
         None => built.material,
     };
 
-    let on_plate: Vec<_> = manifest
-        .objects
-        .iter()
-        .filter(|object| object.printable_on(plate))
+    let on_plate: Vec<_> = (manifest.objects.iter().zip(&project.models))
+        .filter(|(object, _)| object.printable_on(plate))
         .collect();
     let drainage = job.slicing.check_drainage
-        || on_plate.iter().any(|object| {
+        || on_plate.iter().any(|(object, _)| {
             let hollow = &object.hollow;
             hollow.built.is_some() || !hollow.drains.is_empty() || !hollow.channels.is_empty()
         });
+    let fingerprint =
+        (seed.as_ref()).and_then(|_| plate_key(on_plate.iter().copied(), &manifest.supports));
     Ok(Staged {
+        fingerprint,
+        model_ids: on_plate.iter().map(|(object, _)| object.id).collect(),
         parts: on_plate
             .iter()
             .zip(&built.models)
-            .map(|(object, model)| Part {
+            .map(|((object, meshes), model)| Part {
+                id: Some(object.id),
                 input: PathBuf::from(&object.name),
                 import: None,
                 oriented: None,
-                hollow: None,
+                hollow: saved_hollow(manifest, object, meshes),
                 drains: None,
-                supports: None,
+                supports: saved_supports(object, model),
                 standing: bounds(model).map(|bounds| FitCheck::of(&bounds, &built.printer)),
                 meets: Vec::new(),
                 prepared: None,
                 recipe: None,
+                placed: Some(object.transform),
             })
             .collect(),
         models: built.models,
@@ -136,11 +248,58 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
     })
 }
 
+/// What the cavity `object` carries as saved says of it, as `--hollow` would have.
+fn saved_hollow(
+    manifest: &Manifest,
+    object: &ObjectState,
+    meshes: &ModelMeshes,
+) -> Option<HollowReport> {
+    let built = object.hollow.built.as_ref()?;
+    let state = object.own_hollow.as_ref().unwrap_or(&manifest.hollow);
+    let faces = (meshes.source.faces.len(), meshes.printed().faces.len());
+    let lattice = (built.cavity_mm3, built.voxel_mm, built.coarsened);
+    Some(HollowReport::of(
+        (state, object.transform),
+        faces,
+        lattice,
+        Duration::ZERO,
+    ))
+}
+
+/// What the supports `object` stands on as saved say of them, as `--supports` would have:
+/// trees a move dropped grow again from their points on opening, so those count.
+fn saved_supports(object: &ObjectState, model: &core_engine::Model) -> Option<SupportReport> {
+    let held = &object.supports;
+    let trees: Vec<_> = held.frozen.iter().chain(&held.grown).collect();
+    let to_plate = object.transform.to_matrix();
+    let contacts: Vec<_> = (held.points.iter().map(|point| point.contact))
+        .chain(held.frozen.iter().flat_map(|tree| tree.contacts()))
+        .map(|contact| to_plate.transform_point3(contact))
+        .collect();
+    if contacts.is_empty() && model.supports.is_empty() {
+        return None;
+    }
+    let standing = if trees.is_empty() {
+        contacts.len()
+    } else {
+        trees.len()
+    };
+    let lowest = placed_aabb(&model.mesh, model.transform).map_or(0.0, |bounds| bounds.mins.z);
+    Some(SupportReport {
+        lifted_mm: lowest.max(0.0),
+        contacts,
+        standing,
+        unheld: Vec::new(),
+        trees: standing,
+        faces: model.supports.iter().map(|mesh| mesh.faces.len()).sum(),
+    })
+}
+
 /// The printer and resin the flags name, or else the ones the project names by id, as
 /// the user's catalogue has them; the engine tunes the resin to the machine as the window does.
-fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
+pub(crate) fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
     let flags = &job.profile;
-    let (printer, printer_id) = match (&flags.profile, &flags.printer) {
+    let (printer, printer_id) = match (&flags.profile, flags.printer_id()) {
         (Some(path), _) => {
             let printer = PrinterProfile::load(path)
                 .with_context(|| format!("cannot load {}", path.display()))?;
@@ -148,7 +307,7 @@ fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
         }
         (None, Some(id)) => {
             let why = format!("--printer {id} is not among your printers");
-            (printer_of(id, &why)?, Some(id.clone()))
+            (printer_of(id, &why)?, Some(id.to_owned()))
         }
         (None, None) => {
             let id = manifest
@@ -160,10 +319,11 @@ fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
             (printer_of(id, &why)?, Some(id.to_owned()))
         }
     };
-    let resin = match (&flags.material, &flags.resin) {
+    let mut resin = match (&flags.material, &flags.resin) {
         (Some(path), _) => MaterialProfile::load(path)
             .with_context(|| format!("cannot load {}", path.display()))?,
         (None, Some(id)) => resin_of(id, &format!("--resin {id} is not among your resins"))?,
+        (None, None) if flags.standard_machine => MaterialProfile::default(),
         (None, None) => {
             let id = manifest
                 .resin
@@ -173,6 +333,7 @@ fn machine(manifest: &Manifest, job: &JobArgs) -> Result<Machine> {
             resin_of(id, &why)?
         }
     };
+    flags.set.apply(&mut resin);
     Ok(Machine {
         printer,
         printer_id,
@@ -196,33 +357,41 @@ fn resin_of(id: &str, why: &str) -> Result<MaterialProfile> {
     Ok(entry.profile.clone())
 }
 
-/// The flags a project already answers for itself.
-fn refuse_shaping_flags(job: &JobArgs) -> Result<()> {
+/// The flags a project cannot take: a recipe, which prepares models as they come in, the
+/// islands it slices as saved, and models combined from files.
+pub fn refuse_for_projects(job: &JobArgs) -> Result<()> {
     job.hollow.check_flags()?;
-    let import = &job.import;
-    let transform = &import.transform;
-    let given = [
-        ("--rotate", transform.rotate.is_some()),
-        ("--scale", transform.scale.is_some()),
-        ("--center", transform.center),
-        ("--orient", transform.orient),
-        ("--relief", import.relief.is_some()),
-        ("--hollow", job.hollow.wanted()),
-        ("--drain-at or --channel", job.hollow.cutting()),
-        (
-            "--supports",
-            job.supports.supports.is_some() || job.supports.support_profile.is_some(),
-        ),
-        ("--support-cavity", job.supports.support_cavity),
+    let refused = [
         ("--prepare", job.prepare),
         ("--recipe", job.recipe.is_some()),
         ("--remove-islands", job.raster.remove_islands),
         ("--hanging-passes", job.raster.hanging_passes != 0),
+        ("--combine", job.model.combine.is_some()),
     ];
-    if let Some((flag, _)) = given.iter().find(|(_, given)| *given) {
-        bail!("{flag} does not apply to a project, which carries its own; change it in the window");
+    if let Some((flag, _)) = refused.iter().find(|(_, given)| *given) {
+        bail!("{flag} does not apply to a project; prepare the models it holds by their flags");
     }
     Ok(())
+}
+
+/// Whether a flag given shapes the project's models, so its plate is edited by them first.
+pub fn shaped_by_flags(job: &JobArgs, arrange: bool) -> bool {
+    let import = &job.import;
+    let transform = &import.transform;
+    arrange
+        || !job.only.is_empty()
+        || job.model.wanted()
+        || import.repair.is_some()
+        || !crate::edits::mend_asked(import).is_empty()
+        || import.relief.is_some()
+        || transform.places()
+        || transform.placing.copies.is_some()
+        || job.hollow.wanted()
+        || job.hollow.cutting()
+        || job.supports.supports.is_some()
+        || job.supports.support_profile.is_some()
+        || job.supports.support_cavity
+        || job.fixes.asked()
 }
 
 #[cfg(test)]
@@ -256,7 +425,7 @@ mod tests {
             fixtures.join("test-resin.toml"),
         ]);
         let project = open(&path).expect("the project was just saved");
-        let staged = stage(&path, &project, None, &flags.job).expect("it stages");
+        let staged = stage(&path, &project, None, (&flags.job, &None)).expect("it stages");
         assert!(staged.remove_islands);
         assert_eq!(staged.hanging_passes, 2, "as the window would slice it");
     }

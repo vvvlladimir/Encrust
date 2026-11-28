@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
+use core_document::settings_of;
 use core_engine::project::HollowState;
-use core_geometry::{PlacedHit, Transform};
-use core_volume::{
-    Blocker, BlockerSize, HollowMode, HollowSettings, InfillSettings, blocker_under, plate_down,
-};
+use core_geometry::PlacedHit;
+use core_volume::{Blocker, BlockerSize, HollowSettings, blocker_under};
 
 use crate::i18n::tr;
 use crate::job::{
@@ -20,7 +19,7 @@ use crate::status::Status;
 /// The numbers live here rather than in a profile because a wall thickness is a property
 /// of the model being printed, not of the machine printing it; see
 /// `docs/decisions/0059-a-hollow-is-the-model-with-its-cavity-appended.md`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct HollowTool {
     /// What the panel is set to, in the shape a project writes it down in (ADR 0191).
     pub state: HollowState,
@@ -35,33 +34,12 @@ pub struct HollowTool {
     fields: SharedFields,
 }
 
-impl Default for HollowTool {
-    fn default() -> Self {
-        let asked = HollowSettings::default();
-        Self {
-            state: HollowState {
-                thickness_mm: asked.thickness_mm,
-                mode: asked.mode,
-                precision: asked.precision,
-                infill_on: false,
-                infill: InfillSettings::default(),
-                open_floor: false,
-                solid_under_mm: asked.solid_under_mm,
-            },
-            blocker: BlockerSize::default(),
-            job: None,
-            hollowed: false,
-            fields: SharedFields::default(),
-        }
-    }
-}
-
 impl HollowTool {
     /// What the plate's numbers ask a run for. What each model carries — its blockers and
     /// its drain holes — is laid over this per model, in `hollow_tasks` and `is_stale`.
     #[cfg(test)]
     pub fn settings(&self) -> HollowSettings {
-        settings_of(&self.state, Transform::default())
+        settings_of(&self.state, core_geometry::Transform::default())
     }
 
     /// What `object` is hollowed with: its own settings, or the plate's, with its floor
@@ -204,21 +182,6 @@ impl HollowTool {
             HollowOutcome::Cancelled => Status::Info(tr!("hollow-cancelled")),
             HollowOutcome::Failed(message) => Status::Error(message),
         }
-    }
-}
-
-/// The run settings a panel's numbers ask for, on a model standing under `transform`. An
-/// open floor faces the plate it stands on, so turning such a model makes its shell stale.
-fn settings_of(state: &HollowState, transform: Transform) -> HollowSettings {
-    let opens = state.open_floor && state.mode == HollowMode::Internal;
-    HollowSettings {
-        thickness_mm: state.thickness_mm,
-        mode: state.mode,
-        precision: state.precision,
-        infill: state.infill_on.then_some(state.infill),
-        open_toward: opens.then(|| plate_down(transform)),
-        solid_under_mm: state.solid_under_mm,
-        ..HollowSettings::default()
     }
 }
 

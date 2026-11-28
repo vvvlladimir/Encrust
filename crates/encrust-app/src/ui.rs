@@ -13,7 +13,8 @@ pub use widgets::colour_field;
 pub use widgets::paragraph;
 pub use widgets::window_frame;
 pub use widgets::{
-    Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
+    Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row,
+    chooser_row_with, chooser_switch, group_name,
 };
 pub use widgets::{BindingPress, BindingRow, Recording, binding_row};
 pub use widgets::{CardLook, StepState, boxed, bullet, release_hero, steps, tag_label, theme_card};
@@ -65,6 +66,7 @@ pub use widgets::{
     PictureTile, TILE_PICTURE_H, ZoneWords, drop_zone_box, picture_tile, start_title,
 };
 pub use widgets::{ReadoutWords, layer_readout};
+pub use widgets::{RingLook, paint_ring, ring_badge};
 pub use widgets::{RunState, run_box};
 pub use widgets::{ZONE_INSET, inline_button_w};
 pub use widgets::{

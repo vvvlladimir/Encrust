@@ -1,11 +1,12 @@
 use anyhow::{Result, bail};
+use core_document::ApplyError;
 use core_geometry::{Scalar, transform_mesh};
 use core_volume::Boolean;
 
 use crate::i18n::tr;
 use crate::job::{BooleanJob, BooleanOutcome, BooleanRequest, Counted, Method};
 use crate::landing;
-use crate::scene::{Scene, SceneObject, Taken};
+use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
 
 /// Union, difference and intersection of the models picked on the plate, replacing them
@@ -28,6 +29,34 @@ impl BooleanTool {
         if models.len() < 2 {
             bail!(tr!("boolean-pick-two"));
         }
+        self.start_on(&models, self.op, Method::Sampled);
+        Ok(())
+    }
+
+    /// Starts combining the models `ids` name, in that order, by `op` and `method`, whatever
+    /// is picked.
+    pub fn start_asked(
+        &mut self,
+        scene: &Scene,
+        ids: &[ObjectId],
+        (op, method): (Boolean, Method),
+    ) -> Result<()> {
+        let models: Vec<&SceneObject> = ids
+            .iter()
+            .map(|id| {
+                scene
+                    .get(*id)
+                    .ok_or_else(|| ApplyError::NoObject(*id).into())
+            })
+            .collect::<Result<_>>()?;
+        if models.len() < 2 {
+            return Err(ApplyError::TooFew.into());
+        }
+        self.start_on(&models, op, method);
+        Ok(())
+    }
+
+    fn start_on(&mut self, models: &[&SceneObject], op: Boolean, method: Method) {
         self.job = Some(BooleanJob::spawn(BooleanRequest {
             taken: models.iter().map(|object| Taken::of(object)).collect(),
             // The model itself, not its shell: a cavity is not a solid the cut can read,
@@ -36,10 +65,9 @@ impl BooleanTool {
                 .iter()
                 .map(|object| transform_mesh(&object.mesh, object.transform))
                 .collect(),
-            op: self.op,
-            method: Method::Sampled,
+            op,
+            method,
         }));
-        Ok(())
     }
 
     /// Lands a finished run in the scene. Returns whether one is still going, which is what

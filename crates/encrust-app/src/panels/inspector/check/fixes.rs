@@ -96,8 +96,9 @@ pub(super) fn cups(ui: &mut egui::Ui, window: &mut Window, risks: &[Risk]) {
     };
     let stack = (plan, &settings);
     if pressed == 0 {
+        let size = window.tools.drain.size();
         let plate = (&mut window.doc.scene, &mut window.tools.drain);
-        let said = drill_cups(plate, stack, risks, None);
+        let said = drill_cups(plate, stack, risks, None, size);
         report(window, IssueKind::Cups, said);
     } else {
         let hole_mm = window.tools.drain.size().diameter_mm;

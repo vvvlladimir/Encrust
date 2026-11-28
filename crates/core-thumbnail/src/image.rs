@@ -75,6 +75,10 @@ impl Thumbnail {
         &self.pixels
     }
 
+    pub(crate) fn pixels_mut(&mut self) -> &mut [Rgb] {
+        &mut self.pixels
+    }
+
     /// `thumbnail` fitted to a record of `width_px` by `height_px`, or the record all
     /// `background` when there is none.
     pub fn fitted_or_filled(

@@ -22,10 +22,13 @@ core-joint.workspace = true
 core-text.workspace = true
 core-mesh-io.workspace = true
 core-engine.workspace = true
+core-document.workspace = true
+core-edit.workspace = true
 jiff.workspace = true
 core-pipeline.workspace = true
 core-plate.workspace = true
 core-recipe.workspace = true
+core-samples.workspace = true
 core-slicer.workspace = true
 core-raster.workspace = true
 core-supports.workspace = true
@@ -84,6 +87,8 @@ showcase = []
 fontdb.workspace = true
 ureq = { workspace = true, features = ["rustls"] }
 rfd.workspace = true
+# What the window and encrust-mcp say to each other, and where; see docs/decisions/0455.
+agent-link.workspace = true
 
 # The window buttons macOS draws, set on the top bar's centre line, and the application menu;
 # see docs/decisions/0217 and 0444.

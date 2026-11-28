@@ -1,3 +1,4 @@
+use crate::scene::fixtures::drained;
 use core_geometry::{Bvh, Transform, Vec3, cuboid, diagnose, signed_volume};
 use core_volume::HoleSize;
 
@@ -21,9 +22,12 @@ fn a_block_drilled_by(size: HoleSize) -> (Scene, ObjectId) {
     let object = scene.get_mut(id).expect("the block is on the plate");
     let bvh = Bvh::build(&mesh);
     let at = Vec3::new(5.0, 5.0, 10.0);
-    object
-        .hollow
-        .add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+    drained(
+        &mut object.hollow,
+        (&mesh, &bvh, Transform::default()),
+        (at, Vec3::Z),
+        size,
+    );
     (scene, id)
 }
 

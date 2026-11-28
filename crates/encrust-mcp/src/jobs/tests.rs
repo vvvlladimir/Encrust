@@ -1,0 +1,149 @@
+use std::path::PathBuf;
+
+use serde_json::json;
+
+use super::*;
+use crate::recipe::Supports;
+
+fn scratch(name: &str) -> Jobs {
+    let root = std::env::temp_dir().join(format!("encrust-mcp-jobs-{name}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    Jobs::new(root)
+}
+
+fn recipe() -> Recipe {
+    Recipe::bare(
+        PathBuf::from("/models/My Bust (final).stl"),
+        "elegoo-mars-4-ultra".into(),
+        "my-grey".into(),
+    )
+}
+
+#[test]
+fn a_job_is_named_after_its_model_and_starts_at_revision_one() {
+    let jobs = scratch("start");
+    let job = Jobs::name_for(&recipe());
+    assert!(job.starts_with("my-bust--final-"), "named {job}");
+    let first = jobs
+        .commit(&job, (recipe(), None), &Value::Null)
+        .expect("the root is writable");
+    assert_eq!(first.number, 1);
+}
+
+#[test]
+fn each_commit_is_a_new_revision_and_the_old_one_stays_readable() {
+    let jobs = scratch("revisions");
+    let job = Jobs::name_for(&recipe());
+    jobs.commit(&job, (recipe(), None), &Value::Null)
+        .expect("the root is writable");
+    let mut edited = recipe();
+    edited.supports = Some(Supports {
+        profile: "auto".into(),
+        cavity: false,
+        ..Default::default()
+    });
+    let second = jobs
+        .commit(&job, (edited.clone(), None), &Value::Null)
+        .expect("the job exists");
+    assert_eq!(second.number, 2);
+    assert_eq!(jobs.open(&job, None).expect("latest").recipe, edited);
+    assert_eq!(jobs.open(&job, Some(1)).expect("first").recipe, recipe());
+}
+
+#[test]
+fn each_revision_keeps_the_report_of_its_check_beside_its_recipe() {
+    let jobs = scratch("report");
+    let job = Jobs::name_for(&recipe());
+    let report = json!({ "status": "ok" });
+    let first = jobs
+        .commit(&job, (recipe(), None), &report)
+        .expect("the root is writable");
+    let kept = fs::read_to_string(jobs.root.join(&job).join(format!("{}.json", first.number)))
+        .expect("the report is written beside the recipe");
+    assert_eq!(serde_json::from_str::<Value>(&kept).expect("JSON"), report);
+}
+
+#[test]
+fn a_job_name_cannot_reach_outside_the_root() {
+    let jobs = scratch("escape");
+    let outside = std::env::temp_dir().join("encrust-mcp-outside");
+    let absolute = outside.display().to_string();
+    for name in ["../etc", "a/b", "", ".", absolute.as_str()] {
+        assert!(jobs.open(name, None).is_err(), "{name:?} was opened");
+        assert!(
+            jobs.open(name, Some(1)).is_err(),
+            "{name:?} revision 1 was opened"
+        );
+        assert!(
+            jobs.commit(name, (recipe(), None), &Value::Null).is_err(),
+            "{name:?} was written"
+        );
+    }
+    assert!(!outside.exists());
+}
+
+#[test]
+fn a_job_that_was_never_started_has_no_latest_revision() {
+    let jobs = scratch("never");
+    let refused = jobs
+        .open("no-such-job", None)
+        .expect_err("nothing was started");
+    assert!(
+        refused.to_string().contains("no-such-job"),
+        "said {refused}"
+    );
+}
+
+#[test]
+fn a_revision_keeps_the_flags_it_stages_with_and_the_autopilot_s_check_beside_it() {
+    let jobs = scratch("args");
+    let job = Jobs::name_for(&recipe());
+    let first = jobs
+        .commit(&job, (recipe(), None), &json!({"status": "ok"}))
+        .expect("the root is writable");
+    let file = jobs.dir(&job).expect("a plain name").join("1.args.json");
+    let args: Vec<String> =
+        serde_json::from_str(&fs::read_to_string(file).expect("kept")).expect("JSON");
+    assert_eq!(args, first.recipe.flags());
+    assert_eq!(jobs.report(&first).expect("kept")["status"], "ok");
+    assert!(jobs.autopilot_file(&job).is_none(), "none kept yet");
+    jobs.keep_autopilot(&job, &json!({"status": "unclean"}))
+        .expect("the root is writable");
+    assert!(jobs.autopilot_file(&job).is_some());
+    assert_eq!(
+        jobs.latest(&job).expect("one revision"),
+        1,
+        "the kept files are no revision"
+    );
+}
+
+#[test]
+fn a_revision_is_shown_by_the_plate_its_check_wrote() {
+    let jobs = scratch("shown-plate");
+    let job = Jobs::name_for(&recipe());
+    let first = jobs
+        .commit(&job, (recipe(), None), &Value::Null)
+        .expect("the root is writable");
+    let error = jobs.shown_plate(&first).expect_err("no plate was kept yet");
+    assert!(format!("{error:#}").contains("keeps no plate"), "{error:#}");
+
+    let written = jobs.scratch_plate().expect("the root is writable");
+    fs::write(&written, b"plate").expect("the scratch dir is writable");
+    jobs.keep_plate(&job, first.number, &written)
+        .expect("the job exists");
+    let plate = jobs.shown_plate(&first).expect("the plate is kept");
+    assert!(plate.ends_with("1.encrust"), "{}", plate.display());
+}
+
+#[test]
+fn a_revision_made_on_the_windows_plate_is_not_shown_again() {
+    let jobs = scratch("shown-edits");
+    let job = Jobs::name_for(&recipe());
+    let first = jobs
+        .commit(&job, (recipe(), None), &Value::Null)
+        .expect("the root is writable");
+    jobs.keep_edits(&job, first.number, &[])
+        .expect("the job exists");
+    let error = jobs.shown_plate(&first).expect_err("the window holds it");
+    assert!(format!("{error:#}").contains("window's plate"), "{error:#}");
+}

@@ -1,0 +1,22 @@
+[package]
+name = "agent-link"
+description = "What the agents' server and the open window say to each other: the link's lines, the agents' files and where both are kept."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+core-edit.workspace = true
+directories.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[lints]
+workspace = true

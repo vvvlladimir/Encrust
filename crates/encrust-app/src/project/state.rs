@@ -17,7 +17,7 @@ use crate::state::Tools;
 use crate::supports::with_own;
 use crate::tool_settings::ToolSettings;
 use core_engine::project::{
-    BuiltCavity, Cavity, DrainState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
+    BuiltCavity, DrainState, Manifest, ModelMeshes, ObjectHollowState, ObjectState,
     ObjectSupportState, OwnDrain, OwnSupportState, Project, Summary, VERSION, hollow_of,
     supports_of,
 };
@@ -39,11 +39,39 @@ pub struct CapturedMut<'a> {
 
 /// The whole plate as a project, ready to be written.
 pub fn capture(plate: Captured<'_>) -> Project {
-    let Captured {
-        scene,
-        slicing,
-        tools,
-    } = plate;
+    let scene = plate.scene;
+    let objects: Vec<ObjectState> = (scene.objects().iter())
+        .map(|object| object_state(scene, object))
+        .collect();
+    let models = scene.objects().iter().map(model_meshes).collect();
+    let plates = (scene.plates().to_vec(), scene.active_plate());
+    project_of(plate, plates, (objects, models))
+}
+
+/// The models on one plate alone, `None` none at all, as a project of that one plate.
+pub fn capture_plate(plate: Captured<'_>, index: Option<u32>) -> Project {
+    let scene = plate.scene;
+    let on: Vec<&SceneObject> = (scene.objects().iter())
+        .filter(|object| Some(object.plate) == index)
+        .collect();
+    let objects: Vec<ObjectState> = (on.iter())
+        .map(|object| ObjectState {
+            plate: 0,
+            ..object_state(scene, object)
+        })
+        .collect();
+    let models = on.iter().map(|object| model_meshes(object)).collect();
+    let name = index.and_then(|index| scene.plates().get(index as usize).cloned());
+    let plates = (name.into_iter().collect(), 0);
+    project_of(plate, plates, (objects, models))
+}
+
+fn project_of(
+    plate: Captured<'_>,
+    (plates, active_plate): (Vec<String>, u32),
+    (objects, models): (Vec<ObjectState>, Vec<ModelMeshes>),
+) -> Project {
+    let Captured { slicing, tools, .. } = plate;
     let settings = ToolSettings::of(tools, slicing);
     let manifest = Manifest {
         version: VERSION,
@@ -58,17 +86,14 @@ pub fn capture(plate: Captured<'_>) -> Project {
         drain: settings.drain,
         cut: settings.cut,
         array: settings.array,
-        plates: scene.plates().to_vec(),
-        active_plate: scene.active_plate(),
-        objects: scene
-            .objects()
-            .iter()
-            .map(|object| object_state(scene, object))
-            .collect(),
+        plates,
+        active_plate,
+        objects,
+        next_id: None,
     };
     Project {
         manifest,
-        models: scene.objects().iter().map(model_meshes).collect(),
+        models,
         preview: None,
     }
 }
@@ -110,6 +135,7 @@ fn model_meshes(object: &SceneObject) -> ModelMeshes {
 
 fn object_state(scene: &Scene, object: &SceneObject) -> ObjectState {
     ObjectState {
+        id: object.id,
         name: object.name.clone(),
         plate: object.plate,
         transform: object.transform,
@@ -160,18 +186,7 @@ fn object_state(scene: &Scene, object: &SceneObject) -> ObjectState {
 
 /// The shell standing on `object` as the file records it, or `None` for a solid model.
 fn built_cavity(object: &SceneObject) -> Option<BuiltCavity> {
-    let asked = object.hollow.asked()?;
-    let (voxel_mm, coarsened) = object.hollow.lattice()?;
-    let (scale, stretched) = BuiltCavity::keys_of(object.hollow.built_shape()?);
-    Some(BuiltCavity {
-        wall: Cavity::of(asked),
-        cavity_faces: object.hollow.cavity_faces()?,
-        cavity_mm3: object.hollow.cavity_mm3(),
-        voxel_mm,
-        coarsened,
-        scale,
-        stretched,
-    })
+    Some(BuiltCavity::of(object.hollow.built()?))
 }
 
 /// Puts a loaded project in place of whatever the window was holding. Its printer and
@@ -263,14 +278,14 @@ fn take_machine(printer: Option<String>, resin: Option<String>, slicing: &mut Sl
 }
 
 /// Puts every object the file holds back on `scene`, with the shell, the cuts and the
-/// trees it was saved with: nothing here is hollowed or grown again.
-fn restore_objects(
+/// trees it was saved with: nothing here is hollowed or grown again. Answers their ids.
+pub(super) fn restore_objects(
     scene: &mut Scene,
     objects: Vec<ObjectState>,
     models: Vec<ModelMeshes>,
     table: &[SupportProfile],
     plate_raft: Raft,
-) {
+) -> Vec<ObjectId> {
     // The hierarchy is the expensive half of opening a model and is per mesh, so the
     // plate's models are built at once rather than one after another.
     let measured: Vec<(Arc<Bvh>, Vec3)> = models
@@ -285,22 +300,25 @@ fn restore_objects(
 
     let mut plugs = Vec::new();
     for ((state, meshes), (bvh, center_of_mass)) in objects.into_iter().zip(&models).zip(measured) {
-        let id = scene.insert(Imported {
-            name: state.name,
-            bvh: Arc::clone(&bvh),
-            mesh: Arc::clone(&meshes.source),
-            transform: state.transform,
-            center_of_mass,
-            summary: ImportSummary {
-                vertices_merged: state.summary.vertices_merged,
-                faces_removed: state.summary.faces_removed,
-                orientation: state.summary.orientation,
-                diagnostics: state.summary.diagnostics,
+        let id = scene.insert_as(
+            state.id,
+            Imported {
+                name: state.name,
+                bvh: Arc::clone(&bvh),
+                mesh: Arc::clone(&meshes.source),
+                transform: state.transform,
+                center_of_mass,
+                summary: ImportSummary {
+                    vertices_merged: state.summary.vertices_merged,
+                    faces_removed: state.summary.faces_removed,
+                    orientation: state.summary.orientation,
+                    diagnostics: state.summary.diagnostics,
+                },
+                // A project carries meshes, not the files they came from: a texture that was
+                // not pressed in before saving is not in there to press in now.
+                mapped: None,
             },
-            // A project carries meshes, not the files they came from: a texture that was
-            // not pressed in before saving is not in there to press in now.
-            mapped: None,
-        });
+        );
         plugs.push((id, state.plug_of));
         let Some(object) = scene.get_mut(id) else {
             continue;
@@ -347,6 +365,7 @@ fn restore_objects(
             object.plug_of = model;
         }
     }
+    ids
 }
 
 #[cfg(test)]

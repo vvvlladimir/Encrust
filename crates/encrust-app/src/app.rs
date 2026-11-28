@@ -1,8 +1,6 @@
 use std::path::Path;
 
-use core_geometry::Vec2;
-
-use crate::drain::DrainTool;
+use crate::drain::land_ended;
 use crate::files::{Arrived, Handed, Wanted};
 use crate::i18n::tr;
 use crate::panels::Window;
@@ -33,6 +31,9 @@ pub struct SlicerApp {
     prefs: Preferences,
     /// The keys this frame asked for, read off the raw input before egui saw it.
     keys: Vec<shortcuts::Action>,
+    /// What `encrust-mcp` hands the open window, while it listens.
+    #[cfg(not(target_arch = "wasm32"))]
+    link: Option<crate::link::Link>,
 }
 
 impl Default for SlicerApp {
@@ -48,6 +49,8 @@ impl Default for SlicerApp {
             machine: Machine::default(),
             prefs: Preferences::default(),
             keys: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            link: None,
         }
     }
 }
@@ -92,6 +95,11 @@ impl SlicerApp {
         // A copy to restore is offered over the plate, which the start page would hide.
         app.view.options.started |= app.machine.autosave.offered().is_some();
         project::mark_saved(&mut app.window());
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            app.link = crate::link::Link::for_window(&cc.egui_ctx);
+            app.machine.agents = crate::agents::Agents::start(&cc.egui_ctx);
+        }
         if let Some(path) = initial_model {
             open_by_what_it_is(&mut app.window(), Handed::Path(path.to_path_buf()));
         }
@@ -309,16 +317,11 @@ impl SlicerApp {
     /// Lays the plugs a worker has cut into the edit that asked for them. Returns whether
     /// any is still being cut.
     fn land_plugs(&mut self) -> bool {
-        let status = &mut self.machine.status;
-        let plate_mm = Vec2::new(self.doc.plate.x_mm, self.doc.plate.y_mm);
-        for ended in self.tools.drain.plugs_to_land(&self.doc.drilling) {
-            self.doc
-                .history
-                .land(&mut self.doc.scene, ended.asked_by(), |scene| {
-                    DrainTool::land_plugs(scene, &ended, plate_mm, status);
-                });
-        }
-        self.tools.drain.laying_plugs()
+        land_ended(
+            &mut self.doc,
+            &mut self.tools.drain,
+            &mut self.machine.status,
+        )
     }
 
     /// The supports drawn as they would be sliced: see [`crate::growth::refresh_supports`].
@@ -384,6 +387,10 @@ impl SlicerApp {
         working |= machine.preview.poll(status);
         working |= machine.updates.poll(status);
         working |= machine.fetches.poll(status);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            working |= machine.chat_extension.poll(status);
+        }
         working |= tools.supports.poll(scene, status);
         working |= tools.hollow.poll(scene, status);
         working |= tools.relief.poll(scene, status);
@@ -461,7 +468,13 @@ impl eframe::App for SlicerApp {
         #[cfg(not(target_os = "macos"))]
         let _ = frame;
         self.take_files(ui.ctx());
-        let working = self.poll_jobs(ui.ctx()) | self.hollow_what_a_press_opened();
+        let mut working = self.poll_jobs(ui.ctx()) | self.hollow_what_a_press_opened();
+        self.machine.agents.poll();
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(mut link) = self.link.take() {
+            working |= link.poll(&mut self.window());
+            self.link = Some(link);
+        }
         self.forget_what_an_old_check_found();
         self.let_go_of_other_tools();
         if working | self.run_the_cut_up(ui.ctx()) {
@@ -502,6 +515,8 @@ impl eframe::App for SlicerApp {
     }
 }
 
+#[cfg(test)]
+mod agents_ring;
 #[cfg(test)]
 mod plate_card;
 #[cfg(test)]

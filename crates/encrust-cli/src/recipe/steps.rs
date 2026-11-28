@@ -1,61 +1,276 @@
-//! The steps a recipe runs on one model at a time, each by the command line's own call for
-//! it: `--orient`'s search, `--repair`, `--hollow`, `--drain-at` and `--supports`.
+//! The steps a recipe runs on one model at a time, each the edits `core_recipe::edits_of` makes
+//! of it carried out on the plate's document, with what the flags give laid over (ADR 0456, 0458).
 
-use anyhow::Result;
-use clap::ValueEnum;
-use core_engine::{Hollowing, PREPARE_REPAIR, SupportPlan};
-use core_geometry::{Mat3, Scalar, Transform, Vec3};
-use core_plate::{Asked, OrientSettings};
-use core_recipe::{Metric, StepKind, preset_of};
-use core_volume::HollowSettings;
+use std::time::Instant;
+
+use anyhow::{Context, Result, bail};
+use core_document::{ApplyError, Report};
+use core_edit::{AUTO, Edit};
+use core_engine::{Drained, Hollowing, SupportPlan};
+use core_geometry::{Aabb, Mat3, Scalar, Vec3};
+use core_recipe::{Metric, StepKind, edits_of};
+use core_supports::Unstood;
+use core_volume::HoleKind;
 
 use super::piece::Piece;
 use super::prepared::{Wall, profile_name};
 use super::settings::Settings;
-use super::{Ctx, Did, drain};
-use crate::args::RepairMethod;
-use crate::hollowing::{self, HollowArgs, Mode, Pattern};
-use crate::keep_solid::KeepSolidArgs;
-use crate::pipeline::{orientation, read_again, repaired_later, turn_in_place};
-use crate::profiles::{AUTO, plan_of};
-use crate::supports::{stand_at, stand_under};
-use core_recipe::resolved::{flag, number, text};
+use super::{Ctx, Did};
+use crate::hollowing::{AutoReport, HollowReport};
+use crate::pipeline::{OrientSummary, read_again};
+use crate::profiles::plan_of;
+use crate::stage::{
+    self, Searched, Staging, said, shipped_printer, summary_of, support_report, usable_area,
+};
+use core_recipe::resolved::text;
 
-/// A turn this small, degrees, leaves the model as it stood.
+/// A turn smaller than this, degrees, leaves the model as the user stood it.
 const UNTURNED_DEG: Scalar = 1e-3;
 
-/// Runs step `kind`, which works on one model, on `piece` with `settings`.
+/// Runs step `kind` on `piece` by `settings`.
 pub(super) fn run(
     kind: StepKind,
-    piece: &mut Piece,
+    (piece, staging): (&mut Piece, &mut Staging),
     settings: &Settings,
     ctx: &Ctx,
 ) -> Result<Did> {
-    match kind {
-        StepKind::Orient => orient(piece, settings, ctx),
-        StepKind::Repair => repair(piece, settings, ctx),
-        StepKind::Hollow => hollow(piece, settings, ctx),
-        StepKind::Drain => drain::drain(piece, settings, ctx),
-        StepKind::Supports => supports(piece, settings, ctx),
-        StepKind::Check | StepKind::Arrange | StepKind::Save | StepKind::Gate | StepKind::Pause => {
-            Ok(Did::default())
-        }
+    if kind == StepKind::Hollow && staging.hollowed(piece.id) {
+        return Ok(Did::nothing("the model is hollow already"));
     }
+    if kind == StepKind::Supports {
+        hold_profile(piece, staging, settings)?;
+    }
+    let placed = (staging.mesh(piece.id).and_then(|mesh| mesh.aabb()))
+        .context("the model has no surface")?;
+    let area = ctx
+        .chosen
+        .printer
+        .as_ref()
+        .map_or_else(|| whole_plate(placed), usable_area);
+    let drift_mm = ctx.chosen.material.compensation.fit_drift_mm();
+    let edits = edits_of(kind, settings, piece.id, placed, area, drift_mm)
+        .context("the recipe's step names no edit")?;
+    let mut did = Did::default();
+    for edit in edits {
+        let edit = typed(edit, piece, (staging, ctx));
+        if let Edit::Drain { size, .. } = &edit
+            && size.diameter_mm <= 0.0
+        {
+            bail!("a drain hole of no width cannot be drilled");
+        }
+        if let Edit::Hollow { settings, .. } = &edit {
+            piece.prepared.hollowed = wall_of(settings.thickness_mm, staging, piece);
+        }
+        let faces = staging.mesh(piece.id).map_or(0, |mesh| mesh.faces.len());
+        let started = Instant::now();
+        let applied = match staging.apply(&edit, piece.id, ctx.watch.stop) {
+            Err(ApplyError::NoCavity(_)) => {
+                piece.note(Metric::Trapped, 0.0);
+                return Ok(Did::nothing("no cavity to drain"));
+            }
+            Err(ApplyError::NoRoom(_)) => {
+                piece.hollow =
+                    hollow_report(&edit, staging, piece, (faces, (0.0, 0.0, false)), started);
+                continue;
+            }
+            applied => applied.map_err(said)?,
+        };
+        let asked = (&edit, faces, started);
+        noted(piece, staging, (asked, applied.report), ctx, &mut did)?;
+    }
+    Ok(did)
 }
 
-/// The search `--orient` runs, judged on the supports the recipe stands it on; supports
-/// already under it are taken off.
-fn orient(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
-    let asked = Asked {
-        preset: text(settings, "goal").map_or(OrientSettings::default().preset, preset_of),
-        clean_surface: flag(settings, "clean_surface").unwrap_or(false),
+/// The plate as wide as a model's own box where no printer names one.
+fn whole_plate(placed: Aabb) -> ([Scalar; 2], [Scalar; 2]) {
+    let size = placed.maxs - placed.mins;
+    ([placed.mins.x, placed.mins.y], [size.x, size.y])
+}
+
+/// The profile a supports step names, put on the plate as the group in hand where it is the
+/// user's or a flag's, so the edit builds to it.
+fn hold_profile(piece: &Piece, staging: &mut Staging, settings: &Settings) -> Result<()> {
+    let plan = match &piece.shaping.supports {
+        Some(plan) => plan.clone(),
+        None => plan_of(text(settings, "profile").unwrap_or(AUTO))?,
     };
-    let asked = (asked, number(settings, "max_tilt_deg"));
-    piece.take_off_supports();
-    let judged = ctx.support_plan(piece)?;
-    let found = orientation(&piece.mesh, asked, judged.as_ref(), ctx.chosen, ctx.watch)?;
-    let turn = turn_in_place(&piece.mesh, found.rotation)?;
-    piece.moved(turn);
+    if plan.sizing().is_none() {
+        staging.hold_profile(plan.placing());
+    }
+    Ok(())
+}
+
+/// `edit` with what the flags give that no step setting holds: the lattice, the infill, the
+/// places kept solid, the hole and the plug gap typed, the printer a pose is proved on.
+fn typed(mut edit: Edit, piece: &Piece, (staging, ctx): (&Staging, &Ctx)) -> Edit {
+    let (import, hollow) = (&piece.shaping.import, &piece.shaping.hollow);
+    match &mut edit {
+        Edit::Hollow {
+            settings,
+            keep_solid,
+            keep_solid_reach_mm,
+            ..
+        } => {
+            settings.precision = import.precision;
+            if let Some(state) = hollow
+                .state(import.precision)
+                .filter(|_| settings.infill_on)
+            {
+                settings.infill = state.infill;
+            }
+            *keep_solid = hollow.keep_solid.runs.clone();
+            *keep_solid_reach_mm = hollow.keep_solid.reach_mm;
+        }
+        Edit::Drain {
+            object, size, kind, ..
+        } => {
+            *kind = match staging.hollowed(*object) {
+                true => HoleKind::AtDepth,
+                false => HoleKind::Walled,
+            };
+            *size = core_volume::HoleSize {
+                diameter_mm: size.diameter_mm,
+                depth_mm: size.depth_mm,
+                ..hollow.hole_size()
+            };
+        }
+        Edit::Plugs { gap_mm, .. } => {
+            *gap_mm = hollow.plug_gap_mm - ctx.chosen.material.compensation.fit_drift_mm();
+        }
+        Edit::Orient {
+            printer, lift_mm, ..
+        } => {
+            let job = &ctx.job.profile;
+            *printer = shipped_printer(job.printer.as_deref(), job.profile.is_some());
+            // The lift asked stays the model's, as the window keeps the row's for its orient.
+            *lift_mm = import.transform.lift.or(*lift_mm);
+        }
+        Edit::Repair {
+            seam_tolerance_mm,
+            smallest_shell_mm2,
+            ..
+        } => {
+            *seam_tolerance_mm = Some(import.seam_tolerance);
+            *smallest_shell_mm2 = Some(import.smallest_shell);
+        }
+        _ => {}
+    }
+    edit
+}
+
+/// Notes on `piece` what one of its step's edits did, said as the flag's own run says it.
+fn noted(
+    piece: &mut Piece,
+    staging: &mut Staging,
+    ((edit, faces, started), report): ((&Edit, usize, Instant), Report),
+    ctx: &Ctx,
+    did: &mut Did,
+) -> Result<()> {
+    let talk = ctx.watch.talk;
+    match report {
+        Report::Repaired { mended, wrapped } => {
+            let wraps = matches!(edit, Edit::Repair { method, .. } if method.wraps());
+            repaired(piece, staging, (mended, wraps.then_some(wrapped)), ctx)?;
+        }
+        report @ Report::Oriented { .. } => oriented(piece, staging, report, ctx)?,
+        Report::Hollowed {
+            cavity_mm3,
+            voxel_mm,
+            coarsened,
+        } => {
+            let lattice = (cavity_mm3, voxel_mm, coarsened);
+            piece.hollow = hollow_report(edit, staging, piece, (faces, lattice), started);
+            if let (Some(report), true) = (&piece.hollow, talk) {
+                print!("Hollowed\n{report}\n");
+            }
+        }
+        Report::Drained {
+            holes,
+            trapped,
+            searched,
+        } => drained(piece, staging, (holes, trapped, searched), (ctx, did))?,
+        Report::Supported {
+            trees,
+            contacts_mm,
+            standing,
+            unheld,
+            ..
+        } => {
+            let parts = (trees, contacts_mm, standing, unheld);
+            supported(piece, staging, edit, parts, talk);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Notes the holes a drain edit drilled and what it left trapped, searched or scanned.
+fn drained(
+    piece: &mut Piece,
+    staging: &Staging,
+    (holes, trapped, searched): (usize, usize, Option<Drained>),
+    (ctx, did): (&Ctx, &mut Did),
+) -> Result<()> {
+    did.holes = Some(did.holes.unwrap_or(0) + holes);
+    if let (Some(drained), true) = (&searched, ctx.watch.talk) {
+        print!("{}", AutoReport(drained, 0.0));
+    }
+    if searched.is_some() {
+        piece.prepared.drained = true;
+        piece.note(Metric::Trapped, trapped as Scalar);
+        let stood = staging.transform(piece.id);
+        piece.drains = searched.map(|drained| Searched { drained, stood });
+    } else {
+        let trapped = piece.trapped(staging, ctx.watch.stop)?;
+        piece.note(Metric::Trapped, trapped as Scalar);
+    }
+    Ok(())
+}
+
+/// Notes the supports a supports edit grew and the profile it named.
+fn supported(
+    piece: &mut Piece,
+    staging: &Staging,
+    edit: &Edit,
+    parts: (usize, Vec<Vec3>, usize, Vec<(Vec3, Unstood)>),
+    talk: bool,
+) {
+    let report = support_report(staging, piece.id, parts);
+    if talk {
+        print!("{report}");
+    }
+    if let Edit::Supports { profile, .. } = edit {
+        let named = profile.clone().unwrap_or_else(|| AUTO.to_owned());
+        piece.prepared.supports = Some(plan_named(&named));
+        piece.supported_by = Some(named);
+    }
+    piece.supports = Some(report);
+}
+
+/// Notes a repair on `piece`'s import, as `--repair` notes it; `wrapped`, whether a wrap held.
+fn repaired(
+    piece: &mut Piece,
+    staging: &Staging,
+    (mended, wrapped): (core_geometry::Mended, Option<bool>),
+    ctx: &Ctx,
+) -> Result<()> {
+    piece.import.mended = Some(mended);
+    piece.import.wrapped = wrapped.map(|held| match held {
+        true => crate::report::Wrapped::Exactly,
+        false => crate::report::Wrapped::LeftOut,
+    });
+    piece.prepared.repaired = true;
+    reread(piece, staging, ctx.chosen.printer.as_ref())?;
+    if ctx.watch.talk {
+        print!("{}", piece.import);
+    }
+    Ok(())
+}
+
+/// Notes the pose the search stood `piece` in, and whether it turned the model.
+fn oriented(piece: &mut Piece, staging: &Staging, report: Report, ctx: &Ctx) -> Result<()> {
+    let transform = &ctx.job.import.transform;
+    let found: OrientSummary = summary_of(report, (transform, piece.id), piece.stands)?;
     if ctx.watch.talk {
         println!("Oriented: {}\n", found.describe());
     }
@@ -63,131 +278,101 @@ fn orient(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
     piece.seated = found.on_plate;
     piece.oriented = Some(found);
     piece.prepared.oriented = true;
-    read_again(&mut piece.import, &piece.mesh, ctx.chosen.printer.as_ref())?;
-    Ok(Did::default())
+    reread(piece, staging, ctx.chosen.printer.as_ref())
 }
 
-/// `--repair` by the step's method; a shell repaired is remeshed, so its cavity is not known
-/// any more.
-fn repair(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
-    let method = match text(settings, "method") {
-        Some(name) => RepairMethod::from_str(name, true)
-            .map_err(|why| anyhow::anyhow!("no repair method `{name}`: {why}"))?
-            .into(),
-        None => PREPARE_REPAIR,
-    };
-    let asked = (method, &piece.shaping.import);
-    repaired_later(&mut piece.import, &mut piece.mesh, asked, ctx.watch)?;
-    piece.cavity = None;
-    piece.prepared.repaired = true;
-    read_again(&mut piece.import, &piece.mesh, ctx.chosen.printer.as_ref())?;
-    if ctx.watch.talk {
-        print!("{}", piece.import);
+/// What import read off `piece`, read again where a step turned or mended it.
+fn reread(
+    piece: &mut Piece,
+    staging: &Staging,
+    printer: Option<&printer_profiles::PrinterProfile>,
+) -> Result<()> {
+    match staging.mesh(piece.id) {
+        Some(mesh) => read_again(&mut piece.import, &mesh, printer),
+        None => Ok(()),
     }
-    Ok(Did::default())
 }
 
-/// `--hollow` at the step's wall, mode, infill and thinnest part hollowed, keeping a wall
-/// round the holes drilled before it.
-fn hollow(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
-    if piece.cavity.is_some() {
-        return Ok(Did::nothing("the model is hollow already"));
-    }
-    let wall_mm = number(settings, "wall_mm").unwrap_or(HollowSettings::default().thickness_mm);
-    let (mode, open_floor) = match text(settings, "mode") {
-        Some("outside") => (Mode::External, false),
-        Some("open-floor") => (Mode::Internal, true),
-        _ => (Mode::Internal, false),
-    };
-    let typed = &piece.shaping.hollow;
-    let args = HollowArgs {
-        thickness_mm: Some(wall_mm),
-        mode,
-        open_floor,
-        infill: flag(settings, "infill")
-            .unwrap_or(false)
-            .then(|| typed.infill.unwrap_or(Pattern::Hive)),
-        keep_solid: KeepSolidArgs {
-            under_mm: number(settings, "keep_solid_under_mm"),
-            ..typed.keep_solid.clone()
-        },
-        ..typed.clone()
-    };
-    let saves_mm3 = Hollowing::reckoned(&piece.mesh, Mat3::IDENTITY, wall_mm).saves_mm3;
-    let placed = (piece.holes.clone(), Vec::new());
-    let precision = piece.shaping.import.precision;
-    let (shell, cavity, report) =
-        hollowing::run(&piece.mesh, &placed, &args, precision, ctx.watch.stop)?;
-    if ctx.watch.talk {
-        print!("Hollowed\n{report}\n");
-    }
-    piece.mesh = shell;
-    piece.cavity = Some(cavity);
-    piece.wall = Some(report.wall());
-    piece.hollow = Some(report);
-    piece.prepared.hollowed = Some(Wall {
+/// The wall `piece` is hollowed at, and what ADR 0393 reckons it saves of the model as it
+/// stands, said where the recipe chose the wall.
+fn wall_of(wall_mm: Scalar, staging: &Staging, piece: &Piece) -> Option<Wall> {
+    let mesh = staging.mesh(piece.id)?;
+    let saves_mm3 = Hollowing::reckoned(&mesh, Mat3::IDENTITY, wall_mm).saves_mm3;
+    let chosen = piece.shaping.hollow.thickness_mm.is_none();
+    Some(Wall {
         wall_mm,
-        saves_mm3: typed.thickness_mm.is_none().then_some(saves_mm3),
-    });
-    Ok(Did::default())
+        saves_mm3: chosen.then_some(saves_mm3),
+    })
 }
 
-/// `--supports` to the step's profile, inside the cavity too where it asks; the supports of
-/// an earlier step are taken off first, and a model the search seated gets none it needs not.
-fn supports(piece: &mut Piece, settings: &Settings, ctx: &Ctx) -> Result<Did> {
-    let mut plan = match &piece.shaping.supports {
-        Some(plan) => plan.clone(),
-        None => plan_of(text(settings, "profile").unwrap_or(AUTO))?,
+/// The report of a hollow `edit` asked, as `--hollow` says it.
+fn hollow_report(
+    edit: &Edit,
+    staging: &Staging,
+    piece: &Piece,
+    (faces, lattice): (usize, (Scalar, Scalar, bool)),
+    started: Instant,
+) -> Option<HollowReport> {
+    let Edit::Hollow { settings, .. } = edit else {
+        return None;
     };
-    plan.cavity = flag(settings, "cavity").unwrap_or(false);
-    piece.take_off_supports();
-    piece.prepared.supports = Some(profile_name(&plan));
-    stand(piece, plan, ctx)?;
-    Ok(Did::default())
+    staging.mesh(piece.id)?;
+    Some(stage::hollow_report(
+        staging,
+        piece.id,
+        settings,
+        (faces, lattice),
+        started,
+    ))
 }
 
-/// Stands `piece` on supports by `plan`, from where it stands with none under it.
-fn stand(piece: &mut Piece, plan: SupportPlan, ctx: &Ctx) -> Result<()> {
-    let mut cuts = piece.cuts()?;
-    let printed = piece.printed();
-    let model = (&mut piece.mesh, printed, &mut cuts);
-    let seated = piece.seated;
-    let stood = stand_under(model, &plan, ctx.layer_height_mm, seated)?;
-    piece.plan = Some(plan);
-    if seated && stood.0.contacts.is_empty() {
-        return Ok(());
+/// The name `--prepare`'s report gives the supports built to `profile`.
+fn plan_named(profile: &str) -> String {
+    match plan_of(profile) {
+        Ok(plan) => profile_name(&plan),
+        Err(_) => profile.to_owned(),
     }
-    let up = Transform::from_translation(Vec3::Z * stood.0.lifted_mm);
-    for hole in &mut piece.holes {
-        hole.at = up.to_matrix().transform_point3(hole.at);
+}
+
+/// Every island, lever and neck a check holds up on `piece`, at `contacts` plate mm, to
+/// `plan` put on the plate as the group in hand.
+pub(super) fn hold_up(
+    (piece, staging): (&mut Piece, &mut Staging),
+    plan: &SupportPlan,
+    contacts: &[Vec3],
+    ctx: &Ctx,
+) -> Result<()> {
+    staging.hold_profile(plan.placing());
+    let edit = Edit::Supports {
+        object: piece.id,
+        profile: Some(plan.placing().name),
+        at_mm: contacts.to_vec(),
+        only_at: true,
+        cavity: false,
+        shown_at: Vec::new(),
+        clean_surface: false,
+        anew: false,
+    };
+    let applied = staging
+        .apply(&edit, piece.id, ctx.watch.stop)
+        .map_err(said)?;
+    if let Report::Supported {
+        trees,
+        contacts_mm,
+        standing,
+        unheld,
+        ..
+    } = applied.report
+    {
+        let parts = (trees, contacts_mm, standing, unheld);
+        piece.supports = Some(support_report(staging, piece.id, parts));
     }
-    if ctx.watch.talk {
-        print!("{}", stood.0);
-    }
-    piece.supports = Some(stood);
     Ok(())
 }
 
-/// A support by `plan` under each of `contacts`, plate mm, added to those `piece` stands on.
-pub(super) fn hold_up(piece: &mut Piece, plan: &SupportPlan, contacts: &[Vec3]) -> Result<()> {
-    let mut cuts = piece.cuts()?;
-    let printed = piece.printed();
-    let model = (&mut piece.mesh, printed, &mut cuts);
-    let (report, mesh) = stand_at(model, plan, contacts)?;
-    match &mut piece.supports {
-        Some((standing, under)) => {
-            standing.add(report);
-            under.append(&mesh);
-        }
-        None => piece.supports = Some((report, mesh)),
-    }
-    Ok(())
-}
-
-/// Notes the islands, pull and support resin a check measured on `piece`.
-pub(super) fn checked(piece: &mut Piece, islands: usize, peel_n: Scalar) {
+/// What a check measured on `piece`: its islands, its hardest pull and its supports' resin.
+pub(super) fn checked(piece: &mut Piece, staging: &Staging, islands: usize, peel_n: Scalar) {
     piece.note(Metric::Islands, islands as Scalar);
     piece.note(Metric::PeelN, peel_n);
-    let support_ml = piece.support_ml();
-    piece.note(Metric::SupportMl, support_ml);
+    piece.note(Metric::SupportMl, staging.support_ml(piece.id));
 }

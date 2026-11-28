@@ -2,6 +2,7 @@
 //! way a finished plate is. See `docs/design/orientation.md`.
 
 mod islands;
+mod keep_clear;
 mod shows;
 
 pub use shows::Shows;
@@ -28,6 +29,7 @@ use crate::plate::{Model, Plate};
 use crate::run::Run;
 use crate::stand::{Stood, SupportPlan, ToStand, stand_seated, stand_under};
 use crate::trial::islands::islands_born;
+pub use crate::trial::keep_clear::{KEEP_CLEAR_RADIUS_MM, KeepClear};
 
 /// Poses printed to choose between, on top of the way the model stands: four for a model
 /// of a million faces, more for a lighter one, which prints as many in the same time, but
@@ -83,10 +85,12 @@ pub struct Trial<'a> {
     pub support: &'a SupportPlan,
     /// Layers rasterised at once, as `Plate::raster_window`.
     pub raster_window: usize,
+    /// Places no support should touch, which outrank every goal but a lost print.
+    pub keep_clear: Option<&'a KeepClear>,
 }
 
 /// What a pose costs once it is supported, cut and cured.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Printout {
     pub contacts: usize,
     /// The resin in the supports, millilitres, as the plate's summary counts it.
@@ -99,6 +103,8 @@ pub struct Printout {
     /// Contacts each weighed by how much the model shows under it, one on open detail
     /// counting one; zero where neither a clean surface nor [`print_out`] asks what shows.
     pub seen_contacts: f64,
+    /// Contacts touching a place the trial was asked to keep clear.
+    pub kept_clear_touched: usize,
     pub layers: usize,
     /// How tall the stack stands, model and supports, millimetres: what the time follows.
     pub stack_mm: f32,
@@ -161,7 +167,7 @@ pub struct Tried {
 }
 
 /// One way to stand a model, and what it printed where it was printed to be judged.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Choice {
     pub oriented: Oriented,
     pub printout: Option<Printout>,
@@ -259,7 +265,11 @@ pub fn prove(
         preset: settings.preset,
         clean_surface: settings.clean_surface,
     };
-    Ok(judged(&tried, asked, is_standing))
+    let mut ranked = judged(&tried, asked, is_standing);
+    if trial.keep_clear.is_some_and(|kept| !kept.at_mm.is_empty()) {
+        keep_clear::clear_first(&mut ranked);
+    }
+    Ok(ranked)
 }
 
 /// The first `finalists` of `found`, the way the model stands and the best pose set on the
@@ -347,6 +357,19 @@ pub fn print_out(
     print_held(printed, rotation, on_plate, trial, (None, None, shows))
 }
 
+/// `mesh` turned by `rotation`, and how far it then moves to stand centred on a plate `plate_mm`
+/// across, on z = 0; `None` for a mesh with no faces.
+fn turned_mid_plate(mesh: &Mesh, rotation: Quat, plate_mm: Vec2) -> Option<(Mesh, Vec3)> {
+    let turn = Transform {
+        rotation,
+        ..Transform::default()
+    };
+    let turned = transform_mesh(mesh, turn);
+    let bounds = turned.aabb()?;
+    let offset = drop_to_plate(&bounds) + center_over_plate(&bounds, plate_mm.x, plate_mm.y);
+    Some((turned, offset))
+}
+
 /// The same cured as coarse as `trial`, supports placed and islands counted as `print` prints;
 /// `steps` is told as each of the [`PRINT_STEPS`] ends, `shows` reads where contacts land.
 fn print_held(
@@ -357,17 +380,14 @@ fn print_held(
     (print, steps, shows): (Option<&Trial>, Option<&Pieces<'_>>, Option<&Shows>),
 ) -> Result<Printout, EngineError> {
     let told = || steps.map_or(Ok(()), Pieces::finish);
-    let turn = Transform {
-        rotation,
-        ..Transform::default()
-    };
-    let turned = transform_mesh(printed.shell.unwrap_or(printed.outer), turn);
-    let bounds = turned.aabb().ok_or(EngineError::EmptyPlate)?;
     let volume = &trial.printer.build_volume;
-    let offset = drop_to_plate(&bounds) + center_over_plate(&bounds, volume.x, volume.y);
+    let printed_mesh = printed.shell.unwrap_or(printed.outer);
+    let (turned, offset) = turned_mid_plate(printed_mesh, rotation, Vec2::new(volume.x, volume.y))
+        .ok_or(EngineError::EmptyPlate)?;
     let moved = Transform {
         translation: offset,
-        ..turn
+        rotation,
+        ..Transform::default()
     };
     let mut placed = transform_mesh(&turned, Transform::from_translation(offset));
     let mut cuts = printed.cuts.map(|cuts| transform_mesh(cuts, moved));
@@ -396,6 +416,12 @@ fn print_held(
         hanging: stood.contacts.len().saturating_sub(stood.standing),
         top_contacts: looking_up(&stood.facing, rotation),
         seen_contacts,
+        kept_clear_touched: trial
+            .keep_clear
+            .zip(moved)
+            .map_or(0, |(kept, (now, then))| {
+                kept.touched(&stood.contacts, rotation, *now - *then)
+            }),
     };
     let model = on_its_supports(placed, cuts, stood);
 
@@ -457,6 +483,7 @@ struct Held {
     hanging: usize,
     top_contacts: usize,
     seen_contacts: f64,
+    kept_clear_touched: usize,
 }
 
 /// Contacts on a face that looks up in the model's own file, once `rotation` is taken
@@ -496,6 +523,7 @@ fn printout(held: &Held, measured: &Measured, layer_mm: Scalar) -> Printout {
         hanging: held.hanging,
         top_contacts: held.top_contacts,
         seen_contacts: held.seen_contacts,
+        kept_clear_touched: held.kept_clear_touched,
         layers: measured.layer_count(),
         stack_mm: measured.layer_count() as Scalar * layer_mm,
         pull_n: measured

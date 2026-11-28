@@ -57,7 +57,9 @@ one walk down both span lists finds every shared stretch, summed per pair of pie
 the risks are read this way: ADR 0164.
 
 - A piece of at least `MIN_ISLAND_MM2` that touches nothing below is an **island**. One
-  that touches only floating pieces floats too, and is not named again.
+  that touches only floating pieces floats too, and is not named again. Every piece of the
+  bottom block stands on the plate: its long exposure cures through to it, so a sliver a
+  layer or two above the plate is held there, not named.
 - Each anchored piece carries its **neck**: the narrowest section between it and the
   plate. It is the piece's own contact where that is under 0.9 of the necks it stands on,
   its second moments read off its pixels, and otherwise those necks together, their areas

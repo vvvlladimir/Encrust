@@ -32,6 +32,7 @@ regex-automata = { version = "0.4", default-features = false, features = ["dfa-b
 regex-syntax = { version = "0.8" }
 serde = { version = "1", features = ["alloc", "derive"] }
 serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
 smallvec = { version = "1", default-features = false, features = ["const_new"] }
 tracing-core = { version = "0.1" }
 

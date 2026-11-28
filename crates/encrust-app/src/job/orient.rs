@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+use std::sync::{Arc, LazyLock};
 
-use core_engine::{SupportPlan, Trial, orient_for_print};
-use core_geometry::{Mesh, Quat, Region, Transform, Vec3, transform_mesh};
+use core_document::Body;
+use core_engine::{KeepClear, SupportPlan, Trial, kept_poses_folder, orient_for_print_kept};
+use core_geometry::{Mesh, Quat, Region, Transform, Vec3};
 use core_plate::{OrientSettings, Phase, Printed, Watch};
-use core_volume::ModelHollow;
 #[cfg(test)]
 use printer_profiles::SupportProfile;
 use printer_profiles::{MaterialProfile, PrinterProfile};
@@ -18,6 +19,10 @@ use crate::scene::{ObjectId, Scene, SceneObject};
 mod seen;
 
 use seen::Seen;
+
+/// Where searches are kept, shared with the command line built beside the window (ADR 0466).
+static KEPT_POSES: LazyLock<Option<PathBuf>> =
+    LazyLock::new(|| kept_poses_folder(agent_link::cache_dir().as_deref()));
 
 /// One model to find an orientation for, owned so that it can cross to the worker thread.
 #[derive(Clone)]
@@ -43,6 +48,8 @@ pub struct OrientTask {
     pub support: SupportPlan,
     /// The faces of `mesh` painted as what shows, which a clean surface keeps supports off.
     pub shown: Region,
+    /// Places no support should touch, in the sized mesh's frame, which ranks poses first.
+    pub keep_clear: Option<KeepClear>,
 }
 
 impl OrientTask {
@@ -61,6 +68,7 @@ impl OrientTask {
                 SupportProfile::shipped("medium").expect("the medium preset ships"),
             ),
             shown: Region::default(),
+            keep_clear: None,
         }
     }
 
@@ -78,15 +86,7 @@ impl OrientTask {
             && self.sizing == other.sizing
             && self.support == other.support
             && self.shown == other.shown
-    }
-
-    /// `mesh` as it measures on the plate. A model nobody resized is not copied.
-    fn sized(&self, mesh: &Arc<Mesh>) -> Arc<Mesh> {
-        if self.sizing == Transform::default() {
-            Arc::clone(mesh)
-        } else {
-            Arc::new(transform_mesh(mesh, self.sizing))
-        }
+            && self.keep_clear == other.keep_clear
     }
 }
 
@@ -112,6 +112,8 @@ pub struct Turn {
     pub id: ObjectId,
     /// Never empty: the first is the choice, the rest are offered in turn beside it.
     pub poses: Vec<Pose>,
+    /// Every way the search ranked, best first, offered or not: what an edit's pick counts.
+    pub ranked: Vec<Pose>,
     /// How far it is stood off the plate onto its supports when it is not on it,
     /// millimetres: the lift the user gave the model, or its support profile's.
     pub lift_mm: f32,
@@ -203,23 +205,14 @@ impl OrientTask {
             mesh: Arc::clone(&object.mesh),
             shell: object.hollow.shell().map(Arc::clone),
             cuts: object.hollow.cut_bodies().map(Arc::clone),
-            vents: vents_of(&object.hollow),
+            vents: core_document::vents_of(&object.hollow),
             sizing: object.transform.sizing(),
             down_now: object.transform.rotation.inverse() * Vec3::NEG_Z,
-            support: lifted(plan, object.lift_mm),
+            support: core_document::lifted(plan, object.lift_mm),
             shown: object.shown_painted.clone(),
+            keep_clear: None,
         }
     }
-}
-
-/// `plan` standing a model `lift_mm` clear of the plate where the user asked for that.
-fn lifted(mut plan: SupportPlan, lift_mm: Option<f32>) -> SupportPlan {
-    if let Some(lift_mm) = lift_mm {
-        for profile in plan.profiles_mut() {
-            profile.z_lift_mm = lift_mm;
-        }
-    }
-    plan
 }
 
 /// The good ways to stand one model, best first: proven by printing where there is a
@@ -227,57 +220,45 @@ fn lifted(mut plan: SupportPlan, lift_mm: Option<f32>) -> SupportPlan {
 fn choose(
     printed: &Printed,
     settings: &OrientSettings,
-    support: &SupportPlan,
+    (support, keep_clear): (&SupportPlan, Option<&KeepClear>),
     proof: Option<&Proof>,
     watch: Watch<'_>,
-) -> Result<Vec<Pose>, String> {
+) -> Result<Vec<(Pose, bool)>, String> {
     let trial = proof.map(|proof| Trial {
         printer: &proof.printer,
         material: &proof.material,
         support,
         raster_window: worker_threads(),
+        keep_clear,
     });
-    let chosen = orient_for_print(printed, settings, trial.as_ref(), watch)
+    let kept = KEPT_POSES.as_deref();
+    let chosen = orient_for_print_kept(kept, printed, settings, trial.as_ref(), watch)
         .map_err(|error| error.to_string())?;
-    Ok(offered(chosen.iter().map(|choice| {
-        let pose = Pose {
-            rotation: choice.oriented.rotation,
-            on_plate: choice.oriented.on_plate,
-            costs: choice.printout.map(|printout| Costs {
-                supports_ml: printout.supports_ml,
-                pull_n: printout.pull_n,
-                stack_mm: printout.stack_mm,
-            }),
-        };
-        (pose, choice.ruling.is_offered())
-    })))
+    Ok(chosen
+        .iter()
+        .map(|choice| {
+            let pose = Pose {
+                rotation: choice.oriented.rotation,
+                on_plate: choice.oriented.on_plate,
+                costs: choice.printout.map(|printout| Costs {
+                    supports_ml: printout.supports_ml,
+                    pull_n: printout.pull_n,
+                    stack_mm: printout.stack_mm,
+                }),
+            };
+            (pose, choice.ruling.is_offered())
+        })
+        .collect())
 }
 
 /// The first of `ranked` and every other one offered beside it.
-fn offered(ranked: impl Iterator<Item = (Pose, bool)>) -> Vec<Pose> {
+fn offered(ranked: &[(Pose, bool)]) -> Vec<Pose> {
     ranked
+        .iter()
         .enumerate()
         .filter(|(at, (_, offered))| *at == 0 || *offered)
-        .map(|(_, (pose, _))| pose)
+        .map(|(_, (pose, _))| *pose)
         .collect()
-}
-
-/// The way out of every hole and of both ends of every channel cut into a model.
-fn vents_of(hollow: &ModelHollow) -> Vec<Vec3> {
-    let (holes, channels) = hollow.cut();
-    let ends = channels.iter().flat_map(|channel| {
-        let points = &channel.points;
-        let first = points
-            .first()
-            .zip(points.get(1))
-            .map(|(end, next)| *end - *next);
-        let last = points
-            .last()
-            .zip(points.iter().rev().nth(1))
-            .map(|(end, next)| *end - *next);
-        first.into_iter().chain(last)
-    });
-    holes.iter().map(|hole| -hole.axis).chain(ends).collect()
 }
 
 fn run(request: &OrientRequest, (stop, seen): (&AtomicBool, &Seen)) -> OrientOutcome {
@@ -303,39 +284,35 @@ fn run(request: &OrientRequest, (stop, seen): (&AtomicBool, &Seen)) -> OrientOut
 /// How `task`'s model should be turned, judged as the shell and cuts it will print.
 fn turn_of(task: &OrientTask, request: &OrientRequest, watch: Watch<'_>) -> Result<Turn, String> {
     let placing = task.support.placing();
-    let settings = OrientSettings {
-        down_now: task.down_now,
-        max_overhang_deg: placing.max_overhang_deg,
-        contact_spacing_mm: placing.contact_spacing_mm,
-        lift_mm: placing.lift_mm(),
-        ..request.settings
-    };
-    let outer = task.sized(&task.mesh);
-    let shell = task.shell.as_ref().map(|shell| task.sized(shell));
-    let cuts = task.cuts.as_ref().map(|cuts| task.sized(cuts));
-    let sizing = task.sizing.linear();
-    let vents: Vec<Vec3> = task.vents.iter().map(|out| sizing * *out).collect();
-    let printed = Printed {
-        outer: &outer,
-        shell: shell.as_deref(),
-        cuts: cuts.as_deref(),
-        vents: &vents,
-        shown: Some(&task.shown),
-        shows: None,
-    };
-    let poses = choose(
+    let settings = core_document::placed_by(
+        OrientSettings {
+            down_now: task.down_now,
+            ..request.settings
+        },
+        &task.support,
+    );
+    let body = Body {
+        outer: Arc::clone(&task.mesh),
+        shell: task.shell.clone(),
+        cuts: task.cuts.clone(),
+        vents: task.vents.clone(),
+    }
+    .sized(task.sizing);
+    let printed = body.printed(&task.shown);
+    let ranked = choose(
         &printed,
         &settings,
-        &task.support,
+        (&task.support, task.keep_clear.as_ref()),
         request.proof.as_ref(),
         watch,
     )?;
-    if poses.is_empty() {
+    if ranked.is_empty() {
         return Err(tr!("job-orient-none"));
     }
     Ok(Turn {
         id: task.id,
-        poses,
+        poses: offered(&ranked),
+        ranked: ranked.into_iter().map(|(pose, _)| pose).collect(),
         lift_mm: placing.z_lift_mm,
     })
 }
@@ -360,11 +337,8 @@ mod tests {
     fn a_run_reports_a_turn_for_every_model_it_was_given() {
         let request = OrientRequest {
             tasks: vec![
-                OrientTask::solid(
-                    ObjectId::for_test(1),
-                    Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
-                ),
-                OrientTask::solid(ObjectId::for_test(2), Arc::new(cuboid(Vec3::splat(10.0)))),
+                OrientTask::solid(ObjectId(1), Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0)))),
+                OrientTask::solid(ObjectId(2), Arc::new(cuboid(Vec3::splat(10.0)))),
             ],
             settings: OrientSettings::default(),
             proof: None,
@@ -374,7 +348,7 @@ mod tests {
             panic!("two sound models can be oriented");
         };
         assert_eq!(turns.len(), 2);
-        assert_eq!(turns[0].id, ObjectId::for_test(1));
+        assert_eq!(turns[0].id, ObjectId(1));
     }
 
     #[test]
@@ -421,8 +395,8 @@ mod tests {
     #[test]
     fn a_model_painted_otherwise_is_not_asked_the_same() {
         let mesh = Arc::new(cuboid(Vec3::splat(10.0)));
-        let plain = OrientTask::solid(ObjectId::for_test(1), Arc::clone(&mesh));
-        let mut painted = OrientTask::solid(ObjectId::for_test(1), mesh);
+        let plain = OrientTask::solid(ObjectId(1), Arc::clone(&mesh));
+        let mut painted = OrientTask::solid(ObjectId(1), mesh);
         painted.shown.set(0, true);
         assert!(plain.asks_as(&plain), "the same task asks the same");
         assert!(
@@ -434,10 +408,7 @@ mod tests {
     #[test]
     fn a_model_with_no_geometry_fails_the_run() {
         let request = OrientRequest {
-            tasks: vec![OrientTask::solid(
-                ObjectId::for_test(1),
-                Arc::new(Mesh::default()),
-            )],
+            tasks: vec![OrientTask::solid(ObjectId(1), Arc::new(Mesh::default()))],
             settings: OrientSettings::default(),
             proof: None,
         };
@@ -452,7 +423,7 @@ mod tests {
     fn a_run_tells_how_far_each_model_has_got_and_stops_when_asked() {
         let request = OrientRequest {
             tasks: vec![OrientTask::solid(
-                ObjectId::for_test(1),
+                ObjectId(1),
                 Arc::new(cuboid(Vec3::new(40.0, 40.0, 4.0))),
             )],
             settings: OrientSettings::default(),

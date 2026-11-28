@@ -85,7 +85,7 @@ impl Default for OrientSettings {
 }
 
 /// How a model should stand, and what that costs it.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Oriented {
     /// The rotation to place the model with. It replaces whatever rotation the model
     /// carries, the search measuring the mesh in its own space, and turns it about the

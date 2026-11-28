@@ -173,6 +173,15 @@ fn a_piece_that_starts_over_nothing_is_named_once_as_an_island() {
 }
 
 #[test]
+fn a_piece_starting_in_the_bottom_block_is_glued_to_the_plate_not_an_island() {
+    let base = square(0, 0, 10);
+    let both = layer(|x, y| (x < 10 && y < 10) || (x >= 30 && y >= 30));
+    let measured = fold(4, &[base, both.clone(), both.clone(), both]);
+    assert!(measured.risks().is_empty(), "{:?}", measured.risks());
+    assert_eq!(measured.worst(), None);
+}
+
+#[test]
 fn a_column_standing_straight_carries_no_lever() {
     let column: Vec<Cured> = (0..6).map(|_| square(20, 20, 20)).collect();
     assert!(fold(0, &column).risks().is_empty());

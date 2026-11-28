@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use core_engine::{SupportPlan, SupportShapes, Underside, strengthen};
+use core_engine::{NeedsAsked, needs_on, plan_of};
 use core_geometry::Region;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_supports::{Blocked, Need, Shown, WallSide, generate_supports, low_points};
+use core_supports::{Blocked, Need, Shown, WallSide, low_points};
 use printer_profiles::SupportProfile;
 
 use crate::i18n::tr;
@@ -269,64 +269,33 @@ fn needs_of(
     let layers = stack.layers.len().max(1) as f32;
     let mut last = done;
     let painted = Blocked::new(&task.mesh, &task.blocked, task.transform);
-    let blocked = Blocked::keeping(painted, task.side.clone());
     let shown = Shown::new(&task.mesh, &task.shown, task.transform);
-    // A support on the far side of the wall holds up nothing on this one.
-    let seeds: Vec<Vec3> = match &task.side {
-        Some(side) => task
-            .seeds
-            .iter()
-            .copied()
-            .filter(|seed| side.keeps(*seed))
-            .collect(),
-        None => task.seeds.clone(),
-    };
-    let plan = plan_of(task, request.sizing.as_ref());
-    let mut needs = generate_supports(
-        &stack,
-        request.layer_height_mm,
+    let plan = plan_of(
         &task.profile,
-        plan.sizing(),
-        &seeds,
-        &low_points(&task.surface, task.transform),
-        blocked.as_ref(),
-        shown.as_ref(),
-        &mut |layer| {
-            let fraction = done + layer as f32 / layers * of;
-            if fraction - last >= REPORT_STEP {
-                last = fraction;
-                report(fraction);
-            }
-            !cancel.load(Ordering::Relaxed)
-        },
+        request.sizing.as_ref().map(|(auto, shapes)| (auto, shapes)),
     );
-    let underside = Underside {
+    let lows = low_points(&task.surface, task.transform);
+    let asked = NeedsAsked {
         stack: &stack,
-        layer_mm: request.layer_height_mm,
         surface: &placed,
         bvh: &Bvh::build(&placed),
-        blocked: blocked.as_ref(),
+        layer_height_mm: request.layer_height_mm,
+        plan: &plan,
+        lows: &lows,
+        painted,
+        shown: shown.as_ref(),
+        seeds: &task.seeds,
+        side: task.side.clone(),
     };
-    // Tips beyond the wall hold the same shell, so they share its pull all the same.
-    strengthen(underside, &mut needs, &task.seeds, &plan, &mut || {
+    let needs = needs_on(asked, &task.seeds, &mut |layer| {
+        let fraction = done + layer as f32 / layers * of;
+        if fraction - last >= REPORT_STEP {
+            last = fraction;
+            report(fraction);
+        }
         !cancel.load(Ordering::Relaxed)
     })?;
     Ok(needs)
-}
-
-/// What `task`'s supports are built to: `sizing`'s shapes, or its own profile.
-fn plan_of(task: &SupportTask, sizing: Option<&Sizing>) -> SupportPlan {
-    match sizing {
-        Some((auto, shapes)) => SupportPlan {
-            shapes: SupportShapes::Sized {
-                auto: Box::new(auto.clone()),
-                shapes: Box::new(shapes.clone()),
-            },
-            cavity: false,
-            merges: Vec::new(),
-        },
-        None => SupportPlan::of(task.profile.clone()),
-    }
 }
 
 #[cfg(test)]

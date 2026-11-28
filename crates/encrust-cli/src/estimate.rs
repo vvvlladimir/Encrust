@@ -24,6 +24,7 @@ pub struct Estimate {
 }
 
 /// What the masks cure and what that costs in time, resin and money.
+#[derive(Clone)]
 pub struct Print {
     /// The header the file would carry, its resin volume taken from the masks.
     pub job: PrintJob,
@@ -55,9 +56,46 @@ pub fn estimate(
     watch: &Watch,
 ) -> Result<Estimate> {
     let bin = quick.then_some(QUICK_CHECK_BIN);
+    let kept = watch.steps.as_ref().zip(staged.fingerprint.clone());
+    if let Some((steps, fingerprint)) = kept {
+        let key = fingerprint
+            .key
+            .then(machine_of(staged, raster, bin).as_bytes());
+        let steps = std::sync::Arc::clone(steps);
+        let held = &fingerprint.held;
+        return steps.check((key, held), || measured(staged, raster, bin, watch));
+    }
+    measured(staged, raster, bin, watch)
+}
+
+/// Everything but the models that decides what a check of `staged` finds.
+fn machine_of(staged: &Staged, raster: &crate::args::RasterArgs, bin: Option<NonZeroU8>) -> String {
+    format!(
+        "{:?} {:?} {:?} {:?} {:?} {} {} {} {bin:?} {}",
+        staged.printer,
+        staged.material,
+        staged.cutting,
+        staged.panel,
+        staged.exposure,
+        staged.remove_islands,
+        staged.hanging_passes,
+        staged.drainage,
+        raster_window(raster),
+    )
+}
+
+/// Cuts and measures `staged` as [`estimate`] does, with nothing kept.
+fn measured(
+    staged: &mut Staged,
+    raster: &crate::args::RasterArgs,
+    bin: Option<NonZeroU8>,
+    watch: &Watch,
+) -> Result<Estimate> {
     let mut estimate = match staged.take_plate(None, raster_window(raster)) {
         Some(plate) => {
-            let (slice, print) = measure_plate(plate, staged.drainage, bin, watch)?;
+            let (slice, print) = crate::spent::timed("check", || {
+                measure_plate(plate, staged.drainage, bin, watch)
+            })?;
             Estimate {
                 slice,
                 print: Some(print),
@@ -69,7 +107,7 @@ pub fn estimate(
                 bake(&staged.models, &staged.cutting.compensation).context("nothing to slice")?;
             let windows = cut(&baked, &staged.cutting)?;
             let solid = &baked.solid;
-            let mut slice = report_of(solid, &windows, staged.drainage);
+            let mut slice = report_of(solid, &windows, staged.drainage, &staged.material);
             windows
                 .stream(solid, |sliced| {
                     watch.stop.check()?;
@@ -92,18 +130,19 @@ pub(crate) fn measure_plate(
     bin: Option<NonZeroU8>,
     watch: &Watch,
 ) -> Result<(SliceReport, Print)> {
-    let run = Run::of(&plate)?;
+    let run = crate::spent::timed("check:build", || Run::measuring(&plate))?;
+    let material = plate.material.clone();
     drop(plate);
-    let mut slice = report_of(run.solid(), run.windows(), drainage);
+    let mut slice = report_of(run.solid(), run.windows(), drainage, &material);
     let mut watching = Watching {
         report: &mut slice,
         bar: watch.progress.then(|| bar("layers")),
         stop: watch.stop,
     };
-    let measured = match bin {
-        Some(bin) => run.measure_binned(bin, &mut watching)?,
-        None => run.measure(&mut watching)?,
-    };
+    let measured = crate::spent::timed("check:measure", || match bin {
+        Some(bin) => run.measure_binned(bin, &mut watching),
+        None => run.measure(&mut watching),
+    })?;
     let measured = measured.ok_or(Cancelled)?;
     drop(watching);
     let mut job = run.job().clone();
@@ -118,6 +157,14 @@ pub(crate) fn measure_plate(
 }
 
 impl Estimate {
+    /// The estimate again, once its drainage scan has finished; `None` while it reads layers.
+    pub(crate) fn finished_copy(&self) -> Option<Self> {
+        Some(Self {
+            slice: self.slice.finished_copy()?,
+            print: self.print.clone(),
+        })
+    }
+
     /// Nothing found would stop the stack printing correctly.
     pub fn is_clean(&self) -> bool {
         self.slice.is_clean()

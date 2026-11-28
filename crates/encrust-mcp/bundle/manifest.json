@@ -1,0 +1,97 @@
+{
+  "manifest_version": "0.3",
+  "name": "encrust",
+  "display_name": "Encrust",
+  "version": "{{version}}",
+  "description": "Prepare a 3D model for an MSLA resin printer: orient, hollow, drain, support, check and write the printer file.",
+  "long_description": "Encrust is an offline resin slicer. This extension lets your AI assistant drive it on your computer: every tool runs the encrust command line on your own files, profiles and printers on your network. Exposure comes from your own resin profiles only.",
+  "author": { "name": "Encrust contributors" },
+  "homepage": "https://encrust.app",
+  "documentation": "https://github.com/vvvlladimir/Encrust/blob/main/docs/cli.md",
+  "support": "https://github.com/vvvlladimir/Encrust/issues",
+  "repository": { "type": "git", "url": "https://github.com/vvvlladimir/Encrust" },
+  "license": "AGPL-3.0-only",
+  "icon": "icon.png",
+  "keywords": ["3d printing", "resin", "msla", "slicer", "supports"],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/encrust-mcp{{exe_suffix}}",
+    "mcp_config": {
+      "command": "${__dirname}/server/encrust-mcp{{exe_suffix}}",
+      "args": ["--app", "${user_config.app}", "--timeout-s", "${user_config.timeout_s}"]
+    }
+  },
+  "tools": [
+    { "name": "list_profiles", "description": "The printers, your resins and the support profiles" },
+    { "name": "import_resin", "description": "Takes in your resin from a file that printed well or another slicer's export" },
+    { "name": "create_resin", "description": "Makes your resin from the numbers on its bottle" },
+    { "name": "write_test_print", "description": "Writes a test print, such as the exposure check" },
+    { "name": "list_recipes", "description": "The ways a model can be prepared, each with its steps" },
+    { "name": "inspect_model", "description": "What a model file is and what is wrong with it" },
+    { "name": "start_job", "description": "Starts preparing a model for a printer and resin" },
+    { "name": "use_recipe", "description": "Prepares the model by a recipe that fits what it is for" },
+    { "name": "show_in_window", "description": "Shows the model as prepared in your Encrust window" },
+    { "name": "report_print", "description": "Reads what went wrong with a print against its file's check" },
+    { "name": "save_recipe", "description": "Keeps a way of preparing as your own recipe, for the window too" },
+    { "name": "compare_poses", "description": "Shows the best ways to stand the model, each drawn" },
+    { "name": "set_pose", "description": "Orients the model, by the search or a turn" },
+    { "name": "set_hollow", "description": "Hollows the model, with or without infill" },
+    { "name": "set_drains", "description": "Drills drain holes into the cavity" },
+    { "name": "set_supports", "description": "Builds the supports the model stands on" },
+    { "name": "set_shape", "description": "Scales, combines, labels, cuts or textures the model" },
+    { "name": "set_repair", "description": "Repairs the model and mends faces by hand" },
+    { "name": "set_slicing", "description": "Sets the layers, exposure bands and anti-aliasing" },
+    { "name": "set_machine", "description": "Moves the job to the printer and resin you name" },
+    { "name": "fix_issues", "description": "Answers what the check finds, as Check's Fix all does" },
+    { "name": "plate_jobs", "description": "Lays several jobs on one plate, as one printer file" },
+    { "name": "check", "description": "Checks a revision as it would print" },
+    { "name": "render", "description": "Draws the prepared plate from each side, problems marked" },
+    { "name": "revert", "description": "Returns to an earlier revision" },
+    { "name": "write_file", "description": "Writes the printer file" },
+    { "name": "find_printers", "description": "Finds the printers on your network" },
+    { "name": "send_to_printer", "description": "Sends a written file to a printer on your network" }
+  ],
+  "prompts": [
+    {
+      "name": "prepare_for_print",
+      "description": "Prepare a model for print, asking for the printer and resin",
+      "arguments": ["model", "purpose"],
+      "text": "Prepare ${arguments.model} for print on my resin printer. It is for: ${arguments.purpose}. Ask me which printer and resin I use first."
+    },
+    {
+      "name": "prepare_miniature",
+      "description": "Prepare a miniature by the miniatures recipe and show how it stands",
+      "arguments": ["model"],
+      "text": "Prepare the miniature ${arguments.model} for the table with the miniatures recipe. Show me how it stands before you write the file."
+    },
+    {
+      "name": "exposure_test",
+      "description": "Find the right exposure for a resin with a test print",
+      "text": "Help me find the right exposure for my resin: ask which printer and resin I use, then write an exposure test print."
+    },
+    {
+      "name": "failed_print",
+      "description": "Find out why a print failed, from its file's check",
+      "arguments": ["file", "what_went_wrong"],
+      "text": "My print of ${arguments.file} came out wrong: ${arguments.what_went_wrong}. Read it against the file's check and tell me what to change."
+    }
+  ],
+  "user_config": {
+    "app": {
+      "type": "file",
+      "title": "Encrust window",
+      "description": "The Encrust program to start when no window is open. Leave it empty where Encrust is installed in its usual place.",
+      "required": false
+    },
+    "timeout_s": {
+      "type": "number",
+      "title": "Time limit, s",
+      "description": "How long one step may run before it is stopped. A large hollow model needs more.",
+      "default": 1800,
+      "min": 60,
+      "max": 14400,
+      "required": false
+    }
+  },
+  "compatibility": { "platforms": ["{{platform}}"] }
+}

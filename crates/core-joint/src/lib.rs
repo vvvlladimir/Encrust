@@ -17,4 +17,4 @@ mod spots;
 
 pub use error::JointError;
 pub use join::{CutJoined, Dowel, Halves, Joined, cut_and_join, join};
-pub use settings::{JointKind, Joints, Key, Magnets, Pegs};
+pub use settings::{JointAsked, JointKind, Joints, Key, Magnets, Pegs};

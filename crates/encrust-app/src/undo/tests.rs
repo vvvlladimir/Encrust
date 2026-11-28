@@ -564,3 +564,57 @@ fn a_chosen_resin_brings_its_edge_smoothing_without_an_edit() {
     assert!(!bench.slicing.edges.anti_alias, "the resin's own default");
     assert!(!bench.history.can_undo());
 }
+
+#[test]
+fn the_plate_version_rises_with_each_change_of_the_plate_and_its_undo_and_redo() {
+    let mut bench = Bench::default();
+    bench.observe(true);
+    let start = bench.history.plate_version();
+
+    let id = bench.add();
+    bench.observe(true);
+    bench.move_to(id, 5.0);
+    bench.observe(true);
+    assert_eq!(
+        bench.history.plate_version(),
+        start + 2,
+        "an import and a move"
+    );
+
+    assert!(bench.undo());
+    assert!(bench.redo());
+    assert_eq!(
+        bench.history.plate_version(),
+        start + 4,
+        "an undo and a redo"
+    );
+}
+
+#[test]
+fn a_tool_set_anew_leaves_the_plate_version_as_it_was() {
+    let mut bench = Bench::default();
+    bench.observe(true);
+    let start = bench.history.plate_version();
+
+    bench.tools.cut.state.height_mm += 3.0;
+    bench.observe(true);
+
+    assert_eq!(bench.history.plate_version(), start);
+}
+
+#[test]
+fn what_a_run_lands_on_the_plate_raises_its_version_though_it_joins_an_edit() {
+    let mut bench = Bench::default();
+    bench.add();
+    bench.observe(true);
+    let asked_by = bench.history.next_edit() - 1;
+    let before = bench.history.plate_version();
+
+    bench.land_plug(asked_by);
+    bench.observe(true);
+
+    assert!(
+        bench.history.plate_version() > before,
+        "a plate built on before the plug is stale"
+    );
+}

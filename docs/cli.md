@@ -82,18 +82,26 @@ model of a batch share one report shape; `slice` of a plate prints one entry per
 resin, weight, cost and the risks — when there is a printer to draw the masks for.
 
 Every finding the report counts it also locates, in plate millimetres from the plate's front
-left corner as the model prints, after placement and the lift its supports give it — the frame
+left corner as the model prints, after placement and any `--lift` — the frame
 `--drain-at` and `--channel` take — so a script can feed a point straight back (ADR 0400).
 `cured.risks`, wherever `cured` appears, lists each risk in print order: `kind` (`island`, `floating`, `lever`, `peel`, `suction-cup` or `thin`), `layer` counted from one,
 `at_mm` `[x, y, z]` with z the bottom of that layer, and the kind's own readings — `area_mm2`;
 `stress_mpa`, `lever_mm` and `neck_mm2`; `force_n`; `area_mm2` and `volume_mm3`; `width_mm`.
-`slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
+`slicing.fit_drift_mm` is how much wider, mm a side, a hole-and-part fit prints with the run's
+resin (0 while its tolerance is on), the drift `--drain-plugs` takes off the typed gap; `encrust-mcp`
+reads it to write a plug edit's final gap. `slicing.trapped` lists each pocket `trapped_pockets` counts: `at_mm`, a point inside its
 lowest layer where a hole would go, `volume_mm3` and `bounds_mm` `{min, max}`.
 `supports.contacts_at_mm` lists where each contact touches the model: the points
 `--merge-supports` names supports by. `supports.no_room_at_mm` lists where each contact
 `no_room_for` counts touches the model, and
 `supports.no_room_why` why, in the same order: `head-blocked` (its head would run into the
 model), `faces-up` (it sits on a face looking up) or `no-ground` (nothing in reach to stand on).
+`cured.clipped_layers`, present only when some did, counts the layers that ran past the panel
+and were cut off their masks. `estimate`'s `stages_s` gives the seconds each stage took,
+summed by stage — `import:read`, `edit:hollow`, `edit:kept` for edits answered from what a
+server kept, `project:write`, `check:measure` — and each model of a plate carries `frame`, its
+`to_plate` and `from_plate` matrices, sixteen numbers in column order, which carry a point
+between its own frame and the plate's (`--points-in-object`).
 No list is cut short: each is as long as its count. A model given `--drain-at auto` carries
 `auto_drains`: `pockets`, each trapped before its holes with `slicing.trapped`'s fields and
 `drained`; `holes`, each with the index of the `pocket` it serves, `role` `drain` or `vent`,
@@ -135,8 +143,9 @@ A number typed after a flag may be negative — `--rotate -90,0,0`, `--relief -0
 
 On a terminal `slice` draws a bar over the layers on stderr, and `batch` one over the
 models; `--no-progress`, `--quiet` and `--json` turn it off. The first Ctrl-C stops the run
-between layers, inside the cavity a `--hollow` run is building and between the models of a
-batch, and removes the file it was writing; a second one exits at once. `inspect`, `info`
+between layers, inside the cavity a `--hollow` run is building, between the models of a
+batch and between the pictures of a `render`, and removes the file it was writing; a second
+one exits at once. `inspect`, `info`
 and `profiles` write at most one small file, so one Ctrl-C ends them.
 
 The output extension picks the format (ADR 0047): `.goo`, `.prz`, `.ctb`, `.cbddlp`, `.photon`,
@@ -161,6 +170,13 @@ none at all: its layers are polygons, and a pixel is lit or dark at half coverag
 Those two cost by the panel rather than by the model, so a run writing one for a panel larger
 than any of its own machines have — a `.cbddlp` above 1440 x 2560 px, an `.svgx` above
 3840 x 2400 — says so before it writes a layer.
+
+The resin's print settings can be typed for one run over its own numbers, as the window's
+Print settings change the plate in hand (ADR 0459): `--exposure` and `--bottom-exposure`
+seconds, `--bottom-layers` and `--transition-layers`, `--light-off-delay`, `--lift-distance`,
+`--lift-speed` and `--retract-speed`, `--wait-before-lift`, `--wait-after-lift` and
+`--wait-after-retract` (any wait makes the printer rest rather than hold the light off), and
+`--light-power` and `--bottom-light-power`, 0 to 255. A resin must still be named.
 
 An `.sl1` states one exposure and one layer height for the whole stack, so `--exposure-at`
 and `--adaptive` are refused rather than flattened under an `.sl1` name (ADR 0148). A `.zip`
@@ -209,15 +225,20 @@ encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 --keep-solid-u
 
 Modelling, as the window's Relief and Cut tools do it, before the models are hollowed and
 supported (ADR 0312). `--combine union|difference|intersection` makes every model given one,
-a difference keeping the first; `--label TEXT --label-at X,Y,Z` writes on the surface nearest
+a difference keeping the first, joined where their files put them and, with `--center`, the one
+they make centred; `--label TEXT --label-at X,Y,Z` writes on the surface nearest
 that plate point, with `--label-height`, `--label-depth`, `--label-sunk`, `--label-follow`,
 `--label-angle` and `--label-font`; `--cut x|y|z:MM` cuts at a plate coordinate, `--keep
 both|lower|upper` picks the halves and `--joint dowels|pins|magnets|key` joins them at the
 window's default sizes; `--split` breaks a model into its bodies, scraps under
 `--split-smallest` joined or dropped, and `--part-off X,Y,Z` cuts off the part that point is
-on. A half that no longer reaches the floor is laid on its cut face, and a cut needs
-`--arrange`. A piece of several is not hollowed or supported, and a project refuses the
-flags.
+on. `--joint-count N`, `--joint-clearance MM`, `--peg-size D:L` (sized from the face unless
+given), `--magnet-size D:T`, `--key-size W:H` and `--unkeyed` set the joint as the Cut tool's
+fields do (ADR 0459). Each half is laid on its cut face as the window's Lay flat does, but a
+lower half pins or a key stand on, and dowels stand beside it (ADR 0456); a cut needs
+`--arrange`, unless `--cut-upright` leaves the halves standing as they were cut. Each piece is
+hollowed, drilled and supported on its own, as the window's tools would each half (ADR 0458);
+a recipe still takes a model as one, so `--prepare` and `--recipe` refuse a cut model.
 
 ```sh
 encrust slice base.stl lid.stl --printer elegoo-mars-4-ultra --resin my-grey \
@@ -228,12 +249,12 @@ encrust slice bust.stl --printer elegoo-mars-4-ultra --resin my-grey \
 
 A hole into the surface nearest a point, cut with or without a cavity behind it, and the
 check that says whether any resin is still stuck. `--check-drainage` asks for it alone. The
-point is in plate millimetres from the plate's front left corner, after `--center` and the
-rest of the placement and after the lift `--supports` gives the model, which is worked out
-before the hole is placed: the frame the report gives `slicing.trapped` in, so a pocket's
-`at_mm` can be fed straight back. `encrust inspect model.stl --center --printer …` prints the
-bounds to pick it out of. A model its supports stand otherwise than planned — a mould, whose
-wall grows under it — refuses a point:
+point is in plate millimetres from the plate's front left corner, where the model stands once
+placed (`--center`, `--rotate`, `--orient`, `--lift`), as the window's Drain tool takes a click:
+supports grow under the model where it stands and lift nothing first, so a model on the plate
+gets none under its floor (ADR 0458). It is the frame the report gives `slicing.trapped` in, so a
+pocket's `at_mm` can be fed straight back. `encrust inspect model.stl --center --printer …`
+prints the bounds to pick it out of:
 
 ```sh
 encrust slice model.stl \
@@ -266,12 +287,11 @@ through; `--drain-walled` drills it before hollowing instead, a recess at its de
 kept around it, which drains nothing (ADR 0346). `--drain-support-at X,Y,Z` drills into the
 raft nearest the point once it stands, sized as `--drain`, with no plug (ADR 0347); no hole
 cuts a support tree, only the model and the raft (ADR 0441).
-`--drain-plugs` prints a plug for each hole, standing on the plate past the model's
-right-hand side: what the hole took out of the wall, `--plug-gap` millimetres narrower a
+`--drain-plugs` prints a plug for each hole, standing at the nearest free spot of the usable
+plate as the window's plugs stand: what the hole took out of the wall, `--plug-gap` millimetres narrower a
 side (0.15 by default, never less than 0), its outer face flush with the surface (ADR 0313).
 A resin whose tolerance compensation is off takes its hole and outer offsets off that gap,
-so the fit prints as asked. A run whose plugs would land off the plate or on another model
-stops and says so; `--arrange` does not make room for them.
+so the fit prints as asked. A run whose plugs find no free spot stops and says so.
 
 ```sh
 encrust slice figure.stl --printer elegoo-mars-4-ultra --hollow 2 \
@@ -346,10 +366,41 @@ your own TOML with `--support-profile`; `--supports auto` sizes each support by 
 into the automatic profile's shapes, as the window's **Auto** does (ADR 0325); either way a
 tip carrying too much is strengthened as the window's Grow does (ADR 0422); and
 `--support-cavity` holds up the cavity `--hollow`, or a plate file's `hollow`, leaves as well
-as the outside, as the window's **Support the cavity** does (ADR 0332). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
-profile's `max_overhang_deg` does, and 45 degrees without one. With a printer as well the
+as the outside, as the window's **Support the cavity** does (ADR 0332). `--support-at X,Y,Z`,
+repeated, stands one more support under the surface nearest each point, in the same frame as
+`--drain-at`, built as sturdy as a steadying one, as a click in the window's **Edit** mode
+places it; `--support-only-at` stands those alone (ADR 0459). `--shown-at X,Y,Z[:R]`, repeated, paints the faces
+within `R` mm (4) of each point as the side meant to be seen, as the window's Clean surface
+brush does: Auto stands contacts there 1.3 times as far apart, on its lightest tips (ADR 0425,
+0459). A plate file's `supports` takes `auto` too. With both, the search counts as overhang what that
+profile's `max_overhang_deg` does, and the stock `medium` profile's without supports. The
 search's best few are printed to choose between, as the window's **Auto-orient** does
-(ADR 0290). The search draws a bar on a terminal and Ctrl-C stops it (exit 130). A turned model is stood on the plate over the middle it stood over in x and y.
+(ADR 0290), on the printer named or, with none, on the standard `elegoo-saturn-4-ultra` (ADR 0457). The search draws a bar on a terminal and Ctrl-C stops it (exit 130). A turned model is stood on the plate over the middle it stood over in x and y.
+`--orient-choices N` reports the search's first N ways to stand the model under the report's
+`oriented.choices`, each numbered as `pick`, with its `rotate_deg`, whether it is set on the
+plate and offered beside the first, and with a printer what its trial printed: `contacts`,
+`top_contacts` on faces looking up in the file, `kept_clear_touched`, `hanging`,
+`supports_ml`, `resin_ml`, `layers`, `stack_mm`, `pull_n`, `islands`, `suction_cups`, `peels`
+and `overflows`, on the coarse stack a trial cuts, to compare them by. `--orient-pick N`
+stands the model the Nth way instead of the first, and a pick past the ways found fails the
+run; `--orient-pick N,ID:K,...` stands object ID of a cut its own way K, the others the Nth.
+`--orient-keep-clear X,Y,Z`, repeated, keeps supports off the surface near each point,
+given in plate mm as the model stood turned by `--orient-keep-clear-turn X,Y,Z` (none when
+left out) and centred on z = 0: with a printer, the sound poses whose supports touch fewest
+points within `--orient-keep-clear-radius` (4 mm) are ranked first, and a pose with a cup, a
+tearing pull or an overflow never above a sound one (ADR 0460).
+A release build keeps each search under the user's cache (`poses/v1`, a folder per build, which
+the window built beside it shares), so a run asking the same search of the same model again —
+another pick, a render of it — reads it in place of searching (ADR 0466). `ENCRUST_POSE_CACHE`
+names another folder, or `off` for none.
+
+```sh
+encrust estimate bust.stl --printer elegoo-mars-4-ultra --supports auto --orient \
+  --orient-choices 4 --orient-keep-clear 60,40,52 --json
+encrust slice bust.stl --printer elegoo-mars-4-ultra --supports auto --orient --orient-pick 2 \
+  -o bust.goo
+```
+
 A model the search sets on the plate gets supports only under what would hang there, and none
 if nothing does; with supports and a raft it stands on the raft's top. A `--rotate` that tips
 it off that face stands it on supports. For example:
@@ -360,16 +411,16 @@ encrust slice model.stl \
   --center -o model.goo
 
 encrust slice model.stl \
-  --printer elegoo-mars-4-ultra --supports medium --center -o model.goo
+  --printer elegoo-mars-4-ultra --supports medium --center --lift 3 -o model.goo
 
 encrust slice model.stl \
   --printer elegoo-mars-4-ultra --hollow 2 --supports auto --support-cavity -o model.goo
 ```
 
-A model is stood off the plate by the profile's own `z_lift_mm`, and by its raft's
-thickness on top when it has one, before anything is put under it, the way the window's **Lift off the plate** does it: a part sitting on the plate has no
-room for a support. One already standing that high is left where it is, and a profile with
-`z_lift_mm = 0` lifts nothing. The report says how far it moved.
+Supports grow under the model where it stands, as the window's do: a model on the plate gets
+none under its floor. `--lift MM` stands it that high first, last of the placing flags, as the
+window's **Lift off the plate** does; an `--orient` on supports stands its poses at it too. The
+report's `supports.lifted_mm` says how high it stands.
 
 `--merge-supports X,Y,Z;X,Y,Z` joins the supports whose contacts lie within half a millimetre
 of those points into one tree on one trunk, as the window's **Merge into one** does, and grows
@@ -439,6 +490,16 @@ encrust batch busts/ --printer elegoo-mars-4-ultra --resin my-grey --recipe bust
   --hollow 3 -o sliced/
 ```
 
+Check's answers are flags too, run last on the plate as a `check` step whatever else runs
+(ADR 0459): `--support-islands` stands a support under every island and checks again, up to
+three times; `--drill-cups` vents every suction cup; `--hold-necks` holds every weak neck. On a
+project they answer the plate as saved, and with `--only` the objects named alone, the others
+still weighed for what hangs from them (ADR 0465):
+
+```sh
+encrust estimate statue.encrust --only 2 --support-islands --hold-necks --project-out statue-held.encrust
+```
+
 A recipe's `check` step takes `drill_cups` and `hold_levers`, which vent every suction cup by the
 shortest way into its lowest point and hold every weak neck with as many supports as bring it
 under its limit, once before its `retry`, and `arrange` takes
@@ -462,11 +523,14 @@ these two: ADR 0408. Your own are the files `<id>.toml` in the
 moves it); `--recipe <id>` takes the built-in of that id first, so a file of yours named
 like one is reached by its path. `recipes list` prints each built-in recipe and then yours,
 one that would not read with its error, and `recipes show <ID|PATH>` prints a recipe as the
-TOML it reads back, comments aside, to copy and edit; `--json` for both:
+TOML it reads back, comments aside, to copy and edit; `recipes save <PATH> [--name NAME]`
+checks a recipe file as Prepare for print would run it and keeps it as one of yours under a
+new id from its name, refusing one that would not run with why; `--json` for all three:
 
 ```sh
 encrust recipes list
 encrust recipes show miniatures > my-minis.toml
+encrust recipes save my-minis.toml --name "My minis"
 encrust slice figure.stl --printer elegoo-mars-4-ultra --resin my-grey --recipe miniatures
 ```
 
@@ -513,14 +577,28 @@ encrust slice model.stl --printer elegoo-mars-4-ultra --resin my-grey --center \
 
 ## Plates: several models, a plate file, a project
 
-Several models go on one plate. `--arrange` spreads them, biggest first, and turns one longer
-than the plate about the vertical by the least that fits it (ADR 0418); without it each
-stands where its file put it. `--center` and a `--drain-at` point aim at one model, so they
+Several models go on one plate. `--arrange` spreads them over the usable plate last, once each
+stands on its supports, biggest first with their supports' footprint, and turns one longer
+than the plate about the vertical by the least that fits it (ADR 0418, 0458); one that finds no
+room is warned of and stands where it was. Without it each stands where its file put it.
+`--rotate` and `--scale` turn and size a model about its centre of mass and stand it on the
+plate, as the window's Position panel does; `--mirror x|y|z` mirrors it where its middle stays,
+`--move X,Y,Z` moves it by that much once placed, and `--copies N` prints N more of it as
+prepared, in a row beside it for `--arrange` to spread (ADR 0459). `--center` and a `--drain-at` point aim at one model, so they
 are refused for several; `--drain-at auto` drains each model on its own:
 
 ```sh
 encrust slice a.stl b.stl c.stl \
   --printer elegoo-mars-4-ultra --resin my-grey --arrange --supports light -o plate.goo
+```
+
+Several projects (`.encrust`), each the plate it was left on, are laid on one plate, the first's
+printer, resin and settings kept, and `--arrange` spreads them over the plate of `--printer` or
+else the first's printer; `--project-out` writes the plate they make (ADR 0459):
+
+```sh
+encrust slice bust.encrust base.encrust --printer elegoo-mars-4-ultra --resin my-grey \
+  --arrange -o both.goo
 ```
 
 A plate file says the same per model. Paths are relative to it, every key is optional but
@@ -546,9 +624,12 @@ hollow = { wall_mm = 2.0, mode = "internal" }   # or "external" for a mould; ope
 ```
 
 A project saved by the window slices its models as they were saved: the file holds its
-shells and its support trees, and nothing is built again (ADR 0191). It carries its own
-models, so a flag that shapes one — `--hollow`, `--supports`, `--rotate`, `--infill` and the
-rest — is refused; `--printer` and `--resin` replace the project's own. It keeps no print
+shells and its support trees, and nothing is built again (ADR 0191). A flag that shapes a
+model — `--hollow`, `--supports`, `--rotate`, `--cut`, `--mirror`, `--arrange` and the rest —
+is made as the same edit of every object of the plate, or of those `--only` names, and
+`--project-out` writes the plate they leave (ADR 0458); `--prepare`, `--recipe`, Check's
+answers, `--combine` and the island flags, which a project slices as saved, are refused.
+`--printer` and `--resin` replace the project's own. It keeps no print
 settings (ADR 0380): they are the printer's and resin's, under `--layer-height`,
 `--adaptive`, `--samples-per-layer`, `--exposure-at`, the mask flags and `--slice-window` as
 for a model. The project names
@@ -570,18 +651,110 @@ encrust slice plate.encrust --all-plates -o plate.goo
 
 A flag wins over the plate file or project, which wins over the profiles' own numbers.
 
+Every object of a plate has an id, kept across saves (ADR 0456): `inspect plate.encrust` lists
+them — id, name, plate, where it stands, whether it is hollow, its support trees and the model a
+plug is for — and every model a report names carries its `id`, a piece of a cut or a copy
+named `input #id`. `--only 2,3` shapes those objects alone, on models as on a project, every
+object when left out; a point flag — `--drain-at X,Y,Z`, `--channel`, `--keep-solid`,
+`--support-at`, `--shown-at`, `--merge-supports`, `--drain-support-at` — names one model, so
+with several shaped it asks for `--only`. `--points-in-object` reads those points in the
+model's own frame, as its mesh holds it, and carries each onto the plate where the model stands
+when its edit runs, so a point stays on the model however a step before moves it (ADR 0467).
+`render --only` draws those objects alone (ADR 0458):
+
+```sh
+encrust estimate bust.stl --cut z:60 --arrange --project-out bust.encrust
+encrust inspect bust.encrust                          # ids 2 and 3, the halves
+encrust estimate bust.encrust --only 3 --hollow 2 --drain-at auto --project-out bust.encrust
+encrust slice bust.encrust --supports auto --arrange -o bust.goo
+encrust render bust.encrust --only 2 --view iso -o lower.png
+```
+
+A project's plate is edited as the window's tools edit it by `--edits FILE`, a JSON list of
+edits carried out in order before the run, each naming its object by the id the project
+keeps (`docs/design/document.md`, ADR 0456); `--project-out FILE` writes the plate they leave
+as a project. An edit that cannot be carried out stops the run and writes nothing. Models are
+staged as one such plate, an object each, and every shaping flag is an edit of it in the
+window's order (`docs/design/cli-on-document.md`, ADR 0458): `--edits` follows the flags' own
+and `--project-out` writes the plate both leave, so a flag and the same edit by `--edits` write
+one project. A recipe prepares a plate of its own, so `--edits` with `--recipe` or `--prepare`
+is refused, and `--project-out` writes the plate it prepared; a plate file takes neither yet. Besides `cut`, `move` (`by_mm`),
+`rotate` (`degrees`) and `scale` (`factors`), each `[x, y, z]`, place an object; `delete`
+takes it and its plugs off, `duplicate` (`offset_mm`, `[x, y, z]`) puts a copy beside it and
+`mirror` (`axis`, `x`, `y` or `z`) flips it in place; `split` (`smallest_mm3`, optional)
+replaces it by the bodies it is made of, and `part-off` (`at_mm`, `[x, y, z]`) cuts the part at
+that plate point off the rest; `combine` (`objects`, `op` of `union`, `difference` or
+`intersection`, and `toward`, optional `[x, y, z]`) replaces the objects by the one they make,
+the first being what a difference keeps; `label` (`object`, `text`, `at_mm`, `[x, y, z]`, and
+optional `height_mm`, `depth_mm`, `raised` (on), `follow_surface`, `angle_deg` and `font`, a
+file) writes text on the object's surface nearest that point, in IBM Plex Sans unless a font
+is named; `repair` (`method`: `"wrap"`, `"deep"` or `{"mend": "repair"}`, also `close-holes`,
+`close-small-holes` and `turn`) repairs the object's mesh as the window's Repair tool does, and `mend`
+(`flip_faces`, `drop_faces` from 0, `drop_shells` from 1, `bridge`, pairs of open edges as
+`[[a, b], [c, d]]`, all optional) does what `--flip-faces`, `--drop-faces`, `--drop-shells` and
+`--bridge` do; both drop the object's supports and cavity, and keep its plugs; `relief` (`object`,
+`depth_mm`, `image`, a picture file, and optional `tile_mm` (12), `angle_deg`, `invert`, `symmetric`,
+`smoothing_px`, `hold_bottom_deg`, `hold_top_deg` and `precision` (0.5)) presses the picture tiled
+into the object as `--relief-image` does, only into its painted faces where any are, and drops
+its supports and cavity, and keeps its plugs; `hollow` (`object`, and `settings` as the Hollow
+panel keeps them: `thickness_mm`, `mode` of `internal` or `external`, `precision`, `infill_on`,
+`infill`, and optional `open_floor`, `solid_under_mm`) hollows the object by them, which it keeps as
+its own, and keeps its supports; `drain` (`object`, and optional `at_mm`, a list of `[x, y, z]`,
+`size`, `kind`, `at-depth` where unset, `auto` and `vent`, on unless set false) drills a hole into the surface nearest each point as `--drain-at`
+does, a point nearest an edge or corner being refused, and leaves the shell to be cut when it is
+baked; `auto` then adds the holes the engine proves drain every pocket of the cavity, as
+`--drain-at auto`, with a vent on each pocket where `vent`, and an object with no cavity is
+refused; `channel` (`object`, `points_mm`, a list of `[x, y, z]`, and optional `diameter_mm`, 2 mm)
+digs a channel along the points as `--channel` does; `plugs` (`object`, optional `gap_mm`, 0.15 mm; the gap is final, in plate mm: `--drain-plugs` takes the resin's drift off the typed gap, an edit does not) lays a plug for each of the
+object's holes in a row beside it, as `--drain-plugs`, in place of those laid before;
+`orient` (`object`, and optional `goal`, `max_tilt_deg`, `clean_surface`, `pick` from 0, `plate_mm` and `low_mm`, the usable
+area it stays on as `arrange` takes it, and `printer` and `resin`, catalogue ids) runs `--orient`'s search, its best few printed on that
+printer, the standard `elegoo-saturn-4-ultra` where none is named, and stands the object the `pick`th way
+over the middle it stood over. An id is looked up in the shipped catalogue alone, so a printer or resin
+of your own folder is refused (`NoPrinter`, `NoResin`); the window's link takes the window's own;
+`supports` (`object`, and optional `profile`, a shipped support preset, `at_mm`, a list of
+`[x, y, z]`, `only_at`, `cavity`, `shown_at`, `clean_surface` and `anew`) stands supports under the object by the preset,
+the plate's active group's where unset, and a contact at the surface nearest each point; with
+`only_at` those contacts alone. `auto` sizes each support by what it holds, as `--supports auto`;
+`cavity` holds up a hollow object's cavity too, as `--support-cavity`; `shown_at`, a list of
+`{"at_mm": [x, y, z], "radius_mm": r}`, marks the side meant to be seen, as `--shown-at`; the side painted shown in the file is read only
+with `clean_surface` or strokes, as the window's Clean surface reads it; `anew` takes every support
+of the object away first, so none stands from an earlier pose;
+`arrange` (`plate_mm`, `[x, y]`, `clearance_mm` and optional `low_mm`, `[x, y]`, 0) spreads every
+visible object of the active plate over the usable area that size from that corner (the plate less
+its inset), each with its supports, turning one no slide fits, as the window's
+Arrange does; objects with no room are left where they are and named in the report.
+
+```sh
+echo '[{"edit": "cut", "object": 1, "axis": "z", "at_mm": 15, "lay_flat": true}]' > cut.json
+encrust estimate plate.encrust --edits cut.json --project-out cut.encrust --json
+```
+
 ## Estimate, info and convert
 
 `estimate` takes what `slice` takes and writes nothing. It prints what the stack is and,
 with a printer, what the print takes: time, resin by volume and weight, price where the
 resin has one, and the layers likely to fail. `--strict` fails it on the same defects.
+`--standard-machine` checks on the standard printer with the stock resin numbers where the
+user has named neither, as a chat client's job does: a model is centred and arranged on that
+plate, so a plate point keeps its place once the user names a machine of its size; `slice`,
+`batch` and `convert` refuse it, since nobody measured its exposure (ADR 0457).
+
+```sh
+encrust estimate bust.stl --standard-machine --center --cut x:109.44 --arrange
+```
+`--stage-only` lays the plate and writes `--project-out` but cuts and measures nothing: the
+report is the models with `status`, `seconds` and `stages_s`, for a run whose plate the next
+run takes on (ADR 0467).
 `--quick-check` reads the panel in squares of two by two pixels, as the window's background
 check does: quicker, but blind to an island near the smallest one named (ADR 0419). The
 `fits` line answers for the model where it stands, not only for its size: one small enough
 to print but hanging off the plate is named as off it, because the panel clips whatever
 hangs over and the resin figure then counts material no machine would cure. A model in the
 band a maker keeps clear along the plate's edges still fits, and the line names how far it
-reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON); it slices whole (ADR 0371). Once
+reaches in along X and Y (`inset_mm` in `inspect` and `batch` JSON; `models[].fit.usable_mm`, the usable plate's low
+corner and size in mm, and `models[].fit.bounds_mm`, the model's low and high corners on the
+plate, in the check report, which encrust-mcp reads); it slices whole (ADR 0371). Once
 `--supports` has stood them, an *On the plate* block answers again for the model with its
 supports and raft where it was put down, and each project model that does not fit so is
 named with its `fits` line; `--strict` fails on
@@ -590,6 +763,28 @@ supports of one reaching into another, are named once under *Plate* as `meeting 
 b.stl`: they would slice as one piece. Touching counts, a gap does not, and supports meeting
 supports never do; `--strict` fails on it, and each `batch` model lists the others in
 `meets` (ADR 0392).
+
+`--against NAME=FILE`, repeated, sets the run beside a report `estimate --json` kept before:
+the report's `compared` gives, under each name, its `standing` — `beats`, `matches` or
+`behind` — and the readings `worse` and `better`, by the rule `agent-lab` judges a client by;
+a file that does not read or has no score is answered with its `error` (ADR 0460).
+
+```sh
+encrust --json estimate model.stl --printer elegoo-mars-4-ultra --prepare > autopilot.json
+encrust --json estimate model.stl --printer elegoo-mars-4-ultra --hollow 2 --drain-at auto \
+  --supports auto --against autopilot=autopilot.json
+```
+
+`--recipe-out FILE` writes the recipe the run takes each model through, as `recipes show`
+prints one: each flag typed written into the steps it shapes, so a forced step has no `when`
+and a typed setting replaces the step's own; with no `--recipe` or `--prepare`, the steps the
+flags ask for alone. A flag no recipe step holds — a point, a turn, the modelling — is left
+out. `save_recipe` keeps it as a recipe the window and `--recipe` run (ADR 0461):
+
+```sh
+encrust estimate model.stl --printer elegoo-mars-4-ultra --prepare --hollow 2.5 \
+  --recipe-out steps.toml
+```
 
 `slice` and `convert` warn of each resin setting past what the printer takes or its maker
 advises, and write the file as asked (ADR 0368).
@@ -626,6 +821,64 @@ no edge joins fail with nothing printed.
 
 ```sh
 encrust measure figure.stl --from 12,4,30 --to -6,10,2 --along-surface
+```
+
+## After a failed print
+
+`diagnose REPORT --symptom S` reads what a print showed against the `--json` report of the
+`estimate` or `slice` that made its file, and answers each symptom's likely causes, those
+the report shows first with what it shows, each with the step it belongs to and the change
+to try (`docs/design/print-failures.md`). `--symptom` is given once for each of
+`off-plate`, `layer-split`, `hole`, `support-pulled`, `face-mark`, `resin-crack`:
+
+```sh
+encrust estimate bust.stl --printer elegoo-mars-4-ultra --resin my-grey --hollow 2 \
+  --check-drainage --json > bust.json
+encrust diagnose bust.json --symptom resin-crack --symptom off-plate
+```
+
+## Render
+
+`render` takes what `slice` takes — models, a plate file or a project, `--plate N`, and
+every flag that places, orients, hollows, drills and supports — builds the plate as `slice`
+would, and draws it as PNG pictures instead of cutting it, with the drain holes taken out
+(`docs/design/thumbnail.md`). `--view` names the sides, comma separated: `iso` (the sliced
+file's thumbnail), `front`, `back`, `left`, `right`, `top` and `bottom`, which looks up from
+under the plate with X to the right and the front edge at the top; `iso,bottom` without it.
+`-o` is a `.png` name for one view or a directory for several, each written as
+`<view>.png` (`render` without it). `--size PX` (512, 16 to 4096) is each picture's width
+and height. `--mark X,Y,Z` marks a point in plate mm on every picture, and may repeat: a
+disc where the point is seen, a hollow ring where the model stands in front of it. The
+picture frames the models alone, so a far mark does not shrink them; one off the picture is
+drawn at its edge nearest the point. A
+printer is named with a resin, as for `slice`; `--strict` exits 3 and draws nothing when
+the plate has a defect.
+
+```sh
+encrust render model.stl --printer elegoo-mars-4-ultra --resin my-grey \
+  --hollow 2 --drain-at 15,20,2 --supports auto --view iso,front,bottom -o shots
+encrust render plate.encrust --view top -o top.png --mark 60,40,0 --size 1024
+```
+
+`--json` lists each picture written, in the order asked, with where each mark landed in it
+(pixels from the top left), whether the model hid it and whether it was `pinned` to the edge:
+
+```json
+{
+  "schema": 1,
+  "pictures": [
+    {
+      "view": "bottom",
+      "path": "shots/bottom.png",
+      "width_px": 512,
+      "height_px": 512,
+      "markers": [
+        { "at_mm": [15.0, 20.0, 2.0], "x_px": 143.4, "y_px": 256.0, "hidden": false,
+          "pinned": false }
+      ]
+    }
+  ]
+}
 ```
 
 ## Profiles, a config file, completions
@@ -671,6 +924,28 @@ without one needs `--printer ID`. Where each value comes from is in
 
 ```sh
 encrust profiles import "My resin.cfgx"
+```
+
+`profiles new-resin` makes a resin of yours from the numbers on its bottle or its maker's
+page, set up on one printer, as the window's **New resin** does: `--printer ID`, `--name`,
+`--exposure S`, `--bottom-exposure S` and `--bottom-layers N`, and where stated
+`--layer-height`, `--light-off-delay`, `--lift-distance`, `--lift-speed`, `--retract-speed`,
+`--transition-layers` and `--density`; the rest are the stock numbers. A number past what the
+printer takes is refused, as the window would not let it be typed; one it advises against is
+kept and named, under `advised_against` with `--json` (ADR 0461):
+
+```sh
+encrust profiles new-resin --printer elegoo-mars-4-ultra --name "ABS-like grey" \
+  --exposure 2.5 --bottom-exposure 30 --bottom-layers 5
+```
+
+`test-print NAME` writes one of the window's test prints as an STL — `detail`, `exposure`,
+`surface` or `fit` — under its own name in the current directory, or to `-o PATH`, a file or
+a directory; `--json` gives `print` and `path`. The exposure check, printed at a resin's stated
+exposure, tells by which pins stand and which holes stay open whether it is right (ADR 0461):
+
+```sh
+encrust test-print exposure -o ~/prints
 ```
 
 `--config FILE` holds flags written down: a key is a flag's long name, `true` the bare flag,
@@ -771,6 +1046,137 @@ The window, optionally opening a model on startup:
 cargo run -p encrust-app --bin encrust-gui -- model.stl
 ```
 
+## `encrust serve`
+
+One process that runs many invocations: each line of stdin is a run, `{"id": 7, "args":
+["estimate", "bust.stl", ...]}`, the words after `encrust` with `--json` implied, answered on
+stdout by one line `{"id": 7, "exit_code": 0, "report": {...}}`; `{"cancel": 7}` stops run 7
+between its steps. Runs go side by side, each on its own thread; one asked under an id still
+going is answered as failed at once. What one run made, the next
+reuses: a file read, each plate after each edit, each model as cut and each plate's check, kept
+by the hash of what made it, so a run that changes its tenth step pays from the tenth step on;
+a project it wrote is taken back as the plate it wrote. Nothing is kept on disk (ADR 0467).
+
+```sh
+printf '%s\n' '{"id":1,"args":["estimate","bust.stl","--standard-machine","--hollow","2"]}' | encrust serve
+```
+
+## `encrust-mcp`
+
+The command line as tools for a chat client that speaks the Model Context Protocol over
+stdio. The client starts it; each tool runs a run of one `encrust serve` it keeps going —
+`--encrust PATH`, else the one beside the server, else the one on the `PATH` — started anew
+if it ends, and answers with its report (ADR 0455, 0467).
+Jobs are kept under the user's cache directory, or `--jobs DIR`, each revision as `N.toml`
+with the report of its check as `N.json`, the flags it stages with as `N.args.json` and the
+recipe its check ran as `N.recipe.toml`, and the autopilot's own check of the model as
+`autopilot.json`, run aside once the job starts; a job untouched for 30 days goes when the
+server starts, then the oldest while the jobs hold more than 4 GiB, none touched that day. A
+run is stopped after `--timeout-s` seconds (1800), and reports progress every five seconds while it runs; a client
+that takes the MCP tasks extension gets each call that runs the engine as a task to poll and
+cancel. `--trace FILE` appends a JSON
+line per tool call: `tool`, `ms`, `failed`, and the `job` and `revision` it answered with,
+`null` when it named none. Each check of a model keeps the plate it wrote as `N.encrust`; with
+the window open, each revision kept stands on its plate as that file, the answer carrying the
+window's `window`;
+`--window FILE` reads another window's file, `--no-window` shows none
+(`docs/design/window-link.md`). The server lists itself for the window as an agent, a file in
+`agents/` beside the jobs saying which client drives it, what it runs and the jobs it touched;
+`--agents DIR` moves it, and `--no-window` keeps none (ADR 0462). On starting, the server
+writes its version and these folders to stderr, which a client keeps in its log of it. The
+client's name comes from each request's `_meta`, else from its handshake. A revision kept is run on
+the plate only while the window follows its agents; `show_in_window` hands one over marked
+to be shown, starting the window first where none answers — `--app PATH`, else `encrust-gui`
+beside the server, on the `PATH`, in `/Applications/Encrust.app` or in the Windows installer's
+`%LOCALAPPDATA%\Encrust` — and waiting up to 30 s. A flag's value that is empty or a `${…}`
+placeholder the client left unfilled counts as not given, as the extension's unset settings
+arrive. The server offers four prompts, read from the bundle's manifest: `prepare_for_print`,
+`prepare_miniature`, `exposure_test` and `failed_print`.
+
+```sh
+cargo xtask mcpb                                        # target/mcpb/encrust-<os>-<arch>.mcpb
+cargo xtask mcpb --target universal-apple-darwin        # encrust-macos-universal.mcpb, both Macs
+```
+
+The bundle carries both binaries for the platform it is built on, or for `--target`'s, with the
+icon and the settings for `--app` and `--timeout-s`; a chat app that takes `.mcpb` extensions
+installs it by a double click or from its settings. Each release attaches one for every Mac,
+`encrust-macos-universal.mcpb`, and one for each Windows and Linux processor,
+`releases/latest/download/encrust-<os>-<arch>.mcpb`, each with
+a `.minisig` of the release key; the window's File → Use with an AI chat client downloads the
+one for its version, checks it and opens it (ADR 0455). Any other MCP client takes the server by hand
+in its configuration, as its command; a client that times its tools out needs more than 60 s
+for a hollowed model, as in a TOML configuration:
+
+```json
+{ "mcpServers": { "encrust": { "command": "/path/to/encrust-mcp" } } }
+```
+
+```toml
+[mcp_servers.encrust]
+command = "/path/to/encrust-mcp"
+tool_timeout_sec = 1800
+```
+
+`list_profiles` reads the catalogue, its printers cut to id, name and volume and filtered by
+`printer_query`; `inspect_model` reads a model, or lists a project's objects by id. `start_job` takes a model, a printer and a
+resin — ids or TOML paths — and answers with the job and its first revision checked; it
+runs under `--prepare` when `prepare: true`, so every step no tool sets is the autopilot's,
+and stages the model as its file stands when `prepare: false`; the client must choose.
+A project (`.encrust`) starts as it was saved, with neither `--prepare` nor `--center`, and is
+set against no autopilot; the tools shape its objects as the command line's flags do one.
+`set_machine` moves a job to another printer and resin, and the next revision is checked
+there. `set_shape`, `set_hollow`, `set_drains` and `set_supports` take `objects`, ids of the
+job's plate as a check's `models[].id` names them: the revision then runs as the model with
+the steps for every object, then a run per group of steps naming the same objects, each on the
+plate the one before wrote with `--only`, and is kept as the plate the last left (ADR 0458);
+each run but the last is `--stage-only`. A new job keeps the points a client gives in each
+object's own frame, carried there by the latest check's `frame`, and checks with
+`--points-in-object`, so a point stays on its object whatever moves it (ADR 0467).
+`set_shape` — scale, combine with other models, label in a font, cut with a sized joint or
+upright, split, part off, arrange, mirror, move, copies, relief — `set_repair` — the repair, its
+seam, shell and weld limits, faces flipped or dropped and shells dropped by number, bridges —
+and `set_slicing` — layer height, adaptive layers, exposure bands, anti-aliasing, greys, blur,
+islands removed, and `print`, exposure, motion and waits over the resin's — reach the rest of
+the command line's flags; `fix_issues` runs Check's answers as `--support-islands`,
+`--drill-cups` and `--hold-necks`, last, on the `objects` it names by `--only`; `plate_jobs` lays two jobs or more, each as its latest
+revision stands, on one plate with `--arrange`, checks it and, with `output`, writes it under
+`--strict` unless `accept_defects`, every job on one printer and resin.
+`set_hollow` takes the mode, precision, `keep_solid_at_mm`, `keep_solid_reach_mm` and
+`keep_solid_under_mm`,
+`set_drains` the hole's depth, taper, sides, turn, walled holes, holes into the supports and
+channels, and `set_supports` a profile TOML, `lift_mm`, `at_mm` with `only_at` and `shown_at_mm`, the
+side meant to be seen, as `--shown-at`, and `merge_at_mm`, as `--merge-supports`. `list_recipes` answers `recipes list` with each
+recipe's TOML; `use_recipe` prepares the job by one with `--recipe` in place of `--prepare`;
+`save_recipe` runs `recipes save` on a revision's steps, or on a recipe the client wrote.
+`write_file` notes the revision it wrote; `report_print` runs `diagnose` on the check of that
+revision, or of the one named, and appends the symptoms, `at_mm` and the user's note to the
+job's `prints.jsonl`.
+`import_resin` runs `profiles import` on the file given, `create_resin` `profiles new-resin`
+on the numbers given; `write_test_print` runs `test-print`
+into the folder given.
+`set_pose`, `set_hollow`, `set_drains` and `set_supports` check the changed recipe with
+`estimate --check-drainage` and keep it as the next revision only if the command line took
+it; every check is set `--against` the revision before and the autopilot, and the answer
+carries `compared`. `compare_poses` runs a search with `--orient-choices` — 4 ways unless
+`count`, 2 to 8 — and answers with each way's numbers and an `iso` picture each, drawn with
+`--orient-pick`, each object's ways under `objects`, one picture a number with every object
+stood its way of that number; `set_pose` with that search and `pick` takes one for every
+object, `picks` `[{"object", "pick"}]` one of each object's own. A search's
+`keep_clear_at_mm` are plate points as the latest revision stands, `clean_surface` is
+`--clean-surface`: the server keeps with them
+the turn that revision stood in as `keep_clear_seen_deg` and takes its supports' lift off them; edits to one job wait for each other. `set_drains` with `auto` is `--drain-at auto`, a
+proven drain and vent per pocket; a new pose clears drain and support points given by hand and stands
+the supports anew for it (ADR 0460). `check` reads any
+revision again and `revert` copies one forward. `write_file` slices a revision under
+`--strict` unless `accept_defects`, and answers `written: false` as a tool error when nothing
+was written; `send_to_printer` is `printer send`. `render` draws a revision with `encrust render` —
+`iso` and `bottom` unless `views` says otherwise — marks the first 48 findings of its check
+with `--mark`, and answers with the PNGs and a list saying which finding each mark is. Paths
+must be absolute, and no name the
+client gives may start with `-`. The two that write are marked destructive, which a client
+may show; the server's instructions tell the model to ask the user first.
+
 ## `hollow-lab`
 
 What each hollowing stage costs in time and in live bytes, over a matrix of settings, or
@@ -865,3 +1271,46 @@ cargo run --release -p encrust-cli --bin support-lab -- a.stl --auto default --h
 cargo run --release -p encrust-cli --bin support-lab -- --corpus corpus.toml --sweep --export out --json now.json --baseline before.json
 cargo run --release -p encrust-cli --bin support-lab -- --coupon coupon.stl --coupon-spec coupon.toml
 ```
+
+## `agent-lab`
+
+Each model prepared twice and more: by the autopilot, `estimate --prepare` with nothing
+else, and by each chat client under test driving `encrust-mcp`, asked one fixed prompt to
+prepare it for `--printer` and `--resin` (an id, or a TOML path) and to ask, write and send
+nothing. `--agent NAME=COMMAND`, repeated, is the client's own command line, split at
+whitespace, with `{prompt}`, `{mcp_config}` — a JSON file in the `mcpServers` shape that
+starts the server with a job directory and `--trace` of its own — `{encrust_mcp}`,
+`{mcp_args}` (the server's arguments as a JSON array) and `{work}` filled in. The client's
+answer is its job's latest revision, scored by the check the server kept with it; its tool
+calls come from the trace and its tokens from the last `usage` object it prints on stdout.
+
+Both are read for status, islands, suction cups, trapped pockets, contacts with no room,
+resin and print time (ADR 0455). A client matches the autopilot when no status or count is
+worse and resin and print time are within a tenth above; better on one as well, it beats
+it; a client that started no job, or ran past `--timeout-s` (3600), has no score. Each
+client runs in a directory of its own under `--work`, where its jobs, trace, stdout and
+stderr stay to be read. `--corpus FILE` reads a TOML list of `[[model]]` entries — `path`,
+`name`, `skip` — and `--only` keeps the models whose name holds it. `--json FILE` keeps the
+run; `--baseline FILE` exits non-zero when a client that matched there does not here, or the
+autopilot is worse than it was. `encrust` and `encrust-mcp` are taken from beside the bench
+unless `--encrust` and `--encrust-mcp` name them, so build all three with one profile.
+
+`--pictures` draws each preparation from `iso` and `bottom` into its directory, the autopilot's
+from its flags and a client's from the `N.args.json` the server kept with its latest revision,
+and the run lists them as `pictures`. `--judge COMMAND`, with `{prompt}` filled in, draws them
+too and asks another model which of the two prints better, showing it both pictures' paths
+and scores; the last `{"winner": "a" | "b" | "tie", "why": …}` it prints, on a line or inside a
+client's JSON `result`, is kept as the client's `verdict` beside its standing, which it does
+not change (ADR 0460).
+
+```sh
+cargo build --release -p encrust-cli -p encrust-mcp
+target/release/agent-lab model.stl --printer elegoo-mars-4-ultra --resin my-grey \
+  --agent 'fast=CLIENT {prompt} --model FAST --mcp-config {mcp_config}' \
+  --agent 'small=CLIENT {prompt} --model SMALL --mcp-config {mcp_config}' \
+  --json now.json --baseline before.json \
+  --judge 'CLIENT {prompt} --model LARGE'
+```
+
+`CLIENT` is a chat client's own command line that runs one prompt and exits; put `{prompt}`
+before any flag that takes a list, which would read it as one more item.

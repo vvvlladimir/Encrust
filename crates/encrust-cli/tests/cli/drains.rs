@@ -128,7 +128,8 @@ fn no_drain_vent_without_auto_is_refused() {
 
 #[test]
 fn a_trapped_point_the_report_gives_drains_the_pocket_fed_back_to_drain_at() {
-    let model = write_boxes_stl("drain-round-trip", &[([0.0; 3], [20.0, 20.0, 7.0])]);
+    // Drawn 2 mm over the plate, so the supports stand it where it is.
+    let model = write_boxes_stl("drain-round-trip", &[([0.0, 0.0, 2.0], [20.0, 20.0, 9.0])]);
     let shaped = [
         "--hollow",
         "2",
@@ -145,7 +146,7 @@ fn a_trapped_point_the_report_gives_drains_the_pocket_fed_back_to_drain_at() {
     let lifted_mm = found["supports"]["lifted_mm"].as_f64().expect("a lift");
     assert!(
         (lifted_mm - 2.0).abs() < 1e-4,
-        "medium stands a box on the plate 2 mm up, got {lifted_mm}"
+        "the box stands where it was drawn, 2 mm up, got {lifted_mm}"
     );
     let at: Vec<String> = found["slicing"]["trapped"][0]["at_mm"]
         .as_array()
@@ -169,26 +170,6 @@ fn a_trapped_point_the_report_gives_drains_the_pocket_fed_back_to_drain_at() {
         lit_pixels(&sealed, top),
         "the hole goes in through the floor under the pocket, not through the lid"
     );
-}
-
-#[test]
-fn a_point_placed_for_a_lift_the_supports_do_not_give_is_refused() {
-    // A mould's 2 mm wall grows under the box, so medium stands it 7 mm up rather than 5.
-    let model = write_box_stl("drain-mould-lift", 16.0, 12, 0);
-    let output = encrust(&[
-        "estimate",
-        model.to_str().unwrap(),
-        "--hollow",
-        "2",
-        "--hollow-mode",
-        "external",
-        "--supports",
-        "medium",
-        "--drain-at",
-        "8,8,5",
-    ]);
-    assert!(!output.status.success(), "the point would land 2 mm off");
-    assert!(stderr(&output).contains("planned"), "{}", stderr(&output));
 }
 
 #[test]
@@ -218,7 +199,7 @@ fn a_profile_that_lifts_nothing_keeps_the_drain_off_the_face_on_the_plate() {
 
 #[test]
 fn an_auto_drain_into_a_thin_cavity_leaves_the_top_whole() {
-    let model = write_boxes_stl("auto-drains-thin", &[([0.0; 3], [16.0, 16.0, 4.0])]);
+    let model = write_boxes_stl("auto-drains-thin", &[([0.0, 0.0, 2.0], [16.0, 16.0, 6.0])]);
     let shaped = [
         "--hollow",
         "1.5",
@@ -249,5 +230,47 @@ fn an_auto_drain_into_a_thin_cavity_leaves_the_top_whole() {
             lit_pixels(&sealed, layer),
             "layer {layer} of the lid is as whole as without a hole"
         );
+    }
+}
+
+#[test]
+fn auto_drains_of_a_cut_are_reported_where_its_spread_halves_stand() {
+    let model = write_box_stl("auto-drains-cut", 30.0, 12, 0);
+    let output = encrust(&[
+        "estimate",
+        model.to_str().unwrap(),
+        "--standard-machine",
+        "--cut",
+        "x:15",
+        "--arrange",
+        "--hollow",
+        "2",
+        "--drain-at",
+        "auto",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let report = json(&output);
+    let halves = report["models"].as_array().expect("a model a half");
+    assert_eq!(halves.len(), 2, "{report}");
+    for half in halves {
+        let bounds = &half["fit"]["bounds_mm"];
+        let pockets = half["auto_drains"]["pockets"]
+            .as_array()
+            .unwrap_or_else(|| panic!("a hollow half has its pockets: {half}"));
+        assert!(!pockets.is_empty(), "{half}");
+        for pocket in pockets {
+            for axis in 0..2 {
+                let at = pocket["at_mm"][axis].as_f64().expect("a pocket's point");
+                let (low, high) = (bounds[0][axis].as_f64(), bounds[1][axis].as_f64());
+                let within = low
+                    .zip(high)
+                    .is_some_and(|(low, high)| (low..=high).contains(&at));
+                assert!(
+                    within,
+                    "pocket at {at} on axis {axis} lies in its half, {bounds}"
+                );
+            }
+        }
     }
 }

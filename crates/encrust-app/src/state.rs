@@ -150,4 +150,9 @@ pub struct Machine {
     pub general: crate::prefs::General,
     /// The copy of the unsaved plate, and those runs that did not close left.
     pub autosave: crate::autosave::Autosave,
+    /// The chat clients' servers the window lists, and what the user asked of them.
+    pub agents: crate::agents::Agents,
+    /// The chat-app extension being fetched for the user.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub chat_extension: crate::chat_extension::ChatExtension,
 }

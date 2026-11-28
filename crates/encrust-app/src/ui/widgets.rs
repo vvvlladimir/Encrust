@@ -33,6 +33,7 @@ mod run_box;
 mod search;
 mod section;
 mod start_page;
+mod status_ring;
 mod theme_card;
 mod toggle;
 pub mod window_frame;
@@ -49,7 +50,8 @@ pub use button::{
 };
 pub use chain::{ChainAction, ChainStep, chain_drop_mark, chain_ghost, chain_seam, chain_step};
 pub use chooser::{
-    Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row, group_name,
+    Aside, ChooserRow, Lead, chooser_foot, chooser_frame, chooser_group, chooser_row,
+    chooser_row_with, chooser_switch, group_name,
 };
 pub use colour::colour_field;
 pub use confirm::{Confirm, any_armed, confirm_button, is_armed};
@@ -84,7 +86,7 @@ pub use limited::{Held, limit_verdict, limited_row};
 pub use list::{
     IssueHead, ListRow, answered_row, bullet, found_row, is_renaming, issue_card, issue_line,
     issue_lines, issue_list, issue_row, list, list_row, rename_box, row_mark, start_rename, tag,
-    tag_label, two_lines,
+    tag_label, two_lines, two_lines_in,
 };
 pub use menu::{
     MENU_W, MenuRow, context_menu, menu_button, menu_row, menu_rule, menu_style, menu_sub,
@@ -102,6 +104,7 @@ pub use start_page::ZONE_INSET;
 pub use start_page::{
     PictureTile, TILE_PICTURE_H, ZoneWords, drop_zone_box, picture_tile, start_title,
 };
+pub use status_ring::{RingLook, paint_ring, ring_badge};
 pub use theme_card::{CardLook, theme_card};
 pub use toggle::{SWITCH_W, Segment, Segmented, bare_switch, switch, switch_with_toggle, tone};
 

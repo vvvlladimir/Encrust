@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn a_model_standing_elsewhere_has_moved_and_one_added_has_not() {
         let at = |x| Transform::from_translation(core_geometry::Vec3::new(x, 0.0, 0.0));
-        let [one, two] = [ObjectId::for_test(1), ObjectId::for_test(2)];
+        let [one, two] = [ObjectId(1), ObjectId(2)];
         let before = [(one, at(0.0))];
         assert!(
             moved(&before, &[(one, at(1.0))]),

@@ -1,3 +1,4 @@
+use crate::scene::fixtures::drained;
 use std::path::Path;
 
 use super::picture::MAX_PREVIEW_PX;
@@ -456,9 +457,12 @@ fn drilling_a_hole_or_clearing_it_changes_the_fingerprint() {
     let size = core_volume::HoleSize::round(0.2, 0.2, 1.0);
     let point = mesh.vertices[0];
     let transform = object.transform;
-    object
-        .hollow
-        .add_drain(&mesh, &bvh, point, Vec3::NEG_Z, size, transform);
+    drained(
+        &mut object.hollow,
+        (&mesh, &bvh, transform),
+        (point, Vec3::NEG_Z),
+        size,
+    );
     let drilled = stack_fingerprint(&scene, Cutting::uniform(0.05));
     assert_ne!(drilled, solid, "a hole changes what the layers hold");
 

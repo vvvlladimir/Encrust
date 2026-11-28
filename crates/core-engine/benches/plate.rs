@@ -7,15 +7,21 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use core_analysis::{Cured, Measured, cure};
-use core_engine::{Cutting, DrainSearch, Model, Plate, QUICK_CHECK_BIN, Run, suggest_drains};
+use core_engine::project::inner_faces;
+use core_engine::{
+    Cutting, DrainSearch, Model, NeedsAsked, Plate, QUICK_CHECK_BIN, Run, SupportPlan,
+    analysis_slicing, needs_on, suggest_drains, suggest_drains_heard,
+};
 use core_format::ExposurePlan;
 use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use core_raster::{LayerRuns, RasterSettings, Rasterizer, ScanlineRasterizer};
-use core_slicer::{Layer, SliceError};
+use core_slicer::{Layer, PlaneSliceEngine, SliceEngine, SliceError, SliceSettings};
+use core_supports::{WallSide, low_points};
 use core_volume::{Cancel, HoleSize, HollowSettings, hollow};
-use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
-use printer_profiles::{Catalogue, MaterialProfile};
+use criterion::measurement::WallTime;
+use criterion::{BatchSize, BenchmarkGroup, Criterion, criterion_group, criterion_main};
+use printer_profiles::{Catalogue, MaterialProfile, SupportProfile};
 use rayon::prelude::*;
 
 /// Roughly 80k triangles over 20 mm of height: a detailed miniature at print resolution.
@@ -224,5 +230,84 @@ fn drains(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, plates, stages, drains);
+/// Machine layer heights, mm, around the analysis step (the middle one).
+const STEPS_MM: [Scalar; 3] = [0.02, 0.05, 0.1];
+
+/// A 20 mm cube hollowed to a 2 mm wall, standing on the plate.
+fn hollow_cube() -> (Mesh, std::ops::Range<usize>, Scalar) {
+    let cube = core_geometry::cuboid(Vec3::ZERO, Vec3::splat(20.0));
+    let asked = HollowSettings::for_wall(2.0);
+    let shell = hollow(&cube, &Bvh::build(&cube), &asked, Cancel::never()).expect("a cube hollows");
+    (shell.mesh, shell.cavity, shell.voxel_mm)
+}
+
+/// Where the shell needs holding up, slicing it at each step first: the cost of the support
+/// run's model analysis, by the step it reads at.
+fn analysis_needs(group: &mut BenchmarkGroup<'_, WallTime>) {
+    let (mesh, cavity, _) = hollow_cube();
+    let bvh = Arc::new(Bvh::build(&mesh));
+    let plan = SupportPlan::of(SupportProfile::default());
+    let lows = low_points(&mesh, Transform::default());
+    let inner = inner_faces(&cavity, mesh.faces.len());
+    for step in STEPS_MM {
+        let settings = SliceSettings {
+            layer_height: step,
+            ..analysis_slicing()
+        };
+        group.bench_function(format!("needs_cube_20mm_at_{step}"), |b| {
+            b.iter(|| {
+                let stack = PlaneSliceEngine
+                    .slice(&mesh, &settings)
+                    .expect("the shell slices");
+                let asked = NeedsAsked {
+                    stack: &stack,
+                    surface: &mesh,
+                    bvh: &bvh,
+                    layer_height_mm: step,
+                    plan: &plan,
+                    lows: &lows,
+                    painted: None,
+                    shown: None,
+                    seeds: &[],
+                    side: Some(WallSide {
+                        bvh: Arc::clone(&bvh),
+                        inner: inner.clone(),
+                        into_model: core_geometry::Mat4::IDENTITY,
+                        inside: false,
+                    }),
+                };
+                needs_on(asked, &[], &mut |_| true).expect("the shell needs resolve")
+            });
+        });
+    }
+}
+
+/// The drain search on the same shell, its scans cut at each step.
+fn analysis_drains(group: &mut BenchmarkGroup<'_, WallTime>) {
+    let (mesh, _, voxel_mm) = hollow_cube();
+    for step in STEPS_MM {
+        let search = DrainSearch {
+            mesh: &mesh,
+            cuts: None,
+            size: HoleSize::round(3.0, 3.0, 1.0),
+            wall: Some((2.0, voxel_mm)),
+            vents: true,
+            plate_z: Some(0.0),
+            layer_height_mm: step,
+        };
+        group.bench_function(format!("drains_cube_20mm_at_{step}"), |b| {
+            b.iter(|| suggest_drains_heard(&search, |_| true).expect("the shell slices"));
+        });
+    }
+}
+
+fn analysis(c: &mut Criterion) {
+    let mut group = c.benchmark_group("analysis");
+    group.sample_size(10);
+    analysis_needs(&mut group);
+    analysis_drains(&mut group);
+    group.finish();
+}
+
+criterion_group!(benches, plates, stages, drains, analysis);
 criterion_main!(benches);

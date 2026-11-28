@@ -35,6 +35,15 @@ pub fn verify(key: &str, bytes: &[u8], signature: &str, expected: &str) -> Resul
     Ok(())
 }
 
+/// Refuses `bytes` unless the release key signed them for `expected`, a [`trusted_comment`].
+pub(crate) fn verify_release(
+    bytes: &[u8],
+    signature: &str,
+    expected: &str,
+) -> Result<(), UpdateError> {
+    verify(RELEASE_KEY, bytes, signature, expected)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

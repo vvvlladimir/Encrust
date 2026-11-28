@@ -24,6 +24,22 @@ fn lifting_by_nothing_is_dropping_to_the_plate() {
 }
 
 #[test]
+fn a_stretched_plane_keeps_its_normal_square_to_it() {
+    let transform = Transform {
+        scale: Vec3::new(2.0, 1.0, 1.0),
+        ..Transform::default()
+    };
+
+    let normal = transform.normal_matrix() * Vec3::new(1.0, 1.0, 0.0);
+
+    let expected = Vec3::new(1.0, 2.0, 0.0) / 5.0_f32.sqrt();
+    assert!(
+        normal.normalize().abs_diff_eq(expected, 1e-6),
+        "the normal of x + y = c goes to (1, 2, 0) / sqrt 5, got {normal}"
+    );
+}
+
+#[test]
 fn default_transform_is_identity() {
     assert_eq!(Transform::default().to_matrix(), Mat4::IDENTITY);
 }

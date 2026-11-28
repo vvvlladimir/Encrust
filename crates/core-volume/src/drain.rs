@@ -67,7 +67,7 @@ impl HoleShape {
 
 /// The hole a click drills: its mouth and depth in millimetres of the plate, its far end
 /// as a fraction of its mouth, 1 being a cylinder, and its outline and turn.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct HoleSize {
     pub diameter_mm: Scalar,
     pub depth_mm: Scalar,
@@ -207,6 +207,9 @@ pub fn drilled_out(holes: &[DrainHole], point: Vec3) -> bool {
         .filter(|hole| hole.kind != HoleKind::Support)
         .any(|hole| hole.holds(point))
 }
+
+/// The diameter of a drainage channel when none is asked for, mm.
+pub const CHANNEL_DIAMETER_MM: Scalar = 2.0;
 
 /// A drainage channel: a tube of `diameter_mm` dug along a polyline in model space, round
 /// or a polygon turned `turn_deg` from the level about each leg. A file without the outline

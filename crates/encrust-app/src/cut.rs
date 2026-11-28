@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use core_geometry::{Mesh, Plane, Scalar, Transform, Vec3, transform_mesh};
-use core_joint::{Dowel, JointKind, Joints};
-use core_volume::PartedOff;
+use core_document::{CutAsked, CutModel, Role, axis_normal};
+use core_geometry::{Plane, Scalar, Vec3, transform_mesh};
+use core_joint::JointKind;
+use core_volume::{PartSettings, PartedOff};
 
 pub use core_engine::project::Keep;
 
@@ -14,16 +15,12 @@ use crate::job::{
     Counted, CutJob, CutOutcome, CutRequest, SplitJob, SplitOutcome, SplitRequest, spawn_cut,
     spawn_split,
 };
-use crate::landing::{self, mending, place, place_all};
+use crate::landing::{self, mending, place_all, place_piece};
 use crate::scene::{ObjectId, Scene, SceneObject, Taken};
 use crate::status::Status;
 
-/// Space left between a cut's lower half and the dowels laid out beside it, and between
-/// one dowel and the next, millimetres.
-const DOWEL_GAP_MM: Scalar = 3.0;
-
 /// Where the Cut tool's plane is, and what it does with the halves.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CutTool {
     /// What the panel is set to, in the shape a project writes it down in (ADR 0191),
     /// joints included (ADR 0306). Its `height_mm` is where the plane crosses the axis:
@@ -51,38 +48,13 @@ pub struct CutTool {
 struct Running {
     job: CutJob,
     taken: Taken,
-    axis: Axis,
-    position_mm: Scalar,
-    up: Vec3,
-    keep: Keep,
-    joints: Joints,
-    lay_flat: bool,
-}
-
-impl Default for CutTool {
-    fn default() -> Self {
-        Self {
-            state: CutState {
-                axis: Axis::Z,
-                height_mm: 10.0,
-                keep: Keep::Both,
-                joints: Joints::default(),
-                parts: core_volume::PartSettings::default(),
-            },
-            lay_flat: false,
-            centred_on: None,
-            running: None,
-            splitting: None,
-            picking_part: false,
-            part_mark: None,
-        }
-    }
+    asked: CutAsked,
 }
 
 impl CutTool {
     /// The plane the tool is set to for one model, in plate coordinates.
     pub fn plane(&self, object: &SceneObject) -> Option<Plane> {
-        Plane::at(normal(self.state.axis), self.position_mm(object))
+        Plane::at(axis_normal(self.state.axis), self.position_mm(object))
     }
 
     /// Where the plane crosses its axis for one model, in plate millimetres.
@@ -123,32 +95,44 @@ impl CutTool {
         let object = scene
             .get(id)
             .ok_or_else(|| anyhow!(tr!("cut-nothing-selected")))?;
-        let plane = self
-            .plane(object)
-            .ok_or_else(|| anyhow!(tr!("cut-no-direction")))?;
+        if self.plane(object).is_none() {
+            return Err(anyhow!(tr!("cut-no-direction")));
+        }
+        let asked = CutAsked {
+            axis: self.state.axis,
+            at_mm: self.position_mm(object),
+            keep: self.state.keep,
+            joints: self.state.joints,
+            lay_flat: self.lay_flat,
+        };
+        self.start_asked(scene, id, asked)
+    }
+
+    /// Starts the cut `asked` describes on one model, as [`CutTool::start`] does, whatever the
+    /// panel is set to: what an edit handed over the window link asks (ADR 0456).
+    pub fn start_asked(&mut self, scene: &Scene, id: ObjectId, asked: CutAsked) -> Result<()> {
+        let object = scene
+            .get(id)
+            .ok_or_else(|| anyhow!(tr!("cut-nothing-selected")))?;
         let uncut = object.uncut();
         let drilled = object.hollow.drilled(uncut).map(|drilled| &drilled.mesh);
         let job = spawn_cut(CutRequest {
-            printed: Arc::clone(drilled.unwrap_or(uncut)),
-            cuts: drilled
-                .is_none()
-                .then(|| object.hollow.cut_bodies().cloned())
-                .flatten(),
-            solid: object.hollow.shell().map(|_| Arc::clone(&object.mesh)),
-            transform: object.transform,
-            plane,
-            keep: self.state.keep,
-            joints: self.state.joints,
+            id,
+            model: CutModel {
+                printed: Arc::clone(drilled.unwrap_or(uncut)),
+                cuts: drilled
+                    .is_none()
+                    .then(|| object.hollow.cut_bodies().cloned())
+                    .flatten(),
+                solid: object.hollow.shell().map(|_| Arc::clone(&object.mesh)),
+                transform: object.transform,
+            },
+            asked,
         });
         self.running = Some(Running {
             job,
             taken: Taken::of(object),
-            axis: self.state.axis,
-            position_mm: self.position_mm(object),
-            up: plane.normal,
-            keep: self.state.keep,
-            joints: self.state.joints,
-            lay_flat: self.lay_flat,
+            asked,
         });
         Ok(())
     }
@@ -218,14 +202,28 @@ impl CutTool {
     /// marked on it, off the drawing thread, as the tool's `parts` settings say;
     /// [`CutTool::poll`] puts them on the plate.
     pub fn start_split(&mut self, scene: &Scene, id: ObjectId) -> Result<()> {
+        let at = (scene.get(id)).and_then(|object| self.marked_on(object));
+        self.start_split_asked(scene, id, self.state.parts, at)
+    }
+
+    /// Starts the split of one model into `settings`' parts, or the part at plate point `at` cut
+    /// off, whatever the panel is set to, as an edit over the window link asks (ADR 0456).
+    pub fn start_split_asked(
+        &mut self,
+        scene: &Scene,
+        id: ObjectId,
+        settings: PartSettings,
+        at: Option<Vec3>,
+    ) -> Result<()> {
         let object = scene
             .get(id)
             .ok_or_else(|| anyhow!(tr!("cut-nothing-to-split")))?;
         let mesh = object.printed();
         let job = spawn_split(SplitRequest {
+            id,
             placed: transform_mesh(mesh, object.transform),
-            settings: self.state.parts,
-            at: self.marked_on(object),
+            settings,
+            at,
         });
         self.splitting = Some((job, Taken::of(object)));
         Ok(())
@@ -235,12 +233,14 @@ impl CutTool {
 impl Running {
     fn land(self, scene: &mut Scene, outcome: CutOutcome) -> Status {
         let name = self.taken.name.clone();
-        let (joined, open_loops, unjoined) = match outcome {
+        let (pieces, placed, bare, open_loops, unjoined) = match outcome {
             CutOutcome::Cut {
-                joined,
+                pieces,
+                placed,
+                bare,
                 open_loops,
                 unjoined,
-            } => (joined, open_loops, unjoined),
+            } => (pieces, placed, bare, open_loops, unjoined),
             CutOutcome::Missed => return Status::Error(tr!("cut-misses", name = name)),
             CutOutcome::Undrilled => return Status::Error(tr!("cut-undrilled", name = name)),
             CutOutcome::Failed(message) => return Status::Error(message),
@@ -248,82 +248,38 @@ impl Running {
         if let Err(changed) = landing::take_off(scene, std::slice::from_ref(&self.taken)) {
             return Status::Error(changed);
         }
-        let kind = self.joints.kind.filter(|_| self.keep == Keep::Both);
-        // Pins and a tongue stand on the lower half's cut, which it then cannot lie on.
-        let raised = matches!(kind, Some(JointKind::Pins | JointKind::Key)) && joined.placed > 0;
-        let (mended, lower) = self.put_down(scene, joined.below, joined.above, raised);
-        if let Some(lower) = lower {
-            lay_out_dowels(scene, lower, &name, &joined.loose);
+        let mended = pieces.iter().filter(|piece| piece.mended).count();
+        for piece in pieces {
+            let piece_name = piece_name(&name, piece.role);
+            place_piece(scene, self.taken.plate, piece_name, piece);
         }
         if open_loops > 0 {
             let said = tr!("cut-done-open", name = name, open = open_loops);
             return Status::noted(said, mending(mended).into_iter().collect());
         }
-        let mut notes = joint_notes(kind, joined.placed, joined.bare, unjoined);
+        let kind = (self.asked.joints.kind).filter(|_| self.asked.keep == Keep::Both);
+        let mut notes = joint_notes(kind, placed, bare, unjoined);
         notes.extend(mending(mended));
         let said = tr!(
             "cut-done",
             name = name,
-            axis = self.axis.label(),
-            position = format!("{:.1}", self.position_mm)
+            axis = self.asked.axis.label(),
+            position = format!("{:.1}", self.asked.at_mm)
         );
         Status::noted(said, notes)
     }
-
-    /// Puts the halves kept on the plate, each laid on its cut face if asked and unless
-    /// it is the lower one and `raised`. Answers how many had to be mended, and the lower.
-    fn put_down(
-        &self,
-        scene: &mut Scene,
-        below: Mesh,
-        above: Mesh,
-        raised: bool,
-    ) -> (usize, Option<ObjectId>) {
-        let name = &self.taken.name;
-        let up = self.up;
-        let pieces = match self.keep {
-            Keep::Both => vec![
-                (tr!("cut-lower-name", name = name.clone()), below, up),
-                (tr!("cut-upper-name", name = name.clone()), above, -up),
-            ],
-            Keep::Below => vec![(name.clone(), below, up)],
-            Keep::Above => vec![(name.clone(), above, -up)],
-        };
-        let (mut mended, mut lower) = (0, None);
-        for (name, mesh, cut_face) in pieces {
-            let (piece, was_mended) = place(scene, self.taken.plate, name, mesh);
-            mended += usize::from(was_mended);
-            let is_lower = cut_face == up;
-            if is_lower {
-                lower = Some(piece);
-            }
-            if let Some(object) = scene.get_mut(piece)
-                && self.lay_flat
-                && !(is_lower && raised)
-            {
-                object.lay_face_down(cut_face);
-            }
-        }
-        (mended, lower)
-    }
 }
 
-/// Stands each dowel on the plate in a row beside the lower half `beside`.
-fn lay_out_dowels(scene: &mut Scene, beside: ObjectId, name: &str, dowels: &[Dowel]) {
-    let Some((bounds, plate)) = scene
-        .get(beside)
-        .and_then(|object| Some((object.world_bounds()?, object.plate)))
-    else {
-        return;
-    };
-    let mut x = bounds.maxs.x + DOWEL_GAP_MM;
-    for (index, dowel) in dowels.iter().enumerate() {
-        let radius = dowel.radius_mm;
-        let offset = Vec3::new(x + radius, bounds.mins.y + radius, 0.0);
-        let placed = transform_mesh(&dowel.mesh, Transform::from_translation(offset));
-        let name = tr!("cut-dowel-name", name = name.to_owned(), index = index + 1);
-        place(scene, plate, name, placed);
-        x += 2.0 * radius + DOWEL_GAP_MM;
+/// A piece's name in the window's language, after the model it was cut from.
+fn piece_name(name: &str, role: Role) -> String {
+    let name = name.to_owned();
+    match role {
+        Role::Kept | Role::Copy | Role::Combined => name,
+        Role::Lower => tr!("cut-lower-name", name = name),
+        Role::Upper => tr!("cut-upper-name", name = name),
+        Role::Dowel(index) => tr!("cut-dowel-name", name = name, index = index),
+        Role::Part(index) => tr!("cut-part-name", name = name, index = index),
+        Role::Plug(index) => tr!("drain-plug-name", name = name, index = index),
     }
 }
 
@@ -406,14 +362,6 @@ fn scrap_notes(joined: usize, dropped: usize) -> Vec<String> {
     let joined = (joined > 0).then(|| tr!("cut-split-joined", count = joined));
     let dropped = (dropped > 0).then(|| tr!("cut-split-dropped", count = dropped));
     joined.into_iter().chain(dropped).collect()
-}
-
-fn normal(axis: Axis) -> Vec3 {
-    match axis {
-        Axis::X => Vec3::X,
-        Axis::Y => Vec3::Y,
-        Axis::Z => Vec3::Z,
-    }
 }
 
 #[cfg(test)]

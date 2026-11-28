@@ -229,6 +229,7 @@ fn stepping_through_the_offered_poses_turns_the_model_and_wraps_round() {
             Turn {
                 id,
                 poses: vec![pose(Quat::IDENTITY, 1.0), pose(on_edge, 2.0)],
+                ranked: vec![pose(Quat::IDENTITY, 1.0), pose(on_edge, 2.0)],
                 lift_mm: 0.0,
             },
             0,
@@ -259,6 +260,40 @@ fn stepping_through_the_offered_poses_turns_the_model_and_wraps_round() {
     assert!(
         turned.abs_diff_eq(Quat::IDENTITY, 1e-5),
         "past the last, the first, got {turned:?}"
+    );
+}
+
+#[test]
+fn standing_a_ranked_pose_counts_those_not_offered_and_a_run_that_never_landed_has_none() {
+    let mut scene = scene_with(cuboid(Vec3::new(40.0, 20.0, 4.0)));
+    let id = scene.objects()[0].id;
+    let pose = |rotation| Pose {
+        rotation,
+        on_plate: true,
+        costs: None,
+    };
+    let on_edge = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
+    let mut tool = OrientTool::default();
+    let plate = BuildPlate::default();
+    assert_eq!(tool.stand_ranked(&mut scene, &plate, id, 0), Err(0));
+
+    tool.offers = vec![(
+        Turn {
+            id,
+            poses: vec![pose(Quat::IDENTITY)],
+            ranked: vec![pose(Quat::IDENTITY), pose(on_edge)],
+            lift_mm: 0.0,
+        },
+        0,
+    )];
+
+    assert_eq!(tool.stand_ranked(&mut scene, &plate, id, 2), Err(2));
+    tool.stand_ranked(&mut scene, &plate, id, 1)
+        .expect("the second ranked pose exists");
+    let turned = scene.objects()[0].transform.rotation;
+    assert!(
+        turned.abs_diff_eq(on_edge, 1e-5),
+        "the ranked pose not offered, got {turned:?}"
     );
 }
 
@@ -342,6 +377,7 @@ fn a_start_on_named_models_leaves_the_others_standing_and_asked_again_steps() {
             &[slab],
             (OrientPreset::Auto.into(), None, plans),
             None,
+            None,
         )
         .expect("a named slab can be oriented")
     else {
@@ -369,6 +405,7 @@ fn a_start_on_named_models_leaves_the_others_standing_and_asked_again_steps() {
             &scene,
             &[slab],
             (OrientPreset::Auto.into(), None, plans),
+            None,
             None,
         )
         .expect("a named slab can be oriented");

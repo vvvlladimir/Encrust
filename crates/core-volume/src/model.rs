@@ -227,6 +227,11 @@ impl ModelHollow {
         self.built.as_ref().map(|built| &built.mesh)
     }
 
+    /// The shell as a run left it, or `None` while the model is still solid.
+    pub fn built(&self) -> Option<&Shell> {
+        self.built.as_ref()
+    }
+
     /// Which faces of [`Self::shell`] bound the space the resin fills, or `None` while the
     /// model is still solid. It is what a viewport paints to show resin with no way out.
     pub fn cavity_faces(&self) -> Option<Range<usize>> {
@@ -331,21 +336,6 @@ impl ModelHollow {
     pub fn clear_blockers(&mut self) {
         self.blockers.clear();
         self.remesh_markers();
-    }
-
-    /// Drills a hole into the face of `normal` clicked at `point`, plate coordinates, unless one
-    /// drilled takes it in, walled on a solid model (ADR 0346); says whether it drilled one.
-    pub fn add_drain(
-        &mut self,
-        mesh: &Mesh,
-        bvh: &Bvh,
-        point: Vec3,
-        normal: Vec3,
-        size: HoleSize,
-        transform: Transform,
-    ) -> bool {
-        Self::drain_at(mesh, bvh, point, normal, size, transform)
-            .is_some_and(|hole| self.add_hole(hole))
     }
 
     /// Drills `hole` of [`Self::drain_at`], model space, as a click would, unless one drilled
@@ -500,6 +490,12 @@ impl ModelHollow {
         self.channels.push(channel);
         self.recut();
         true
+    }
+
+    /// Digs `channel`, model space, as one laid out by its points would be.
+    pub fn add_channel(&mut self, channel: Channel) {
+        self.channels.push(channel);
+        self.recut();
     }
 
     pub fn clear_channels(&mut self) {

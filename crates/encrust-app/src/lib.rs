@@ -2,6 +2,7 @@
 //! `encrust-web` hands it a canvas in a browser; the window itself, and every tool in it,
 //! is here.
 
+mod agents;
 mod app;
 #[cfg(target_os = "macos")]
 mod app_menu;
@@ -9,6 +10,8 @@ mod arrange;
 mod autosave;
 mod boolean;
 mod camera;
+#[cfg(not(target_arch = "wasm32"))]
+mod chat_extension;
 mod check;
 mod cut;
 mod drain;
@@ -26,6 +29,8 @@ mod interface_scale;
 mod job;
 mod landing;
 mod launch;
+#[cfg(not(target_arch = "wasm32"))]
+mod link;
 mod measure;
 mod meeting;
 mod network;

@@ -11,6 +11,14 @@ use toml::{Table, Value};
 
 use crate::commands::Cli;
 
+/// clap's complaint as an error document carries it: its first line, without the usage
+/// that follows for a reader at a terminal.
+pub fn usage_error(error: &clap::Error) -> anyhow::Error {
+    let rendered = error.render().to_string();
+    let line = rendered.lines().next().unwrap_or_default();
+    anyhow::anyhow!("{}", line.strip_prefix("error: ").unwrap_or(line))
+}
+
 /// Parses `args` as clap would, then once more with every flag the `--config` file names and
 /// the command line does not appended, so a typed flag or its variable always wins.
 pub fn parse_from(args: Vec<OsString>) -> Result<Cli, clap::Error> {

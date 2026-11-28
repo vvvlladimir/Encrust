@@ -1,4 +1,5 @@
 use super::*;
+use crate::fixtures::drained;
 use core_geometry::{Quat, Ray, signed_volume};
 use std::f32::consts::FRAC_PI_2;
 
@@ -128,13 +129,11 @@ fn a_blocker_is_drawn_as_a_ball_where_it_stands() {
 fn a_drain_hole_is_stored_in_the_models_own_space_and_points_into_it() {
     let transform = Transform::from_translation(Vec3::new(50.0, 0.0, 0.0));
     let mut hollow = ModelHollow::default();
-    hollow.add_drain(
-        &lid(),
-        &Bvh::build(&lid()),
-        Vec3::new(60.0, 0.0, 10.0),
-        Vec3::Z,
+    drained(
+        &mut hollow,
+        (&lid(), &Bvh::build(&lid()), transform),
+        (Vec3::new(60.0, 0.0, 10.0), Vec3::Z),
         drain_tool(3.0, 4.0),
-        transform,
     );
 
     let hole = hollow.drains()[0];
@@ -153,13 +152,11 @@ fn a_drain_hole_on_a_scaled_model_keeps_the_size_it_was_asked_for() {
         ..Transform::default()
     };
     let mut hollow = ModelHollow::default();
-    hollow.add_drain(
-        &lid(),
-        &Bvh::build(&lid()),
-        Vec3::new(0.0, 0.0, 4.0),
-        Vec3::Z,
+    drained(
+        &mut hollow,
+        (&lid(), &Bvh::build(&lid()), transform),
+        (Vec3::new(0.0, 0.0, 4.0), Vec3::Z),
         drain_tool(3.0, 4.0),
-        transform,
     );
 
     let hole = hollow.drains()[0];
@@ -170,13 +167,11 @@ fn a_drain_hole_on_a_scaled_model_keeps_the_size_it_was_asked_for() {
 #[test]
 fn clicking_a_drain_hole_takes_it_away() {
     let mut hollow = ModelHollow::default();
-    hollow.add_drain(
-        &lid(),
-        &Bvh::build(&lid()),
-        Vec3::ZERO,
-        Vec3::Z,
+    drained(
+        &mut hollow,
+        (&lid(), &Bvh::build(&lid()), Transform::default()),
+        (Vec3::ZERO, Vec3::Z),
         drain_tool(4.0, 5.0),
-        Transform::default(),
     );
 
     assert!(!hollow.remove_drain(Vec3::new(9.0, 0.0, 0.0), Transform::default()));
@@ -191,7 +186,12 @@ fn a_click_on_a_hole_drills_nothing_more_but_a_wider_one_over_it_is_drilled() {
     let (mesh, bvh) = (lid(), Bvh::build(&lid()));
     let mut click = |at: Vec3, diameter_mm: Scalar| {
         let size = drain_tool(diameter_mm, 5.0);
-        hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default())
+        drained(
+            &mut hollow,
+            (&mesh, &bvh, Transform::default()),
+            (at, Vec3::Z),
+            size,
+        )
     };
     let drilled = [
         click(Vec3::ZERO, 3.0),
@@ -231,7 +231,12 @@ fn a_narrower_hole_on_the_floor_of_one_already_drilled_is_drilled_through_it() {
     let (mesh, bvh) = (lid(), Bvh::build(&lid()));
     let mut click = |at: Vec3, diameter_mm: Scalar, depth_mm: Scalar| {
         let size = drain_tool(diameter_mm, depth_mm);
-        hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+        drained(
+            &mut hollow,
+            (&mesh, &bvh, Transform::default()),
+            (at, Vec3::Z),
+            size,
+        );
     };
     click(Vec3::ZERO, 6.0, 2.0);
     // On the 6 mm hole's floor, 2 mm down, and on to 4 mm.
@@ -283,7 +288,12 @@ fn what_was_drilled_holds_only_for_the_cuts_and_mesh_it_was_drilled_from() {
     let click = |hollow: &mut ModelHollow, x: Scalar| {
         let size = drain_tool(3.0, 5.0);
         let at = Vec3::new(x, 0.0, 0.0);
-        hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+        drained(
+            hollow,
+            (&mesh, &bvh, Transform::default()),
+            (at, Vec3::Z),
+            size,
+        );
     };
     click(&mut hollow, 0.0);
     assert!(
@@ -317,13 +327,11 @@ fn what_was_drilled_holds_only_for_the_cuts_and_mesh_it_was_drilled_from() {
 #[test]
 fn a_drain_hole_is_cut_as_the_tube_it_takes_out() {
     let mut hollow = ModelHollow::default();
-    hollow.add_drain(
-        &lid(),
-        &Bvh::build(&lid()),
-        Vec3::ZERO,
-        Vec3::Z,
+    drained(
+        &mut hollow,
+        (&lid(), &Bvh::build(&lid()), Transform::default()),
+        (Vec3::ZERO, Vec3::Z),
         drain_tool(4.0, 5.0),
-        Transform::default(),
     );
 
     let bodies = hollow.cut_bodies().expect("a hole is a body").clone();
@@ -370,13 +378,11 @@ fn a_channel_is_dug_only_once_it_has_two_points_to_run_between() {
 #[test]
 fn a_hole_is_cut_the_moment_it_is_placed() {
     let mut hollow = ModelHollow::default();
-    hollow.add_drain(
-        &lid(),
-        &Bvh::build(&lid()),
-        Vec3::ZERO,
-        Vec3::Z,
+    drained(
+        &mut hollow,
+        (&lid(), &Bvh::build(&lid()), Transform::default()),
+        (Vec3::ZERO, Vec3::Z),
         drain_tool(3.0, 0.5),
-        Transform::default(),
     );
 
     assert!(
@@ -402,7 +408,12 @@ fn a_hole_clicked_into_a_shell_keeps_the_depth_asked_as_one_drilled_before_the_c
     let (mesh, size) = (lid(), drain_tool(3.0, 0.5));
     let bvh = Bvh::build(&mesh);
     let mut hollow = ModelHollow::default();
-    hollow.add_drain(&mesh, &bvh, Vec3::ZERO, Vec3::Z, size, Transform::default());
+    drained(
+        &mut hollow,
+        (&mesh, &bvh, Transform::default()),
+        (Vec3::ZERO, Vec3::Z),
+        size,
+    );
     // Two millimetres of wall on a 0.2 mm lattice, which a half-millimetre dimple
     // cannot reach through.
     hollow.take(shell(
@@ -410,7 +421,12 @@ fn a_hole_clicked_into_a_shell_keeps_the_depth_asked_as_one_drilled_before_the_c
         hollow.asking(&HollowSettings::default()),
     ));
     let at = Vec3::new(20.0, 0.0, 0.0);
-    hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, Transform::default());
+    drained(
+        &mut hollow,
+        (&mesh, &bvh, Transform::default()),
+        (at, Vec3::Z),
+        size,
+    );
 
     let (before, after) = (hollow.cut().0[0], hollow.cut().0[1]);
     assert!(
@@ -447,13 +463,11 @@ fn a_hole_a_search_chose_is_carried_through_the_wall_of_the_shell() {
 fn a_hole_drilled_into_a_solid_model_asks_for_a_wall_around_it() {
     let asked = HollowSettings::default();
     let mut hollow = ModelHollow::default();
-    hollow.add_drain(
-        &lid(),
-        &Bvh::build(&lid()),
-        Vec3::ZERO,
-        Vec3::Z,
+    drained(
+        &mut hollow,
+        (&lid(), &Bvh::build(&lid()), Transform::default()),
+        (Vec3::ZERO, Vec3::Z),
         drain_tool(3.0, 4.0),
-        Transform::default(),
     );
     let walled = hollow.asking(&asked);
     assert_eq!(
@@ -488,7 +502,7 @@ fn the_hole_a_click_would_drill_is_the_hole_it_cuts() {
 
     let would = ModelHollow::drain_at(&mesh, &bvh, at, Vec3::Z, size, placed)
         .expect("a flat lid takes a hole anywhere");
-    hollow.add_drain(&mesh, &bvh, at, Vec3::Z, size, placed);
+    drained(&mut hollow, (&mesh, &bvh, placed), (at, Vec3::Z), size);
     assert_eq!(
         hollow.as_cut(would),
         hollow.cut().0[0],
@@ -501,13 +515,11 @@ fn drilling_a_hole_leaves_the_shell_alone() {
     let asked = HollowSettings::default();
     let mut hollow = ModelHollow::default();
     hollow.take(shell(Mat3::IDENTITY, asked.clone()));
-    hollow.add_drain(
-        &lid(),
-        &Bvh::build(&lid()),
-        Vec3::ZERO,
-        Vec3::Z,
+    drained(
+        &mut hollow,
+        (&lid(), &Bvh::build(&lid()), Transform::default()),
+        (Vec3::ZERO, Vec3::Z),
         drain_tool(3.0, 4.0),
-        Transform::default(),
     );
 
     assert!(
@@ -663,13 +675,11 @@ fn cuts_carried_onto_a_pressed_surface_stand_where_they_printed_and_the_model_is
             .expect("the placement inverts"),
     );
     let (lid, bvh) = (lid(), Bvh::build(&lid()));
-    hollow.add_drain(
-        &lid,
-        &bvh,
-        Vec3::new(0.0, 0.0, 4.0),
-        Vec3::Z,
+    drained(
+        &mut hollow,
+        (&lid, &bvh, placed),
+        (Vec3::new(0.0, 0.0, 4.0), Vec3::Z),
         drain_tool(3.0, 4.0),
-        placed,
     );
     hollow.take(shell(placed.unturned(), HollowSettings::default()));
 

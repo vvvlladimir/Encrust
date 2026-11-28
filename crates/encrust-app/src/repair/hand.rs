@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use core_document::MendAsked;
 use core_geometry::{Mesh, Region, Vec3};
 
 use crate::highlight::{EdgeMark, FaceMark, Highlight, LIFT_MM, patch};
@@ -159,6 +160,21 @@ impl Hand {
         if let Some(object) = scene.get(id).filter(|_| !which.is_empty()) {
             self.run(object, Edit::DropShells(which), status);
         }
+    }
+
+    /// Starts mending `id` by `asked` as one change, answering whether the model is there.
+    pub fn mend(
+        &mut self,
+        scene: &Scene,
+        id: ObjectId,
+        asked: MendAsked,
+        status: &mut Status,
+    ) -> bool {
+        let Some(object) = scene.get(id) else {
+            return false;
+        };
+        self.run(object, Edit::Mend(id, asked), status);
+        true
     }
 
     fn run(&mut self, object: &SceneObject, edit: Edit, status: &mut Status) {

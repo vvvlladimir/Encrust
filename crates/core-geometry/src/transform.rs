@@ -77,6 +77,12 @@ impl Transform {
         self.stretch * self.linear_unstretched()
     }
 
+    /// What carries a surface normal onto the plate: the inverse transpose of [`Self::linear`],
+    /// which keeps it square to the surface under a stretch.
+    pub fn normal_matrix(self) -> Mat3 {
+        self.linear().inverse().transpose()
+    }
+
     fn linear_unstretched(self) -> Mat3 {
         Mat3::from_quat(self.rotation) * Mat3::from_diagonal(self.scale)
     }

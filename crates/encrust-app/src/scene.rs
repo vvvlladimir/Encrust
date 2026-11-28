@@ -1,6 +1,7 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
+use core_document::onto_plate;
 pub use core_engine::project::Axis;
 use core_geometry::{Aabb, Bvh, Mesh, MeshDiagnostics, Region, Scalar, Vec2, Vec3, center_of_mass};
 
@@ -19,8 +20,8 @@ mod selection;
 mod shown_patch;
 mod support_surface;
 pub use import_summary::{ImportSummary, Imported, Mapped};
+use object::PlacedBounds;
 pub use object::{OwnSettings, SceneObject, Taken};
-use object::{PlacedBounds, flip, onto_plate};
 use plates::plate_name;
 pub use shown_patch::ShownPatch;
 
@@ -61,19 +62,7 @@ impl std::fmt::Debug for Shaped {
     }
 }
 
-/// Identifies one object for as long as the window is open. Never reused, so a stale
-/// identifier resolves to nothing instead of to the wrong object.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ObjectId(u64);
-
-impl ObjectId {
-    /// A bare identifier, for the tests of modules that hold one without a scene to take
-    /// it from.
-    #[cfg(test)]
-    pub fn for_test(raw: u64) -> Self {
-        Self(raw)
-    }
-}
+pub use core_edit::ObjectId;
 
 impl SceneObject {}
 
@@ -105,7 +94,8 @@ impl Default for Scene {
             active: 0,
             selected: Vec::new(),
             anchor: None,
-            next_id: 0,
+            // Nought is the id a project file written before ids reads as (ADR 0456).
+            next_id: 1,
         }
     }
 }
@@ -206,8 +196,18 @@ impl Scene {
 
     /// Adds a model, gives it the next identifier, selects it and returns that identifier.
     pub fn insert(&mut self, imported: Imported) -> ObjectId {
-        let id = ObjectId(self.next_id);
-        self.next_id += 1;
+        self.insert_as(ObjectId(self.next_id), imported)
+    }
+
+    /// Adds a model under `id`, as a project file keeps it (ADR 0456), or under the next
+    /// identifier where `id` is unset or taken; selects it and returns the identifier.
+    pub fn insert_as(&mut self, id: ObjectId, imported: Imported) -> ObjectId {
+        let id = if id == ObjectId::UNSET || self.get(id).is_some() {
+            ObjectId(self.next_id)
+        } else {
+            id
+        };
+        self.next_id = self.next_id.max(id.0 + 1);
         self.objects.push(SceneObject {
             id,
             name: imported.name,
@@ -303,23 +303,18 @@ impl Scene {
     /// The flip is a negative scale, which reverses winding; `transform_mesh` puts the
     /// faces back the right way round, so the copy still slices as a solid.
     pub fn mirror(&mut self, id: ObjectId, axis: Axis) -> bool {
-        let Some(before) = self.get(id).and_then(SceneObject::world_bounds) else {
-            return false;
-        };
         let Some(object) = self.get_mut(id) else {
             return false;
         };
-        object.transform.scale *= flip(axis);
-
-        let Some(after) = self.get(id).and_then(SceneObject::world_bounds) else {
-            return false;
-        };
-        let center = |bounds: &Aabb| (bounds.mins + bounds.maxs) / 2.0;
-        let back = center(&before) - center(&after);
-        if let Some(object) = self.get_mut(id) {
-            object.transform.translation += back;
-        }
+        object.transform = core_document::mirrored(object.transform, &object.mesh, axis);
         true
+    }
+
+    /// Removes the plugs laid for model `id`, and leaves the model.
+    pub fn remove_plugs_of(&mut self, id: ObjectId) {
+        self.objects.retain(|object| object.plug_of != Some(id));
+        self.selected
+            .retain(|picked| self.objects.iter().any(|o| o.id == *picked));
     }
 
     pub fn remove(&mut self, id: ObjectId) {

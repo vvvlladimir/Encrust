@@ -1,6 +1,6 @@
 use super::{SHAPES, Side, Sizing, SupportGroup, SupportTool, frozen_inside};
 use crate::i18n::tr;
-use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, SupportTask, tasks_of};
+use crate::job::{Placement, SupportJob, SupportOutcome, SupportRequest, SupportTask};
 use crate::scene::{ObjectId, Scene};
 use crate::status::Status;
 use anyhow::{Result, bail};
@@ -85,41 +85,6 @@ impl SupportTool {
             .transpose()
     }
 
-    /// Starts placement over everything visible, by the group in hand or the automatic profile;
-    /// for the inside, only cavities, and what stood in them goes when it lands (ADR 0332).
-    /// The faces painted to be seen are held sparser while `clean` (ADR 0425). What stands in
-    /// the groups it grows is grown again, not added to: it goes when the run lands.
-    pub fn start(
-        &mut self,
-        scene: &mut Scene,
-        layer_height_mm: Scalar,
-        catalogue: &Catalogue,
-        (side, clean): (Side, bool),
-    ) -> Result<()> {
-        self.sizing = self.sized(catalogue)?;
-        let mut tasks = match &self.sizing {
-            Some((auto, shapes)) => tasks_of(scene, |_| auto.placing_with(&shapes[0])),
-            None => tasks_of(scene, |object| self.profile_for(object).clone()),
-        };
-        // A run inside a cavity takes away whatever stood there already when it lands.
-        self.regrowing = match side {
-            Side::Outside => self.grown_groups(),
-            Side::Inside => Vec::new(),
-        };
-        for task in &mut tasks {
-            task.shown_only_if(clean);
-            if let Some(object) = scene.get(task.id) {
-                task.seeds = object
-                    .supports
-                    .contacts_outside(object.transform, &self.regrowing);
-            }
-        }
-        let job = spawn(scene, tasks, (layer_height_mm, side), self.sizing.as_ref())?;
-        self.job = Some(job);
-        self.side = side;
-        Ok(())
-    }
-
     /// The shapes Check builds the supports it stands to, lightest first: those of the automatic
     /// profile in hand or set aside, else the first `catalogue` ships, else the group in hand.
     pub fn check_shapes(&self, catalogue: &Catalogue) -> Vec<SupportProfile> {
@@ -134,7 +99,7 @@ impl SupportTool {
 
     /// The groups a run started now grows: every group built to a shape the automatic profile
     /// sizes into while it is on, else the group in hand; never one Check stood its answers in.
-    fn grown_groups(&self) -> Vec<u16> {
+    pub(super) fn grown_groups(&self) -> Vec<u16> {
         let Some((auto, shapes)) = &self.sizing else {
             let check = (self.groups.get(usize::from(self.active)))
                 .is_none_or(|group| group.answers_check());
@@ -395,7 +360,7 @@ pub(super) fn built_tasks(
     scene.named(ids).map(task).collect()
 }
 
-fn spawn(
+pub(super) fn spawn(
     scene: &Scene,
     mut tasks: Vec<SupportTask>,
     (layer_height_mm, side): (Scalar, Side),

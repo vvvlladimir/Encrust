@@ -1,0 +1,277 @@
+//! A revision started, changed, checked and kept, each check one run of the command line.
+
+use std::path::PathBuf;
+use std::time::Duration;
+
+use anyhow::{Result, bail};
+use rmcp::model::ProgressNotificationParam;
+
+use super::reply::{Reply, not_applied, reported, revised};
+use super::{Context, Server, plate_edits};
+use crate::jobs::{Jobs, Revision};
+use crate::params::{Model, Start, absolute, plain};
+use crate::recipe::{Recipe, Repair};
+use crate::runner::Outcome;
+
+/// What a job of a project answers with first.
+const PROJECT: &str = "a project the window saved: its models stand as saved, and each tool \
+    shapes every one of them, or the ids its `objects` names, as `inspect_model` lists them; \
+    the autopilot and recipes prepare models from their files only.";
+
+/// `run`'s flags with the plate the run before wrote in the place left for it.
+fn after(run: Vec<String>, previous: Option<&std::path::Path>) -> Vec<String> {
+    let previous = previous.map(|path| path.display().to_string());
+    (run.into_iter())
+        .map(|flag| match (&previous, flag == crate::recipe::PREVIOUS) {
+            (Some(path), true) => path.clone(),
+            _ => flag,
+        })
+        .collect()
+}
+
+/// How often a client hears that a long run is still going, so it does not time out.
+const BEAT: Duration = Duration::from_secs(5);
+
+impl Server {
+    pub(super) async fn inspect(&self, model: Model, ctx: &Context) -> Result<Reply> {
+        absolute(&model.path, "the model")?;
+        let mut args = vec!["inspect".into(), model.path.display().to_string()];
+        args.extend(model.repair.map(Repair::flag));
+        let outcome = self.watched(&args, ctx).await?;
+        Ok(reported(&outcome, outcome.report.clone()))
+    }
+
+    pub(super) async fn start(&self, start: Start, ctx: &Context) -> Result<Reply> {
+        absolute(&start.model, "the model")?;
+        let (printer, resin) = machine_of(start.printer, start.resin)?;
+        let mut recipe = Recipe {
+            prepare: start.prepare,
+            repair: start.repair,
+            ..Recipe::bare(start.model, printer, resin)
+        };
+        if recipe.is_project() {
+            recipe.prepare = false;
+        }
+        let (outcome, steps, plate) = self.checked(&recipe, &[], ctx).await?;
+        if !outcome.reported() {
+            return Ok(not_applied(None, &outcome));
+        }
+        let job = Jobs::name_for(&recipe);
+        let note = recipe.is_project().then_some(PROJECT);
+        let revision = self.jobs.commit(&job, (recipe, steps), &outcome.report)?;
+        self.keep_plate(&revision, plate);
+        let recipe = &revision.recipe;
+        if recipe.prepare && recipe.repair.is_none() {
+            self.jobs.keep_autopilot(&job, &outcome.report)?;
+        } else if !recipe.is_project() {
+            self.autopilot_aside(&job, recipe);
+        }
+        Ok(self.kept(&revision, &outcome, note).await)
+    }
+
+    /// Runs the autopilot on `recipe`'s model aside, keeping its check as the job's to set each
+    /// later check against once it ends: the client is answered without waiting for it.
+    fn autopilot_aside(&self, job: &str, recipe: &Recipe) {
+        let alone = Recipe {
+            prepare: true,
+            ..Recipe::bare(
+                recipe.model.clone(),
+                recipe.printer.clone(),
+                recipe.resin.clone(),
+            )
+        };
+        let (server, job) = (self.clone(), job.to_owned());
+        tokio::spawn(async move {
+            let mut args = vec!["estimate".to_owned()];
+            args.extend(alone.flags());
+            match server.cli.run(&args).await {
+                Ok(outcome) if outcome.reported() => {
+                    let kept = server.jobs.keep_autopilot(&job, &outcome.report);
+                    super::plate_edits::unkept("the autopilot's check", kept);
+                }
+                Ok(outcome) => eprintln!(
+                    "encrust-mcp: the autopilot did not check: {}",
+                    outcome.report
+                ),
+                Err(error) => eprintln!("encrust-mcp: the autopilot did not run: {error:#}"),
+            }
+        });
+    }
+
+    /// Changes the job's latest recipe, checks it, and keeps it as the next revision only when
+    /// the command line took it. The job's lock is held throughout.
+    pub(super) async fn edit(
+        &self,
+        job: &str,
+        ctx: &Context,
+        change: impl FnOnce(&mut Recipe) -> Option<&'static str>,
+    ) -> Result<Reply> {
+        self.edit_on_latest(job, ctx, |recipe, _| Ok(change(recipe)))
+            .await
+    }
+
+    /// As `edit`, with the change reading the revision it is made on under the same lock.
+    pub(super) async fn edit_on_latest(
+        &self,
+        job: &str,
+        ctx: &Context,
+        change: impl FnOnce(&mut Recipe, &Revision) -> Result<Option<&'static str>>,
+    ) -> Result<Reply> {
+        let lock = self.jobs.lock(job);
+        let _held = lock.lock().await;
+        let latest = self.jobs.open(job, None)?;
+        let mut recipe = latest.recipe.clone();
+        let undone = self.follow_window_undo(&latest, &mut recipe).await;
+        let note = match (change(&mut recipe, &latest)?, undone) {
+            (Some(asked), Some(undone)) => Some(format!("{asked}; {undone}")),
+            (asked, undone) => asked.or(undone).map(str::to_owned),
+        };
+        recipe.check_paths()?;
+        let against = self.jobs.against(job, Some(latest.number));
+        let asked = (&latest, recipe, note.as_deref());
+        let recipe = match self.edit_on_plate(asked, &against, ctx).await {
+            Ok(reply) => return reply,
+            Err(recipe) => *recipe,
+        };
+        let (outcome, steps, plate) = self.checked(&recipe, &against, ctx).await?;
+        if !outcome.reported() {
+            return Ok(not_applied(Some(&latest), &outcome));
+        }
+        let revision = self.jobs.commit(job, (recipe, steps), &outcome.report)?;
+        self.keep_plate(&revision, plate);
+        Ok(self.kept(&revision, &outcome, note.as_deref()).await)
+    }
+
+    /// A check of `recipe` and the steps it ran, as the command line wrote them out, and the
+    /// plate it left where it only places its model (ADR 0456).
+    pub(super) async fn checked(
+        &self,
+        recipe: &Recipe,
+        against: &[String],
+        ctx: &Context,
+    ) -> Result<(Outcome, Option<String>, Option<PathBuf>)> {
+        let mut runs = recipe.runs()?;
+        let last = runs.pop().unwrap_or_default();
+        let mut previous: Option<PathBuf> = None;
+        for run in runs {
+            let plate = self.jobs.scratch_plate()?;
+            let mut args = vec!["estimate".to_owned(), "--stage-only".to_owned()];
+            args.extend(after(run, previous.as_deref()));
+            args.push(format!("--project-out={}", plate.display()));
+            let outcome = self.watched(&args, ctx).await;
+            if let Some(before) = previous.replace(plate) {
+                let _ = std::fs::remove_file(before);
+            }
+            match outcome {
+                Ok(outcome) if outcome.exit_code == 0 => {}
+                failed => {
+                    let _ = previous.map(std::fs::remove_file);
+                    return failed.map(|outcome| (outcome, None, None));
+                }
+            }
+        }
+        let out = self.jobs.scratch_steps()?;
+        let mut args = vec!["estimate".to_owned()];
+        args.extend(after(last, previous.as_deref()));
+        args.extend(against.iter().cloned());
+        args.push(format!("--recipe-out={}", out.display()));
+        let plate = self.jobs.scratch_plate()?;
+        args.push(format!("--project-out={}", plate.display()));
+        let outcome = self.watched(&args, ctx).await;
+        if let Some(before) = previous {
+            let _ = std::fs::remove_file(before);
+        }
+        let steps = std::fs::read_to_string(&out).ok();
+        let _ = std::fs::remove_file(&out);
+        let outcome = outcome.inspect_err(|_| drop(std::fs::remove_file(&plate)))?;
+        if !outcome.reported() {
+            let _ = std::fs::remove_file(&plate);
+            return Ok((outcome, steps, None));
+        }
+        Ok((outcome, steps, Some(plate).filter(|plate| plate.is_file())))
+    }
+
+    /// Keeps the plate a check wrote as the revision's, which the window is shown.
+    pub(super) fn keep_plate(&self, revision: &Revision, plate: Option<PathBuf>) {
+        if let Some(plate) = plate {
+            let kept = (self.jobs).keep_plate(&revision.job, revision.number, &plate);
+            plate_edits::unkept("the plate", kept);
+        }
+    }
+
+    /// The answer for a revision just kept, handed to the open window aside: the answer does not
+    /// wait for it, and what the window did not take is told with the job's next answer.
+    pub(super) async fn kept(
+        &self,
+        revision: &Revision,
+        outcome: &Outcome,
+        note: Option<&str>,
+    ) -> Reply {
+        let mut reply = revised(revision, outcome, note);
+        self.tell_untold(&revision.job, &mut reply);
+        if self.window.answers().await {
+            let (server, handed) = (self.clone(), revision.clone());
+            let report = outcome.report.clone();
+            self.window
+                .aside()
+                .queue(async move { server.handed_over(&handed, &report).await });
+            reply.body["window"] = plate_edits::pending();
+        }
+        reply
+    }
+
+    pub(super) async fn estimate(
+        &self,
+        recipe: &Recipe,
+        against: &[String],
+        ctx: &Context,
+    ) -> Result<Outcome> {
+        let mut args = vec!["estimate".to_owned()];
+        args.extend(recipe.flags());
+        args.extend(against.iter().cloned());
+        self.watched(&args, ctx).await
+    }
+
+    /// Runs the command line, telling the client every `BEAT` that it still runs, and stopping
+    /// it when the client cancels the call.
+    pub(super) async fn watched(&self, args: &[String], ctx: &Context) -> Result<Outcome> {
+        let token = ctx.meta.get_progress_token();
+        let run = self.cli.run(args);
+        tokio::pin!(run);
+        let mut beat = tokio::time::interval(BEAT);
+        beat.tick().await;
+        let mut seconds = 0;
+        loop {
+            tokio::select! {
+                outcome = &mut run => return outcome,
+                () = ctx.ct.cancelled() => bail!("the client cancelled the call"),
+                _ = beat.tick() => {
+                    seconds += BEAT.as_secs();
+                    if let Some(token) = &token {
+                        let progress = ProgressNotificationParam::new(token.clone(), seconds as f64)
+                            .with_message(format!("encrust has run {seconds} s"));
+                        // A client that misses a beat still gets the answer.
+                        let _ = ctx.peer.notify_progress(progress).await;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The printer and resin a call names, both or neither: none is the standard printer with the
+/// stock resin (ADR 0457).
+pub(super) fn machine_of(
+    printer: Option<String>,
+    resin: Option<String>,
+) -> Result<(String, String)> {
+    match (printer, resin) {
+        (None, None) => Ok((String::new(), String::new())),
+        (Some(printer), Some(resin)) => {
+            plain(&printer, "the printer")?;
+            plain(&resin, "the resin")?;
+            Ok((printer, resin))
+        }
+        _ => bail!("name the printer and the resin together, or neither for the standard ones"),
+    }
+}

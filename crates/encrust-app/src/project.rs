@@ -4,6 +4,7 @@
 //! The format itself — the manifest, the mesh blobs and their (de)serialisation — is
 //! `core_engine::project`. What the window converts to and from it is `state`.
 
+pub mod inserted;
 pub mod state;
 
 use std::path::PathBuf;
@@ -294,12 +295,22 @@ fn store(path: &std::path::Path, project: &Project) -> Result<(), ProjectError> 
 }
 
 /// The plate as a project, which is both what gets written and what gets hashed.
-fn captured(window: &Window) -> Project {
+pub(crate) fn captured(window: &Window) -> Project {
     state::capture(state::Captured {
         scene: &window.doc.scene,
         slicing: &window.machine.slicing,
         tools: window.tools,
     })
+}
+
+/// The models on `plate` alone as a project of one plate; `None` gives none.
+pub(crate) fn captured_plate(window: &Window, plate: Option<u32>) -> Project {
+    let captured = state::Captured {
+        scene: &window.doc.scene,
+        slicing: &window.machine.slicing,
+        tools: window.tools,
+    };
+    state::capture_plate(captured, plate)
 }
 
 /// The empty plate the window opens on counts as saved: closing it again asks nothing.

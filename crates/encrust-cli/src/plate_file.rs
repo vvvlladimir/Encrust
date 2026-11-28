@@ -102,7 +102,7 @@ pub fn stage(path: &Path, arrange: bool, job: &JobArgs, watch: &Watch) -> Result
 
     let base = Shaping::of(job)?;
     if plate.models.len() > 1 {
-        refuse_one_model_flags(&base)?;
+        refuse_one_model_flags(&base, false)?;
     }
     let beside = path.parent().unwrap_or(Path::new("."));
     let entries: Vec<_> = plate

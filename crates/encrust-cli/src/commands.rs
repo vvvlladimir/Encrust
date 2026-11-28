@@ -3,6 +3,7 @@
 mod batch;
 mod completions;
 mod convert;
+mod diagnose;
 mod estimate;
 mod info;
 mod inspect;
@@ -10,20 +11,26 @@ mod measure;
 pub(crate) mod printer;
 mod profiles;
 mod recipes;
+mod render;
+mod serve;
 pub mod slice;
+mod test_print;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Result;
 use clap::{ArgAction, Parser, Subcommand};
 
 use crate::exit::{Exit, Stop};
 use crate::pipeline::Watch;
+use crate::steps::Steps;
 
 pub use batch::BatchCommand;
 pub use completions::CompletionsCommand;
 pub use convert::ConvertCommand;
+pub use diagnose::DiagnoseCommand;
 pub use estimate::EstimateCommand;
 pub use info::InfoCommand;
 pub use inspect::InspectCommand;
@@ -31,7 +38,10 @@ pub use measure::MeasureCommand;
 pub use printer::PrinterCommand;
 pub use profiles::ProfilesCommand;
 pub use recipes::RecipesCommand;
+pub use render::RenderCommand;
+pub use serve::ServeCommand;
 pub use slice::SliceCommand;
+pub use test_print::TestPrintCommand;
 
 /// Slice meshes for MSLA resin printers.
 #[derive(Parser, Debug)]
@@ -67,6 +77,10 @@ pub struct GlobalArgs {
     /// Flags written down in a TOML file, a table per subcommand; a flag typed here wins.
     #[arg(long, global = true, value_name = "PATH")]
     pub config: Option<PathBuf>,
+
+    /// What `encrust serve` keeps between the runs it is asked for; none on the command line.
+    #[arg(skip)]
+    pub steps: Option<Arc<Steps>>,
 }
 
 impl GlobalArgs {
@@ -86,6 +100,7 @@ impl GlobalArgs {
             progress: self.shows_progress(),
             stop,
             writes: true,
+            steps: self.steps.clone(),
         }
     }
 
@@ -114,6 +129,9 @@ pub enum Command {
     Inspect(InspectCommand),
     /// How far apart two points of a model are, straight and, when asked, over its surface.
     Measure(MeasureCommand),
+    /// Draw the plate as `slice` would build it, from the sides asked for, as PNG pictures
+    /// with points marked.
+    Render(RenderCommand),
     /// Open a sliced file, print what it states and decode every layer, or take one out.
     Info(InfoCommand),
     /// Write a sliced file again in another container, for a machine with the same panel.
@@ -124,11 +142,19 @@ pub enum Command {
     /// The recipes Prepare runs, the built-in ones and yours.
     #[command(subcommand)]
     Recipes(RecipesCommand),
+    /// Write one of the project's test prints as an STL: detail, exposure, surface or fit.
+    TestPrint(TestPrintCommand),
+    /// What a failed print most likely came from: its symptoms read against the check of the
+    /// file printed, each cause with the change to try.
+    Diagnose(DiagnoseCommand),
     /// Find printers on the network, ask one what it is doing, send it a file.
     #[command(subcommand)]
     Printer(PrinterCommand),
     /// Print the completion script for a shell, to be sourced from its startup file.
     Completions(CompletionsCommand),
+    /// Run many invocations in one process, each a line of JSON on stdin answered on stdout,
+    /// reusing what one made for the next: how a chat client's server drives the engine.
+    Serve(ServeCommand),
 }
 
 impl Command {
@@ -136,14 +162,21 @@ impl Command {
     /// shell's own Ctrl-C, so the first press ends it.
     pub fn watches_stop(&self) -> bool {
         match self {
-            Self::Slice(_) | Self::Estimate(_) | Self::Batch(_) | Self::Convert(_) => true,
+            Self::Slice(_)
+            | Self::Estimate(_)
+            | Self::Render(_)
+            | Self::Batch(_)
+            | Self::Convert(_) => true,
             Self::Printer(command) => matches!(command, PrinterCommand::Send(_)),
             Self::Inspect(_)
             | Self::Measure(_)
             | Self::Info(_)
             | Self::Profiles(_)
             | Self::Recipes(_)
-            | Self::Completions(_) => false,
+            | Self::TestPrint(_)
+            | Self::Diagnose(_)
+            | Self::Completions(_)
+            | Self::Serve(_) => false,
         }
     }
 }
@@ -170,11 +203,15 @@ pub fn run(cli: &Cli, stop: &Stop) -> Result<Exit> {
         Command::Batch(command) => command.run(global, stop),
         Command::Inspect(command) => command.run(global),
         Command::Measure(command) => command.run(global),
+        Command::Render(command) => command.run(global, stop),
         Command::Info(command) => command.run(global),
         Command::Convert(command) => command.run(global, stop),
         Command::Profiles(command) => command.run(global),
         Command::Recipes(command) => command.run(global),
+        Command::TestPrint(command) => command.run(global),
+        Command::Diagnose(command) => command.run(global),
         Command::Printer(command) => command.run(global, stop),
         Command::Completions(command) => command.run(),
+        Command::Serve(command) => command.run(),
     }
 }

@@ -127,7 +127,8 @@ whole-surface fill is Cmd-Shift-click.
 - **Lay on face:** click a face and the model lies on it.
 - Put a model back in the middle of the plate, back on the plate, or lift it off by a set
   height, typed or a millimetre a press of − or +. Auto-orient keeps that height for a pose
-  on supports; nought, or **On the plate**, hands it back to the support profile's lift.
+  on supports; nought, or **On the plate**, hands it back to the support profile's lift. On
+  the command line, `--lift`.
 
 **Prepare for print:** from its row over the plate card — the recipe and the run — and in
 the Edit menu, for the picked models or the whole plate, it runs the steps of the recipe
@@ -175,8 +176,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   the window reopens; **Clean surface** and the brush size are remembered and undone with
   the other tool settings.
 - The search shows its step over a bar and **Cancel**: first it scores the ways to stand,
-  then, with a printer chosen, prints the best of them to compare. Cancel leaves the models
-  as they stand.
+  then prints the best of them to compare, on the printer chosen or, with none, on the standard
+  Elegoo Saturn 4 Ultra. Cancel leaves the models as they stand.
 - **Clean surface**, a switch under the presets, works with any of them: of the poses that
   put the fewest contacts where the model shows — within about one contact — the preset
   takes its best. A pose with a few more contacts on show is offered beside the choice
@@ -257,7 +258,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   cores and at half the panel's resolution, so the dot on the Check tool and its first list
   are there before Check is opened. Opening Check reads every pixel; until that is in, the
   quick list is marked and its fixes wait. An island near the smallest one named can be missed
-  or wrongly named by the quick read, never by the full one. While Fix all or another recipe
+  or wrongly named by the quick read, never by the full one. Nothing within the bottom layers
+  is an island: their long exposure cures it to the plate. While Fix all or another recipe
   runs, Check reads nothing of its own: it reads again once the run ends or pauses.
 - Check keeps each kind of issue on a card of its own, with its rows and the buttons that
   answer it: **Placement**, **Hollow and drain**, then in the layers **Islands**, **Suction cups**,
@@ -397,7 +399,9 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   wall solid, so the panel hides both.
 - **Bottom through** grows the wall inward like Inside and cuts away the floor the model
   stands on, so the resin runs out with no drain hole and the model shows the opening. It
-  follows the plate: turn the model and it asks to be hollowed again. Standing on the plate
+  follows the plate: turn the model and it asks to be hollowed again. On the command line
+  and through the agents' server a model scaled, or turned with its floor open, after it was
+  hollowed is hollowed again at once to the same wall. Standing on the plate
   the cavity stays sealed until the print comes off, so add a small vent near the top. On a
   model with holes in its surface the floor is still drawn, though the layers are open.
 - **Infill** inside the cavity, or leave it empty. Every pattern takes two numbers, the
@@ -490,6 +494,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   Auto is chosen, in place of what stood in it; other groups stay and are grown around.
 - Supports go only under what actually hangs over nothing, stay out of the model, and each
   one holds only the part it stands under.
+- Supports, the automatic drain search and the trapped-resin scan are worked out at one
+  analysis step, 0.05 mm, and no longer follow the printer's layer height.
 - A point or a needle hanging down is held at its very tip, however thin, and every
   island Check would name is touched where it begins, even with a bite of nought; a speck
   too small for Check to name is left alone. Small islands are held closer than large
@@ -620,7 +626,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
 - Pick two or more supports of one model and **Merge into one** joins them into a single tree
   on one trunk, each tip kept however many there are; where the model is in the way or the
   trunk has nowhere to stand, the supports stay as they were and the stage says why.
-  `encrust --merge-supports` does the same by the contacts `--json` lists.
+  `encrust --merge-supports` does the same by the contacts `--json` lists, and a chat client
+  by `set_supports`' `merge_at_mm`.
 
 ### Groups and profiles
 - Supports belong to **groups**, one per preset, so one model can have heavy supports
@@ -1085,19 +1092,93 @@ The whole pipeline from a terminal. See [`cli.md`](cli.md) for every flag.
 |---|---|
 | `slice` | One model, several models on one plate, a plate file (TOML) or a project, to a printer file or PNGs. A project slices one plate of your choosing or all of them, a file each. Orient, support, hollow, drain, relief, exposure bands, adaptive layers and island removal are all flags. |
 | `batch` | A whole folder of models, several at once, with a JSON report for each. A model that fails does not stop the rest. |
-| `estimate` | Time, resin, weight, cost and risky layers, without writing a file. |
-| `inspect` | What is wrong with a model and whether it fits. |
+| `estimate` | Time, resin, weight, cost and risky layers, without writing a file; the recipe the run took, your flags written into its steps, with `--recipe-out`. A project's plate edited first by a list of edits — a cut, a split, a part-off, a combine, a label, a repair, a mend by hand, a picture pressed in as relief (a hollow model hollowed again under it, as in the window), a hollowing, drain holes at points and by the engine's search with vents, a drainage channel, plugs for the holes, supports by a preset or sized automatically, at points, under a hollow's cavity and off what shows, a move, a turn, a scale, a delete, a duplicate, a mirror, an orientation by the search and the plate arranged — and the plate they leave written as a project; models are staged as such a plate and every flag that shapes them is one of those edits, so a flag and the same edit give one project. |
+| `inspect` | What is wrong with a model and whether it fits, repaired, turned and placed as `slice` would. |
+| `render` | The plate as `slice` would build it — hollowed, drilled, supported — drawn as PNG pictures from the sides you name, the bottom included, with points of your choosing marked even where the model hides them. For a person at a terminal, or a model that reads images. |
 | `info` | What a sliced file says, checked layer by layer. Export one layer, or the file's preview picture, as PNG. |
 | `convert` | A sliced file to another format. |
-| `profiles` | List, show, export and import profiles. |
-| `recipes` | List the built-in and your own recipes, and show one as TOML to copy and edit. |
+| `profiles` | List, show, export and import profiles, and make a resin from the numbers on its bottle. |
+| `recipes` | List the built-in and your own recipes, show one as TOML to copy and edit, and keep a recipe file as one of yours once it is checked. |
+| `diagnose` | What a failed print most likely came from: its symptoms read against the report of the file printed, each cause with the change to try. |
+| `test-print` | The window's test prints — detail, exposure check, surface finish, fit gauge — written as STL files to prepare and print like any model. |
 | `printer` | Discover, status and send with optional start; pause, resume and stop a print, list the last prints, turn the camera on or off, save the plate's picture. |
 | `completions` | Shell completion for bash, zsh, fish, elvish, PowerShell. |
 
+**For a chat client:** each release carries an extension for a desktop AI chat app, on the
+download page and the release page. The window's File → Use with an AI chat client downloads the
+one of its own version, refuses it unless the release key signed it, and opens it, which installs
+it; the agents' list offers it again when a chat client runs another version than the window.
+The extension's settings name the Encrust program to start and how long a step may run, and its
+ready requests prepare a model or a miniature, test a resin's exposure or read a failed print.
+`encrust-mcp` gives a desktop chat app, a coding agent or any other MCP client the
+command line as tools, so a language model prepares a model step by step on your
+computer, checks it and writes the file. It asks you for the printer and resin; until you
+say, it works on the standard printer's plate with stock resin numbers, so a cut it made
+there stays where it was once you name yours, and it writes no file before you have named
+both. Each check says where every model stands on the plate. After a cut, each piece is
+turned and lifted on its own, and supports asked for one piece keep the others'; a point
+given on a plate of pieces goes to the piece it lies at and stays on it, however a later step
+moves or spreads the pieces. Encrust runs as one process for the whole conversation and keeps
+what each step made, so a step pays only for what it changed: a model already cut, posed and
+hollowed is not cut, posed or hollowed again, and a check of a plate it checked before is
+instant. Each answer lists the dozen risks that matter first and how long the step took;
+`check` lists every risk. Jobs untouched for a month are cleared away. It finds
+the printers on your network itself before sending a file. The command line's flags are its
+tools': `set_shape` cuts with a
+joint of the size you ask or leaves the halves upright, labels in a font, splits, mirrors,
+moves, copies and presses reliefs, `set_repair` mends, `set_slicing` sets the layers and,
+with numbers you or the resin's maker give, the exposure, motion and waits, and `fix_issues`
+answers what Check finds — islands supported, suction cups vented, weak necks held — on every
+model of the job or the ones it names, a cut model's halves among them. Each
+model is prepared in a job of its own; `plate_jobs` lays several on one plate, spread apart,
+checks it and writes them as one file.
+`compare_poses` shows each model or piece the best few ways the engine found to stand it,
+searching once for the numbers and every picture, and `set_pose` takes the way chosen for each
+piece without searching again — nor does the window when it stands the model that way;
+each drawn with what it prints, and the model picks one for what the print is — keeping supports off a
+face you named, say, which the search then ranks first. A model on supports that the agent
+stands a new way gets its supports again for that pose, none left over from the old one. Every step it takes is set against
+the step before and the autopilot's own preparation, so it can undo one that made the print
+worse. The window lists every agent — each chat client by the name it gives — in a robot's ring beside the
+print chip, there while an agent has a model in hand and turning while it works, each with
+the model it works on and what the check found — no history; a job can be hidden from the
+list or, once its agent is not working on it, deleted with its revisions; a click
+stands it on a plate of its own, named for the model, exactly as the check left it, supports
+and all, one undo, on the job's printer and resin, whenever the window was opened; your own
+plates are left alone and the agent never sees them. With Follow
+agents on, each step an agent keeps stands there as it comes; asked to show you the model, the agent
+puts it on its plate itself, opening Encrust if it is closed. Followed, the window owns that
+plate: a repair, faces mended, a picture pressed in, a scale, a turn typed, a label, a split,
+a cut, a hollow, a hole drilled at a point or supports an agent makes lands there as an edit
+of the model on it, each step one undo, and the agent's next step is checked on the plate as
+you left it, so what you changed or undid there is part of it. The agent never waits for the
+window: its steps land there in order as the window gets to them, and one asked while the
+window is still busy is checked without your changes, which reach the step after. A step
+that cannot land whole is taken back from the plate, which then shows the agent's own plate
+for that step, and the agent is told with its next answer. A pose the search picked lands as the turn it chose and stays that turn through the
+agent's later steps, a new lift included, and the drain search and plugs land as edits too. It asks what the print is for and can prepare it by
+another recipe, such as Miniatures; it can be told which side of the model is looked at, so
+the supports there are sparser and lighter. A way of preparing that worked, or one you
+describe in words, it keeps as a recipe of your own, which the window's Prepare for print then
+runs with no chat. When a print fails, you tell it what you saw, or show it a photo; it reads
+that against what the check found in the file you printed — trapped resin, a suction cup,
+a part starting in mid-air — names the likely cause and makes the change to try. A resin you have not set up it takes in from a
+file that printed well with it or from another slicer's export, and it writes the exposure
+check for you to print; a resin known only by its label's numbers it makes from those
+numbers, refusing one past what your printer takes. A project you saved in the window it
+checks, draws, writes and sends, and shapes as it does a model. Each tool shapes every object
+of the job — after a cut, both halves — or only those it names by id, the others keeping what
+they were given, and `set_machine` moves
+the job to another printer and resin.
+
 **For scripts:** `--json` output with a fixed schema, every finding located on the plate, clear exit codes, `--strict` (fail
 and leave nothing on disk if a model has defects), a config file for flags you always use,
-progress bars that turn off when not on a terminal, and Ctrl-C that stops cleanly and
+progress bars — the repair's and the orientation search's among them — that turn off when not on a terminal, and Ctrl-C that stops cleanly and
 removes the half-written file.
+
+**Choosing a pose:** `--orient-choices` lists the search's best ways to stand a model with
+what each prints, `--orient-pick` takes one of them, and `--orient-keep-clear` keeps supports
+off the surface round a point. `estimate --against` sets a run beside a report kept before.
 
 **Autopilot:** `--prepare` readies each model the way the engine's own defaults would: repair
 it if it has defects, orient it, hollow, drain and hold up its cavity where a wall saves
@@ -1114,8 +1195,26 @@ step keeps the wall solid where the model is thin (`keep_solid_under_mm`), and a
 with `plugs = true` lays a plug beside the model for each hole it drills; without it, none,
 in the window's Prepare for print too.
 
-**Modelling:** combine the models given, write a label on one, cut it with a joint, split
-it into its parts or cut a part off, all at the window's default sizes, before it is sliced.
+**Modelling:** combine the models given, write a label on one, cut it with a joint — its
+count, clearance and peg, magnet or key size as the Cut tool sets them, or the halves left
+standing as cut — split it into its parts or cut a part off, before it is sliced.
+
+**Placing:** mirror a model, move it by a distance, lift it off the plate, print copies of it
+beside it, and lay several saved projects on one plate, spread apart by `--arrange`.
+
+**Objects by id:** `encrust inspect plate.encrust` lists every object of a saved plate by its
+id, and every report names each model's id. Flags shape every object of the plate — both
+halves of a cut, hollowed and supported each — or only those `--only 2,3` names, on models and
+on a saved project alike, whose plate `--project-out` writes again; `render --only` draws those
+alone.
+
+**Print settings:** type the exposure, bottom layers, transition, lift, retract, light-off
+delay, waits and light power for one run over the resin's own numbers, as the window's Print
+settings do.
+
+**Check's answers:** `--support-islands`, `--drill-cups` and `--hold-necks` support the
+islands, vent the suction cups and hold the weak necks Check finds, as its Fix all does — on a
+saved project too, and with `--only` on the models named alone.
 
 **Supports:** build to any support profile, size each support by what it holds as **Auto**
 does (`--supports auto`), and hold up a hollowed model's cavity as well as its outside
@@ -1123,19 +1222,22 @@ does (`--supports auto`), and hold up a hollowed model's cavity as well as its o
 
 **Holes:** open a shell's floor, cut drain holes round or as polygons, and
 print a plug for each beside the model, with the gap you choose. A hole's point is where the
-model prints, supports' lift included, so a point `--json` reports can be drilled as it stands. `--drain-at auto` finds the
+model stands, as the window's Drain tool takes a click, so a point `--json` reports can be drilled as it stands; supports grow under the model where it stands, lifting nothing first. `--drain-at auto` finds the
 holes itself: a drain low on each pocket of trapped resin and a vent high on it, each kept only
 once a fresh scan shows the pocket empty, and listed in `--json`; a pocket no hole can drain is
-still reported; the window's Drain tool does the same with Auto. A run whose plugs have no
-room beside their model stops rather than printing them on a neighbour.
+still reported; the window's Drain tool does the same with Auto. Plugs stand at the nearest free
+spot of the plate, as the window's do; a run whose plugs find none stops rather than printing them on a neighbour.
 
-**You cannot** (from the command line): paint supports or where a relief goes, place supports
-by hand, set blockers, take the pieces of a cut or a split out as meshes, or hollow or support
-a model a cut or a split broke into several pieces. Do that in the window, save a project, then slice it.
-Nor can you open a sliced file as a model, use a saved Hollow or Drain preset, press one of
-the built-in textures, pick an edge-smoothing look by name, or set a model's lift off the plate
-by a number of your own. Supporting the islands and weak necks and drilling the suction cups Check finds
-is a recipe's `check` step (`retry`, `hold_levers`, `drill_cups`).
+**By hand:** stand a support under the surface nearest a point with `--support-at`, alone with
+`--support-only-at`; paint the side meant to be seen round a point with `--shown-at`, so the
+supports there stand sparser and lighter.
+
+**You cannot** (from the command line or a chat client): paint supports or where a relief
+goes, block an area from supports, move or delete one support, take the pieces of a cut or a
+split out as meshes, or prepare a cut model or a saved project by a recipe. Do that in the
+window, save a project, then slice it. Nor can you open a sliced file as a
+model, use a saved Hollow or Drain preset, press one of the built-in textures, pick an
+edge-smoothing look by name, or set a printer's second, slower lift stage.
 
 ---
 

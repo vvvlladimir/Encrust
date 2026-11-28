@@ -1,25 +1,27 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, transform_mesh};
-use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings, Sliced};
+use core_geometry::{Bvh, Mesh, Region, Scalar, Transform, Vec3, transform_mesh};
+use core_slicer::{PlaneSliceEngine, SliceEngine, SliceSettings};
 use core_supports::{
-    Blocked, Lost, Need, Placed, Profiles, Reason, SupportPoint, WallSide, columns,
-    generate_supports, grow, lost, low_points, mesh_groups,
+    Lost, Need, Placed, Profiles, Reason, Shown, SupportPoint, WallSide, columns, grow, lost,
+    low_points, mesh_groups,
 };
 use core_volume::Drilled;
 use printer_profiles::{AUTO_SIZES, AutoProfile, Catalogue, ProfileError, SupportProfile};
+use serde::{Deserialize, Serialize};
 
 use crate::error::EngineError;
-use crate::strengthen::{Underside, strengthen};
 
 mod lift;
 mod merge;
+mod needs;
 
 use lift::lift_of;
 pub use lift::{Lift, planned_lift};
-pub(crate) use merge::merge_refusal;
 use merge::merged_near;
+pub use merge::{merge_refusal, nearest_named};
+pub use needs::{NeedSides, NeedsAsked, needs_on, needs_on_both, plan_of};
 
 /// What a run builds supports to: one profile, or the shapes an automatic profile sizes
 /// each support into by what it holds (ADR 0325).
@@ -42,29 +44,54 @@ pub struct SupportPlan {
     /// Each a merge, as the window's Merge into one: points, plate mm, naming the supports by
     /// their contacts once they stand (ADR 0440).
     pub merges: Vec<Vec<Vec3>>,
+    /// Contacts placed by hand, as the window's Edit mode places them.
+    pub by_hand: ByHand,
+    /// The side meant to be seen, painted round points as the window's Clean surface brush
+    /// paints it, where contacts stand sparser and lightest (ADR 0425, 0459).
+    pub shown_at: Vec<ShownAt>,
+}
+
+/// One stroke of the Clean surface brush: the faces within `radius_mm` of `at_mm`, plate
+/// millimetres as the model prints, lift included.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ShownAt {
+    pub at_mm: Vec3,
+    pub radius_mm: Scalar,
+}
+
+/// Where supports touch the model by hand: each point snapped to the surface nearest it, in
+/// plate millimetres as the model prints, lift included.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ByHand {
+    pub at_mm: Vec<Vec3>,
+    /// Stands only these, with none placed automatically.
+    pub only: bool,
 }
 
 impl SupportPlan {
-    /// Supports built to `profile` alone, outside only.
-    pub fn of(profile: SupportProfile) -> Self {
+    /// Supports built to `shapes`, outside only, nothing merged or placed by hand.
+    fn of_shapes(shapes: SupportShapes) -> Self {
         Self {
-            shapes: SupportShapes::One(Box::new(profile)),
+            shapes,
             cavity: false,
             merges: Vec::new(),
+            by_hand: ByHand::default(),
+            shown_at: Vec::new(),
         }
+    }
+
+    /// Supports built to `profile` alone, outside only.
+    pub fn of(profile: SupportProfile) -> Self {
+        Self::of_shapes(SupportShapes::One(Box::new(profile)))
     }
 
     /// Supports sized by `auto` into the shapes `catalogue` has for it, outside only.
     pub fn sized(auto: AutoProfile, catalogue: &Catalogue) -> Result<Self, ProfileError> {
         let shapes = auto.shapes_in(catalogue)?;
-        Ok(Self {
-            shapes: SupportShapes::Sized {
-                auto: Box::new(auto),
-                shapes: Box::new(shapes),
-            },
-            cavity: false,
-            merges: Vec::new(),
-        })
+        Ok(Self::of_shapes(SupportShapes::Sized {
+            auto: Box::new(auto),
+            shapes: Box::new(shapes),
+        }))
     }
 
     /// The profile placement runs with: where supports go, how close, how far a model is
@@ -349,89 +376,55 @@ fn needs_under(
             },
         )
         .map_err(EngineError::Supports)?;
-    let run = Run {
+    let shown = shown_on(surface, bvh, &plan.shown_at);
+    let lows = low_points(surface, Transform::default());
+    let inner = inner.filter(|inner| !inner.is_empty());
+    let asked = |inside: bool| NeedsAsked {
         stack: &stack,
         surface,
         bvh,
         layer_height_mm,
         plan,
-        lows: low_points(surface, Transform::default()),
-    };
-    let inner = inner.filter(|inner| !inner.is_empty());
-    let side = |inside| {
-        inner.clone().map(|inner| WallSide {
+        lows: &lows,
+        painted: None,
+        shown: shown.as_ref(),
+        seeds: &[],
+        side: inner.clone().map(|inner| WallSide {
             bvh: Arc::clone(bvh),
             inner,
             into_model: core_geometry::Mat4::IDENTITY,
             inside,
-        })
+        }),
     };
-    let mut needs = run.place(side(false));
-    let mut inside = if plan.cavity && inner.is_some() {
-        run.place(side(true))
-    } else {
+    let mut needs = if plan.by_hand.only {
         Vec::new()
+    } else {
+        let sides = NeedSides {
+            inside: plan.cavity && inner.is_some(),
+            strengthening,
+        };
+        needs_on_both(&asked, sides, &[], &mut |_| true)?
     };
-    if strengthening {
-        // Both sides hold the one shell, so each is read with the other's tips standing.
-        let contacts = |needs: &[Need]| needs.iter().map(|need| need.contact).collect::<Vec<_>>();
-        run.strengthen(side(false), &mut needs, &contacts(&inside))?;
-        if !inside.is_empty() {
-            run.strengthen(side(true), &mut inside, &contacts(&needs))?;
-        }
-    }
-    needs.extend(inside);
+    // A support placed by hand is built as sturdy as one steadying a part: it holds what the
+    // user says, not a measured load.
+    let by_hand = plan
+        .by_hand
+        .at_mm
+        .iter()
+        .filter_map(|at| bvh.closest(*at))
+        .map(|found| Need::new(found.point, Reason::Steady));
+    needs.extend(by_hand);
     Ok(needs)
 }
 
-/// One cut stack and what placement on it is asked with.
-struct Run<'a> {
-    stack: &'a Sliced,
-    surface: &'a Mesh,
-    bvh: &'a Bvh,
-    layer_height_mm: Scalar,
-    plan: &'a SupportPlan,
-    lows: Vec<Vec3>,
-}
-
-impl Run<'_> {
-    /// What automatic placement touches, kept to `side` of the wall where there is one.
-    fn place(&self, side: Option<WallSide>) -> Vec<Need> {
-        let blocked = Blocked::keeping(None, side.clone());
-        let mut needs = generate_supports(
-            self.stack,
-            self.layer_height_mm,
-            &self.plan.placing(),
-            self.plan.sizing(),
-            &[],
-            &self.lows,
-            blocked.as_ref(),
-            None,
-            &mut |_| true,
-        );
-        if let Some(side) = side {
-            needs.retain(|need| side.keeps(need.contact));
-        }
-        needs
+/// The faces of `surface` the brush strokes `shown_at` paint, or `None` where none is painted.
+pub fn shown_on(surface: &Mesh, bvh: &Bvh, shown_at: &[ShownAt]) -> Option<Shown> {
+    let mut region = Region::default();
+    for stroke in shown_at {
+        let on = (surface, bvh, Transform::default());
+        region.brush(on, stroke.at_mm, stroke.radius_mm, true);
     }
-
-    /// Strengthens `needs`, placed on `side` of the wall, with `held` standing beside them.
-    fn strengthen(
-        &self,
-        side: Option<WallSide>,
-        needs: &mut Vec<Need>,
-        held: &[Vec3],
-    ) -> Result<(), EngineError> {
-        let blocked = Blocked::keeping(None, side);
-        let underside = Underside {
-            stack: self.stack,
-            layer_mm: self.layer_height_mm,
-            surface: self.surface,
-            bvh: self.bvh,
-            blocked: blocked.as_ref(),
-        };
-        strengthen(underside, needs, held, self.plan, &mut || true).map(|_| ())
-    }
+    Shown::new(surface, &region, Transform::default())
 }
 
 /// Stands `mesh` and what is cut out of it `lift_mm` clear of the plate, and answers how

@@ -365,9 +365,8 @@ pub(crate) fn cuts_of(
 /// A channel leg's mitre plane carried onto the plate: a plane's normal goes by the inverse
 /// transpose; all zero for an end that opens.
 fn mitre_of(normal: Option<Vec3>, transform: Transform) -> [f32; 4] {
-    let linear = transform.linear();
     let Some(placed) =
-        normal.and_then(|normal| (linear.inverse().transpose() * normal).try_normalize())
+        normal.and_then(|normal| (transform.normal_matrix() * normal).try_normalize())
     else {
         return [0.0; 4];
     };

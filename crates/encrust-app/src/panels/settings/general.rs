@@ -159,16 +159,6 @@ fn tilde(path: &std::path::Path) -> String {
 /// saved a profile, so it may not be there yet.
 #[cfg(not(target_arch = "wasm32"))]
 fn reveal(dir: &std::path::Path) -> std::io::Result<()> {
-    let opener = if cfg!(target_os = "macos") {
-        "open"
-    } else if cfg!(target_os = "windows") {
-        "explorer"
-    } else {
-        "xdg-open"
-    };
     std::fs::create_dir_all(dir)?;
-    std::process::Command::new(opener)
-        .arg(dir)
-        .spawn()
-        .map(drop)
+    crate::files::open_with_system(dir)
 }

@@ -1,6 +1,5 @@
-use anyhow::{Context, Result, bail};
-use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3};
-use core_volume::{BLOCKER_REACH_MM, Blocker, BlockerSize, blocker_under, rod_on};
+use anyhow::{Result, bail};
+use core_geometry::{Scalar, Vec3};
 
 use crate::hollowing::polyline;
 
@@ -49,32 +48,4 @@ impl KeepSolidArgs {
             _ => Ok(()),
         }
     }
-
-    /// The blockers on `mesh` as it stands on the plate: a ball at each run's first point and
-    /// a rod on to each next, as a click and shift-clicks lay them.
-    pub(crate) fn blockers(&self, mesh: &Mesh, bvh: &Bvh) -> Result<Vec<Blocker>> {
-        let size = BlockerSize {
-            fit: self.reach_mm.is_none(),
-            reach_mm: self.reach_mm.unwrap_or(BLOCKER_REACH_MM),
-        };
-        let mut placed = Vec::new();
-        for run in &self.runs {
-            let mut last: Option<Blocker> = None;
-            for near in run {
-                let ball = blocker_near(mesh, bvh, *near, size)
-                    .with_context(|| format!("no surface near {near} to keep solid"))?;
-                let next = last.map_or(ball, |last| rod_on(&last, &ball));
-                placed.push(next);
-                last = Some(next);
-            }
-        }
-        Ok(placed)
-    }
-}
-
-/// The blocker a click on the surface nearest `near` puts down.
-fn blocker_near(mesh: &Mesh, bvh: &Bvh, near: Vec3, size: BlockerSize) -> Option<Blocker> {
-    let closest = bvh.closest(near)?;
-    let normal = mesh.triangle(closest.face)?.normal_unnormalized();
-    blocker_under(mesh, bvh, Transform::default(), closest.point, normal, size)
 }

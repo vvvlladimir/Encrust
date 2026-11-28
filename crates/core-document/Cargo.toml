@@ -1,0 +1,31 @@
+[package]
+name = "core-document"
+description = "The plate as one document, and the one way an edit is carried out on it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+core-edit.workspace = true
+core-engine.workspace = true
+core-geometry.workspace = true
+core-joint.workspace = true
+core-mesh-io.workspace = true
+core-plate.workspace = true
+core-slicer.workspace = true
+core-supports.workspace = true
+core-text.workspace = true
+core-volume.workspace = true
+printer-profiles.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[lints]
+workspace = true

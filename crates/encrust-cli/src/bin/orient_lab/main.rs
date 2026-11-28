@@ -80,6 +80,7 @@ impl Setup {
                 material: &self.material,
                 support: &self.plan,
                 raster_window: rayon::current_num_threads(),
+                keep_clear: None,
             },
             support: &self.support,
             volume: &self.printer.build_volume,

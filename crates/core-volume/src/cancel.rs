@@ -52,6 +52,19 @@ impl<'a> Cancel<'a> {
         }
     }
 
+    /// `done` of the `total` pieces of `step` are done, told from any thread in any order:
+    /// within a step the count only moves on, and a new step starts it again.
+    pub fn reached(&self, step: Step, done: usize, total: usize) {
+        if let Some(progress) = self.progress {
+            progress.total.store(total, Relaxed);
+            if progress.step.swap(step as u8 + 1, Relaxed) == step as u8 + 1 {
+                progress.done.fetch_max(done, Relaxed);
+            } else {
+                progress.done.store(done, Relaxed);
+            }
+        }
+    }
+
     /// `pieces` more of the step in hand are done.
     pub(crate) fn advance(&self, pieces: usize) {
         if let Some(progress) = self.progress {
@@ -60,7 +73,7 @@ impl<'a> Cancel<'a> {
     }
 }
 
-/// The steps a field, an exact boolean or a repair goes through, in order.
+/// The steps a field, an exact boolean, a repair or an orientation search goes through, in order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Step {
@@ -86,11 +99,13 @@ pub enum Step {
     Mending,
     /// The faces that cross each other, found before a wrap joins the shells.
     Crossing,
+    /// The ways to stand a model scored and the best printed, counted as the share done.
+    Searching,
 }
 
 impl Step {
     /// Every step, in the order of its discriminant.
-    const ALL: [Self; 11] = [
+    const ALL: [Self; 12] = [
         Self::Preparing,
         Self::Seeding,
         Self::Carrying,
@@ -102,12 +117,13 @@ impl Step {
         Self::Finishing,
         Self::Mending,
         Self::Crossing,
+        Self::Searching,
     ];
 }
 
 impl Step {
     /// Where the step starts and ends in the share of one run, a field's, an exact
-    /// boolean's or a repair's, as weighed in ADR 0317 and 0384.
+    /// boolean's, a repair's or a search's, as weighed in ADR 0317 and 0384.
     pub fn span(self) -> (f32, f32) {
         match self {
             Self::Preparing => (0.0, 0.1),
@@ -121,6 +137,7 @@ impl Step {
             Self::Finishing => (0.9, 1.0),
             Self::Mending => (0.0, 0.2),
             Self::Crossing => (0.2, 0.45),
+            Self::Searching => (0.0, 1.0),
         }
     }
 }
@@ -202,6 +219,21 @@ mod tests {
         assert!(
             (share - 0.98).abs() < 1e-6,
             "an uncounted step stands at its start"
+        );
+    }
+
+    #[test]
+    fn a_count_reached_on_a_new_step_starts_from_it_not_from_the_last_steps() {
+        let progress = Progress::default();
+        let run = Cancel::never().reporting(&progress);
+        run.reached(Step::Reading, 8, 10);
+        run.reached(Step::Combining, 2, 10);
+        assert_eq!(progress.read(), Some((Step::Combining, 2, 10)));
+        run.reached(Step::Combining, 1, 10);
+        assert_eq!(
+            progress.read(),
+            Some((Step::Combining, 2, 10)),
+            "within a step the count only moves on"
         );
     }
 

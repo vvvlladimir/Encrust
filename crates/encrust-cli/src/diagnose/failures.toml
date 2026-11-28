@@ -1,0 +1,182 @@
+# What a failed print most likely came from: docs/design/print-failures.md.
+# A cause with a `sign` is offered only where the file's check shows it, and first; one
+# without is offered after them, as what the check cannot see.
+
+[[symptom]]
+id = "off-plate"
+means = "The print, or a part of it, never stuck to the plate or came off it: it is on the film or in the vat."
+
+[[symptom]]
+id = "layer-split"
+means = "The layers came apart, or a line runs round the print where it shifted or stopped."
+
+[[symptom]]
+id = "hole"
+means = "A hole, a crater or a blowout in a wall that the model does not have."
+
+[[symptom]]
+id = "support-pulled"
+means = "A support broke or tore out of the model, and the part it held is missing, sagged or on the film."
+
+[[symptom]]
+id = "face-mark"
+means = "Support marks, pits or scars on a face meant to be seen."
+
+[[symptom]]
+id = "resin-crack"
+means = "A hollow print cracked or leaks, often days after the print."
+
+[[cause]]
+symptom = "off-plate"
+sign = "likely-fails"
+cause = "the check expected the print to tear off the film at that layer"
+step = "pose"
+try = "set_pose with the least-peel goal, or set_supports with a heavier profile"
+
+[[cause]]
+symptom = "off-plate"
+sign = "suction-cup"
+cause = "a cup holds the film as the plate lifts and pulls the print off"
+step = "drains"
+try = "set_drains with auto, or set_pose so the cup opens towards the plate"
+
+[[cause]]
+symptom = "off-plate"
+sign = "unsupported"
+cause = "the model stands on its own bottom, a large face that peels hard"
+step = "supports"
+try = "set_supports with auto, which lifts the model on a raft"
+
+[[cause]]
+symptom = "off-plate"
+cause = "the bottom layers were not cured long enough, or the plate is not level"
+step = "resin"
+try = "raise the resin's bottom exposure by a fifth, or level the plate and print again"
+
+[[cause]]
+symptom = "layer-split"
+sign = "suction-cup"
+cause = "a cup pulls on the film each lift until the layers part"
+step = "drains"
+try = "set_drains with auto to vent the cup"
+
+[[cause]]
+symptom = "layer-split"
+sign = "peel"
+cause = "the layer pulls harder on the film than it holds to the one under it"
+step = "pose"
+try = "set_pose with the least-peel goal, which tilts the widest layers away"
+
+[[cause]]
+symptom = "layer-split"
+sign = "lever"
+cause = "a part hangs on a thin neck that bends as the plate lifts"
+step = "supports"
+try = "set_supports with at_mm at that point"
+
+[[cause]]
+symptom = "layer-split"
+cause = "the normal layers were not cured long enough, or the lift is too fast"
+step = "resin"
+try = "raise the resin's exposure by a tenth, or slow its lift"
+
+[[cause]]
+symptom = "hole"
+sign = "trapped-resin"
+cause = "resin shut in a cavity pushed through the wall as the print rose"
+step = "drains"
+try = "set_drains with auto, and check that slicing.trapped is empty"
+
+[[cause]]
+symptom = "hole"
+sign = "suction-cup"
+cause = "a cup's pull broke through the thin wall at its top"
+step = "drains"
+try = "set_drains with auto to vent the cup"
+
+[[cause]]
+symptom = "hole"
+sign = "thin"
+cause = "a wall thinner than the resin holds did not cure through"
+step = "hollow"
+try = "set_hollow with a thicker wall, 2.5 to 3 mm; a thin part of the model itself is thickened in the modeller"
+
+[[cause]]
+symptom = "hole"
+sign = "open-mesh"
+cause = "the model's file has holes, and the slice left them open"
+step = "repair"
+try = "set_repair with the repair inspect_model suggests"
+
+[[cause]]
+symptom = "hole"
+cause = "the walls were not cured long enough to close"
+step = "resin"
+try = "raise the resin's exposure by a tenth"
+
+[[cause]]
+symptom = "support-pulled"
+sign = "island"
+cause = "a part starts in mid-air, and the support under it was too weak or missing"
+step = "supports"
+try = "set_supports with auto, or at_mm at that point"
+
+[[cause]]
+symptom = "support-pulled"
+sign = "no-room"
+cause = "supports had no room where the model needed them"
+step = "pose"
+try = "set_pose with another way from compare_poses, or set_supports with at_mm where a support can stand"
+
+[[cause]]
+symptom = "support-pulled"
+sign = "lever"
+cause = "a part on a long arm pulls on its supports as the plate lifts"
+step = "supports"
+try = "set_supports with at_mm at that point, or a heavier profile"
+
+[[cause]]
+symptom = "support-pulled"
+sign = "supported"
+cause = "the tips were too light for the part they held"
+step = "supports"
+try = "set_supports with at_mm where it tore, or a heavier profile"
+
+[[cause]]
+symptom = "support-pulled"
+cause = "the supports were not cured long enough to hold"
+step = "resin"
+try = "raise the resin's exposure by a tenth"
+
+[[cause]]
+symptom = "face-mark"
+sign = "supported"
+cause = "supports touch the face meant to be seen"
+step = "supports"
+try = "set_supports with shown_at_mm on that face, or set_pose with keep_clear_at_mm there"
+
+[[cause]]
+symptom = "face-mark"
+cause = "the face cured against the film or was scratched in the wash"
+step = "pose"
+try = "set_pose so the face looks up, away from the film"
+
+[[cause]]
+symptom = "resin-crack"
+sign = "trapped-resin"
+cause = "resin left in the cavity swells and cracks the wall as it cures"
+step = "drains"
+try = "set_drains with auto, and check that slicing.trapped is empty"
+
+[[cause]]
+symptom = "resin-crack"
+sign = "hollow"
+cause = "uncured resin stayed inside, as the drains were too small to wash it out"
+step = "drains"
+try = "set_drains with a larger hole, or set_hollow with open_floor; wash and cure the inside through them"
+
+[[cause]]
+symptom = "resin-crack"
+cause = "the print cured too long or too hot after the wash"
+step = "after"
+try = "cure for less time, and only once the print is dry"

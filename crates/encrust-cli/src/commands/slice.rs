@@ -73,6 +73,7 @@ impl PlateArgs {
 
 impl SliceCommand {
     pub fn run(&self, global: &GlobalArgs, stop: &Stop) -> Result<Exit> {
+        self.job.profile.refuse_standard_machine()?;
         self.plate.check()?;
         if self.all_plates {
             return self.run_every_plate(global, stop);
@@ -90,8 +91,11 @@ impl SliceCommand {
             [path] if stage::describes_a_project(path) => path,
             _ => bail!("--all-plates slices the plates of one project (.encrust)"),
         };
-        stage::refuse_for_a_project(self.plate.arrange, &self.job)?;
-        let project = project::open(path)?;
+        crate::project::refuse_for_projects(&self.job)?;
+        if project::shaped_by_flags(&self.job, self.plate.arrange) {
+            bail!("--all-plates slices the plates as saved; shape one with --plate N first");
+        }
+        let (project, _) = self.job.edits.applied((project::open(path)?, None))?;
         let plates = project::printable_plates(&project.manifest);
         if plates.is_empty() {
             bail!("{} holds nothing to print", path.display());
@@ -188,7 +192,7 @@ impl SliceCommand {
     ) -> Result<(Option<serde_json::Value>, bool)> {
         let started = Instant::now();
         let watch = global.watch(stop);
-        let mut staged = project::stage(path, project, Some(plate), &self.job)?;
+        let mut staged = project::stage(path, project, Some(plate), (&self.job, &None))?;
         self.finish(&mut staged, output, global, &watch, started)
     }
 

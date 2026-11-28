@@ -1,13 +1,12 @@
 use crate::args::ImportArgs;
 use anyhow::{Context, Result};
 use core_geometry::{Bvh, Heightmap, Mesh, UvMap, Welded};
-use core_mesh_io::{Loaded, Texture};
-use core_volume::{AngleMask, ReliefSettings, Tiling, press, press_tiled};
-use std::path::Path;
+use core_mesh_io::Loaded;
+use core_volume::{AngleMask, ReliefSettings, press};
 use std::time::Instant;
 
-/// Presses `--relief-image` or the file's own texture into the welded mesh, where
-/// `--relief` asked for it.
+/// Presses the file's own texture into the welded mesh where `--relief` asked for it; a
+/// `--relief-image` is an edit once the model is placed.
 pub(super) fn press_relief(
     mesh: Mesh,
     welded: &Welded,
@@ -33,25 +32,10 @@ pub(super) fn press_relief(
         ..ReliefSettings::default()
     };
     let started = Instant::now();
-    let (relief, source) = match &args.relief_image {
-        Some(path) => {
-            let image = read_picture(path)?;
-            let tiling = Tiling {
-                tile_mm: args.relief_tile,
-                angle_deg: args.relief_angle,
-            };
-            let relief = press_tiled(&mesh, &Bvh::build(&mesh), &image, tiling, &settings)
-                .context("pressing the picture into the model")?;
-            let source = format!("{} tiled every {} mm", path.display(), tiling.tile_mm);
-            (relief, source)
-        }
-        None => {
-            let (uvs, heights) = texture_of(welded, loaded)?;
-            let relief = press(&mesh, &Bvh::build(&mesh), &uvs, &heights, &settings)
-                .context("pressing the texture into the model")?;
-            (relief, format!("{} image(s)", heights.len()))
-        }
-    };
+    let (uvs, heights) = texture_of(welded, loaded)?;
+    let relief = press(&mesh, &Bvh::build(&mesh), &uvs, &heights, &settings)
+        .context("pressing the texture into the model")?;
+    let source = format!("{} image(s)", heights.len());
 
     if talk {
         let lattice = match relief.coarsened {
@@ -93,16 +77,4 @@ pub(super) fn texture_of(welded: &Welded, loaded: &Loaded) -> Result<(UvMap, Vec
         })
         .collect::<Result<Vec<_>>>()?;
     Ok((uvs, heights))
-}
-
-/// The picture at `path` as one height per pixel, read as a texture would be.
-pub(super) fn read_picture(path: &Path) -> Result<Heightmap> {
-    let bytes = std::fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
-    let texture = Texture {
-        name: path.display().to_string(),
-        bytes,
-    };
-    texture
-        .decode()
-        .with_context(|| format!("reading {}", path.display()))
 }

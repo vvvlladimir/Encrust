@@ -30,16 +30,25 @@ path = "src/bin/orient_lab/main.rs"
 name = "support-lab"
 path = "src/bin/support_lab/main.rs"
 
+# A bench for language models: each model prepared by the autopilot and by chat clients
+# over encrust-mcp, scored alike.
+[[bin]]
+name = "agent-lab"
+path = "src/bin/agent_lab/main.rs"
+
 [dependencies]
 core-analysis.workspace = true
 core-geometry.workspace = true
 core-joint.workspace = true
 core-mesh-io.workspace = true
 core-engine.workspace = true
+core-document.workspace = true
+core-edit.workspace = true
 jiff.workspace = true
 core-pipeline.workspace = true
 core-plate.workspace = true
 core-recipe.workspace = true
+core-samples.workspace = true
 core-slicer.workspace = true
 core-raster.workspace = true
 core-supports.workspace = true
@@ -54,9 +63,11 @@ printer-link.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 toml.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
+directories.workspace = true
 indicatif.workspace = true
 ctrlc.workspace = true
 rayon.workspace = true

@@ -55,8 +55,8 @@ impl Going {
         tools: &mut Tools,
         machine: &Machine,
     ) -> Result<Option<Self>> {
-        let (scene, slicing) = (&doc.scene, &machine.slicing);
-        let layer_mm = slicing.layer_height_mm();
+        let scene = &doc.scene;
+        let layer_mm = core_engine::ANALYSIS_LAYER_MM;
         let ids = &batch.ids;
         let hollow: Vec<ObjectId> = scene
             .named(ids)
@@ -116,13 +116,13 @@ impl Going {
     ) -> Result<Self> {
         let slicing = &machine.slicing;
         let plans = tools.supports.automatic_plans(&slicing.catalogue)?;
-        let proof = slicing
-            .printer
+        let machine = crate::orient::proof_machine(slicing);
+        let proof = machine
             .as_ref()
-            .map(|printer| (printer, &slicing.material));
+            .map(|(printer, material)| (printer, material));
         let asked = (wanted, max_tilt_deg, plans);
         Ok(Self::Orient(
-            tools.orient.start_on(&doc.scene, ids, asked, proof)?,
+            tools.orient.start_on(&doc.scene, ids, asked, proof, None)?,
         ))
     }
 
@@ -147,7 +147,7 @@ impl Going {
             return Ok(None);
         }
         let built = BuiltTo::of(profile, &slicing.catalogue)?;
-        let layer_mm = slicing.layer_height_mm();
+        let layer_mm = core_engine::ANALYSIS_LAYER_MM;
         let job = SupportTool::start_built_on(scene, &held, (layer_mm, &built), (side, clean))?;
         Ok(Some(Self::Supports(job, side, Box::new(built))))
     }

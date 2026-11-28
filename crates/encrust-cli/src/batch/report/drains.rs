@@ -1,12 +1,13 @@
 //! What `--drain-at auto` chose, located where the model prints, as `slicing.trapped` is
 //! (ADR 0400, 0401).
 
-use core_engine::{Drained, HoleRole};
-use core_geometry::{Aabb, Scalar, Vec3};
+use core_engine::HoleRole;
+use core_geometry::{Aabb, Mat4, Scalar, Transform, Vec3};
 use core_supports::Trapped;
 use serde::Serialize;
 
 use super::located::TrappedAt;
+use crate::stage::Searched;
 
 /// The pockets the search found and the holes it proved drain them.
 #[derive(Debug, Serialize)]
@@ -47,16 +48,20 @@ pub enum Role {
 }
 
 impl AutoDrains {
-    /// `drained` moved up by the `lifted_mm` the supports stood the model off the plate.
-    pub fn of(drained: &Drained, lifted_mm: Scalar) -> Self {
-        let up = Vec3::Z * lifted_mm;
+    /// `searched`, carried from where the model stood when it searched to where it is
+    /// `placed` now, then up by the `lifted_mm` the supports stood it off the plate.
+    pub fn of(searched: &Searched, placed: Option<Transform>, lifted_mm: Scalar) -> Self {
+        let back = searched.stood.inverse_matrix().unwrap_or(Mat4::IDENTITY);
+        let now = placed.map_or(Mat4::IDENTITY, |placed| placed.to_matrix() * back);
+        let moved = Mat4::from_translation(Vec3::Z * lifted_mm) * now;
+        let drained = &searched.drained;
         Self {
             pockets: drained
                 .pockets
                 .iter()
                 .enumerate()
                 .map(|(index, pocket)| PocketDrained {
-                    pocket: TrappedAt::from(&raised(pocket, up)),
+                    pocket: TrappedAt::from(&carried(pocket, moved)),
                     drained: drained.is_drained(index),
                 })
                 .collect(),
@@ -69,8 +74,10 @@ impl AutoDrains {
                         HoleRole::Drain => Role::Drain,
                         HoleRole::Vent => Role::Vent,
                     },
-                    at_mm: (suggested.hole.at + up).to_array(),
-                    axis: suggested.hole.axis.normalize_or_zero().to_array(),
+                    at_mm: moved.transform_point3(suggested.hole.at).to_array(),
+                    axis: (moved.transform_vector3(suggested.hole.axis))
+                        .normalize_or_zero()
+                        .to_array(),
                     diameter_mm: suggested.hole.diameter_mm,
                     depth_mm: suggested.hole.depth_mm,
                 })
@@ -80,10 +87,21 @@ impl AutoDrains {
     }
 }
 
-fn raised(pocket: &Trapped, up: Vec3) -> Trapped {
+fn carried(pocket: &Trapped, moved: Mat4) -> Trapped {
+    let corners = pocket
+        .bounds
+        .vertices()
+        .map(|corner| moved.transform_point3(corner));
+    let (mins, maxs) = (corners.iter()).fold(
+        (
+            Vec3::splat(Scalar::INFINITY),
+            Vec3::splat(Scalar::NEG_INFINITY),
+        ),
+        |(mins, maxs), corner| (mins.min(*corner), maxs.max(*corner)),
+    );
     Trapped {
-        at: pocket.at + up,
-        bounds: Aabb::new(pocket.bounds.mins + up, pocket.bounds.maxs + up),
+        at: moved.transform_point3(pocket.at),
+        bounds: Aabb::new(mins, maxs),
         ..*pocket
     }
 }

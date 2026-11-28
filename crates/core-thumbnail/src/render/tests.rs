@@ -1,5 +1,8 @@
 use super::*;
 use crate::settings::Rgb;
+use crate::view::EYE;
+
+mod views;
 
 /// Axis-aligned cube spanning 0..1 on every axis, twelve triangles.
 fn unit_cube() -> Mesh {

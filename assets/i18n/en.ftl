@@ -369,6 +369,63 @@ supports-growth-stopped = Building the supports stopped without an answer
 surfaces-cannot-build = The surface supports stand on could not be prepared: { $reason }
 surfaces-build-stopped = Preparing the surface supports stand on stopped without an answer
 
+## panels/title_bar/agents.rs
+
+# The agents' ring, as a screen reader names it.
+agents-title = Agents
+# A group of the list, one an agent: its chat client's name, then what it does now.
+agents-working = { $client } · working
+agents-idle = { $client } · waiting
+# A second agent of the same chat client, numbered.
+agents-numbered = { $client } { $number }
+# The name of an agent whose chat client gave none.
+agents-unnamed = Agent
+# Under an agent while it opens a model as a new job, before the job has a revision.
+agents-opening = Opening a model…
+# Under a model's name in the list: its latest revision and what the check found in it.
+agents-revision-clean = Revision { $revision } · no problems found
+agents-revision-problems = Revision { $revision } · problems found
+agents-revision = Revision { $revision }
+agents-revision-project = Revision { $revision } · project
+# Under a model's name while its agent works on it: what the agent does now.
+agents-starting = Revision { $revision } · starting
+agents-checking = Revision { $revision } · checking
+agents-drawing = Revision { $revision } · making pictures
+agents-writing = Revision { $revision } · writing the file
+agents-sending = Revision { $revision } · sending to the printer
+agents-reading-print = Revision { $revision } · looking at a print
+agents-changing = Revision { $revision } · changing the model
+agents-show-tooltip = Show this revision on the plate
+agents-open-project-tooltip = Open this project
+agents-hide-tooltip = Hide from the list until the agent takes another model
+agents-delete-tooltip = Delete this job and its revisions from the disk
+# The delete button while the agent runs a tool on this job.
+agents-delete-busy-tooltip = The agent is working on this job
+# The agents' ring on hover, a line an agent at work: its group name, the model, what it does, and for how long.
+agents-ring-line = { $agent }: { $model }, { $detail }, { $time }
+# The same while the agent works on no model yet.
+agents-ring-busy = { $agent }, { $time }
+# A row under the agents when one's chat client extension is of another version than this window.
+agents-extension-update = Update the chat client extension
+agents-extension-version = Extension { $extension } · window { $window }
+agents-extension-update-tooltip = Download and open the extension of this window's version
+agents-follow = Follow agents
+agents-follow-tooltip = Run each revision an agent saves on the plate straight away
+
+## link.rs
+
+# A chat client prepares a model over MCP; each change it keeps is a numbered revision of its job, shown again on the plate.
+link-replaying = Showing revision { $revision } of the chat client's job { $job }
+# The name of the plate an agent's job stands on, when the model's name is a plate's already.
+link-plate-numbered = { $model } { $number }
+# A revision the user asked to see from the agents' list that was made by edits on the plate shown, so it is there already.
+link-revision-on-plate = revision { $revision } of the job { $job } was made on this plate and is on it already
+link-revision-unreadable = cannot read revision { $revision } of the job { $job }
+# The agents' list named a job whose folder name is not a job's.
+link-no-job = there is no job named { $job }
+# The system stopped the window from reading a revision's plate off the drawing thread.
+link-plate-unread = cannot read the revision's plate
+
 ## measure.rs
 
 measure-snapped-corner = on a corner
@@ -1055,6 +1112,8 @@ menu-open-test-print = Test prints
 menu-import-machine = Machine profile...
 menu-import-resin = Resin profile...
 menu-machine-and-resin = Machine and resin...
+# Downloads the extension that lets a chat client on this computer prepare models with Encrust, and opens it, which installs it.
+menu-chat-extension = Use with an AI chat client...
 menu-settings = Settings...
 menu-quit = Quit Encrust
 menu-nothing-recent = Nothing opened yet
@@ -2427,6 +2486,13 @@ edit-dropped-shells =
         [one] Dropped { $count } shell of { $name }
        *[other] Dropped { $count } shells of { $name }
     }
+edit-mended =
+    { $count ->
+        [one] Made { $count } change to the faces of { $name }
+       *[other] Made { $count } changes to the faces of { $name }
+    }
+edit-no-such-face = { $name } has no face { $number }; faces are numbered from 0
+edit-no-such-shell = { $name } has no shell { $number }; shells are numbered from 1
 edit-bridge-not-open = One of the edges is not open any more, so there is nothing to bridge
 edit-bridge-same = An edge cannot be bridged to itself
 edit-bridge-in-line = The two edges lie on one line, so no face spans them
@@ -2501,6 +2567,7 @@ app-cannot-build-preview = cannot build the layer preview
 ## job/hollow.rs
 
 job-thread-stopped-hollowing = the hollowing thread stopped without finishing
+hollow-no-room = the wall is too thick to leave room for a cavity inside the model
 job-hollow-stopping = Stopping...
 job-hollow-progress = Hollowing model { $index } of { $total }
 job-step-preparing = Checking the model
@@ -2514,6 +2581,7 @@ job-step-combining = Combining them
 job-step-finishing = Building the result
 job-step-mending = Repairing the mesh
 job-step-crossing = Finding where it crosses itself
+job-step-searching = Finding the best way to stand it
 job-hollow-preparing = Checking the model
 job-hollow-seeding = Measuring the surface
 job-hollow-carrying = Reaching across the wall
@@ -2765,3 +2833,12 @@ hint-gizmo-steps = a handle in 1 mm and 15° steps
 ## panels/send_file.rs
 
 send-file-not-sliced = { $file } is not a sliced file Encrust can send
+
+## chat_extension.rs
+
+chat-extension-fetching = Downloading the chat client extension…
+chat-extension-opened = Opened the chat client extension from { $path }
+# After the error, where the user can download it by hand.
+chat-extension-failed = The chat client extension was not opened, download it from { $url }: { $error }
+chat-extension-write = cannot write { $path }
+chat-extension-open = cannot open { $path }

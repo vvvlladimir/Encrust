@@ -33,7 +33,12 @@ pub fn held_up(doc: &Doc, tools: &Tools, machine: &Machine) -> Option<String> {
 }
 
 /// Whether a job that will land on the plate is running.
-pub(super) fn busy(doc: &Doc, tools: &Tools, machine: &Machine) -> bool {
+pub fn busy(doc: &Doc, tools: &Tools, machine: &Machine) -> bool {
+    tool_busy(doc, tools) || doc.imports.is_busy() || machine.slicing.job.is_some()
+}
+
+/// Whether a tool's job that will change a model on the plate is running.
+pub fn tool_busy(doc: &Doc, tools: &Tools) -> bool {
     tools.orient.is_running()
         || tools.hollow.job.is_some()
         || tools.drain.job.is_some()
@@ -45,8 +50,7 @@ pub(super) fn busy(doc: &Doc, tools: &Tools, machine: &Machine) -> bool {
         || tools.relief.is_busy()
         || tools.text.is_busy()
         || doc.repairs.is_busy()
-        || doc.imports.is_busy()
-        || machine.slicing.job.is_some()
+        || doc.repairs.hand.is_busy()
 }
 
 /// Starts preparing what a tool would act on now, the picked models or the whole plate, by
@@ -84,6 +88,21 @@ pub(super) fn start_on(
     tools: &mut Tools,
     machine: &mut Machine,
 ) -> Result<()> {
+    can_start(&plan, &ids, doc, tools, machine)?;
+    hold(doc, tools, machine);
+    tools.prepare.run = Some(Run::new(plan, ids));
+    poll(doc, tools, machine, true);
+    Ok(())
+}
+
+/// Why `plan` cannot start on `ids` now.
+fn can_start(
+    plan: &Plan,
+    ids: &[ObjectId],
+    doc: &Doc,
+    tools: &Tools,
+    machine: &Machine,
+) -> Result<()> {
     if let Some(why) = held_up(doc, tools, machine) {
         bail!(why);
     }
@@ -95,10 +114,12 @@ pub(super) fn start_on(
     if supports && machine.slicing.catalogue.autos().next().is_none() {
         bail!(tr!("supports-no-automatic"));
     }
+    Ok(())
+}
+
+/// Opens the run's one undo entry, the plate and the tools as they stand.
+fn hold(doc: &mut Doc, tools: &Tools, machine: &Machine) {
     let settings = ToolSettings::of(tools, &machine.slicing);
     let chosen = machine.slicing.chosen();
     doc.history.hold(&doc.scene, &settings, chosen);
-    tools.prepare.run = Some(Run::new(plan, ids));
-    poll(doc, tools, machine, true);
-    Ok(())
 }

@@ -35,7 +35,7 @@ fn wait(job: &mut TrapJob) -> TrapOutcome {
 fn a_sealed_cavity_is_found_where_its_floor_is() {
     let mut job = TrapJob::spawn(TrapRequest {
         tasks: vec![TrapTask {
-            id: ObjectId::for_test(1),
+            id: ObjectId(1),
             mesh: Arc::new(sealed_box()),
             cuts: None,
             transform: Transform::default(),
@@ -63,7 +63,7 @@ fn a_sealed_cavity_is_found_where_its_floor_is() {
 
 fn task(id: u64, mesh: &Arc<Mesh>, transform: Transform) -> TrapTask {
     TrapTask {
-        id: ObjectId::for_test(id),
+        id: ObjectId(id),
         mesh: Arc::clone(mesh),
         cuts: None,
         transform,
@@ -110,7 +110,7 @@ fn every_copy_gets_the_pockets_of_its_original() {
         panic!("a closed mesh slices");
     };
     let ids: Vec<ObjectId> = models.iter().map(|pockets| pockets.id).collect();
-    assert_eq!(ids, [1, 2].map(ObjectId::for_test));
+    assert_eq!(ids, [1, 2].map(ObjectId));
     assert_eq!(models[1].trapped, models[0].trapped);
     assert_eq!(
         models[1].trapped.len(),
@@ -123,7 +123,7 @@ fn every_copy_gets_the_pockets_of_its_original() {
 fn a_solid_model_has_nothing_trapped_in_it() {
     let mut job = TrapJob::spawn(TrapRequest {
         tasks: vec![TrapTask {
-            id: ObjectId::for_test(2),
+            id: ObjectId(2),
             mesh: Arc::new(box_mesh(Vec3::ZERO, Vec3::splat(10.0))),
             cuts: None,
             transform: Transform::default(),

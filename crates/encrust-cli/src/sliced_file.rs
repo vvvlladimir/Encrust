@@ -65,7 +65,7 @@ pub fn write_plate(
     let run = Run::of(&plate)?;
     // The run holds the baked plate; the models it was baked from are not needed again.
     drop(plate.models);
-    let mut slice = report_of(run.solid(), run.windows(), drainage);
+    let mut slice = report_of(run.solid(), run.windows(), drainage, &plate.material);
     warn_if_exposure_was_measured_elsewhere(run.job(), &plate.material);
     warn_of_limits(run.job());
 
@@ -151,7 +151,7 @@ pub(crate) fn warn_of_limits(job: &PrintJob) {
     }
 }
 
-fn limit_warning(printer: &str, breach: &LimitBreach) -> String {
+pub(crate) fn limit_warning(printer: &str, breach: &LimitBreach) -> String {
     let span = match breach.span {
         (Some(low), Some(high)) => format!("{low} to {high}"),
         (Some(low), None) => format!("at least {low}"),

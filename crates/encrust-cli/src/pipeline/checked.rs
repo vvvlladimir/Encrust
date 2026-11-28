@@ -1,34 +1,30 @@
-//! What import does to a mesh before it is placed: doubled faces dropped, winding fixed,
-//! changes by hand, the repair asked for, and what was found.
+//! What import does to a mesh before it is placed: doubled faces dropped, winding fixed, and
+//! what was found; the changes by hand and the repair are edits (`stage/repaired.rs`).
 
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use core_document::ApplyError;
 use core_engine::hollowing;
 use core_geometry::{
-    Aabb, Mat3, MendSettings, Mended, Mesh, MeshDiagnostics, Welded, diagnose, list_shells,
-    orient_outward, remove_duplicate_faces,
+    Aabb, Mat3, Mesh, MeshDiagnostics, Welded, diagnose, orient_outward, remove_duplicate_faces,
 };
-use core_volume::{Cancel, Progress, RepairSettings, VolumeError, repair};
+use core_volume::{Cancel, Progress};
 use printer_profiles::PrinterProfile;
 
 use crate::args::ImportArgs;
-use crate::edits;
 use crate::exit::Cancelled;
 use crate::pipeline::Watch;
 use crate::progress::bar;
-use crate::report::{FitCheck, ImportReport, Wrapped};
+use crate::report::{FitCheck, ImportReport};
 use crate::stats::MeshStats;
 
-/// Drops doubled faces, fixes the winding, makes the changes by hand and the repair asked
-/// for, and says what import found; `with_shells` lists the shells as they came.
+/// Drops doubled faces, fixes the winding and says what import found.
 pub(super) fn checked(
     mesh: &mut Mesh,
     (input, welded): (&Path, Welded),
     args: &ImportArgs,
     profile: Option<&PrinterProfile>,
-    with_shells: bool,
-    watch: &Watch,
 ) -> Result<ImportReport> {
     // Before the orientation fix: a face laid over another reads as a branch to it.
     let doubled = if args.no_validate {
@@ -37,14 +33,6 @@ pub(super) fn checked(
         remove_duplicate_faces(mesh).len()
     };
     let orientation = (!args.no_validate).then(|| orient_outward(mesh));
-    let listed = with_shells.then(|| list_shells(mesh));
-    let edited = edits::apply(mesh, args)?;
-    let repaired = args
-        .repair
-        .map(|method| repaired(mesh, method.into(), args, watch))
-        .transpose()?;
-    let (mended, wrapped) =
-        repaired.map_or((None, None), |(mended, wrapped)| (Some(mended), wrapped));
     let facts = Facts::of(mesh, !args.no_validate, profile)?;
     Ok(ImportReport {
         path: input.to_path_buf(),
@@ -53,11 +41,40 @@ pub(super) fn checked(
         doubled,
         diagnostics: facts.diagnostics,
         orientation,
-        mended,
-        wrapped,
+        mended: None,
+        wrapped: None,
         crossing_pairs: None,
-        edited,
-        shells: listed,
+        edited: None,
+        shells: None,
+        fit: facts.fit,
+        hollowing_saves: facts.hollowing_saves,
+    })
+}
+
+/// What import would say of `mesh` as a saved plate holds it, read as it stands: nothing
+/// welded, dropped or turned, since the window did that when the model came in.
+pub(crate) fn saved_model_report(
+    input: &Path,
+    mesh: &Mesh,
+    profile: Option<&PrinterProfile>,
+) -> Result<ImportReport> {
+    let facts = Facts::of(mesh, true, profile)?;
+    Ok(ImportReport {
+        path: input.to_path_buf(),
+        stats: facts.stats,
+        welded: Welded {
+            mesh: Mesh::default(),
+            vertices_merged: 0,
+            dropped: Vec::new(),
+        },
+        doubled: 0,
+        diagnostics: facts.diagnostics,
+        orientation: None,
+        mended: None,
+        wrapped: None,
+        crossing_pairs: None,
+        edited: None,
+        shells: None,
         fit: facts.fit,
         hollowing_saves: facts.hollowing_saves,
     })
@@ -104,52 +121,10 @@ pub(crate) fn read_again(
     Ok(())
 }
 
-/// What a repair a later step asks of `mesh` changed, noted on `import` as `--repair` notes it.
-pub(crate) fn repaired_later(
-    import: &mut ImportReport,
-    mesh: &mut Mesh,
-    (method, args): (core_volume::RepairMethod, &ImportArgs),
-    watch: &Watch,
-) -> Result<()> {
-    let (mended, wrapped) = repaired(mesh, method, args, watch)?;
-    import.mended = Some(mended);
-    import.wrapped = wrapped;
-    Ok(())
-}
-
-/// Runs `method` on `mesh` in place: what it changed, and how a wrap went.
-fn repaired(
-    mesh: &mut Mesh,
-    method: core_volume::RepairMethod,
-    args: &ImportArgs,
-    watch: &Watch,
-) -> Result<(Mended, Option<Wrapped>)> {
-    let settings = RepairSettings {
-        mend: MendSettings {
-            seam_tolerance_mm: args.seam_tolerance,
-            smallest_shell_mm2: args.smallest_shell,
-        },
-    };
-    let done = watched_repair(mesh, method, settings, watch)?;
-    *mesh = done.mesh;
-    let wrapped = method.wraps().then_some(if done.wrapped {
-        Wrapped::Exactly
-    } else {
-        Wrapped::LeftOut
-    });
-    Ok((done.mended, wrapped))
-}
-
-/// The repair, with its share on a bar spanned as the window spans it (ADR 0384), and
-/// Ctrl-C stopping it between steps; the bar is drawn where the repair asks whether to stop.
-fn watched_repair(
-    mesh: &Mesh,
-    method: core_volume::RepairMethod,
-    settings: RepairSettings,
-    watch: &Watch,
-) -> Result<core_volume::Repaired> {
+/// `run` given a stop that also draws its share on a bar labelled `what`, where a run talks.
+pub(crate) fn with_bar<T>(watch: &Watch, what: &str, run: impl FnOnce(Cancel<'_>) -> T) -> T {
     let progress = Progress::default();
-    let shown = watch.progress.then(|| bar("% of the repair"));
+    let shown = watch.progress.then(|| bar(what));
     let asked = || {
         if let (Some(shown), Some((_, share))) = (&shown, progress.share()) {
             shown.set_length(100);
@@ -157,24 +132,30 @@ fn watched_repair(
         }
         watch.stop.requested()
     };
-    let done = repair(
-        mesh,
-        method,
-        settings,
-        Cancel::when(&asked).reporting(&progress),
-    );
+    let done = run(Cancel::when(&asked).reporting(&progress));
     if let Some(shown) = &shown {
         shown.finish_and_clear();
     }
-    match done {
-        Err(VolumeError::Cancelled) => Err(Cancelled.into()),
-        done => done.context("could not repair the model"),
+    done
+}
+
+/// Why a repair did not finish, as the command line says it.
+pub(crate) fn repair_refused(error: ApplyError) -> anyhow::Error {
+    match error {
+        ApplyError::Cancelled => Cancelled.into(),
+        ApplyError::Failed { reason, .. } => {
+            anyhow::anyhow!(reason).context("could not repair the model")
+        }
+        other => anyhow::Error::new(other).context("could not repair the model"),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use core_geometry::{Vec3, cuboid};
+
+    use core_document::repaired as repaired_by;
+    use core_edit::ObjectId;
 
     use super::*;
     use crate::exit::{Stop, is_cancelled};
@@ -184,13 +165,13 @@ mod tests {
         let cube = cuboid(Vec3::new(0.0, 0.0, 0.0), Vec3::new(10.0, 10.0, 10.0));
         let stop = Stop::default();
         stop.request();
-        let wrapped = watched_repair(
-            &cube,
-            core_volume::RepairMethod::Wrap,
-            RepairSettings::default(),
-            &Watch::quiet(&stop),
-        );
-        let error = wrapped.expect_err("a stop asked for before the wrap stops it");
+        let wrapped = with_bar(&Watch::quiet(&stop), "% of the repair", |cancel| {
+            let asked = (core_volume::RepairMethod::Wrap, Default::default());
+            repaired_by(&cube, asked, cancel, ObjectId::UNSET)
+        });
+        let error = wrapped
+            .map_err(repair_refused)
+            .expect_err("a stop asked for before the wrap stops it");
         assert!(
             is_cancelled(&error),
             "exit 130, not a failed repair: {error:#}"

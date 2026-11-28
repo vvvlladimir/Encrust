@@ -9,7 +9,9 @@ use std::borrow::Cow;
 use core_geometry::{Mesh, SmoothNormals, Transform, Vec3, smooth_normals, transform_mesh};
 
 use crate::image::{MARGIN, Thumbnail};
-use crate::settings::ThumbnailSettings;
+use crate::marker::{self, Marker, MarkerSpot};
+use crate::settings::{Rgb, ThumbnailSettings};
+use crate::view::{Basis, View};
 use raster::{Corner, Surfaces};
 
 /// What a part is, which picks its colour.
@@ -50,9 +52,13 @@ impl<'m> Part<'m> {
     }
 }
 
-/// Where the plate is looked at from, in plate coordinates with Z up. The front right corner, a
-/// little above the part: it shows a silhouette, a top and a side.
-const EYE: Vec3 = Vec3::new(1.0, -1.0, 0.75);
+/// A picture of the plate from one view, and where each marker asked for landed in it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Rendered {
+    pub image: Thumbnail,
+    /// One per marker, in the order given; none in an image of no pixels.
+    pub markers: Vec<MarkerSpot>,
+}
 
 /// Degrees two faces may turn apart and still be shaded as one surface: a ball's facets
 /// blend, a box keeps its edges.
@@ -61,26 +67,97 @@ const CREASE_DEG: f32 = 40.0;
 /// Renders every part into one shaded image framed to the parts, not the build volume, as a
 /// thumbnail is a centimetre wide; see `docs/design/thumbnail.md`.
 pub fn render(parts: &[Part<'_>], settings: &ThumbnailSettings) -> Thumbnail {
-    let view = View::new();
-    let viewed: Vec<Viewed<'_>> = parts.iter().map(|part| Viewed::of(part, &view)).collect();
-    let Some(frame) = Frame::around(
+    render_view(parts, View::Iso, &[], settings).image
+}
+
+/// Renders every part from `view` with `markers` drawn over it, framed so the parts fit: a
+/// marker off the picture is pinned to its edge. How each is drawn: `docs/design/thumbnail.md`.
+pub fn render_view(
+    parts: &[Part<'_>],
+    view: View,
+    markers: &[Marker],
+    settings: &ThumbnailSettings,
+) -> Rendered {
+    let basis = view.basis();
+    let viewed: Vec<Viewed<'_>> = parts.iter().map(|part| Viewed::of(part, &basis)).collect();
+    let marked: Vec<Vec3> = markers.iter().map(|marker| basis.of(marker.at)).collect();
+    let (width_px, height_px) = (settings.width_px, settings.height_px);
+    let framed = Frame::around(
         viewed.iter().map(|part| part.vertices.as_slice()),
-        settings.width_px,
-        settings.height_px,
-    ) else {
-        return empty(settings);
+        width_px,
+        height_px,
+    )
+    .or_else(|| Frame::around(std::iter::once(marked.as_slice()), width_px, height_px));
+    let Some(frame) = framed else {
+        return Rendered {
+            image: empty(settings),
+            markers: Vec::new(),
+        };
     };
 
-    let mut surfaces = Surfaces::new(settings.width_px, settings.height_px);
+    let mut surfaces = Surfaces::new(width_px, height_px);
     for part in &viewed {
         for face in 0..part.mesh.faces.len() {
-            if let Some(corners) = part.corners(face, &view, &frame) {
+            if let Some(corners) = part.corners(face, &basis, &frame) {
                 surfaces.fill(&corners, part.look);
             }
         }
     }
-    shade::image(&surfaces, 1.0 / frame.scale, frame.span_mm, settings)
-        .unwrap_or_else(|| empty(settings))
+    let mut image = shade::image(&surfaces, 1.0 / frame.scale, frame.span_mm, settings)
+        .unwrap_or_else(|| empty(settings));
+    let spots = mark(
+        image.pixels_mut(),
+        &surfaces.depths,
+        &frame,
+        &marked,
+        markers,
+    );
+    Rendered {
+        image,
+        markers: spots,
+    }
+}
+
+/// Draws every marker over the shaded picture and says where each landed. `marked` holds their
+/// points in view coordinates, in the order of `markers`.
+fn mark(
+    colours: &mut [Rgb],
+    depths: &[f32],
+    frame: &Frame,
+    marked: &[Vec3],
+    markers: &[Marker],
+) -> Vec<MarkerSpot> {
+    let size = (frame.width as u32, frame.height as u32);
+    let radius = marker::radius_px(size.0, size.1);
+    let spots: Vec<MarkerSpot> = marked
+        .iter()
+        .map(|point| {
+            let screen = frame.to_screen(*point);
+            let off = |at: f32, across: f32| !(0.0..across).contains(&at);
+            if off(screen.x, frame.width) || off(screen.y, frame.height) {
+                let pin = |at: f32, across: f32| at.clamp(radius, (across - radius).max(radius));
+                return MarkerSpot {
+                    x_px: pin(screen.x, frame.width),
+                    y_px: pin(screen.y, frame.height),
+                    hidden: false,
+                    pinned: true,
+                };
+            }
+            MarkerSpot {
+                x_px: screen.x,
+                y_px: screen.y,
+                hidden: marker::hidden(depths, size, screen, frame.scale),
+                pinned: false,
+            }
+        })
+        .collect();
+    // The hidden ones first, so one behind the model never covers one in plain sight.
+    let mut order: Vec<usize> = (0..spots.len()).collect();
+    order.sort_by_key(|&index| !spots[index].hidden);
+    for index in order {
+        marker::draw(colours, size, spots[index], markers[index].colour);
+    }
+    spots
 }
 
 /// A render nothing landed on, so a record shows its own background alone.
@@ -97,31 +174,6 @@ fn empty(settings: &ThumbnailSettings) -> Thumbnail {
     })
 }
 
-/// The view's axes in plate coordinates: right, up, and forward away from the eye.
-struct View {
-    right: Vec3,
-    up: Vec3,
-    forward: Vec3,
-}
-
-impl View {
-    fn new() -> Self {
-        let forward = -EYE.normalize();
-        let right = forward.cross(Vec3::Z).normalize();
-        let up = right.cross(forward);
-        Self { right, up, forward }
-    }
-
-    /// A plate point or direction in view coordinates; the third is depth.
-    fn of(&self, vector: Vec3) -> Vec3 {
-        Vec3::new(
-            vector.dot(self.right),
-            vector.dot(self.up),
-            vector.dot(self.forward),
-        )
-    }
-}
-
 /// One part placed on the plate, its vertices in view coordinates and its smoothed normals.
 struct Viewed<'m> {
     look: Look,
@@ -131,7 +183,7 @@ struct Viewed<'m> {
 }
 
 impl<'m> Viewed<'m> {
-    fn of(part: &Part<'m>, view: &View) -> Self {
+    fn of(part: &Part<'m>, view: &Basis) -> Self {
         let mesh = if part.transform == Transform::default() {
             Cow::Borrowed(part.mesh)
         } else {
@@ -153,7 +205,7 @@ impl<'m> Viewed<'m> {
 
     /// Face `face` on screen, each corner with its normal in view coordinates; a corner of a
     /// face the smoothing skipped takes the face's own.
-    fn corners(&self, face: usize, view: &View, frame: &Frame) -> Option<[Corner; 3]> {
+    fn corners(&self, face: usize, view: &Basis, frame: &Frame) -> Option<[Corner; 3]> {
         let indices = self.mesh.faces.get(face)?;
         let points = [
             *self.vertices.get(indices[0] as usize)?,

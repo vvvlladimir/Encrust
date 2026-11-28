@@ -2,10 +2,13 @@
 
 use std::path::Path;
 
+use core_volume::HoleSize;
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
 use super::recipes::plan;
+use super::work::CheckFixes;
 use super::*;
+use crate::check::ForRun;
 
 /// A panel coarse enough to cut and measure in a moment, wide enough for the large cube.
 const PANEL: &str = r#"
@@ -277,4 +280,96 @@ fn an_arrange_step_names_itself_on_the_bar() {
     bench.run("[[step]]\ndo = \"arrange\"\n[[step]]\ndo = \"hollow\"\n");
     let (step, _) = bench.tools.prepare.progress().expect("running");
     assert_eq!(step, Step::Arrange, "arranged in the frame it started");
+}
+
+/// What a prepare of `steps` drills one suction cup in a slab 3 mm off the plate to, beside a
+/// 10 mm cube, with the Drain panel left at 4 mm: the diameter of the hole the check's cup
+/// answer over both models put in.
+fn cup_vent_diameter(steps: &str) -> f32 {
+    use core_analysis::{Risk, RiskKind};
+    use core_slicer::{LayerPlan, SliceSettings};
+
+    let slab = cuboid(Vec3::new(0.0, 0.0, 3.0), Vec3::new(10.0, 10.0, 5.0));
+    let (bench, id) = Bench::with(slab);
+    let mut bench = bench.with_printer();
+    let cube = cuboid(Vec3::new(50.0, 0.0, 0.0), Vec3::new(60.0, 10.0, 10.0));
+    let summary = ImportSummary::made(diagnose(&cube));
+    let cube = Imported::new(
+        "cube".to_owned(),
+        Arc::new(cube),
+        Transform::default(),
+        summary,
+    );
+    let tall = bench.doc.scene.insert(cube);
+    bench.tools.drain.state.diameter_mm = 4.0;
+    let ids = [id, tall];
+    let mut run = Run::new(plan(steps), ids.to_vec());
+    while run.next < run.plan.recipe().steps.len() {
+        run.decide_next(&bench.doc.scene, &bench.doc.plate)
+            .expect("the steps decide");
+    }
+    let settings = bench.machine.slicing.raster_settings().expect("a panel");
+    let slice = SliceSettings {
+        layer_height: LAYER_MM,
+        ..SliceSettings::default()
+    };
+    let plan = LayerPlan::uniform(&slice, 0.0, 10.0);
+    let panel_height_mm = settings.height_px as f32 * settings.pitch.y;
+    let cup = Risk {
+        layer: 16,
+        at_mm: [5.0, panel_height_mm - 5.0],
+        kind: RiskKind::SuctionCup {
+            area_mm2: 30.0,
+            volume_mm3: 30.0,
+        },
+    };
+    let (doc, tools, machine) = (&mut bench.doc, &mut bench.tools, &mut bench.machine);
+    let fixes = CheckFixes {
+        cups: true,
+        levers: false,
+    };
+    let held = ForRun {
+        ids: &ids,
+        profiles: &[],
+    };
+    let stack = (&[cup][..], (&plan, &settings));
+    run.answer_fixes((doc, tools, &mut machine.status), fixes, held, stack);
+    let holes = bench.object(id).hollow.drains();
+    assert_eq!(holes.len(), 1, "the cup is vented");
+    holes[0].diameter_mm
+}
+
+#[test]
+fn a_checks_cup_vents_take_the_recipes_hole_size_not_the_panels() {
+    let steps = "[[step]]\ndo = \"drain\"\nset = { at = \"points\", points = [[0.5, 0.5, 1.0]], \
+        diameter_mm = 2.5 }\n[[step]]\ndo = \"check\"\nset = { drill_cups = true }\n";
+    let diameter_mm = cup_vent_diameter(steps);
+    assert!(
+        (diameter_mm - 2.5).abs() < 1e-4,
+        "the drain step's 2.5 mm, the panel being at 4, got {diameter_mm}"
+    );
+}
+
+#[test]
+fn a_checks_cup_vents_with_no_drain_step_take_the_default_hole_size() {
+    let diameter_mm = cup_vent_diameter("[[step]]\ndo = \"check\"\nset = { drill_cups = true }\n");
+    let expected_mm = HoleSize::default().diameter_mm;
+    assert!(
+        (diameter_mm - expected_mm).abs() < 1e-4,
+        "the default {expected_mm} mm, the panel being at 4, got {diameter_mm}"
+    );
+}
+
+#[test]
+fn a_checks_cup_vents_take_the_widest_hole_of_its_models_a_later_drain_left_alone() {
+    let steps = "[[step]]\ndo = \"drain\"\nset = { at = \"points\", points = [[0.5, 0.5, 1.0]], \
+        diameter_mm = 3.5 }\nchoose = [{ when = \"height_mm > 5\", set = { diameter_mm = 1.5 } }]\n\
+        [[step]]\ndo = \"drain\"\nwhen = \"height_mm > 5\"\n\
+        set = { at = \"points\", points = [[0.5, 0.5, 1.0]], diameter_mm = 1.0 }\n\
+        [[step]]\ndo = \"check\"\nset = { drill_cups = true }\n";
+    let diameter_mm = cup_vent_diameter(steps);
+    assert!(
+        (diameter_mm - 3.5).abs() < 1e-4,
+        "the slab keeps its 3.5 mm, the cube's 1.0 being the last, got {diameter_mm}"
+    );
 }

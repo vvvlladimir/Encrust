@@ -57,6 +57,15 @@ impl SupportTree {
         }
     }
 
+    /// Renumbers every group the tree is built to by `to`, its trunk's and each head's, as a
+    /// plate of other groups takes it in.
+    pub fn renumber_groups(&mut self, to: impl Fn(u16) -> u16) {
+        self.group = to(self.group);
+        for node in &mut self.nodes {
+            node.head = node.head.map(&to);
+        }
+    }
+
     /// Builds the trunk to `group` and leaves each head to the group it names, forgetting
     /// the names that are now the tree's own.
     pub(crate) fn settle(&mut self, group: u16) {
@@ -380,6 +389,23 @@ mod tests {
             .find(|node| node.point == Some(point))
             .and_then(|node| node.parent)
             .expect("a tip of a branched tree hangs from a neck")
+    }
+
+    #[test]
+    fn a_tree_renumbered_builds_its_trunk_and_heads_to_the_groups_they_became() {
+        let mut tree = branched();
+        let leaf = (tree.nodes().iter()).position(|node| node.point == Some(2));
+        let leaf = leaf.expect("tip 2 is a leaf");
+        tree.nodes[leaf].head = Some(1);
+
+        tree.renumber_groups(|group| group + 3);
+
+        assert_eq!(tree.group(), 3, "the trunk of group 0 is now group 3's");
+        assert_eq!(
+            tree.head_group(leaf),
+            4,
+            "the head of group 1 is now group 4's"
+        );
     }
 
     #[test]

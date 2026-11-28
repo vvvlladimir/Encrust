@@ -197,7 +197,7 @@ paints from tokens only.
 | `compact_button` | A button as tall as a field, to stand in a row of them |
 | `icon_button`, `icon_toggle` | A borderless square with one glyph; the toggle stays lit while on |
 | `mode_column` | Toggles stacked in one sunken group as narrow as they are, spaced as a `mode_group`, centred by its parent |
-| `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_foot` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand — and rows under a rule leading elsewhere |
+| `chooser_frame`, `chooser_group`, `chooser_row`, `chooser_row_with`, `chooser_foot`, `chooser_switch` | A list a part of the chip opens, 300 wide on `raised` with a window's shadow: a capital group name, 44 tall two-line rows — a glyph or a colour's dot, name over detail, a dot or a figure at the right, washed and ticked while in hand, or, `with`, the row's own quiet squares at its right and its lines cut before them — and under a rule rows leading elsewhere or a switch in line with the names |
 | `small_icon_button` | The same square at 26, for a card's own rows: the plates, the actions under the models |
 | `chain_step`, `ChainStep`, `chain_seam`, `chain_drop_mark`, `chain_ghost` | Steps run one after another: a folding card on a rail, its number in a disc on it, a grip, glyph, name, a one-line summary, question mark, switch, caret and its actions, some only while open; seams with a + on the rail; where a dragged card lands, and the card by the pointer |
 | `tag` | A state named at the end of a row, a word in its tone on its wash, a pill; a click on it says more |
@@ -238,6 +238,7 @@ paints from tokens only.
 | `search_button` | The bar's way into Find: a sunken box of the glyph, the word and its keys, the glyph alone when compact |
 | `bar_pill` | A round tag in the bar ringed in its tint: the update badges |
 | `ChipPart`, `paint_chip` | The print chip: three parts of a glyph, what is chosen and a caret, side by side under one ring |
+| `RingLook`, `paint_ring`, `ring_badge` | A round status beside the chip: a track, an arc for the share done or spinning, the percent or a glyph in the middle, a count in a disc at its corner |
 | `device_row`, `print_picture` | A printer as one row on `raised`, its state word and dot breathing while busy; a print's picture, or the model glyph on `sunken` |
 | `paint_layer_track`, `layer_readout` | The layer strip: its rule with the cured area behind it, scale, fill, risk bars and thumbs; the layer in a sunken box to type into, the count and the height |
 | `window_frame` | The Settings and Machine and resin windows' frame: title row, list, header, page, action bar, tabs and table |
@@ -276,6 +277,7 @@ from `egui-phosphor` only. A glyph a screen needs and the table lacks is added t
 | Cut, Relief, Supports, Check | `KNIFE`, `STAMP`, `TREE_STRUCTURE`, `LIST_CHECKS` |
 | Print settings, General and the profiles | `SLIDERS_HORIZONTAL`, `SLIDERS` |
 | Machine, resin, network | `PRINTER`, `FLASK`, `WIFI_HIGH` |
+| Agents | `ROBOT` |
 | Model view, model beside layer, layer | `CUBE`, `COLUMNS`, `SQUARE_HALF` |
 | Frame, grid, see through, as printed, perspective | `FRAME_CORNERS`, `GRID_FOUR`, `CIRCLE_HALF`, `SPARKLE`, `PERSPECTIVE` |
 | Empty plate | `CUBE_FOCUS` |

@@ -3,8 +3,8 @@
 
 use std::str::FromStr;
 
-use anyhow::{Context as _, Result, bail};
-use core_geometry::{Mesh, Region, bridge, flip_faces, list_shells, remove_faces};
+use anyhow::{Result, anyhow};
+use core_document::{ApplyError, HandMended, MendAsked};
 
 use crate::args::ImportArgs;
 
@@ -16,82 +16,55 @@ impl FromStr for BridgeEdges {
     type Err = String;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let edge = |part: &str| -> Option<[u32; 2]> {
-            let (a, b) = part.split_once('-')?;
-            Some([a.trim().parse().ok()?, b.trim().parse().ok()?])
-        };
-        let (first, second) = text
-            .split_once(':')
-            .ok_or_else(|| format!("`{text}` is not two edges as A-B:C-D"))?;
-        match (edge(first), edge(second)) {
-            (Some(a), Some(b)) => Ok(Self(a, b)),
-            _ => Err(format!(
-                "`{text}` is not two edges of vertex numbers as A-B:C-D"
-            )),
+        let [a, b] = core_edit::bridge_edges(text)
+            .ok_or_else(|| format!("`{text}` is not two edges of vertex numbers as A-B:C-D"))?;
+        Ok(Self(a, b))
+    }
+}
+
+/// The changes by hand `args` name.
+pub fn mend_asked(args: &ImportArgs) -> MendAsked {
+    MendAsked {
+        flip_faces: args.flip_faces.clone(),
+        drop_faces: args.drop_faces.clone(),
+        drop_shells: args.drop_shells.clone(),
+        bridge: args
+            .bridge
+            .iter()
+            .map(|BridgeEdges(a, b)| [*a, *b])
+            .collect(),
+    }
+}
+
+/// Why a change by hand was refused, naming the flag the way the command line has it.
+pub(crate) fn refused(
+    error: &ApplyError,
+    (faces, shells): (usize, usize),
+    args: &ImportArgs,
+) -> anyhow::Error {
+    match error {
+        ApplyError::NoSuchFace { number, .. } => {
+            let flag = if args.flip_faces.contains(number) {
+                "--flip-faces"
+            } else {
+                "--drop-faces"
+            };
+            anyhow!("{flag}: there is no face {number}; the model has {faces}, numbered from 0")
         }
-    }
-}
-
-/// What the changes by hand did.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Edited {
-    pub faces_flipped: usize,
-    pub faces_added: usize,
-    pub faces_dropped: usize,
-    pub shells_dropped: usize,
-}
-
-/// Turns, bridges and drops what `args` names on `mesh`: the turns and bridges first, the
-/// drops last, so no number moves under one still to come. `None` where none was named.
-pub fn apply(mesh: &mut Mesh, args: &ImportArgs) -> Result<Option<Edited>> {
-    if args.flip_faces.is_empty()
-        && args.drop_faces.is_empty()
-        && args.drop_shells.is_empty()
-        && args.bridge.is_empty()
-    {
-        return Ok(None);
-    }
-    let faces = mesh.faces.len();
-    let flipped = region(&args.flip_faces, faces).context("--flip-faces")?;
-    let mut dropped = region(&args.drop_faces, faces).context("--drop-faces")?;
-    let shells = list_shells(mesh);
-    let mut numbers = args.drop_shells.clone();
-    numbers.sort_unstable();
-    numbers.dedup();
-    for &number in &numbers {
-        let Some(shell) = number.checked_sub(1).and_then(|at| shells.get(at)) else {
-            bail!(
-                "--drop-shells: there is no shell {number}; the model has {}",
-                shells.len()
-            );
-        };
-        for face in &shell.faces {
-            dropped.set(*face as usize, true);
+        ApplyError::NoSuchShell { number, .. } => {
+            anyhow!("--drop-shells: there is no shell {number}; the model has {shells}")
         }
+        ApplyError::NoBridge {
+            edges: [a, b],
+            reason,
+            ..
+        } => anyhow!("--bridge {}-{}:{}-{}: {reason}", a[0], a[1], b[0], b[1]),
+        other => anyhow!("{other}"),
     }
-    let mut edited = Edited {
-        faces_flipped: flip_faces(mesh, &flipped),
-        shells_dropped: numbers.len(),
-        ..Edited::default()
-    };
-    for BridgeEdges(a, b) in &args.bridge {
-        edited.faces_added += bridge(mesh, *a, *b)
-            .with_context(|| format!("--bridge {}-{}:{}-{}", a[0], a[1], b[0], b[1]))?;
-    }
-    edited.faces_dropped = remove_faces(mesh, &dropped);
-    Ok(Some(edited))
-}
-
-/// The faces `numbers` names, refusing one past the last of `faces`.
-fn region(numbers: &[usize], faces: usize) -> Result<Region> {
-    if let Some(face) = numbers.iter().find(|&&face| face >= faces) {
-        bail!("there is no face {face}; the model has {faces}, numbered from 0");
-    }
-    Ok(numbers.iter().copied().collect())
 }
 
 /// What the changes by hand did, in the words the report says it in.
-pub fn describe(edited: &Edited) -> String {
+pub fn describe(edited: &HandMended) -> String {
     let said = |count: usize, verb: &str, noun: &str| {
         let plural = if count == 1 { "" } else { "s" };
         (count > 0).then(|| format!("{verb} {count} {noun}{plural}"))

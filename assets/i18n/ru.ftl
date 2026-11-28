@@ -380,6 +380,47 @@ supports-growth-stopped = Построение поддержек прервал
 surfaces-cannot-build = Не удалось подготовить поверхность для поддержек: { $reason }
 surfaces-build-stopped = Подготовка поверхности для поддержек прервалась без результата
 
+## panels/title_bar/agents.rs
+
+agents-title = Агенты
+agents-working = { $client } · работает
+agents-idle = { $client } · ждёт
+agents-numbered = { $client } { $number }
+agents-unnamed = Агент
+agents-opening = Открывает модель…
+agents-revision-clean = Ревизия { $revision } · проблем нет
+agents-revision-problems = Ревизия { $revision } · есть проблемы
+agents-revision = Ревизия { $revision }
+agents-revision-project = Ревизия { $revision } · проект
+agents-starting = Ревизия { $revision } · начинает работу
+agents-checking = Ревизия { $revision } · проверяет
+agents-drawing = Ревизия { $revision } · строит изображения
+agents-writing = Ревизия { $revision } · записывает файл
+agents-sending = Ревизия { $revision } · отправляет на принтер
+agents-reading-print = Ревизия { $revision } · изучает печать
+agents-changing = Ревизия { $revision } · меняет модель
+agents-show-tooltip = Показать эту ревизию на платформе
+agents-open-project-tooltip = Открыть этот проект
+agents-hide-tooltip = Скрыть из списка, пока агент не возьмёт другую модель
+agents-delete-tooltip = Удалить это задание и его ревизии с диска
+agents-delete-busy-tooltip = Агент работает над этим заданием
+agents-ring-line = { $agent }: { $model }, { $detail }, { $time }
+agents-ring-busy = { $agent }, { $time }
+agents-extension-update = Обновить расширение для чат-клиента
+agents-extension-version = Расширение { $extension } · окно { $window }
+agents-extension-update-tooltip = Скачать и открыть расширение той же версии, что и окно
+agents-follow = Следить за агентами
+agents-follow-tooltip = Сразу запускать на платформе каждую ревизию, которую сохраняет агент
+
+## link.rs
+
+link-replaying = Показываю ревизию { $revision } задания чат-клиента { $job }
+link-plate-numbered = { $model } { $number }
+link-revision-on-plate = ревизия { $revision } задания { $job } сделана на этой платформе и уже на ней
+link-revision-unreadable = не удалось прочитать ревизию { $revision } задания { $job }
+link-no-job = задания { $job } нет
+link-plate-unread = не удалось прочитать платформу ревизии
+
 ## measure.rs
 
 measure-snapped-corner = на углу
@@ -1093,6 +1134,7 @@ menu-open-test-print = Пробные печати
 menu-import-machine = Профиль принтера…
 menu-import-resin = Профиль смолы…
 menu-machine-and-resin = Принтер и смола…
+menu-chat-extension = Подключить к чат-клиенту с ИИ…
 menu-settings = Настройки…
 menu-quit = Выйти из Encrust
 menu-nothing-recent = Пока ничего не открывалось
@@ -2494,6 +2536,14 @@ edit-dropped-shells =
         [few] Удалено { $count } оболочки { $name }
        *[many] Удалено { $count } оболочек { $name }
     }
+edit-mended =
+    { $count ->
+        [one] Внесено { $count } изменение в грани { $name }
+        [few] Внесено { $count } изменения в грани { $name }
+       *[many] Внесено { $count } изменений в грани { $name }
+    }
+edit-no-such-face = В { $name } нет грани { $number }; грани нумеруются с 0
+edit-no-such-shell = В { $name } нет оболочки { $number }; оболочки нумеруются с 1
 edit-bridge-not-open = Одно из рёбер уже не открыто, соединять нечего
 edit-bridge-same = Ребро нельзя соединить с самим собой
 edit-bridge-in-line = Рёбра лежат на одной прямой, грань между ними не ляжет
@@ -2568,6 +2618,7 @@ app-cannot-build-preview = не удалось построить предпро
 ## job/hollow.rs
 
 job-thread-stopped-hollowing = поток создания полости остановился, не закончив
+hollow-no-room = стенка слишком толстая, и полости внутри модели не остаётся места
 job-hollow-stopping = Остановка…
 job-hollow-progress = Создание полости: модель { $index } из { $total }
 job-step-preparing = Проверка модели
@@ -2581,6 +2632,7 @@ job-step-combining = Объединение
 job-step-finishing = Сборка результата
 job-step-mending = Починка сетки
 job-step-crossing = Поиск самопересечений
+job-step-searching = Подбор положения модели
 job-hollow-preparing = Проверка модели
 job-hollow-seeding = Измерение поверхности
 job-hollow-carrying = Проход через стенку
@@ -2845,3 +2897,11 @@ hint-gizmo-steps = за ручку шагами по 1 мм и 15°
 ## panels/send_file.rs
 
 send-file-not-sliced = { $file } нельзя отправить: это не нарезанный файл
+
+## chat_extension.rs
+
+chat-extension-fetching = Скачивание расширения для чат-клиента…
+chat-extension-opened = Расширение для чат-клиента открыто из { $path }
+chat-extension-failed = Расширение для чат-клиента не открыто, скачайте его по ссылке { $url }: { $error }
+chat-extension-write = не удалось записать { $path }
+chat-extension-open = не удалось открыть { $path }

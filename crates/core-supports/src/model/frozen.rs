@@ -45,7 +45,7 @@ impl ModelSupports {
 
     /// Freezes each of `trees`, indices into [`ModelSupports::trees`], at once: freezing one
     /// renumbers the rest. Answers each one's frozen index, in the order asked.
-    fn freeze_all(&mut self, trees: &[usize], transform: Transform) -> Vec<Option<usize>> {
+    pub fn freeze_all(&mut self, trees: &[usize], transform: Transform) -> Vec<Option<usize>> {
         let (Some(inverse), Some(built)) = (transform.inverse_matrix(), self.built.as_ref()) else {
             return vec![None; trees.len()];
         };

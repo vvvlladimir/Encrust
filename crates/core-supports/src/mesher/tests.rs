@@ -1663,3 +1663,26 @@ fn a_support_that_reaches_the_plate_is_never_thinned() {
         "the small pillar is for struts between surfaces, not for columns"
     );
 }
+
+#[test]
+fn a_support_sunk_into_a_model_resting_on_the_plate_stops_at_the_plate() {
+    // A slab whose top is 0.05 mm up: the support's end sinks deeper than that into it.
+    let slab = box_mesh(Vec3::ZERO, Vec3::new(10.0, 10.0, 0.05));
+    let profile = profile();
+    let trees = trees_on(
+        &[SupportPoint::new(Vec3::new(5.0, 5.0, 1.5))],
+        &slab,
+        Transform::default(),
+        Profiles::single(&profile),
+    );
+    assert!(trees[0].landing().on_model, "it stands on the slab");
+    let lowest = meshed(&trees, Profiles::single(&profile))
+        .vertices
+        .iter()
+        .map(|vertex| vertex.z)
+        .fold(Scalar::INFINITY, Scalar::min);
+    assert!(
+        lowest >= 0.0,
+        "nothing goes under the plate, got {lowest} mm"
+    );
+}

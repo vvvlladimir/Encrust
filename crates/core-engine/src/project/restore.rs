@@ -34,6 +34,22 @@ pub fn hollow_of(state: &ObjectHollowState, meshes: &ModelMeshes) -> ModelHollow
     hollow
 }
 
+/// The supports `state` keeps, less every one whose tip a hole of `drains` drills out, and how
+/// many went (ADR 0443).
+pub fn supports_without_drilled(
+    state: &ObjectSupportState,
+    drains: &[DrainHole],
+) -> (ModelSupports, usize) {
+    let mut supports = ModelSupports::restore(
+        state.points.clone(),
+        state.painted.clone(),
+        state.blocked.clone(),
+        state.frozen.clone(),
+    );
+    let taken = supports.clear_contacts(|contact| drilled_out(drains, contact));
+    (supports, taken)
+}
+
 /// The supports an object carries, standing where the file says they stand: the trees are
 /// read and meshed against `surface`, whose hierarchy is `bvh`, and no run decides where a
 /// column goes again. The patches are `model`'s. A tip one of `drains` drilled out goes, and
@@ -47,13 +63,7 @@ pub fn supports_of(
     transform: Transform,
     table: &[SupportProfile],
 ) -> ModelSupports {
-    let mut supports = ModelSupports::restore(
-        state.points.clone(),
-        state.painted.clone(),
-        state.blocked.clone(),
-        state.frozen.clone(),
-    );
-    let taken = supports.clear_contacts(|contact| drilled_out(drains, contact));
+    let (mut supports, taken) = supports_without_drilled(state, drains);
     let grown = if taken > 0 {
         &[]
     } else {

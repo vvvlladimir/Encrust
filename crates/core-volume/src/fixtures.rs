@@ -1,7 +1,7 @@
-use core_geometry::{Mesh, Scalar, Vec3, cuboid};
+use core_geometry::{Bvh, Mesh, Scalar, Transform, Vec3, cuboid};
 
 use crate::drain::inward;
-use crate::{Boolean, combine_exact};
+use crate::{Boolean, HoleSize, ModelHollow, combine_exact};
 
 /// The box from `outer.0` to `outer.1` with each box of `cavities` sealed in it, wound inward
 /// as a hollowed model carries its cavity.
@@ -38,4 +38,16 @@ pub(crate) fn dumbbell() -> Mesh {
     );
     combine_exact(&[cube(0.0), bar, cube(60.0)], Boolean::Union)
         .expect("three overlapping boxes unite")
+}
+
+/// Drills into `hollow` the hole a click at `point` on the face of `normal` makes, on the model
+/// `(mesh, bvh, transform)`; says whether it was new.
+pub(crate) fn drained(
+    hollow: &mut ModelHollow,
+    (mesh, bvh, transform): (&Mesh, &Bvh, Transform),
+    (point, normal): (Vec3, Vec3),
+    size: HoleSize,
+) -> bool {
+    let hole = ModelHollow::drain_at(mesh, bvh, point, normal, size, transform);
+    hollow.add_hole(hole.expect("the point drains"))
 }

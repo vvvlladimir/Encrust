@@ -161,6 +161,8 @@ pub struct General {
     pub autosave: bool,
     /// How large the interface is drawn, in percent of the system's own size.
     pub interface_scale_percent: u16,
+    /// Whether each revision an agent keeps is run on the plate as it comes (ADR 0462).
+    pub follow_agents: bool,
 }
 
 /// The palette the user asked for. `System` follows the platform's own setting as it
@@ -197,6 +199,7 @@ impl Default for General {
             appearance: Appearance::System,
             autosave: true,
             interface_scale_percent: crate::interface_scale::SYSTEM_PERCENT,
+            follow_agents: false,
         }
     }
 }

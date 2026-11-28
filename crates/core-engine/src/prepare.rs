@@ -3,16 +3,12 @@
 //! the catalogue's automatic supports, its cavity held up as well.
 
 use core_geometry::{Mat3, MendMethod, Mesh, MeshDiagnostics, Scalar};
-use core_plate::OrientPreset;
 use core_volume::{
     HollowSettings, RepairMethod, hollowing_saves_mm3, placed_volume_and_area, raw_saving_mm3,
 };
 
 /// The repair a model with defects gets: the window's full mend.
 pub const PREPARE_REPAIR: RepairMethod = RepairMethod::Mend(MendMethod::Repair);
-
-/// What the orientation search weighs: every goal at once.
-pub const PREPARE_ORIENT: OrientPreset = OrientPreset::Auto;
 
 /// The wall a solid model is hollowed with, and the resin it is reckoned to save.
 #[derive(Debug, Clone, Copy, PartialEq)]

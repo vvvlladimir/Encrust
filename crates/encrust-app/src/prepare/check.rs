@@ -136,7 +136,7 @@ impl Run {
     }
 
     /// Answers the necks and cups `fixes` asks for on `run`'s models, before they are noted.
-    fn answer_fixes(
+    pub(super) fn answer_fixes(
         &mut self,
         (doc, tools, status): (&mut Doc, &mut Tools, &mut Status),
         fixes: CheckFixes,
@@ -151,7 +151,8 @@ impl Run {
         }
         if fixes.cups {
             let plate = (&mut doc.scene, &mut tools.drain);
-            *status = drill_cups(plate, stack, risks, Some(ids));
+            let size = self.widest_hole(ids);
+            *status = drill_cups(plate, stack, risks, Some(ids), size);
             self.answered(IssueKind::Cups, status);
         }
     }

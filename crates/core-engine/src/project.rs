@@ -2,21 +2,27 @@
 //! pure functions are redone in `restore`; see `docs/formats/encrust-project.md`, ADR 0191.
 
 mod blob;
+mod cavity;
+mod defaults;
+mod ids;
+mod merge;
 mod restore;
 
-pub use restore::{hollow_of, supports_of};
+pub use cavity::{BuiltCavity, Cavity, inner_faces};
+pub use defaults::{FIRST_GROUP, FIRST_PLATE};
+pub use ids::{ObjectId, assign as assign_ids};
+pub use merge::{insert, join_groups, regroup};
+pub use restore::{hollow_of, supports_of, supports_without_drilled};
 
 use std::io::{Read, Seek, Write};
-use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
 
-use core_geometry::{Mat3, Mesh, MeshDiagnostics, Orientation, Region, Scalar, Transform, Vec3};
+use core_geometry::{Mesh, MeshDiagnostics, Orientation, Region, Scalar, Transform};
 use core_joint::Joints;
 use core_supports::{ProjectSettings, SupportPoint, SupportTree};
 use core_volume::{
-    Blocker, Channel, DrainHole, HoleShape, HollowMode, HollowSettings, InfillSettings,
-    PLUG_GAP_MM, PartSettings,
+    Blocker, Channel, DrainHole, HoleShape, HollowMode, InfillSettings, PLUG_GAP_MM, PartSettings,
 };
 use printer_profiles::{AutoProfile, OutputFormat, Raft, SupportProfile};
 use serde::{Deserialize, Serialize};
@@ -140,7 +146,7 @@ pub fn digest(manifest: &Manifest) -> u64 {
 
 /// A project as the window holds it: the manifest, and the geometry of each object in
 /// the same order as [`Manifest::objects`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Project {
     pub manifest: Manifest,
     pub models: Vec<ModelMeshes>,
@@ -166,7 +172,7 @@ impl ModelMeshes {
 }
 
 /// Everything a project holds but its meshes, as `project.json` stores it.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Manifest {
     pub version: u32,
     /// The catalogue id of the printer, which the file names but does not carry: a plate
@@ -185,11 +191,15 @@ pub struct Manifest {
     pub plates: Vec<String>,
     pub active_plate: u32,
     pub objects: Vec<ObjectState>,
+    /// The id the next object made takes, so one deleted is never given again; absent in an
+    /// older file, and read as one past the highest present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_id: Option<ObjectId>,
 }
 
 /// What the plate's slices do beyond the print settings, which are taken from the printer
 /// and resin each time a project opens (ADR 0380).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SlicingState {
     pub remove_islands: bool,
     /// Layers more of what stood on an island taken out that go too; absent, and so
@@ -331,8 +341,11 @@ pub struct CutState {
 }
 
 /// One model on a plate: where it stands, and what was done to it.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectState {
+    /// A file written before ids reads as [`ObjectId::UNSET`] until [`read_from`] gives one.
+    #[serde(default)]
+    pub id: ObjectId,
     pub name: String,
     pub plate: u32,
     pub transform: Transform,
@@ -420,7 +433,7 @@ pub struct OwnSupportState {
 
 /// What mesh repair found at import, kept because the stored mesh is already repaired and
 /// loading it would report nothing to do.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
     pub vertices_merged: usize,
     pub faces_removed: usize,
@@ -430,7 +443,7 @@ pub struct Summary {
 
 /// One model's supports: the points placed, the regions painted, and every tree
 /// standing — the ones an automatic run grew as well as the ones a hand froze.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ObjectSupportState {
     pub points: Vec<SupportPoint>,
     pub painted: Region,
@@ -447,7 +460,7 @@ pub struct ObjectSupportState {
 
 /// One model's hollowing: the blockers, drains and channels placed on it, and the shell
 /// standing on it.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ObjectHollowState {
     pub blockers: Vec<Blocker>,
     pub drains: Vec<DrainHole>,
@@ -455,85 +468,6 @@ pub struct ObjectHollowState {
     /// The shell as it was built, or `None` for a model that is still solid. Its geometry
     /// is the object's `shell.mesh`.
     pub built: Option<BuiltCavity>,
-}
-
-/// A shell as the run left it: the wall it was asked for, and what came out of the
-/// lattice. Everything here is measured, not asked for again, so the file opens as the
-/// plate that was saved (ADR 0191).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BuiltCavity {
-    pub wall: Cavity,
-    /// Which faces of the shell bound the space the resin fills.
-    pub cavity_faces: Range<usize>,
-    pub cavity_mm3: Scalar,
-    /// The lattice the cavity came out on, millimetres, and whether a memory budget made
-    /// it coarser than the precision asked for.
-    pub voxel_mm: Scalar,
-    pub coarsened: bool,
-    /// The size the model stood at, which the wall was measured under; see [`Self::shape`].
-    pub scale: Vec3,
-    /// That size whole, written only where the model was stretched along the plate too.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stretched: Option<Mat3>,
-}
-
-impl BuiltCavity {
-    /// What the wall was measured under (`Transform::unturned`), however the file wrote it.
-    pub fn shape(&self) -> Mat3 {
-        self.stretched
-            .unwrap_or_else(|| Mat3::from_diagonal(self.scale.abs()))
-    }
-
-    /// `shape` as the two keys write it: its diagonal, and itself where that is not all.
-    pub fn keys_of(shape: Mat3) -> (Vec3, Option<Mat3>) {
-        let diagonal = Vec3::new(shape.x_axis.x, shape.y_axis.y, shape.z_axis.z);
-        let stretched = (shape != Mat3::from_diagonal(diagonal)).then_some(shape);
-        (diagonal, stretched)
-    }
-}
-
-/// The wall a model was hollowed to, as the Hollow panel shows it.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct Cavity {
-    pub thickness_mm: Scalar,
-    pub mode: HollowMode,
-    pub precision: Scalar,
-    pub infill: Option<InfillSettings>,
-    /// The way to the plate the floor was opened toward; absent for a closed shell, and in
-    /// a file from before ADR 0313.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub open_toward: Option<Vec3>,
-    /// Where the wall was kept solid under, millimetres; absent before ADR 0404.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub solid_under_mm: Option<Scalar>,
-}
-
-impl Cavity {
-    /// The wall `asked` builds, without what the model laid over it.
-    pub fn of(asked: &HollowSettings) -> Self {
-        Self {
-            thickness_mm: asked.thickness_mm,
-            mode: asked.mode,
-            precision: asked.precision,
-            infill: asked.infill,
-            open_toward: asked.open_toward,
-            solid_under_mm: asked.solid_under_mm,
-        }
-    }
-
-    /// What a run is asked for to build this wall again, before the model lays its own
-    /// blockers and channels over it.
-    pub fn settings(&self) -> HollowSettings {
-        HollowSettings {
-            thickness_mm: self.thickness_mm,
-            mode: self.mode,
-            precision: self.precision,
-            infill: self.infill,
-            open_toward: self.open_toward,
-            solid_under_mm: self.solid_under_mm,
-            ..HollowSettings::default()
-        }
-    }
 }
 
 /// Writes the project into `sink`, which is the only thing a browser can offer.
@@ -574,7 +508,7 @@ pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
     let mut zip = zip::ZipArchive::new(source)
         .map_err(|error| ProjectError::NotAProject(error.to_string()))?;
 
-    let manifest: Manifest = {
+    let mut manifest: Manifest = {
         let mut entry = zip
             .by_name(MANIFEST)
             .map_err(|_| ProjectError::NotAProject(format!("no {MANIFEST} inside")))?;
@@ -592,6 +526,7 @@ pub fn read_from<R: Read + Seek>(source: R) -> Result<Project, ProjectError> {
         }
     };
 
+    ids::assign(&mut manifest.objects);
     let mut models = Vec::with_capacity(manifest.objects.len());
     for (index, object) in manifest.objects.iter().enumerate() {
         let source = Arc::new(mesh_at(&mut zip, &source_name(index))?);

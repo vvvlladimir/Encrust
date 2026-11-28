@@ -244,10 +244,10 @@ fn a_project_naming_no_printer_asks_for_one() {
 }
 
 #[test]
-fn a_flag_that_shapes_a_model_is_refused_for_a_project() {
-    let output = estimate(&[project_fixture().to_str().unwrap(), "--hollow", "3"]);
+fn a_recipe_is_refused_for_a_project() {
+    let output = estimate(&[project_fixture().to_str().unwrap(), "--prepare"]);
     assert_eq!(output.status.code(), Some(1));
-    assert!(stderr(&output).contains("--hollow"), "{}", stderr(&output));
+    assert!(stderr(&output).contains("--prepare"), "{}", stderr(&output));
 }
 
 #[test]
@@ -289,6 +289,29 @@ fn a_project_is_sliced_on_its_own() {
         "{}",
         stderr(&output)
     );
+}
+
+#[test]
+fn projects_arranged_together_stand_on_the_printer_they_name() {
+    let named = |name: &str| {
+        let mut project = core_engine::project::load(&project_fixture()).expect("a fixture");
+        project.manifest.printer = Some("elegoo-saturn-4-ultra".to_owned());
+        let path = output_file(&format!("{name}.encrust"));
+        core_engine::project::save(&path, &project).expect("the temp dir is writable");
+        path
+    };
+    let (one, two) = (named("arranged-one"), named("arranged-two"));
+    let resin = test_resin();
+
+    let output = estimate(&[
+        one.to_str().unwrap(),
+        two.to_str().unwrap(),
+        "--arrange",
+        "--material",
+        resin.to_str().unwrap(),
+    ]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
 }
 
 /// The cube fixture with a second plate, "Small parts", holding a copy of the cube.
