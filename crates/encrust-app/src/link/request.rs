@@ -17,14 +17,14 @@ pub struct Shown {
     pub project: Project,
 }
 
-/// Revision `revision` of `job` as the server keeps it under `jobs`, to be shown: the model and
-/// the machine from the flags it stages with, and the plate its check wrote.
-pub fn of_job(jobs: &Path, job: &str, revision: u32) -> Result<Show> {
+/// Revision `revision` of `job` under `jobs`, shown from its flags and the plate its check wrote;
+/// one made by edits is refused while the job's plate, which holds it, stands (`held`).
+pub fn of_job(jobs: &Path, job: &str, revision: u32, held: bool) -> Result<Show> {
     if !is_job_name(job) {
         bail!(tr!("link-no-job", job = job.to_owned()));
     }
     let dir = jobs.join(job);
-    if dir.join(RevisionFile::Edits.of(revision)).is_file() {
+    if held && dir.join(RevisionFile::Edits.of(revision)).is_file() {
         bail!(tr!(
             "link-revision-on-plate",
             job = job.to_owned(),

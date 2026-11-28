@@ -1,5 +1,6 @@
 //! The tools a client sees, each one or two runs of the command line over a job's revision.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::Result;
@@ -69,8 +70,17 @@ impl Server {
             trace,
             window,
             presence,
-            tool_router: Self::tool_router(),
+            tool_router: Self::portable_tools(),
         }
+    }
+
+    /// The tools, each schema in the subset every local client reads (`crate::schema`).
+    fn portable_tools() -> ToolRouter<Self> {
+        let mut tools = Self::tool_router();
+        for route in tools.map.values_mut() {
+            route.attr.input_schema = Arc::new(crate::schema::portable(&route.attr.input_schema));
+        }
+        tools
     }
 
     /// The printers, the user's resins and the support profiles there are to choose from.
@@ -177,8 +187,8 @@ impl Server {
         Ok(answer(self.inspect(model, &ctx).await))
     }
 
-    /// Starts preparing a model, or a project the window saved as it was saved, for the printer
-    /// and resin the user named, and checks it as it stands.
+    /// Starts a model, or a project the window saved, on the printer and resin the user named —
+    /// ask, never choose — and checks it; `prepare: true` only when they ask to prepare it.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -387,8 +397,8 @@ impl Server {
         Ok(answer(reverted.await))
     }
 
-    /// Writes the printer file of a revision. Refused while its check names defects, unless the
-    /// user accepted them.
+    /// Writes a revision's printer file once the user named their printer and resin; refused
+    /// while its check names defects, unless the user accepted them.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = true,
@@ -456,8 +466,8 @@ impl Server {
         Ok(answer(self.discovered(find, &ctx).await))
     }
 
-    /// Sends a written file to a printer on the local network when the user asks for that
-    /// printer, and starts it only as `start` allows.
+    /// Sends a written file to a printer on the local network only when the user asks; `start`
+    /// only when they ask to start and say the vat is filled and the plate and film are clear.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = true,
@@ -551,7 +561,29 @@ impl ServerHandler for Server {
 
 #[cfg(test)]
 mod tests {
-    use super::INSTRUCTIONS;
+    use super::{INSTRUCTIONS, Server};
+
+    #[test]
+    fn every_tool_schema_is_in_the_subset_every_client_reads() {
+        for tool in Server::portable_tools().list_all() {
+            let schema = serde_json::to_string(&tool.input_schema).expect("a schema serialises");
+            for refused in [
+                "$ref",
+                "$defs",
+                "anyOf",
+                "oneOf",
+                "\"const\"",
+                "\"null\"",
+                "uint",
+            ] {
+                assert!(
+                    !schema.contains(refused),
+                    "{}'s schema holds {refused}: {schema}",
+                    tool.name
+                );
+            }
+        }
+    }
 
     #[test]
     fn the_instructions_fit_what_a_client_keeps() {

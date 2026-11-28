@@ -135,7 +135,8 @@ impl Link {
     /// Takes the revisions the user asked to see from the agents' list.
     fn take_asked(&mut self, window: &mut Window) {
         for asked in std::mem::take(&mut window.machine.agents.asked) {
-            match request::of_job(&self.jobs, &asked.job, asked.revision) {
+            let held = self.plate_of(&asked.job, &window.doc.scene).is_some();
+            match request::of_job(&self.jobs, &asked.job, asked.revision, held) {
                 Ok(show) => self.take(show),
                 Err(error) => window.machine.status = Status::failed(&error),
             }

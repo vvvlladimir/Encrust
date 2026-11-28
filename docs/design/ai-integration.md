@@ -144,6 +144,19 @@ config. The files are the user's own paths and the printer is on the user's netw
 - **No window needed.** Resins come from `import_resin` and the exposure test (step 15).
   When the window is open, each revision lands on a plate of its own (ADR 0462, `window-link.md`).
 
+### Any other local client
+
+A client that does not take `.mcpb` runs the same server by hand: a `.mcpb` is a zip, and
+its `server/encrust-mcp` with no arguments is the whole setup. The client's config names
+that path as a stdio server; `encrust` beside it is found on its own.
+
+- **Schemas every client reads.** At start each tool's input schema is folded into the subset
+  the strictest clients take: `$ref` written in place, unions into one type or `enum`, no
+  `null`, `const` or number format (`encrust-mcp/src/schema.rs`, tested on every tool).
+- **Rules in the tools.** A client may not show the server's instructions to its model, so
+  each rule that guards the user — ask for the printer and resin, send and start only when
+  asked — is also in its tool's description.
+
 A chat on the web or on a phone runs no local program and gives an MCP App page no file
 from the chat; it is served once one of those changes.
 

@@ -156,7 +156,8 @@ verdict is `N.json`'s `status`. An ended agent, one with no job and a job no age
 are not listed, nor a job the user hid; one deleted from the list loses its folder
 (ADR 0462). A press on a job builds the same line the server sends from
 `N.args.json` (`--printer` or `--profile`, `--resin` or `--material`) and `N.encrust`,
-marked `open`, and takes it as one handed over; one made on the plate is said to be there.
+marked `open`, and takes it as one handed over; one made on the job's plate is said to be
+there while that plate stands, and shown from `N.encrust` once it is gone.
 
 ## Following
 

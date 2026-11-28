@@ -453,6 +453,19 @@ fn a_revision_the_user_asks_for_is_read_from_the_servers_jobs_and_shown() {
         "a revision made on this plate is there already: {:?}",
         bench.machine.status
     );
+
+    let cube = bench.doc.scene.plates().iter().position(|p| p == "cube");
+    let cube = u32::try_from(cube.expect("the job's plate")).expect("few plates");
+    bench.doc.scene.remove_plate(cube);
+    plate_at(&job.join("4.encrust"), Vec3::new(7.0, 0.0, 0.0));
+    bench.machine.status = Status::default();
+    bench.machine.agents.asked.push(ask(4));
+    bench.run_to_end();
+    assert_eq!(
+        bench.lows_x(),
+        [7.0],
+        "a revision made on a plate since closed is shown again"
+    );
 }
 
 #[test]

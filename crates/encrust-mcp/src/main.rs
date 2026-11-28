@@ -8,6 +8,7 @@ mod params;
 mod prompts;
 mod recipe;
 mod runner;
+mod schema;
 mod server;
 mod trace;
 mod window;
