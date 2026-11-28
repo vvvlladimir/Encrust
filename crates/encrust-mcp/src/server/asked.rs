@@ -328,9 +328,7 @@ fn edit_of(written: Value) -> Option<Edit> {
 }
 
 mod finished;
-mod pieces;
 
 use finished::finished;
-pub use pieces::asked_of_pieces;
 #[cfg(test)]
 mod tests;

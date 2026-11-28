@@ -35,6 +35,10 @@ pub struct EstimateCommand {
     /// into its steps, for the window to run the same steps (`--prepare`, `--recipe` or none).
     #[arg(long, value_name = "FILE")]
     pub recipe_out: Option<PathBuf>,
+    /// Lay the plate and write `--project-out`, but cut and measure nothing: the report lists
+    /// the models alone, for a run whose plate the next run takes on.
+    #[arg(long)]
+    pub stage_only: bool,
 }
 
 impl EstimateCommand {
@@ -44,6 +48,7 @@ impl EstimateCommand {
             write_recipe(&self.job, path)?;
         }
         let started = Instant::now();
+        crate::spent::take();
         let watch = Watch {
             writes: false,
             ..global.watch(stop)
@@ -55,13 +60,17 @@ impl EstimateCommand {
             &self.job,
             &watch,
         )?;
+        if self.stage_only {
+            return Self::staged_only(&staged, (started, self.job.strict), global);
+        }
         let estimate = estimate::estimate(&mut staged, &self.job.raster, self.quick_check, &watch)?;
-        let report = EstimateReport::of(
+        let mut report = EstimateReport::of(
             &self.plate.inputs,
             &staged.parts,
             &estimate,
             started.elapsed(),
         );
+        report.stages_s = crate::spent::take();
         let compared = if self.against.is_empty() {
             BTreeMap::new()
         } else {
@@ -87,6 +96,44 @@ impl EstimateCommand {
             Exit::Success
         })
     }
+}
+
+impl EstimateCommand {
+    /// Answers a run asked to lay the plate alone with its models, as their parts found them.
+    fn staged_only(
+        staged: &stage::Staged,
+        (started, strict): (Instant, bool),
+        global: &GlobalArgs,
+    ) -> Result<Exit> {
+        let clean = staged.parts.iter().all(crate::stage::Part::is_clean);
+        let report = StagedReport {
+            status: crate::batch::status_of(clean),
+            seconds: started.elapsed().as_secs_f64(),
+            stages_s: crate::spent::take(),
+            models: staged
+                .parts
+                .iter()
+                .map(crate::batch::PartReport::of)
+                .collect(),
+        };
+        if global.json {
+            json::print(&report)?;
+        }
+        Ok(if strict && !clean {
+            Exit::Unclean
+        } else {
+            Exit::Success
+        })
+    }
+}
+
+/// What `--stage-only` answers: the models laid, and what laying them took.
+#[derive(Serialize)]
+struct StagedReport {
+    status: crate::batch::Status,
+    seconds: f64,
+    stages_s: BTreeMap<String, f64>,
+    models: Vec<crate::batch::PartReport>,
 }
 
 /// The report, and how it stands against each kept one `--against` named.

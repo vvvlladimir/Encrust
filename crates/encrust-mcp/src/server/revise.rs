@@ -56,29 +56,46 @@ impl Server {
         if !outcome.reported() {
             return Ok(not_applied(None, &outcome));
         }
-        let autopilot = if recipe.is_project() {
-            None
-        } else if recipe.prepare && recipe.repair.is_none() {
-            Some(outcome.report.clone())
-        } else {
-            let alone = Recipe {
-                prepare: true,
-                ..Recipe::bare(
-                    recipe.model.clone(),
-                    recipe.printer.clone(),
-                    recipe.resin.clone(),
-                )
-            };
-            Some(self.estimate(&alone, &[], ctx).await?.report)
-        };
         let job = Jobs::name_for(&recipe);
         let note = recipe.is_project().then_some(PROJECT);
         let revision = self.jobs.commit(&job, (recipe, steps), &outcome.report)?;
         self.keep_plate(&revision, plate);
-        if let Some(autopilot) = &autopilot {
-            self.jobs.keep_autopilot(&job, autopilot)?;
+        let recipe = &revision.recipe;
+        if recipe.prepare && recipe.repair.is_none() {
+            self.jobs.keep_autopilot(&job, &outcome.report)?;
+        } else if !recipe.is_project() {
+            self.autopilot_aside(&job, recipe);
         }
         Ok(self.kept(&revision, &outcome, note).await)
+    }
+
+    /// Runs the autopilot on `recipe`'s model aside, keeping its check as the job's to set each
+    /// later check against once it ends: the client is answered without waiting for it.
+    fn autopilot_aside(&self, job: &str, recipe: &Recipe) {
+        let alone = Recipe {
+            prepare: true,
+            ..Recipe::bare(
+                recipe.model.clone(),
+                recipe.printer.clone(),
+                recipe.resin.clone(),
+            )
+        };
+        let (server, job) = (self.clone(), job.to_owned());
+        tokio::spawn(async move {
+            let mut args = vec!["estimate".to_owned()];
+            args.extend(alone.flags());
+            match server.cli.run(&args).await {
+                Ok(outcome) if outcome.reported() => {
+                    let kept = server.jobs.keep_autopilot(&job, &outcome.report);
+                    super::plate_edits::unkept("the autopilot's check", kept);
+                }
+                Ok(outcome) => eprintln!(
+                    "encrust-mcp: the autopilot did not check: {}",
+                    outcome.report
+                ),
+                Err(error) => eprintln!("encrust-mcp: the autopilot did not run: {error:#}"),
+            }
+        });
     }
 
     /// Changes the job's latest recipe, checks it, and keeps it as the next revision only when
@@ -138,7 +155,7 @@ impl Server {
         let mut previous: Option<PathBuf> = None;
         for run in runs {
             let plate = self.jobs.scratch_plate()?;
-            let mut args = vec!["estimate".to_owned()];
+            let mut args = vec!["estimate".to_owned(), "--stage-only".to_owned()];
             args.extend(after(run, previous.as_deref()));
             args.push(format!("--project-out={}", plate.display()));
             let outcome = self.watched(&args, ctx).await;
@@ -182,7 +199,8 @@ impl Server {
         }
     }
 
-    /// The answer for a revision just kept: what the open window, if any, said of it.
+    /// The answer for a revision just kept, handed to the open window aside: the answer does not
+    /// wait for it, and what the window did not take is told with the job's next answer.
     pub(super) async fn kept(
         &self,
         revision: &Revision,
@@ -190,22 +208,14 @@ impl Server {
         note: Option<&str>,
     ) -> Reply {
         let mut reply = revised(revision, outcome, note);
-        if let Some(applied) = self.edits_in_window(revision, &outcome.report).await {
-            // Edits the window took back leave its plate behind: it is shown the revision's.
-            let taken_back = applied["applied"] == false;
-            reply.body["window"] = applied;
-            if !taken_back {
-                return reply;
-            }
-        }
-        let plate = self.jobs.shown_plate(revision).ok();
-        if let Some(plate) = plate
-            && let Some(shown) = self.window.show(revision, &plate, false).await
-        {
-            match reply.body["window"].as_object_mut() {
-                Some(refused) => _ = refused.insert("then_shown".into(), shown),
-                None => reply.body["window"] = shown,
-            }
+        self.tell_untold(&revision.job, &mut reply);
+        if self.window.answers().await {
+            let (server, handed) = (self.clone(), revision.clone());
+            let report = outcome.report.clone();
+            self.window
+                .aside()
+                .queue(async move { server.handed_over(&handed, &report).await });
+            reply.body["window"] = plate_edits::pending();
         }
         reply
     }

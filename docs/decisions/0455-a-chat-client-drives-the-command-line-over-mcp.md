@@ -1,6 +1,6 @@
 # 0455. A chat client drives the command line over MCP
 
-- **Status:** Accepted
+- **Status:** Accepted; a process a call is superseded by 0467
 - **Date:** 2026-11-02
 
 ## Context

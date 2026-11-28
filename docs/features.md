@@ -258,7 +258,8 @@ asks by a second press; **Import** and **Export** carry a recipe as its file.
   cores and at half the panel's resolution, so the dot on the Check tool and its first list
   are there before Check is opened. Opening Check reads every pixel; until that is in, the
   quick list is marked and its fixes wait. An island near the smallest one named can be missed
-  or wrongly named by the quick read, never by the full one. While Fix all or another recipe
+  or wrongly named by the quick read, never by the full one. Nothing within the bottom layers
+  is an island: their long exposure cures it to the plate. While Fix all or another recipe
   runs, Check reads nothing of its own: it reads again once the run ends or pauses.
 - Check keeps each kind of issue on a card of its own, with its rows and the buttons that
   answer it: **Placement**, **Hollow and drain**, then in the layers **Islands**, **Suction cups**,
@@ -1116,9 +1117,12 @@ say, it works on the standard printer's plate with stock resin numbers, so a cut
 there stays where it was once you name yours, and it writes no file before you have named
 both. Each check says where every model stands on the plate. After a cut, each piece is
 turned and lifted on its own, and supports asked for one piece keep the others'; a point
-given on a plate of pieces goes to the piece it lies at, and each step after the cut is built
-on the plate the step before left rather than cutting the model again. Each answer lists the
-dozen risks that matter first and how long the step took; `check` lists every risk. It finds
+given on a plate of pieces goes to the piece it lies at and stays on it, however a later step
+moves or spreads the pieces. Encrust runs as one process for the whole conversation and keeps
+what each step made, so a step pays only for what it changed: a model already cut, posed and
+hollowed is not cut, posed or hollowed again, and a check of a plate it checked before is
+instant. Each answer lists the dozen risks that matter first and how long the step took;
+`check` lists every risk. Jobs untouched for a month are cleared away. It finds
 the printers on your network itself before sending a file. The command line's flags are its
 tools': `set_shape` cuts with a
 joint of the size you ask or leaves the halves upright, labels in a font, splits, mirrors,
@@ -1128,9 +1132,9 @@ answers what Check finds — islands supported, suction cups vented, weak necks 
 model of the job or the ones it names, a cut model's halves among them. Each
 model is prepared in a job of its own; `plate_jobs` lays several on one plate, spread apart,
 checks it and writes them as one file.
-`compare_poses` shows the model the best few ways the engine found to stand it, searching once
-for the numbers and every picture, and `set_pose` takes the one chosen without searching again — nor does the window when it
-stands the model that way;
+`compare_poses` shows each model or piece the best few ways the engine found to stand it,
+searching once for the numbers and every picture, and `set_pose` takes the way chosen for each
+piece without searching again — nor does the window when it stands the model that way;
 each drawn with what it prints, and the model picks one for what the print is — keeping supports off a
 face you named, say, which the search then ranks first. A model on supports that the agent
 stands a new way gets its supports again for that pose, none left over from the old one. Every step it takes is set against
@@ -1147,9 +1151,11 @@ puts it on its plate itself, opening Encrust if it is closed. Followed, the wind
 plate: a repair, faces mended, a picture pressed in, a scale, a turn typed, a label, a split,
 a cut, a hollow, a hole drilled at a point or supports an agent makes lands there as an edit
 of the model on it, each step one undo, and the agent's next step is checked on the plate as
-you left it, so what you changed or undid there is part of it. A step that cannot land whole
-is taken back from the plate and not kept by the agent, so the plate and the agent never
-disagree. A pose the search picked lands as the turn it chose and stays that turn through the
+you left it, so what you changed or undid there is part of it. The agent never waits for the
+window: its steps land there in order as the window gets to them, and one asked while the
+window is still busy is checked without your changes, which reach the step after. A step
+that cannot land whole is taken back from the plate, which then shows the agent's own plate
+for that step, and the agent is told with its next answer. A pose the search picked lands as the turn it chose and stays that turn through the
 agent's later steps, a new lift included, and the drain search and plugs land as edits too. It asks what the print is for and can prepare it by
 another recipe, such as Miniatures; it can be told which side of the model is looked at, so
 the supports there are sparser and lighter. A way of preparing that worked, or one you

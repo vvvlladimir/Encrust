@@ -2,6 +2,7 @@
 //! flags, and `--project-out` writing the plate they leave (ADR 0456, 0458).
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
 use core_document::{Document, ImportedModel, apply};
@@ -11,6 +12,8 @@ use core_geometry::{Mesh, Orientation, diagnose};
 use core_volume::Cancel;
 
 use crate::report::ImportReport;
+use crate::stage::Seed;
+use crate::steps::{Edited, edit_bytes};
 
 /// The edits a run makes to a project's plate, and where the plate they leave is written.
 #[derive(Debug, Clone, Default, clap::Args)]
@@ -40,18 +43,42 @@ impl EditArgs {
     }
 
     /// `project` with `--edits` carried out on it, written to `--project-out` where asked.
-    pub fn applied(&self, project: Project) -> Result<Project> {
+    pub(crate) fn applied(&self, (project, mut seed): (Project, Seed)) -> Result<(Project, Seed)> {
         let mut document = Document::from_project(project);
         document.keep_poses_in(crate::kept_poses::folder());
         each_edit(&self.listed()?, |edit| {
-            apply(&mut document, edit, Cancel::never())?;
+            let next = (seed.as_ref())
+                .map(|(steps, key)| (Arc::clone(steps), key.then(&edit_bytes(edit))));
+            if let Some((steps, key)) = &next
+                && let Some(edited) = steps.plate(*key)
+            {
+                document = edited.document;
+            } else {
+                let stage = crate::spent::edit_stage(edit);
+                let applied =
+                    crate::spent::timed(&stage, || apply(&mut document, edit, Cancel::never()))?;
+                if let Some((steps, key)) = &next {
+                    let edited = Edited {
+                        document: document.clone(),
+                        owners: Vec::new(),
+                        applied,
+                    };
+                    steps.keep_plate(*key, edited);
+                }
+            }
+            seed = next;
             Ok(())
         })?;
+        let written = self.project_out.as_ref().zip(seed.as_ref());
+        let kept = written.map(|_| document.clone());
         let project = document.into_project();
         if let Some(path) = &self.project_out {
             write_project(path, &project)?;
         }
-        Ok(project)
+        if let (Some((path, (steps, key))), Some(document)) = (written, kept) {
+            steps.wrote(path, *key, document);
+        }
+        Ok((project, seed))
     }
 
     /// Refuses the flags for a plate file, which its own keys shape.
@@ -110,7 +137,8 @@ pub(crate) fn each_edit(
 
 /// Writes `project` to `path`, as `--project-out` asks.
 pub(crate) fn write_project(path: &Path, project: &Project) -> Result<()> {
-    save(path, project).with_context(|| format!("cannot write the project {}", path.display()))
+    crate::spent::timed("project:write", || save(path, project))
+        .with_context(|| format!("cannot write the project {}", path.display()))
 }
 
 /// An orient proved on the machine `--orient` proves on: a printer the shipped catalogue lists,

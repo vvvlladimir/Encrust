@@ -3,14 +3,16 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::Result;
 use core_document::{Applied, ApplyError, Document, apply, standing_meshes};
 use core_edit::{Edit, ObjectId};
-use core_engine::plate_models;
 use core_engine::project::{AutoSizing, Group, Manifest, ObjectState, Project, SupportState};
 use core_engine::{Model, SupportPlan};
-use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar, Transform, signed_volume, transform_mesh};
+use core_geometry::{
+    Aabb, BoundingVolume, Mesh, Scalar, Transform, Vec3, signed_volume, transform_mesh,
+};
 use core_volume::Cancel;
 use printer_profiles::{PrinterProfile, SupportProfile};
 
@@ -19,6 +21,7 @@ use super::{Found, Laid, Part, Shaping, bounds, standing_of};
 use crate::exit::{Cancelled, Stop};
 use crate::pipeline::OrientSummary;
 use crate::plate_edits::{imported_model, write_project};
+use crate::steps::{Edited, Fingerprint, Key, Steps, edit_bytes, plate_key};
 
 /// The printer and resin a project names by catalogue id.
 pub(super) type Named = (Option<String>, Option<String>);
@@ -33,7 +36,12 @@ pub(crate) struct Staging {
     plate: u32,
     /// What the search chose for each piece it stood, where an entry was cut into several.
     oriented: HashMap<ObjectId, OrientSummary>,
+    /// What a server keeps and the key of the plate as it stands, where each edit is reused.
+    kept: Option<(Arc<Steps>, Key)>,
 }
+
+/// What a server keeps, and the key of the plate a run starts from.
+pub(crate) type Seed = Option<(Arc<Steps>, Key)>;
 
 impl Staging {
     /// An object for each piece of each entry, ids from 1 in the order given, as the window
@@ -42,6 +50,7 @@ impl Staging {
         pieces: Vec<Vec<Mesh>>,
         found: &[Found],
         (entries, named): (&[(PathBuf, Shaping)], Named),
+        kept: Seed,
     ) -> Self {
         // The first entry's profile ends in hand, every other's a group of the plate.
         let held: Vec<&SupportPlan> = (entries.iter().rev())
@@ -68,21 +77,29 @@ impl Staging {
             only,
             plate: 0,
             oriented: HashMap::new(),
+            kept,
         }
     }
 
     /// A project's plate to be edited by the flags, every object of it the one entry's; the
     /// flags work on `plate` and on the objects `only` names, every one when it is empty.
-    pub(crate) fn of_project(project: Project, plate: u32, only: Vec<ObjectId>) -> Self {
+    pub(crate) fn of_project(
+        project: Project,
+        plate: u32,
+        only: Vec<ObjectId>,
+        kept: Seed,
+    ) -> Self {
         let mut document = Document::from_project(project);
         document.keep_poses_in(crate::kept_poses::folder());
         let owners = document.ids().into_iter().map(|id| (id, 0)).collect();
+        let asked = format!("{plate} {only:?}");
         Self {
             document,
             owners,
             only,
             plate,
             oriented: HashMap::new(),
+            kept: kept.map(|(steps, key)| (steps, key.then(asked.as_bytes()))),
         }
     }
 
@@ -91,9 +108,9 @@ impl Staging {
         self.oriented.insert(object, summary);
     }
 
-    /// The plate as a project, as the edits left it.
-    pub(crate) fn into_project(self) -> Project {
-        self.document.into_project()
+    /// The plate as a project, as the edits left it, with the key a server keeps it under.
+    pub(crate) fn into_project(self) -> (Project, Seed) {
+        (self.document.into_project(), self.kept)
     }
 
     /// The objects of entry `entry` the flags shape: on the plate worked on, named by `--only`
@@ -150,6 +167,15 @@ impl Staging {
         (self.document.object(id)).map_or(0.0, |(state, _)| state.supports.raft_lift_mm)
     }
 
+    /// `points` in object `id`'s own frame, carried onto the plate where it stands now.
+    pub(crate) fn carried(&self, id: ObjectId, points: &[Vec3]) -> Vec<Vec3> {
+        let matrix = self.transform(id).to_matrix();
+        points
+            .iter()
+            .map(|point| matrix.transform_point3(*point))
+            .collect()
+    }
+
     /// Where object `id` stands; the identity off the plate.
     pub(crate) fn transform(&self, id: ObjectId) -> Transform {
         self.document
@@ -161,6 +187,9 @@ impl Staging {
     /// Takes `profile` up as the plate's group in hand, as a front end puts a profile of its
     /// own on the plate before an edit names it.
     pub(crate) fn hold_profile(&mut self, profile: SupportProfile) {
+        if let Some((_, key)) = &mut self.kept {
+            *key = key.then(format!("hold {profile:?}").as_bytes());
+        }
         let group = Group {
             name: profile.name.clone(),
             profile,
@@ -177,12 +206,32 @@ impl Staging {
 
     /// The models of the plate as a run cuts them, in the order of [`Self::ids`].
     pub(crate) fn models(&self) -> Vec<Model> {
-        self.document.plate_models()
+        match &self.kept {
+            Some(_) => (self.document.printable().into_iter())
+                .filter_map(|id| self.model(id))
+                .collect(),
+            None => self.document.plate_models(),
+        }
+    }
+
+    /// The key of the plate's models as they stand, where a server keeps steps.
+    pub(crate) fn fingerprint(&self) -> Option<Fingerprint> {
+        self.kept.as_ref()?;
+        let objects = self.document.printable().into_iter();
+        let objects = objects.filter_map(|id| self.document.object(id));
+        plate_key(objects, self.document.support_state())
     }
 
     /// Object `id` as a run cuts it, its supports under it.
     pub(crate) fn model(&self, id: ObjectId) -> Option<Model> {
-        self.document.model(id)
+        match &self.kept {
+            Some((steps, _)) => {
+                let (object, meshes) = self.document.object(id)?;
+                let plate = self.document.support_state();
+                steps.model((object, meshes, plate), || self.document.model(id))
+            }
+            None => self.document.model(id),
+        }
     }
 
     /// The box object `id` and its supports stand in, plate mm.
@@ -249,12 +298,35 @@ impl Staging {
         object: ObjectId,
         cancel: Cancel<'_>,
     ) -> Result<Applied, ApplyError> {
-        let applied = apply(&mut self.document, edit, cancel)?;
+        let next = (self.kept.as_ref()).map(|(steps, key)| {
+            let mut asked = edit_bytes(edit);
+            asked.extend_from_slice(&object.0.to_le_bytes());
+            (Arc::clone(steps), key.then(&asked))
+        });
+        if let Some((steps, key)) = &next
+            && let Some(edited) = crate::spent::timed("edit:kept", || steps.plate(*key))
+        {
+            self.document = edited.document;
+            self.owners = edited.owners;
+            self.kept = next;
+            return Ok(edited.applied);
+        }
+        let stage = crate::spent::edit_stage(edit);
+        let applied = crate::spent::timed(&stage, || apply(&mut self.document, edit, cancel))?;
         let first = applied.removed.first().copied().unwrap_or(object);
         let owner = self.entry_of(first).unwrap_or(0);
         self.owners = (self.document.ids().into_iter())
             .map(|id| (id, self.entry_of(id).unwrap_or(owner)))
             .collect();
+        if let Some((steps, key)) = &next {
+            let edited = Edited {
+                document: self.document.clone(),
+                owners: self.owners.clone(),
+                applied: applied.clone(),
+            };
+            steps.keep_plate(*key, edited);
+        }
+        self.kept = next;
         Ok(applied)
     }
 
@@ -274,12 +346,22 @@ impl Staging {
         talk: bool,
     ) -> Result<Laid> {
         let entry_of: HashMap<ObjectId, usize> = self.owners.iter().copied().collect();
+        let models = self.models();
+        let fingerprint = self.fingerprint();
+        let written = out.zip(
+            self.kept
+                .as_ref()
+                .map(|(steps, key)| (Arc::clone(steps), *key)),
+        );
+        let document = written.as_ref().map(|_| self.document.clone());
         let project = self.document.into_project();
         if let Some(path) = out {
             write_project(path, &project)?;
         }
+        if let (Some((path, (steps, key))), Some(document)) = (written, document) {
+            steps.wrote(path, key, document);
+        }
         let plate = project.manifest.active_plate;
-        let models = plate_models(&project, plate);
         let on: Vec<&ObjectState> = (project.manifest.objects.iter())
             .filter(|object| object.printable_on(plate))
             .collect();
@@ -297,6 +379,7 @@ impl Staging {
             models,
             owners,
             part_entries,
+            fingerprint,
         })
     }
 }
@@ -344,6 +427,7 @@ fn parts_of(
             meets: Vec::new(),
             prepared: None,
             recipe: None,
+            placed: Some(object.transform),
         });
         part_entries.push(entry);
     }

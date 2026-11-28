@@ -36,7 +36,10 @@ impl Run<'_> {
             .any(|piece| self.staging.hollowed(piece.id));
         let ctx = self.ctx;
         let machine = (ctx.job, ctx.chosen, ctx.layer_height_mm);
-        staged((Vec::new(), models), drainage, machine, false)
+        Staged {
+            fingerprint: self.staging.fingerprint(),
+            ..staged((Vec::new(), models), drainage, machine, false)
+        }
     }
 
     /// Answers the cups and necks `settings` ask for, then measures, notes and supports the

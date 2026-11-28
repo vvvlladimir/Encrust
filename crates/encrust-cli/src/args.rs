@@ -29,6 +29,10 @@ use crate::resin_set::ResinSet;
 use crate::sliced_file::CtbRevision;
 use crate::supports::{MergePoints, merge_points};
 
+mod orient_pick;
+
+pub use orient_pick::OrientPick;
+
 /// Which printer to check against and which resin to expose with.
 #[derive(Debug, Default, clap::Args)]
 #[command(next_help_heading = "Printer and resin")]
@@ -245,10 +249,10 @@ pub struct TransformArgs {
           value_parser = clap::value_parser!(u16).range(1..=16))]
     pub orient_choices: Option<u16>,
 
-    /// Stand the model the Nth way the search ranks, counted from one, not the first.
-    #[arg(long, value_name = "N", requires = "orient",
-          value_parser = clap::value_parser!(u16).range(1..=64))]
-    pub orient_pick: Option<u16>,
+    /// Stand the model the Nth way the search ranks, counted from one, not the first; `ID:N`
+    /// gives object ID its own way, as `inspect` lists ids, beside an `N` for the rest.
+    #[arg(long, value_name = "N|ID:N,...", requires = "orient", value_parser = orient_pick::parse)]
+    pub orient_pick: Option<OrientPick>,
 
     /// Keep supports off the surface near this point, plate mm as the model stands turned by
     /// --orient-keep-clear-turn and centred on z = 0. Repeat for more.
@@ -576,6 +580,11 @@ pub struct JobArgs {
     /// object when left out.
     #[arg(long, value_name = "ID,...", value_delimiter = ',')]
     pub only: Vec<u64>,
+
+    /// Read every finishing flag's points (`--drain-at` to `--merge-supports`) in the model's
+    /// own frame, so a point stays on the model wherever an edit before it moves it.
+    #[arg(long)]
+    pub points_in_object: bool,
 
     /// Prepare each model as the engine's defaults would: repair it if it has defects, orient
     /// it, hollow, drain and hold up its cavity where a wall saves resin, and stand it on

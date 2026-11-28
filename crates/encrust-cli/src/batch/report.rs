@@ -1,12 +1,13 @@
 //! What a run writes down as JSON: one report per model and one over a whole batch.
 //! Every number a farm would gate on is a field here, not prose.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Result;
 use core_analysis::{Measured, RiskKind, equivalent_disc_mm};
-use core_geometry::Scalar;
+use core_geometry::{Scalar, Transform};
 use serde::Serialize;
 
 use crate::estimate::Estimate;
@@ -66,6 +67,10 @@ pub struct EstimateReport {
     pub input: Vec<String>,
     pub status: Status,
     pub seconds: f64,
+    /// The seconds each stage of the run took, summed by stage: `import:read`, `edit:hollow`,
+    /// `check`, ...; the stages left out took no time worth a millisecond.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub stages_s: BTreeMap<String, f64>,
     pub models: Vec<PartReport>,
     pub slicing: Slicing,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -97,6 +102,7 @@ impl EstimateReport {
                 .collect(),
             status: status_of(parts.iter().all(Part::is_clean) && estimate.is_clean()),
             seconds: took.as_secs_f64(),
+            stages_s: BTreeMap::new(),
             models: parts.iter().map(PartReport::of).collect(),
             slicing: Slicing::of(&estimate.slice),
             print: estimate.print.as_ref().map(|print| PrintReport {
@@ -149,6 +155,26 @@ pub struct PartReport {
     /// What each step of `--recipe` decided for it, and read to decide.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recipe: Option<RecipeRun>,
+    /// What carries a point between the model's own frame and the plate's, for a client that
+    /// keeps points on the model (`--points-in-object`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame: Option<Placed>,
+}
+
+/// Where a model stands, as two 4x4 matrices in column order, plate mm.
+#[derive(Debug, Serialize)]
+pub struct Placed {
+    pub to_plate: [Scalar; 16],
+    pub from_plate: [Scalar; 16],
+}
+
+impl Placed {
+    fn of(placed: Transform) -> Option<Self> {
+        Some(Self {
+            to_plate: placed.to_matrix().to_cols_array(),
+            from_plate: placed.inverse_matrix()?.to_cols_array(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -274,9 +300,9 @@ impl PartReport {
                 wall_mm: report.wall().0,
                 cavity_mm3: report.cavity_mm3(),
             }),
-            auto_drains: part.drains.as_ref().map(|drained| {
+            auto_drains: part.drains.as_ref().map(|searched| {
                 let lifted_mm = part.supports.as_ref().map_or(0.0, |found| found.lifted_mm);
-                AutoDrains::of(drained, lifted_mm)
+                AutoDrains::of(searched, part.placed, lifted_mm)
             }),
             supports: part.supports.as_ref().map(|report| Supports {
                 lifted_mm: report.lifted_mm,
@@ -299,6 +325,7 @@ impl PartReport {
                 .collect(),
             prepared: part.prepared.clone(),
             recipe: part.recipe.clone(),
+            frame: part.placed.and_then(Placed::of),
         }
     }
 
@@ -316,6 +343,7 @@ impl PartReport {
             meets: Vec::new(),
             prepared: None,
             recipe: None,
+            frame: None,
         }
     }
 }
@@ -353,7 +381,7 @@ fn cured_of(outcome: &Outcome) -> Option<Cured> {
     })
 }
 
-fn status_of(clean: bool) -> Status {
+pub(crate) fn status_of(clean: bool) -> Status {
     if clean { Status::Ok } else { Status::Unclean }
 }
 

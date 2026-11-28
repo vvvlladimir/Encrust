@@ -19,7 +19,8 @@ Each tool's description holds its own rules; these hold across them.
    revision before or the autopilot is undone with `revert` unless the user asked for it;
    say what it cost.
 5. Look before you change: `render` the job and say what the model is and which surfaces a
-   person will see. `compare_poses` before `set_pose`, picking for a reason you can name.
+   person will see. `compare_poses` before `set_pose`, picking each piece's way for a reason you
+   can name.
    Name the side that shows in `shown_at_mm`, and what no support may touch in
    `keep_clear_at_mm`.
 6. A hollow model needs a way out for its resin: `slicing.trapped` must be empty. Fix what the

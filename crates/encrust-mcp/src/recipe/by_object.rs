@@ -20,6 +20,15 @@ pub trait PlatePoints: ForObjects + Clone {
     /// Keeps the points and groups whose anchor `keep` takes.
     fn keep_points(&mut self, keep: &dyn Fn([f32; 3]) -> bool);
     fn name_objects(&mut self, ids: Vec<u64>);
+    /// Carries every point and group of points by `carry`.
+    fn carry_points(&mut self, carry: &dyn Fn([f32; 3]) -> [f32; 3]);
+}
+
+/// `points` each carried by `carry`.
+fn carried(points: &mut [[f32; 3]], carry: &dyn Fn([f32; 3]) -> [f32; 3]) {
+    for point in points {
+        *point = carry(*point);
+    }
 }
 
 /// `asked` as it stands where it names objects, has no points or there is one object; else the
@@ -91,6 +100,14 @@ impl PlatePoints for Drains {
     fn name_objects(&mut self, ids: Vec<u64>) {
         self.objects = ids;
     }
+
+    fn carry_points(&mut self, carry: &dyn Fn([f32; 3]) -> [f32; 3]) {
+        carried(&mut self.at_mm, carry);
+        carried(&mut self.support_at_mm, carry);
+        self.channels
+            .iter_mut()
+            .for_each(|channel| carried(channel, carry));
+    }
 }
 
 impl PlatePoints for Supports {
@@ -110,6 +127,14 @@ impl PlatePoints for Supports {
     fn name_objects(&mut self, ids: Vec<u64>) {
         self.objects = ids;
     }
+
+    fn carry_points(&mut self, carry: &dyn Fn([f32; 3]) -> [f32; 3]) {
+        carried(&mut self.at_mm, carry);
+        carried(&mut self.shown_at_mm, carry);
+        self.merge_at_mm
+            .iter_mut()
+            .for_each(|group| carried(group, carry));
+    }
 }
 
 impl PlatePoints for Hollow {
@@ -123,6 +148,10 @@ impl PlatePoints for Hollow {
 
     fn name_objects(&mut self, ids: Vec<u64>) {
         self.objects = ids;
+    }
+
+    fn carry_points(&mut self, carry: &dyn Fn([f32; 3]) -> [f32; 3]) {
+        carried(&mut self.keep_solid_at_mm, carry);
     }
 }
 

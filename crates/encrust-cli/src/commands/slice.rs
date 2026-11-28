@@ -95,7 +95,7 @@ impl SliceCommand {
         if project::shaped_by_flags(&self.job, self.plate.arrange) {
             bail!("--all-plates slices the plates as saved; shape one with --plate N first");
         }
-        let project = self.job.edits.applied(project::open(path)?)?;
+        let (project, _) = self.job.edits.applied((project::open(path)?, None))?;
         let plates = project::printable_plates(&project.manifest);
         if plates.is_empty() {
             bail!("{} holds nothing to print", path.display());
@@ -192,7 +192,7 @@ impl SliceCommand {
     ) -> Result<(Option<serde_json::Value>, bool)> {
         let started = Instant::now();
         let watch = global.watch(stop);
-        let mut staged = project::stage(path, project, Some(plate), &self.job)?;
+        let mut staged = project::stage(path, project, Some(plate), (&self.job, &None))?;
         self.finish(&mut staged, output, global, &watch, started)
     }
 

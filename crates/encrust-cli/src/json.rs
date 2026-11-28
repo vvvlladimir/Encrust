@@ -1,7 +1,14 @@
 //! The one JSON document `--json` prints to stdout, with the schema version it follows.
 
+use std::cell::RefCell;
+
 use anyhow::Result;
 use serde::Serialize;
+
+thread_local! {
+    /// The documents printed while `caught` runs, kept for its caller in place of stdout.
+    static CAUGHT: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
+}
 
 /// Raised whenever a field is removed or changes meaning; adding one does not raise it.
 pub const SCHEMA: u32 = 1;
@@ -15,8 +22,26 @@ struct Document<'a, T> {
 
 /// Prints `body` as the run's one document, the schema version beside its own fields.
 pub fn print<T: Serialize>(body: &T) -> Result<()> {
-    println!("{}", document(body)?);
+    let document = document(body)?;
+    let kept = CAUGHT.with(|caught| match caught.borrow_mut().as_mut() {
+        Some(kept) => {
+            kept.push(document.clone());
+            true
+        }
+        None => false,
+    });
+    if !kept {
+        println!("{document}");
+    }
     Ok(())
+}
+
+/// Runs `work` with the documents it prints kept from stdout, and the last of them.
+pub(crate) fn caught<T>(work: impl FnOnce() -> T) -> (T, Option<String>) {
+    CAUGHT.with(|caught| *caught.borrow_mut() = Some(Vec::new()));
+    let done = work();
+    let printed = CAUGHT.with(|caught| caught.borrow_mut().take());
+    (done, printed.and_then(|mut printed| printed.pop()))
 }
 
 fn document<T: Serialize>(body: &T) -> Result<String> {

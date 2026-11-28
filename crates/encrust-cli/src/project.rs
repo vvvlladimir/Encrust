@@ -2,6 +2,7 @@
 //! flags (ADR 0458); its printer and resin by id (ADR 0261), its settings under the flags' (0380).
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
 use core_document::{Document, apply};
@@ -12,7 +13,7 @@ use std::time::Duration;
 
 use crate::hollowing::HollowReport;
 use crate::supports::SupportReport;
-use core_engine::{Machine, Opening, open_plate};
+use core_engine::{Machine, Model, Opening, object_model, open_plate_of, plate_models};
 use core_format::ExposurePlan;
 use core_volume::Cancel;
 use printer_profiles::{MaterialProfile, PrinterProfile};
@@ -23,11 +24,48 @@ use crate::pipeline::{Watch, cutting_of, overrides_of, raster_window, warn_if_gr
 use crate::profiles::catalogue;
 use crate::report::FitCheck;
 use crate::sliced_file::now_unix_s;
-use crate::stage::{Part, Staged, bounds, print_off_the_plate};
+use crate::stage::{Part, Seed, Staged, bounds, print_off_the_plate};
+use crate::steps::{Key, plate_key};
+
+/// A project to stage from, with its key where a server keeps steps: the plate this server
+/// wrote to `path` where the file is still as written, else the file as read.
+pub(crate) fn opened(path: &Path, watch: &Watch) -> Result<(Project, Seed)> {
+    let Some(steps) = &watch.steps else {
+        return Ok((open(path)?, None));
+    };
+    if let Some((key, document)) = steps.written(path) {
+        return Ok((document.into_project(), Some((Arc::clone(steps), key))));
+    }
+    let project = open(path)?;
+    let seed = (steps.file_key(path).ok())
+        .map(|file| (Arc::clone(steps), Key::of(&[b"project"]).with(file)));
+    Ok((project, seed))
+}
+
+/// The models `plate` of `project` prints, each as a server made it before where `seed` names
+/// the plate it keeps.
+fn models_of(project: &Project, plate: u32, seed: &Seed) -> Vec<Model> {
+    let Some((steps, _)) = seed else {
+        return plate_models(project, plate);
+    };
+    let supports = &project.manifest.supports;
+    (project
+        .manifest
+        .objects
+        .iter()
+        .zip(&project.models)
+        .enumerate())
+    .filter(|(_, (object, _))| object.printable_on(plate))
+    .filter_map(|(index, (object, meshes))| {
+        steps.model((object, meshes, supports), || object_model(project, index))
+    })
+    .collect()
+}
 
 /// Opens a project to stage its plates from.
 pub fn open(path: &Path) -> Result<Project> {
-    load(path).with_context(|| format!("cannot open the project {}", path.display()))
+    crate::spent::timed("project:read", || load(path))
+        .with_context(|| format!("cannot open the project {}", path.display()))
 }
 
 /// The plate each of `paths` was left on, laid on one in the order given, the first's settings
@@ -116,9 +154,9 @@ fn saved_plate(path: &Path, manifest: &Manifest) -> u32 {
 }
 
 /// `plate` of `project`, counted from one, staged, with what stands off the plate said.
-pub fn stage_checked(
+pub(crate) fn stage_checked(
     path: &Path,
-    project: &Project,
+    (project, seed): (&Project, &Seed),
     plate: Option<u32>,
     job: &JobArgs,
     watch: &Watch,
@@ -126,21 +164,30 @@ pub fn stage_checked(
     let plate = plate
         .map(|number| chosen_plate(&project.manifest, number))
         .transpose()?;
-    let mut staged = stage(path, project, plate, job)?;
+    let mut staged =
+        crate::spent::timed("stage:project", || stage(path, project, plate, (job, seed)))?;
     if watch.talk {
         print_off_the_plate(&staged.parts);
     }
     let owners: Vec<usize> = (0..staged.models.len()).collect();
-    meeting::mark(&mut staged.parts, &staged.models, &owners, watch.talk);
+    crate::spent::timed("stage:meeting", || {
+        meeting::mark(&mut staged.parts, &staged.models, &owners, watch.talk);
+    });
     Ok(staged)
 }
 
 /// Stages `plate` of the project, or the plate it was left on.
-pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) -> Result<Staged> {
+pub(crate) fn stage(
+    path: &Path,
+    project: &Project,
+    plate: Option<u32>,
+    (job, seed): (&JobArgs, &Seed),
+) -> Result<Staged> {
     let manifest = &project.manifest;
     let plate = plate.unwrap_or_else(|| saved_plate(path, manifest));
     let machine = machine(manifest, job)?;
-    let built = open_plate(
+    let built = open_plate_of(
+        models_of(project, plate, seed),
         project,
         &machine,
         &Opening {
@@ -165,7 +212,10 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
             let hollow = &object.hollow;
             hollow.built.is_some() || !hollow.drains.is_empty() || !hollow.channels.is_empty()
         });
+    let fingerprint =
+        (seed.as_ref()).and_then(|_| plate_key(on_plate.iter().copied(), &manifest.supports));
     Ok(Staged {
+        fingerprint,
         model_ids: on_plate.iter().map(|(object, _)| object.id).collect(),
         parts: on_plate
             .iter()
@@ -182,6 +232,7 @@ pub fn stage(path: &Path, project: &Project, plate: Option<u32>, job: &JobArgs) 
                 meets: Vec::new(),
                 prepared: None,
                 recipe: None,
+                placed: Some(object.transform),
             })
             .collect(),
         models: built.models,
@@ -374,7 +425,7 @@ mod tests {
             fixtures.join("test-resin.toml"),
         ]);
         let project = open(&path).expect("the project was just saved");
-        let staged = stage(&path, &project, None, &flags.job).expect("it stages");
+        let staged = stage(&path, &project, None, (&flags.job, &None)).expect("it stages");
         assert!(staged.remove_islands);
         assert_eq!(staged.hanging_passes, 2, "as the window would slice it");
     }

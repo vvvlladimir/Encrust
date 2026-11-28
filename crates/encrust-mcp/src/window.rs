@@ -20,6 +20,10 @@ use tokio::task::JoinHandle;
 
 use crate::jobs::Revision;
 
+mod aside;
+
+pub use aside::{Aside, Said};
+
 /// How long the window may take to take the connection.
 const CONNECT_WAIT: Duration = Duration::from_secs(1);
 /// How long it may take to answer: its next frame, which a busy plate can hold up.
@@ -48,6 +52,7 @@ pub struct Window {
     told_version: Arc<AtomicBool>,
     /// A revision handed over whose answer the tool did not wait for.
     showing: Arc<Mutex<Option<JoinHandle<Result<Value>>>>>,
+    aside: Arc<Aside>,
 }
 
 impl Window {
@@ -58,7 +63,18 @@ impl Window {
             apps,
             told_version: Arc::default(),
             showing: Arc::default(),
+            aside: Arc::default(),
         }
+    }
+
+    /// What is handed over after a tool has answered, one at a time.
+    pub fn aside(&self) -> &Aside {
+        &self.aside
+    }
+
+    /// Whether a window has said where it listens: one that closes takes its file away.
+    pub async fn answers(&self) -> bool {
+        self.read().await.is_some()
     }
 
     /// Hands `revision` to the window marked `open`, so it is shown whether the window
@@ -67,6 +83,7 @@ impl Window {
         if self.file.is_none() {
             bail!("this server was started with --no-window");
         }
+        self.aside.drained().await;
         if let Some(answer) = self.show(revision, plate, true).await {
             return Ok((answer, false));
         }

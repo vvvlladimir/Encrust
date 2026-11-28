@@ -101,20 +101,6 @@ pub(super) fn not_applied(latest: Option<&Revision>, outcome: &Outcome) -> Reply
     }
 }
 
-/// Edits the open window did not take, so the revision built of them is not kept: the window's
-/// plate and the latest revision stay as they were (ADR 0462).
-pub(super) fn not_taken(latest: &Revision, window: &Value) -> Reply {
-    Reply {
-        body: json!({
-            "applied": false,
-            "why_not": "the open window did not take the edits, so nothing was kept",
-            "latest_revision": latest.number,
-            "window": window,
-        }),
-        failed: true,
-    }
-}
-
 pub(super) fn reported(outcome: &Outcome, body: Value) -> Reply {
     Reply {
         body,

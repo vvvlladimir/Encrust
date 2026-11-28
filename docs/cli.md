@@ -97,7 +97,11 @@ lowest layer where a hole would go, `volume_mm3` and `bounds_mm` `{min, max}`.
 `supports.no_room_why` why, in the same order: `head-blocked` (its head would run into the
 model), `faces-up` (it sits on a face looking up) or `no-ground` (nothing in reach to stand on).
 `cured.clipped_layers`, present only when some did, counts the layers that ran past the panel
-and were cut off their masks.
+and were cut off their masks. `estimate`'s `stages_s` gives the seconds each stage took,
+summed by stage — `import:read`, `edit:hollow`, `edit:kept` for edits answered from what a
+server kept, `project:write`, `check:measure` — and each model of a plate carries `frame`, its
+`to_plate` and `from_plate` matrices, sixteen numbers in column order, which carry a point
+between its own frame and the plate's (`--points-in-object`).
 No list is cut short: each is as long as its count. A model given `--drain-at auto` carries
 `auto_drains`: `pockets`, each trapped before its holes with `slicing.trapped`'s fields and
 `drained`; `holes`, each with the index of the `pocket` it serves, `role` `drain` or `vent`,
@@ -379,7 +383,7 @@ plate and offered beside the first, and with a printer what its trial printed: `
 `supports_ml`, `resin_ml`, `layers`, `stack_mm`, `pull_n`, `islands`, `suction_cups`, `peels`
 and `overflows`, on the coarse stack a trial cuts, to compare them by. `--orient-pick N`
 stands the model the Nth way instead of the first, and a pick past the ways found fails the
-run.
+run; `--orient-pick N,ID:K,...` stands object ID of a cut its own way K, the others the Nth.
 `--orient-keep-clear X,Y,Z`, repeated, keeps supports off the surface near each point,
 given in plate mm as the model stood turned by `--orient-keep-clear-turn X,Y,Z` (none when
 left out) and centred on z = 0: with a printer, the sound poses whose supports touch fewest
@@ -653,7 +657,10 @@ plug is for — and every model a report names carries its `id`, a piece of a cu
 named `input #id`. `--only 2,3` shapes those objects alone, on models as on a project, every
 object when left out; a point flag — `--drain-at X,Y,Z`, `--channel`, `--keep-solid`,
 `--support-at`, `--shown-at`, `--merge-supports`, `--drain-support-at` — names one model, so
-with several shaped it asks for `--only`. `render --only` draws those objects alone (ADR 0458):
+with several shaped it asks for `--only`. `--points-in-object` reads those points in the
+model's own frame, as its mesh holds it, and carries each onto the plate where the model stands
+when its edit runs, so a point stays on the model however a step before moves it (ADR 0467).
+`render --only` draws those objects alone (ADR 0458):
 
 ```sh
 encrust estimate bust.stl --cut z:60 --arrange --project-out bust.encrust
@@ -736,6 +743,9 @@ plate, so a plate point keeps its place once the user names a machine of its siz
 ```sh
 encrust estimate bust.stl --standard-machine --center --cut x:109.44 --arrange
 ```
+`--stage-only` lays the plate and writes `--project-out` but cuts and measures nothing: the
+report is the models with `status`, `seconds` and `stages_s`, for a run whose plate the next
+run takes on (ADR 0467).
 `--quick-check` reads the panel in squares of two by two pixels, as the window's background
 check does: quicker, but blind to an island near the smallest one named (ADR 0419). The
 `fits` line answers for the model where it stands, not only for its size: one small enough
@@ -1036,16 +1046,35 @@ The window, optionally opening a model on startup:
 cargo run -p encrust-app --bin encrust-gui -- model.stl
 ```
 
+## `encrust serve`
+
+One process that runs many invocations: each line of stdin is a run, `{"id": 7, "args":
+["estimate", "bust.stl", ...]}`, the words after `encrust` with `--json` implied, answered on
+stdout by one line `{"id": 7, "exit_code": 0, "report": {...}}`; `{"cancel": 7}` stops run 7
+between its steps. Runs go side by side, each on its own thread; one asked under an id still
+going is answered as failed at once. What one run made, the next
+reuses: a file read, each plate after each edit, each model as cut and each plate's check, kept
+by the hash of what made it, so a run that changes its tenth step pays from the tenth step on;
+a project it wrote is taken back as the plate it wrote. Nothing is kept on disk (ADR 0467).
+
+```sh
+printf '%s\n' '{"id":1,"args":["estimate","bust.stl","--standard-machine","--hollow","2"]}' | encrust serve
+```
+
 ## `encrust-mcp`
 
 The command line as tools for a chat client that speaks the Model Context Protocol over
-stdio. The client starts it; each tool runs `encrust --json` — `--encrust PATH`, else the
-one beside the server, else the one on the `PATH` — and answers with its report (ADR 0455).
+stdio. The client starts it; each tool runs a run of one `encrust serve` it keeps going —
+`--encrust PATH`, else the one beside the server, else the one on the `PATH` — started anew
+if it ends, and answers with its report (ADR 0455, 0467).
 Jobs are kept under the user's cache directory, or `--jobs DIR`, each revision as `N.toml`
 with the report of its check as `N.json`, the flags it stages with as `N.args.json` and the
 recipe its check ran as `N.recipe.toml`, and the autopilot's own check of the model as
-`autopilot.json`; a run is stopped after `--timeout-s` seconds
-(1800), and reports progress every five seconds while it runs. `--trace FILE` appends a JSON
+`autopilot.json`, run aside once the job starts; a job untouched for 30 days goes when the
+server starts, then the oldest while the jobs hold more than 4 GiB, none touched that day. A
+run is stopped after `--timeout-s` seconds (1800), and reports progress every five seconds while it runs; a client
+that takes the MCP tasks extension gets each call that runs the engine as a task to poll and
+cancel. `--trace FILE` appends a JSON
 line per tool call: `tool`, `ms`, `failed`, and the `job` and `revision` it answered with,
 `null` when it named none. Each check of a model keeps the plate it wrote as `N.encrust`; with
 the window open, each revision kept stands on its plate as that file, the answer carrying the
@@ -1100,7 +1129,10 @@ set against no autopilot; the tools shape its objects as the command line's flag
 there. `set_shape`, `set_hollow`, `set_drains` and `set_supports` take `objects`, ids of the
 job's plate as a check's `models[].id` names them: the revision then runs as the model with
 the steps for every object, then a run per group of steps naming the same objects, each on the
-plate the one before wrote with `--only`, and is kept as the plate the last left (ADR 0458).
+plate the one before wrote with `--only`, and is kept as the plate the last left (ADR 0458);
+each run but the last is `--stage-only`. A new job keeps the points a client gives in each
+object's own frame, carried there by the latest check's `frame`, and checks with
+`--points-in-object`, so a point stays on its object whatever moves it (ADR 0467).
 `set_shape` — scale, combine with other models, label in a font, cut with a sized joint or
 upright, split, part off, arrange, mirror, move, copies, relief — `set_repair` — the repair, its
 seam, shell and weld limits, faces flipped or dropped and shells dropped by number, bridges —
@@ -1128,7 +1160,9 @@ into the folder given.
 it; every check is set `--against` the revision before and the autopilot, and the answer
 carries `compared`. `compare_poses` runs a search with `--orient-choices` — 4 ways unless
 `count`, 2 to 8 — and answers with each way's numbers and an `iso` picture each, drawn with
-`--orient-pick`; `set_pose` with that search and `pick` takes one. A search's
+`--orient-pick`, each object's ways under `objects`, one picture a number with every object
+stood its way of that number; `set_pose` with that search and `pick` takes one for every
+object, `picks` `[{"object", "pick"}]` one of each object's own. A search's
 `keep_clear_at_mm` are plate points as the latest revision stands, `clean_surface` is
 `--clean-surface`: the server keeps with them
 the turn that revision stood in as `keep_clear_seen_deg` and takes its supports' lift off them; edits to one job wait for each other. `set_drains` with `auto` is `--drain-at auto`, a

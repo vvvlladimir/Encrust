@@ -62,13 +62,23 @@ pub fn open_plate(
     machine: &Machine,
     opening: &Opening,
 ) -> Result<Plate, EngineError> {
+    let models = plate_models(project, opening.plate);
+    open_plate_of(models, project, machine, opening)
+}
+
+/// As [`open_plate`], with the plate's `models` made already, in plate order.
+pub fn open_plate_of(
+    models: Vec<Model>,
+    project: &Project,
+    machine: &Machine,
+    opening: &Opening,
+) -> Result<Plate, EngineError> {
     let manifest = &project.manifest;
     let material = match machine.printer_id.as_deref() {
         Some(id) => machine.resin.starting_point(id),
         None => machine.resin.clone(),
     };
 
-    let models = plate_models(project, opening.plate);
     let slicing = &manifest.slicing;
     Ok(Plate {
         models,

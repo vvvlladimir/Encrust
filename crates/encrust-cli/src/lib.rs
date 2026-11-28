@@ -29,9 +29,11 @@ mod resin_set;
 mod slice_report;
 mod sliced_file;
 mod sliced_read;
+mod spent;
 mod stack;
 mod stage;
 mod stats;
+mod steps;
 mod supports;
 
 pub mod pipeline;
@@ -40,7 +42,8 @@ pub mod report;
 pub mod score;
 
 pub use commands::{Cli, Command, GlobalArgs, init_tracing, run};
-pub use config::parse_from;
+pub use config::{parse_from, usage_error};
 pub use exit::{Cancelled, Exit, Stop, exit_code};
 pub use json::{SCHEMA, error as json_error};
+pub use steps::Steps;
 pub use supports::SupportReport;

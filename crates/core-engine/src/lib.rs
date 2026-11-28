@@ -36,7 +36,7 @@ pub use held::{
     neck_profile,
 };
 pub use kept_poses::{KEPT_POSES, KEPT_POSES_ENV, kept_poses_folder, orient_for_print_kept};
-pub use open::{Machine, Opening, object_model, open_plate, plate_models};
+pub use open::{Machine, Opening, object_model, open_plate, open_plate_of, plate_models};
 pub use outputs::{PlateFile, plate_outputs};
 pub use plate::{Model, Plate};
 pub use prepare::{Hollowing, PREPARE_REPAIR, hollowing, needs_repair};

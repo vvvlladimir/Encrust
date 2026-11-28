@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use core_edit::ObjectId;
-use core_engine::{ANALYSIS_LAYER_MM, Drained, Model, bake, trapped_in};
+use core_engine::{ANALYSIS_LAYER_MM, Model, bake, trapped_in};
 use core_geometry::{MeshDiagnostics, Scalar, Transform, diagnose};
 use core_recipe::{Metric, Metrics, Plan, Value, measure_planned};
 use printer_profiles::{Compensation, PrinterProfile};
@@ -16,7 +16,7 @@ use crate::exit::{Cancelled, Stop};
 use crate::hollowing::HollowReport;
 use crate::pipeline::OrientSummary;
 use crate::report::{FitCheck, ImportReport};
-use crate::stage::{Finished, Found, Shaping, Staging};
+use crate::stage::{Finished, Found, Searched, Shaping, Staging};
 use crate::supports::SupportReport;
 
 /// One model on its way through a recipe: an object of the plate the run edits.
@@ -36,7 +36,7 @@ pub(super) struct Piece {
     pub import: ImportReport,
     pub oriented: Option<OrientSummary>,
     pub hollow: Option<HollowReport>,
-    pub drains: Option<Drained>,
+    pub drains: Option<Searched>,
     pub supports: Option<SupportReport>,
     /// What steps measured on it since import, over what `measure` reads off it.
     pub measured: Metrics,

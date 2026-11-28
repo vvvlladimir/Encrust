@@ -38,6 +38,8 @@ const TIMEOUT: Duration = Duration::from_mins(30);
 #[tokio::main]
 async fn main() -> Result<()> {
     let (cli, jobs, shown) = parse(std::env::args_os().skip(1))?;
+    let pruning = jobs.clone();
+    tokio::task::spawn_blocking(move || pruning.prune(std::time::SystemTime::now()));
     let presence = shown.2.clone();
     let beating = presence.clone();
     let beat = tokio::spawn(async move {

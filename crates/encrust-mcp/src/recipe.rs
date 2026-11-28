@@ -17,6 +17,7 @@ mod slicing;
 pub use by_object::{ObjectBox, PlatePoints, split_by_object};
 pub use finish::{Drains, Fixes, HoleKind, Hollow, Supports};
 pub use runs::PREVIOUS;
+pub use scoped::ForObjects;
 pub use shape::{Cut, Mend, Modelling, Relief};
 pub use slicing::Slicing;
 
@@ -66,6 +67,10 @@ pub struct Recipe {
     pub slicing: Option<Slicing>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fixes: Option<Fixes>,
+    /// The finishing steps' points are in each object's own frame, as `--points-in-object`
+    /// reads them; a job begun before stays in plate mm.
+    #[serde(default)]
+    pub points_in_object: bool,
 }
 
 /// The repair `--repair` runs: all of it, or one part.
@@ -91,6 +96,16 @@ pub enum Goal {
     Auto,
 }
 
+/// The way one object takes of those the search ranks for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ObjectPick {
+    /// The object, as the check's `models[].id` names it.
+    pub object: u64,
+    /// Its way, from one, as `compare_poses` numbers that object's ways.
+    #[schemars(range(min = 1, max = 64))]
+    pub pick: u16,
+}
+
 /// How the model stands: the orientation search, or a turn given outright.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", tag = "by")]
@@ -105,6 +120,10 @@ pub enum Pose {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[schemars(range(min = 1, max = 64))]
         pick: Option<u16>,
+        /// Each object its own way, as `compare_poses` lists each object's: over `pick` for
+        /// the objects named, the others taking `pick`.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        picks: Vec<ObjectPick>,
         /// Points no support should touch — a face, a lip, a detail — in plate mm as the latest
         /// revision stands; the search ranks first the sound poses that leave them clear.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -163,6 +182,7 @@ impl Recipe {
             more_supports: Vec::new(),
             slicing: None,
             fixes: None,
+            points_in_object: true,
         }
     }
 
@@ -229,6 +249,9 @@ impl Recipe {
     pub fn machine_flags(&self) -> Vec<String> {
         let mut flags = self.machine_named();
         flags.push("--check-drainage".into());
+        if self.points_in_object {
+            flags.push("--points-in-object".into());
+        }
         if let Some(slicing) = &self.slicing {
             slicing.push_flags(&mut flags);
         }
@@ -253,6 +276,9 @@ impl Recipe {
             flags.push("--center".into());
         }
         flags.push("--check-drainage".into());
+        if self.points_in_object {
+            flags.push("--points-in-object".into());
+        }
         if let Some(recipe) = &self.steps_by {
             flags.push(format!("--recipe={recipe}"));
         } else if self.prepare {
@@ -325,6 +351,7 @@ impl Pose {
             goal,
             max_tilt_deg,
             pick: None,
+            picks: Vec::new(),
             clean_surface: false,
             keep_clear_at_mm: Vec::new(),
             keep_clear_radius_mm: None,
@@ -353,6 +380,7 @@ impl Pose {
                 goal,
                 max_tilt_deg,
                 pick,
+                picks,
                 clean_surface,
                 keep_clear_at_mm,
                 keep_clear_radius_mm,
@@ -370,8 +398,13 @@ impl Pose {
                 if let Some(tilt) = max_tilt_deg {
                     flags.push(format!("--max-tilt={tilt}"));
                 }
-                if let Some(pick) = pick {
-                    flags.push(format!("--orient-pick={pick}"));
+                let each = picks
+                    .iter()
+                    .map(|one| format!("{}:{}", one.object, one.pick));
+                let every = pick.map(|pick| pick.to_string());
+                let named: Vec<String> = every.into_iter().chain(each).collect();
+                if !named.is_empty() {
+                    flags.push(format!("--orient-pick={}", named.join(",")));
                 }
                 if keep_clear_at_mm.is_empty() {
                     return;

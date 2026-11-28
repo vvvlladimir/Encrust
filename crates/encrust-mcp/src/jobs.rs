@@ -16,6 +16,8 @@ use serde_json::{Value, json};
 
 use crate::recipe::Recipe;
 
+mod pruned;
+
 /// The file in a job's directory that keeps the autopilot's check.
 const AUTOPILOT: &str = "autopilot.json";
 /// The file that keeps the number of the revision last written to a printer file.
@@ -262,39 +264,6 @@ impl Jobs {
         Ok(plate)
     }
 
-    /// Revision `revision`'s plate and the job's one model on it, the base of the next revision
-    /// with no window answering; `None` without a plate, or where the model is now in pieces.
-    pub fn kept_base(&self, revision: &Revision) -> Option<(PathBuf, ObjectId)> {
-        let dir = self.dir(&revision.job).ok()?;
-        let number = revision.number;
-        let plate = dir.join(RevisionFile::Plate.of(number));
-        // A plate of pieces is edited piece by piece (`kept_pieces`), never as one model.
-        if !plate.is_file() || revision.recipe.is_project() || revision.recipe.makes_pieces() {
-            return None;
-        }
-        let object = match fs::read_to_string(dir.join(RevisionFile::Edits.of(number))) {
-            Ok(text) => {
-                let edits: Vec<Edit> = serde_json::from_str(&text).ok()?;
-                if edits.iter().any(makes_pieces) {
-                    return None;
-                }
-                edits.iter().find_map(Edit::object)?
-            }
-            // A check of the model alone stands it as the plate's first object.
-            Err(_) if revision.recipe.makes_pieces() => return None,
-            Err(_) => ObjectId(1),
-        };
-        Some((plate, object))
-    }
-
-    /// The plate `revision` kept where its recipe left the model in pieces, which each later
-    /// edit is made on.
-    pub fn kept_pieces(&self, revision: &Revision) -> Option<PathBuf> {
-        let plate = (self.dir(&revision.job).ok()?).join(RevisionFile::Plate.of(revision.number));
-        let pieces = revision.recipe.makes_pieces() && !revision.recipe.is_project();
-        (pieces && plate.is_file()).then_some(plate)
-    }
-
     /// Keeps the plate a check wrote at `from` as revision `number`'s `N.encrust`.
     pub fn keep_plate(&self, job: &str, number: u32, from: &Path) -> Result<()> {
         let path = self.dir(job)?.join(RevisionFile::Plate.of(number));
@@ -389,14 +358,6 @@ fn slug(stem: &str) -> String {
     } else {
         slug
     }
-}
-
-/// Whether `edit` leaves its model as pieces or joined into another, no longer one object.
-fn makes_pieces(edit: &Edit) -> bool {
-    matches!(
-        edit,
-        Edit::Cut { .. } | Edit::Split { .. } | Edit::PartOff { .. } | Edit::Combine { .. }
-    )
 }
 
 /// The file the window's object of revision `number`'s cut is kept in, to follow its undo.

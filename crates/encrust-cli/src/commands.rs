@@ -12,17 +12,20 @@ pub(crate) mod printer;
 mod profiles;
 mod recipes;
 mod render;
+mod serve;
 pub mod slice;
 mod test_print;
 
 use std::io::IsTerminal;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Result;
 use clap::{ArgAction, Parser, Subcommand};
 
 use crate::exit::{Exit, Stop};
 use crate::pipeline::Watch;
+use crate::steps::Steps;
 
 pub use batch::BatchCommand;
 pub use completions::CompletionsCommand;
@@ -36,6 +39,7 @@ pub use printer::PrinterCommand;
 pub use profiles::ProfilesCommand;
 pub use recipes::RecipesCommand;
 pub use render::RenderCommand;
+pub use serve::ServeCommand;
 pub use slice::SliceCommand;
 pub use test_print::TestPrintCommand;
 
@@ -73,6 +77,10 @@ pub struct GlobalArgs {
     /// Flags written down in a TOML file, a table per subcommand; a flag typed here wins.
     #[arg(long, global = true, value_name = "PATH")]
     pub config: Option<PathBuf>,
+
+    /// What `encrust serve` keeps between the runs it is asked for; none on the command line.
+    #[arg(skip)]
+    pub steps: Option<Arc<Steps>>,
 }
 
 impl GlobalArgs {
@@ -92,6 +100,7 @@ impl GlobalArgs {
             progress: self.shows_progress(),
             stop,
             writes: true,
+            steps: self.steps.clone(),
         }
     }
 
@@ -143,6 +152,9 @@ pub enum Command {
     Printer(PrinterCommand),
     /// Print the completion script for a shell, to be sourced from its startup file.
     Completions(CompletionsCommand),
+    /// Run many invocations in one process, each a line of JSON on stdin answered on stdout,
+    /// reusing what one made for the next: how a chat client's server drives the engine.
+    Serve(ServeCommand),
 }
 
 impl Command {
@@ -163,7 +175,8 @@ impl Command {
             | Self::Recipes(_)
             | Self::TestPrint(_)
             | Self::Diagnose(_)
-            | Self::Completions(_) => false,
+            | Self::Completions(_)
+            | Self::Serve(_) => false,
         }
     }
 }
@@ -199,5 +212,6 @@ pub fn run(cli: &Cli, stop: &Stop) -> Result<Exit> {
         Command::Diagnose(command) => command.run(global),
         Command::Printer(command) => command.run(global, stop),
         Command::Completions(command) => command.run(),
+        Command::Serve(command) => command.run(),
     }
 }

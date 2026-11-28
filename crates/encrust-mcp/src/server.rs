@@ -1,16 +1,14 @@
 //! The tools a client sees, each one or two runs of the command line over a job's revision.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use anyhow::Result;
 use rmcp::handler::server::router::tool::ToolRouter;
-use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, GetPromptRequestParams,
-    GetPromptResponse, Implementation, ListPromptsResult, PaginatedRequestParams,
-    ServerCapabilities, ServerConfig,
+    CallToolRequestParams, CallToolResponse, CallToolResult, CancelTaskParams,
+    GetPromptRequestParams, GetPromptResponse, GetTaskParams, GetTaskResult, Implementation,
+    ListPromptsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, UpdateTaskParams,
 };
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, tool, tool_handler, tool_router};
@@ -26,7 +24,7 @@ use crate::params::{
 };
 use crate::recipe::Recipe;
 use crate::runner::Cli;
-use crate::trace::{Trace, body_of, stamp_took};
+use crate::trace::Trace;
 use crate::window::Window;
 
 mod after;
@@ -40,6 +38,7 @@ mod poses;
 mod reply;
 mod revise;
 mod shown;
+mod tasked;
 mod written;
 
 use reply::{answer, not_applied, reported, revised_with};
@@ -55,9 +54,11 @@ pub struct Server {
     trace: Trace,
     window: Window,
     presence: Presence,
+    tasks: tasked::Tasks,
     tool_router: ToolRouter<Self>,
 }
 
+type Failed = rmcp::ErrorData;
 type Answer = Result<CallToolResult, rmcp::ErrorData>;
 type Context = RequestContext<RoleServer>;
 
@@ -70,6 +71,7 @@ impl Server {
             trace,
             window,
             presence,
+            tasks: tasked::Tasks::default(),
             tool_router: Self::portable_tools(),
         }
     }
@@ -198,8 +200,8 @@ impl Server {
         Ok(answer(self.start(start, &ctx).await))
     }
 
-    /// Sets how the model stands — the search, a `pick` of it, or a turn — and checks it; a new
-    /// pose drops the points given by hand on the old one and stands the supports anew.
+    /// Sets how the model stands — the search, a `pick` of it or each piece's own in `picks`, or
+    /// a turn — and checks it; a new pose drops the points given by hand and stands supports anew.
     #[tool(annotations(
         read_only_hint = false,
         destructive_hint = false,
@@ -216,8 +218,8 @@ impl Server {
         Ok(answer(edited.await))
     }
 
-    /// The search's best ways to stand the model, each drawn with what it prints, `top_contacts`
-    /// being marks on faces looking up; `set_pose` with `pick` takes one.
+    /// The search's best ways to stand each object, each drawn with what it prints, `top_contacts`
+    /// being marks on faces looking up; `set_pose` with `pick`, or `picks` per object, takes them.
     #[tool(annotations(read_only_hint = true, open_world_hint = false))]
     async fn compare_poses(
         &self,
@@ -482,20 +484,6 @@ impl Server {
     }
 }
 
-/// The client's own name for itself: from the request's `_meta`, else its handshake.
-fn client_name(context: &Context) -> Option<String> {
-    context
-        .meta
-        .client_info()
-        .map(|info| info.name)
-        .or_else(|| {
-            context
-                .peer
-                .peer_info()
-                .map(|info| info.client_info.name.clone())
-        })
-}
-
 #[expect(
     clippy::unused_async_trait_impl,
     reason = "rmcp's tool_handler expands to it"
@@ -507,29 +495,23 @@ impl ServerHandler for Server {
         request: CallToolRequestParams,
         context: Context,
     ) -> Result<CallToolResponse, rmcp::ErrorData> {
-        let started = Instant::now();
-        let tool = request.name.clone();
-        let client = client_name(&context);
-        let named = request
-            .arguments
-            .as_ref()
-            .and_then(|arguments| arguments.get("job")?.as_str().map(str::to_owned));
-        let call = (self.presence).begin(client.as_deref(), &tool, named.as_deref());
-        let mut response = self
-            .tool_router
-            .call(ToolCallContext::new(self, request, context))
-            .await;
-        if let Ok(CallToolResponse::Complete(result)) = &mut response
-            && let Some(note) = self.window.version_note().await
-        {
-            result.content.push(ContentBlock::text(note));
+        if tasked::as_task(&request, &context) {
+            return Ok(self.tasked(request, &context));
         }
-        let answered = body_of(&response)["job"].as_str().map(str::to_owned);
-        self.presence.end(call, answered.or(named).as_deref());
-        let took = started.elapsed();
-        self.trace.record(&tool, took, &response).await;
-        stamp_took(&mut response, took);
-        response
+        self.called(request, context).await
+    }
+
+    async fn get_task(&self, asked: GetTaskParams, _: Context) -> Result<GetTaskResult, Failed> {
+        Ok(GetTaskResult::new(self.tasks.get_task(&asked.task_id)?))
+    }
+
+    async fn update_task(&self, asked: UpdateTaskParams, _: Context) -> Result<(), Failed> {
+        self.tasks
+            .update_task(&asked.task_id, asked.input_responses)
+    }
+
+    async fn cancel_task(&self, asked: CancelTaskParams, _: Context) -> Result<(), Failed> {
+        self.tasks.cancel_task(&asked.task_id)
     }
 
     async fn list_prompts(
@@ -552,6 +534,7 @@ impl ServerHandler for Server {
         let capabilities = ServerCapabilities::builder()
             .enable_tools()
             .enable_prompts()
+            .enable_tasks()
             .build();
         ServerConfig::new(capabilities)
             .with_server_info(Implementation::new("encrust", env!("CARGO_PKG_VERSION")))

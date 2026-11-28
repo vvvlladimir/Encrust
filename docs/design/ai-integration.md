@@ -34,7 +34,7 @@ strict check decides when the work is done.
                                         └── or into the open window ───┤
  the window's agent panel (step 9) ── in process ───────────────────────┤
                                                                        v
-                         encrust --json, a child per call (the panel: the scene)
+                         encrust serve, a run per call (the panel: the scene)
                                                                        v
                                        core-engine, core-plate, core-volume, core-supports …
 
@@ -110,10 +110,10 @@ a plate of its own (ADR 0456, 0462): a revision whose every change is an edit is
 as that plate and its edits (`N.encrust`, `N.edits.json`), and handed to the window as edits,
 so what the user did there is in the next check; any other revision is shown as the plate its
 check wrote (ADR 0462). An editing tool writes the next revision and checks it; `revert` copies an old one forward;
-`report_print` appends what a print did. A plate a cut left in pieces is edited piece by piece
-on the plate kept (ADR 0464); any other revision no edit carries stages the model again from
-its file (ADR 0455). The connector keeps the same revisions in the page's own state, never
-on the server.
+`report_print` appends what a print did. With no window, every revision stages the model from
+its file by its flags in one `encrust serve`, which answers each step the revision shares with
+the one before from what it kept, so a revision pays for what it changed (ADR 0467). The
+connector keeps the same revisions in the page's own state, never on the server.
 
 ## The transports
 

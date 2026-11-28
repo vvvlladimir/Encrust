@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use core_edit::ObjectId;
 use core_engine::project::Project;
 
-use super::document::Staging;
+use super::document::{Seed, Staging};
 use super::{Shaping, finished, laying, modelled, placed, repaired};
 use crate::args::JobArgs;
 use crate::pipeline::{Watch, saved_model_report};
@@ -18,17 +18,17 @@ use crate::recipe;
 /// then spread over the plate where `arrange`.
 pub(crate) fn shaped(
     path: &Path,
-    mut project: Project,
+    (mut project, seed): (Project, Seed),
     plate: u32,
     (job, arrange): (&JobArgs, bool),
     watch: &Watch,
-) -> Result<Project> {
+) -> Result<(Project, Seed)> {
     let machine = crate::project::machine(&project.manifest, job)?;
     let printer = Some(&machine.printer);
     let drift_mm = machine.resin.compensation.fit_drift_mm();
     project.manifest.active_plate = plate;
     let only = job.only.iter().copied().map(ObjectId).collect();
-    let mut staging = Staging::of_project(project, plate, only);
+    let mut staging = Staging::of_project(project, plate, only, seed);
     let unknown = staging.unknown_only();
     if !unknown.is_empty() {
         let ids: Vec<String> = unknown.iter().map(|id| id.0.to_string()).collect();

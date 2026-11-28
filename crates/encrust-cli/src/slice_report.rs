@@ -53,6 +53,29 @@ impl SliceReport {
         self.drainage = Some(TrapScan::new(min, max, self.settings.layer_height));
     }
 
+    /// The report again, once its drainage scan has finished; `None` while it reads layers.
+    pub(crate) fn finished_copy(&self) -> Option<Self> {
+        if self.drainage.is_some() {
+            return None;
+        }
+        Some(Self {
+            settings: self.settings,
+            fit_drift_mm: self.fit_drift_mm,
+            plan: self.plan.clone(),
+            layers: self.layers,
+            contours: self.contours,
+            widest_layer: self.widest_layer,
+            empty_layers: self.empty_layers,
+            first_z: self.first_z,
+            last_z: self.last_z,
+            open_contours: self.open_contours,
+            degenerate_contours: self.degenerate_contours,
+            unlinked_segments: self.unlinked_segments,
+            drainage: None,
+            trapped: self.trapped.clone(),
+        })
+    }
+
     /// Closes the drainage scan, after which the report knows what is trapped.
     pub fn finish_drainage(&mut self) {
         if let Some(scan) = self.drainage.take() {

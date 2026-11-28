@@ -12,7 +12,7 @@ use printer_profiles::{Catalogue, PrinterProfile};
 use super::document::{Staging, said};
 use super::finished::usable_area;
 use super::{Found, Shaping};
-use crate::args::{Goal, TransformArgs};
+use crate::args::{Goal, OrientPick, TransformArgs};
 use crate::pipeline::{OrientChoice, OrientSummary, Watch, with_bar};
 
 /// What import leaves to edits of the placing flags.
@@ -185,7 +185,7 @@ fn orient(
 ) -> Result<OrientSummary> {
     let edit = orient_edit(object, (transform, trial), printer);
     let report = searched(staging, &edit, object, watch)?;
-    let summary = summary_of(report, transform, supported)?;
+    let summary = summary_of(report, (transform, object), supported)?;
     if watch.talk {
         let seated = if summary.on_plate {
             ", set on the plate"
@@ -216,7 +216,7 @@ fn orient_edit(
         goal: aim_of(transform.orient_goal),
         max_tilt_deg: transform.max_tilt,
         clean_surface: transform.clean_surface,
-        pick: usize::from(transform.orient_pick.unwrap_or(1)).saturating_sub(1),
+        pick: usize::from(OrientPick::of(transform.orient_pick.as_ref(), object)).saturating_sub(1),
         plate_mm: area.map(|(_, size)| size),
         low_mm: area.map_or([0.0, 0.0], |(low, _)| low),
         printer: shipped_printer(trial, false),
@@ -248,7 +248,7 @@ fn searched(staging: &mut Staging, edit: &Edit, object: ObjectId, watch: &Watch)
 /// What the search chose, as import notes it: the first `--orient-choices` poses listed.
 pub(crate) fn summary_of(
     report: Report,
-    transform: &TransformArgs,
+    (transform, object): (&TransformArgs, ObjectId),
     supported: bool,
 ) -> Result<OrientSummary> {
     let Report::Oriented {
@@ -262,7 +262,8 @@ pub(crate) fn summary_of(
         return Err(anyhow!("the orientation search answered no pose"));
     };
     let shown = usize::from(transform.orient_choices.unwrap_or(0));
-    let pick = usize::from(transform.orient_pick.unwrap_or(1)).saturating_sub(1);
+    let pick =
+        usize::from(OrientPick::of(transform.orient_pick.as_ref(), object)).saturating_sub(1);
     let chosen = ranked.get(pick).map(|ranked| ranked.rotation);
     Ok(OrientSummary {
         rotation: chosen.unwrap_or_else(|| euler_degrees(rotate_deg)),

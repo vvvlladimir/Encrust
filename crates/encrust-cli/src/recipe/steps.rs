@@ -19,7 +19,9 @@ use super::{Ctx, Did};
 use crate::hollowing::{AutoReport, HollowReport};
 use crate::pipeline::{OrientSummary, read_again};
 use crate::profiles::plan_of;
-use crate::stage::{self, Staging, said, shipped_printer, summary_of, support_report, usable_area};
+use crate::stage::{
+    self, Searched, Staging, said, shipped_printer, summary_of, support_report, usable_area,
+};
 use core_recipe::resolved::text;
 
 /// A turn smaller than this, degrees, leaves the model as the user stood it.
@@ -216,7 +218,8 @@ fn drained(
     if searched.is_some() {
         piece.prepared.drained = true;
         piece.note(Metric::Trapped, trapped as Scalar);
-        piece.drains = searched;
+        let stood = staging.transform(piece.id);
+        piece.drains = searched.map(|drained| Searched { drained, stood });
     } else {
         let trapped = piece.trapped(staging, ctx.watch.stop)?;
         piece.note(Metric::Trapped, trapped as Scalar);
@@ -267,7 +270,7 @@ fn repaired(
 /// Notes the pose the search stood `piece` in, and whether it turned the model.
 fn oriented(piece: &mut Piece, staging: &Staging, report: Report, ctx: &Ctx) -> Result<()> {
     let transform = &ctx.job.import.transform;
-    let found: OrientSummary = summary_of(report, transform, piece.stands)?;
+    let found: OrientSummary = summary_of(report, (transform, piece.id), piece.stands)?;
     if ctx.watch.talk {
         println!("Oriented: {}\n", found.describe());
     }

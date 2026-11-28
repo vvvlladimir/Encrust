@@ -38,16 +38,20 @@ writes one line of JSON and reads one back:
 is answered on a thread of its own, at most eight at once, so a line waiting on the window holds
 up no other (ADR 0462). A line with another token or schema, or a plate that is not there, is
 refused and never reaches the plate. The window takes the revision on its next frame and
-answers then. A tool's answer waits 2 s for it, `show_in_window` 15 s; past that the answer says
-`"shown": "pending"` and the window is handed the revision meanwhile, the server's next line
-to it waiting until it is taken, so lines arrive in the order sent; the plate is read on a thread aside and stood
-once read, a plate that does not read told on the status line. The tool's answer carries the
-window's as `window`:
+answers then. A tool's answer waits for none of it (ADR 0467): it says `"shown": "pending"` and
+the revision is handed over aside, one hand-over after another in the order the revisions were
+kept, so lines arrive in the order sent; `show_in_window` waits for those queued, then up to
+15 s for its own. The plate is read on a thread aside and stood once read, a plate that does
+not read told on the status line. What the window said of a revision it did not show or take
+comes with the job's next answer, as `window_before`:
 
 ```json
-{"shown": true}
-{"shown": false, "why_not": "the revision's plate …: …"}
+{"revision": 2, "window": {"applied": false, "why_not": "…", "then_shown": {"shown": true}}}
 ```
+
+The window repeats each edit on its own plate, so it works as hard as the check did; a window
+built for debugging takes many times longer, which the answers no longer wait for but the
+plate shows late: run it from a release build.
 
 A revision made by edits on the window's plate (below) is not handed over again: that plate
 holds it.
@@ -81,22 +85,22 @@ builds its edits on that file and hands them back with the version:
 
 Edits on a plate still at `base_version` run one after another on the job's plate, shown as
 each starts, as the tools' own jobs, and are answered once all have landed, within 10 min (the
-server waits 11): all of them one undo entry. One that does not land stops the rest, the plate
-is put back as the edits found it, and the answer says why (ADR 0462). The server then keeps no
-revision of them; a revision checked by its flags before its edits were handed over is shown
-by its plate instead, the answer's `then_shown`. A plate the user changes while edits land is
-left as they left it, one undo entry, and answered with why. A plate that moved on is answered
-`stale` with its version, and nothing is applied: the server asks for the plate again, builds
-and checks the edits on it once more and keeps only that revision. A window not following its
-agents refuses both lines, and edits while others are still being applied are refused.
+server waits 11): all of them one undo entry. One that does not land stops the rest, and the
+plate is put back as the edits found it. A plate that moved on is answered `stale` with its
+version, and nothing is applied. Either way the revision stands, checked on its own plate: its
+edits are forgotten, the window is shown that plate instead, and the job's next answer says so.
+A plate the user changes while edits land is left as they left it, one undo entry. A window not
+following its agents refuses both lines, and edits while others are still being applied are
+refused.
 
-With the window followed, a revision whose every change is an edit is built on the window's
-plate: the server asks for it, checks it with the edits (`estimate PLATE --edits --project-out`)
-and keeps the plate they leave as `N.encrust` and the edits as `N.edits.json`, then hands the
-edits over on that plate's version. What the user changed or undid there is in the next check,
-whatever the change. With no window answering, the same revision is built on the plate the
-last one kept, while the job's model on it is one object; a revision made so is written and
-drawn from that plate.
+With the window followed and taking nothing handed before, a revision whose every change is an
+edit is built on the window's plate: the server asks for it, checks it with the edits (`estimate
+PLATE --edits --project-out`) and keeps the plate they leave as `N.encrust` and the edits as
+`N.edits.json`, then hands the edits over aside on that plate's version. While the window is
+still taking an earlier hand-over, the revision is staged by its flags, and an undo of a cut
+there is followed on the next one. What the user changed or undid there is in the next check,
+whatever the change. With no window answering, every revision is staged by its flags, the
+steps it shares with the one before answered from what `encrust serve` kept (ADR 0467).
 
 A revision after the first hands over, as edits of the job's model, what it asks beyond the
 revision before: a repair, the faces mended, a picture pressed in, a scale, a turn typed, a

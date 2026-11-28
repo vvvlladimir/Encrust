@@ -7,7 +7,7 @@ use anyhow::{Result, bail};
 use core_edit::ObjectId;
 use core_engine::{Cutting, Drained, Model, Plate, SupportPlan};
 use core_format::ExposurePlan;
-use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar, Vec2, placed_aabb};
+use core_geometry::{Aabb, BoundingVolume, Mesh, Scalar, Transform, Vec2, placed_aabb};
 use core_pipeline::{PanelOverrides, SlicedFormat};
 use printer_profiles::{MaterialProfile, PrinterProfile};
 
@@ -21,13 +21,14 @@ use crate::profiles::Chosen;
 use crate::recipe::{self, Prepared, RecipeRun, Saved};
 use crate::report::{FitCheck, ImportReport, describe_fit};
 use crate::sliced_file::now_unix_s;
+use crate::steps::Fingerprint;
 use crate::supports::SupportReport;
 use crate::{meeting, plate_file, project};
 
 mod document;
 mod laying;
 
-pub(crate) use document::{Staging, said};
+pub(crate) use document::{Seed, Staging, said};
 pub(crate) use finished::{Finished, hollow_report, support_report, usable_area};
 pub(crate) use laying::placed_by_edits;
 pub(crate) use placed::{shipped_printer, summary_of};
@@ -56,6 +57,8 @@ pub struct Shaping {
     pub keyed: Keyed,
     /// The objects of the plate `--only` names, empty for every one.
     pub only: Vec<ObjectId>,
+    /// Whether the finishing flags' points are in the object's own frame, not the plate's.
+    pub points_in_object: bool,
 }
 
 /// The plate file's keys that ask a step of a recipe to run, as their flags do.
@@ -75,6 +78,7 @@ impl Shaping {
             position: None,
             keyed: Keyed::default(),
             only: job.only.iter().copied().map(ObjectId).collect(),
+            points_in_object: job.points_in_object,
         })
     }
 
@@ -87,8 +91,17 @@ impl Shaping {
             position: None,
             keyed: Keyed::default(),
             only: Vec::new(),
+            points_in_object: false,
         })
     }
+}
+
+/// What `--drain-at auto` found and drilled, in plate millimetres where the model `stood` when
+/// it searched: steps after, an arrange among them, may move it.
+#[derive(Debug, Clone)]
+pub struct Searched {
+    pub drained: Drained,
+    pub stood: Transform,
 }
 
 /// One model's way onto the plate, and what each stage found on it.
@@ -101,8 +114,7 @@ pub struct Part {
     pub import: Option<ImportReport>,
     pub oriented: Option<OrientSummary>,
     pub hollow: Option<HollowReport>,
-    /// What `--drain-at auto` found and drilled, where the model stood before its supports.
-    pub drains: Option<Drained>,
+    pub drains: Option<Searched>,
     pub supports: Option<SupportReport>,
     /// How the model with its supports and raft sits on the plate where it was put down.
     pub standing: Option<FitCheck>,
@@ -112,6 +124,8 @@ pub struct Part {
     pub prepared: Option<Prepared>,
     /// What each step of the recipe it was prepared by decided.
     pub recipe: Option<RecipeRun>,
+    /// Where it stands on the plate: what carries its own frame onto the plate's.
+    pub placed: Option<Transform>,
 }
 
 impl Part {
@@ -149,6 +163,8 @@ pub struct Staged {
     pub drainage: bool,
     /// The plate as a recipe's last save step wrote it.
     pub saved: Option<Saved>,
+    /// The key of the plate's models where a server keeps steps, which its check is kept by.
+    pub(crate) fingerprint: Option<Fingerprint>,
 }
 
 impl Staged {
@@ -188,7 +204,7 @@ pub fn stage(
     job: &JobArgs,
     watch: &Watch,
 ) -> Result<Staged> {
-    let given = given(inputs)?;
+    let given = crate::spent::timed("stage:given", || given(inputs))?;
     if plate.is_some() && !matches!(given, Given::Project(_)) {
         bail!("--plate picks a plate of a project (.encrust)");
     }
@@ -203,16 +219,16 @@ pub fn stage(
         }
         Given::Project(path) => {
             project::refuse_for_projects(job)?;
-            let mut opened = project::open(path)?;
+            let mut opened = project::opened(path, watch)?;
             let plate_index = match plate {
-                Some(number) => project::chosen_plate(&opened.manifest, number)?,
-                None => opened.manifest.active_plate,
+                Some(number) => project::chosen_plate(&opened.0.manifest, number)?,
+                None => opened.0.manifest.active_plate,
             };
             if project::shaped_by_flags(job, arrange) {
                 opened = on_project::shaped(path, opened, plate_index, (job, arrange), watch)?;
             }
-            let project = job.edits.applied(opened)?;
-            project::stage_checked(path, &project, plate, job, watch)
+            let (project, seed) = job.edits.applied(opened)?;
+            project::stage_checked(path, (&project, &seed), plate, job, watch)
         }
         Given::Projects(paths) => {
             project::refuse_for_projects(job)?;
@@ -223,8 +239,8 @@ pub fn stage(
                 );
             }
             let laid = project::laid_together(paths, arrange.then_some(job))?;
-            let project = job.edits.applied(laid)?;
-            project::stage_checked(&paths[0], &project, None, job, watch)
+            let (project, seed) = job.edits.applied((laid, None))?;
+            project::stage_checked(&paths[0], (&project, &seed), None, job, watch)
         }
     }
 }
@@ -314,7 +330,9 @@ pub fn plate_of(
         }
     };
     let machine = (job, chosen, layer_height);
-    let mut staged = staged_of(laid, entries, machine, watch.talk);
+    let mut staged = crate::spent::timed("stage:machine", || {
+        staged_of(laid, entries, machine, watch.talk)
+    });
     staged.saved = saved;
     Ok(staged)
 }
@@ -331,6 +349,7 @@ fn staged_of(
         mut parts,
         models,
         owners,
+        fingerprint,
         ..
     } = laid;
     meeting::mark(&mut parts, &models, &owners, talk);
@@ -348,6 +367,7 @@ fn staged_of(
             .any(|(_, shaping)| shaping.hollow.wanted() || shaping.hollow.cutting());
     Staged {
         model_ids,
+        fingerprint,
         ..staged((parts, models), drainage, machine, talk)
     }
 }
@@ -401,6 +421,7 @@ pub(crate) fn staged(
         hanging_passes: job.raster.hanging_passes,
         drainage,
         saved: None,
+        fingerprint: None,
     }
 }
 
@@ -417,15 +438,21 @@ fn imported(
     let mut meshes = Vec::with_capacity(entries.len());
     let mut found = Vec::with_capacity(entries.len());
     for (path, shaping) in entries {
-        let mut asked = shaping.import.clone();
-        repaired::left_to_edits(&mut asked);
-        placed::left_to_edits(&mut asked.transform);
+        let asked = asked_of(&shaping.import);
         let (mesh, import) = import(path, &asked, chosen, watch)?;
         meshes.push(mesh);
         found.push((import, None));
         watch.stop.check()?;
     }
     Ok((meshes, found))
+}
+
+/// What import itself is asked of a model, all after it left to edits.
+fn asked_of(import: &ImportArgs) -> ImportArgs {
+    let mut asked = import.clone();
+    repaired::left_to_edits(&mut asked);
+    placed::left_to_edits(&mut asked.transform);
+    asked
 }
 
 /// The box `model` and its supports stand in, plate millimetres.
@@ -445,6 +472,8 @@ pub(crate) struct Laid {
     owners: Vec<usize>,
     /// The entry of the command line each of `parts` came from.
     part_entries: Vec<usize>,
+    /// The key of the plate's models where a server keeps steps.
+    fingerprint: Option<Fingerprint>,
 }
 
 /// How a model put down in `stands_in` sits on `printer`'s plate, said when supports changed

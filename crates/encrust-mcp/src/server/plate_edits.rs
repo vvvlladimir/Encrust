@@ -7,8 +7,10 @@ use serde_json::{Value, json};
 
 use super::Server;
 use super::asked::{Area, Stood, asked_after_check};
+use super::reply::Reply;
 use crate::jobs::Revision;
 use crate::recipe::{Cut, Recipe};
+use crate::window::Said;
 
 /// How many times edits are handed again to a window whose plate moved on meanwhile.
 pub(super) const REBUILDS: usize = 1;
@@ -27,6 +29,15 @@ const CUT_HELD: &str = "the window holds the plate the cut left, and the revisio
 /// What the client is told when the window's plate moved on each time the edits were handed.
 pub(super) const GAVE_UP: &str = "the window's plate changed each time the edits were handed over";
 
+/// What the client is told of a revision handed to the window after the answer.
+const HANDED: &str = "handed to the window, which takes it when free; what it does not take is \
+    told with the job's next answer";
+
+/// The `window` of an answer whose revision the window takes after it (ADR 0467).
+pub(super) fn pending() -> Value {
+    json!({ "shown": "pending", "why_not": HANDED })
+}
+
 fn cut_of(recipe: &Recipe) -> Option<&Cut> {
     recipe.modelling.as_ref()?.cut.as_ref()
 }
@@ -39,6 +50,11 @@ impl Server {
         latest: &Revision,
         recipe: &mut Recipe,
     ) -> Option<&'static str> {
+        // A window still taking what was handed before is not waited for: the undo is followed
+        // on the next revision.
+        if self.window.aside().busy() {
+            return None;
+        }
         let object = self.jobs.window_cut(&latest.job, latest.number)?;
         let plate = self.window.plate(&latest.job).await?;
         if !plate.objects.contains(&object) {
@@ -75,13 +91,80 @@ impl Server {
             usable_area_of(report),
             stood_of(earlier_report.as_ref()),
         );
-        let asked = asked_after_check(&revision.recipe, &earlier.recipe, ObjectId::UNSET, chosen)?;
+        let now = super::points::on_plate(&revision.recipe, report);
+        let then = super::points::on_plate(&earlier.recipe, report);
+        let asked = asked_after_check(&now, &then, ObjectId::UNSET, chosen)?;
         if asked.is_empty() {
             return Some(json!({"shown": false, "why_not": NOTHING_ASKED}));
         }
-        let edits_on =
-            |object| asked_after_check(&revision.recipe, &earlier.recipe, object, chosen);
+        let edits_on = |object| asked_after_check(&now, &then, object, chosen);
         self.handed_to_window(revision, edits_on).await
+    }
+}
+
+impl Server {
+    /// What the window said of `revision`, handed aside: the edits it took, else its plate
+    /// shown in their place.
+    pub(super) async fn handed_over(&self, revision: &Revision, report: &Value) -> Option<Said> {
+        let mut answer = self.edits_in_window(revision, report).await;
+        // Edits the window took back leave its plate behind: it is shown the revision's.
+        let taken = answer.as_ref().is_some_and(|said| said["applied"] != false);
+        if !taken {
+            let plate = self.jobs.shown_plate(revision).ok();
+            let shown = match plate {
+                Some(plate) => self.window.show(revision, &plate, false).await,
+                None => None,
+            };
+            answer = match (answer, shown) {
+                (Some(mut refused), Some(shown)) => {
+                    refused["then_shown"] = shown;
+                    Some(refused)
+                }
+                (refused, shown) => refused.or(shown),
+            };
+        }
+        Some(Said {
+            job: revision.job.clone(),
+            revision: revision.number,
+            answer: answer?,
+        })
+    }
+
+    /// Hands `edits`, which `revision` was made of on the window's plate at `version`, to the
+    /// window aside; where it does not take them, it is shown the revision's plate instead.
+    pub(super) fn apply_aside(&self, revision: &Revision, edits: Vec<Edit>, version: u64) {
+        let (server, revision) = (self.clone(), revision.clone());
+        self.window.aside().queue(async move {
+            let answer = server.window.apply(&revision.job, &edits, version).await?;
+            let mut said = server.answered(&revision, &answer);
+            if let Some(cut) = cut_object(&edits).filter(|_| answer.applied) {
+                let kept = server
+                    .jobs
+                    .keep_window_cut(&revision.job, revision.number, cut);
+                unkept("the window's cut", kept);
+            } else if !answer.applied
+                && let Ok(plate) = server.jobs.shown_plate(&revision)
+                && let Some(shown) = server.window.show(&revision, &plate, false).await
+            {
+                said["then_shown"] = shown;
+            }
+            Some(Said {
+                job: revision.job.clone(),
+                revision: revision.number,
+                answer: said,
+            })
+        });
+    }
+
+    /// Adds to `reply` what the window said of the job's revision handed before, where it did
+    /// not take it.
+    pub(super) fn tell_untold(&self, job: &str, reply: &mut Reply) {
+        if let Some(said) = self.window.aside().untold(job) {
+            reply.body["window_before"] = json!({
+                "revision": said.revision,
+                "window": said.answer,
+            });
+        }
     }
 }
 
@@ -161,17 +244,6 @@ fn stood_in(model: &Value) -> Stood {
     let contacts = model["supports"]["contacts"].as_u64().unwrap_or(0);
     let cavity_mm3 = model["hollow"]["cavity_mm3"].as_f64().unwrap_or(0.0);
     (contacts > 0, cavity_mm3 > 0.0)
-}
-
-/// Each object the check lists, with how it stood there: the pieces a cut left.
-pub(super) fn pieces_of(report: &Value) -> Vec<(ObjectId, Stood)> {
-    let models = report["models"].as_array().map_or(&[][..], Vec::as_slice);
-    (models.iter())
-        .filter_map(|model| {
-            let id = ObjectId(model["id"].as_u64()?);
-            Some((id, stood_in(model)))
-        })
-        .collect()
 }
 
 /// The printer's usable area of the check, its low corner and its size, mm.

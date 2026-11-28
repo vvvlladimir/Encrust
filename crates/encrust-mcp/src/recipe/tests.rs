@@ -20,7 +20,8 @@ fn a_plain_recipe_stages_the_model_centred_and_checks_drainage() {
             "--printer=elegoo-mars-4-ultra",
             "--resin=my-grey",
             "--center",
-            "--check-drainage"
+            "--check-drainage",
+            "--points-in-object"
         ]
     );
 }
@@ -82,7 +83,7 @@ fn every_step_becomes_the_flags_the_command_line_documents() {
     };
     let flags = recipe.flags();
     assert_eq!(
-        flags[5..],
+        flags[6..],
         [
             "--repair=close-holes",
             "--orient",
@@ -110,6 +111,7 @@ fn a_negative_number_rides_on_its_flag() {
             stood_deg: None,
             keep_clear_radius_mm: Some(5.0),
             pick: Some(2),
+            picks: vec![crate::recipe::ObjectPick { object: 3, pick: 4 }],
             goal: Goal::Auto,
             max_tilt_deg: None,
             clean_surface: true,
@@ -118,7 +120,7 @@ fn a_negative_number_rides_on_its_flag() {
     };
     let flags = picked.flags();
     for flag in [
-        "--orient-pick=2",
+        "--orient-pick=2,3:4",
         "--orient-keep-clear=10,-2,3",
         "--orient-keep-clear-turn=0,-90,0",
         "--orient-keep-clear-radius=5",
@@ -154,7 +156,7 @@ fn the_autopilot_rides_before_every_step_given_outright() {
         }),
         ..plain()
     };
-    assert_eq!(recipe.flags()[5..], ["--prepare", "--supports=light"]);
+    assert_eq!(recipe.flags()[6..], ["--prepare", "--supports=light"]);
 }
 
 #[test]
@@ -195,9 +197,9 @@ fn automatic_drains_ask_the_engine_and_may_leave_out_the_vent() {
         }),
         ..plain()
     };
-    assert_eq!(auto(true).flags()[5..], ["--drain=3", "--drain-at=auto"]);
+    assert_eq!(auto(true).flags()[6..], ["--drain=3", "--drain-at=auto"]);
     assert_eq!(
-        auto(false).flags()[5..],
+        auto(false).flags()[6..],
         ["--drain=3", "--drain-at=auto", "--no-drain-vent"]
     );
 }
@@ -580,6 +582,42 @@ fn checks_answers_for_one_object_stage_the_rest_first() {
     let runs = recipe.runs().expect("runs");
     assert_eq!(runs.len(), 2, "the model, then its answers: {runs:?}");
     assert!(runs[1].contains(&"--only=1".to_owned()), "{:?}", runs[1]);
+}
+
+#[test]
+fn checks_answers_on_a_cut_run_on_the_plate_of_its_pieces() {
+    let recipe = Recipe {
+        modelling: Some(Modelling {
+            cut: Some(
+                serde_json::from_value(serde_json::json!({"axis": "x", "at_mm": 10.0}))
+                    .expect("a cut reads"),
+            ),
+            arrange: true,
+            ..Modelling::default()
+        }),
+        supports: Some(Supports {
+            profile: "auto".into(),
+            ..Supports::default()
+        }),
+        fixes: Some(Fixes {
+            drill_cups: true,
+            ..Fixes::default()
+        }),
+        ..plain()
+    };
+    let runs = recipe.runs().expect("runs");
+    assert_eq!(runs.len(), 2, "the pieces, then the answers: {runs:?}");
+    assert!(
+        runs[0].contains(&"--cut=x:10".to_owned()) && !runs[0].contains(&"--drill-cups".to_owned()),
+        "a recipe takes no pieces: {:?}",
+        runs[0]
+    );
+    assert_eq!(runs[1][0], PREVIOUS);
+    assert!(
+        runs[1].contains(&"--drill-cups".to_owned()),
+        "{:?}",
+        runs[1]
+    );
 }
 
 #[test]

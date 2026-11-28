@@ -388,6 +388,7 @@ fn searching(pick: Option<u16>, keep_clear_at_mm: Vec<[f32; 3]>) -> Pose {
         goal: crate::recipe::Goal::LeastPeel,
         max_tilt_deg: Some(30.0),
         pick,
+        picks: Vec::new(),
         clean_surface: false,
         keep_clear_at_mm,
         keep_clear_radius_mm: None,

@@ -3,19 +3,16 @@
 
 use std::path::PathBuf;
 
-use agent_link::ApplyReply;
 use anyhow::Result;
 use core_edit::{Edit, ObjectId};
-use serde_json::json;
 
 use crate::runner::Outcome;
 
 use super::Server;
-use super::asked::{Area, Checked, Stood, asked_after_check, asked_of_pieces};
-use super::plate_edits::{
-    GAVE_UP, REBUILDS, cut_object, fit_drift_of, pieces_of, stood_of, unkept, usable_area_of,
-};
-use super::reply::{Reply, not_applied, not_taken, revised};
+use super::asked::{Area, Stood, asked_after_check};
+use super::plate_edits::{fit_drift_of, pending, stood_of, unkept, usable_area_of};
+use super::points::on_plate;
+use super::reply::{Reply, not_applied, revised};
 use crate::jobs::Revision;
 use crate::recipe::Recipe;
 use crate::server::Context;
@@ -41,59 +38,32 @@ impl Server {
         against: &[String],
         ctx: &Context,
     ) -> Result<Result<Reply>, Box<Recipe>> {
-        if let Some(on) = self.pieces_on_plate(latest, &recipe) {
-            let job = latest.job.clone();
-            let reply = (self.checked_on_plate((latest, recipe, note), on, against, ctx)).await;
-            return Ok(self.shown_kept(&job, reply).await);
+        // A plate of pieces is no one model for edits of it to name; a window still taking what
+        // was handed before is not waited for (ADR 0467).
+        if latest.recipe.makes_pieces() || self.window.aside().busy() {
+            return Err(Box::new(recipe));
         }
         let (drift, area, stood) = self.earlier_check(latest, &recipe);
         let checked = (None, drift, area, stood);
-        let asked = asked_after_check(&recipe, &latest.recipe, ObjectId::UNSET, checked);
+        let report = self.jobs.report(latest).unwrap_or_default();
+        let (now, then) = (
+            on_plate(&recipe, &report),
+            on_plate(&latest.recipe, &report),
+        );
+        let asked = asked_after_check(&now, &then, ObjectId::UNSET, checked);
         if asked.as_ref().is_none_or(Vec::is_empty) {
             return Err(Box::new(recipe));
         }
         let Some(base) = self.base_of(latest).await else {
             return Err(Box::new(recipe));
         };
-        let Some(edits) = asked_after_check(&recipe, &latest.recipe, base.object, checked) else {
+        let Some(edits) = asked_after_check(&now, &then, base.object, checked) else {
             return Err(Box::new(recipe));
         };
-        let on = (base, edits, checked);
+        let on = (base, edits);
         Ok(self
             .checked_on_plate((latest, recipe, note), on, against, ctx)
             .await)
-    }
-
-    /// The plate `latest` left in pieces and what `recipe` asks of each as edits; `None` where
-    /// it is no such plate or one change is no edit, for the flags.
-    fn pieces_on_plate(
-        &self,
-        latest: &Revision,
-        recipe: &Recipe,
-    ) -> Option<(Base, Vec<Edit>, Checked)> {
-        let path = self.jobs.kept_pieces(latest)?;
-        let report = self.jobs.report(latest).ok()?;
-        let (drift, area, stood) = self.earlier_check(latest, recipe);
-        let edits = asked_of_pieces(recipe, &latest.recipe, &pieces_of(&report), (drift, area))?;
-        let base = Base {
-            path,
-            version: None,
-            object: ObjectId::UNSET,
-        };
-        (!edits.is_empty()).then_some((base, edits, (None, drift, area, stood)))
-    }
-
-    /// Shows the open window the revision `reply` kept, as a check by flags is shown.
-    async fn shown_kept(&self, job: &str, mut reply: Result<Reply>) -> Result<Reply> {
-        if let Ok(kept) = &mut reply
-            && !kept.failed
-            && let Ok(revision) = self.jobs.open(job, None)
-            && let Some(plate) = self.jobs.made_on_plate(&revision)
-            && let Some(shown) = self.window.show(&revision, &plate, false).await
-        {
-            kept.body["window"] = shown;
-        }
-        reply
     }
 
     /// The fit drift and usable plate area the previous revision's check reported, where it ran
@@ -114,93 +84,42 @@ impl Server {
     }
 
     /// The open window's plate with the job's model on it, which holds whatever the user did
-    /// there; with no window answering, the plate `latest` kept.
+    /// there; none without a window answering, where the flags stage the revision (ADR 0467).
     async fn base_of(&self, latest: &Revision) -> Option<Base> {
-        if let Some(plate) = self.window.plate(&latest.job).await {
-            return Some(Base {
-                object: plate.job_object?,
-                path: plate.path,
-                version: Some(plate.version),
-            });
-        }
-        let (path, object) = self.jobs.kept_base(latest)?;
+        let plate = self.window.plate(&latest.job).await?;
         Some(Base {
-            path,
-            version: None,
-            object,
+            object: plate.job_object?,
+            path: plate.path,
+            version: Some(plate.version),
         })
     }
 
-    /// Checks `edits` on `base` and hands them to the window that handed it over; where its plate
-    /// moved on meanwhile, they are built and checked again on the plate it then holds.
+    /// Checks `edits` on `base` and keeps them as a revision, handed aside to the window that
+    /// handed the plate over: the answer does not wait for it (ADR 0467).
     async fn checked_on_plate(
         &self,
         (latest, recipe, note): Asked<'_>,
-        (mut base, mut edits, checked): (Base, Vec<Edit>, Checked),
+        (base, edits): (Base, Vec<Edit>),
         against: &[String],
         ctx: &Context,
     ) -> Result<Reply> {
-        let mut rebuilt = 0;
-        loop {
-            let (outcome, written) = self
-                .check_edits(&base, &edits, &recipe, against, ctx)
-                .await?;
-            if !outcome.reported() {
-                let _ = std::fs::remove_file(&written);
-                return Ok(not_applied(Some(latest), &outcome));
-            }
-            let answer = match base.version {
-                Some(version) => Some(self.window.apply(&latest.job, &edits, version).await),
-                None => None,
-            };
-            let stale = answer
-                .as_ref()
-                .is_some_and(|a| a.as_ref().is_some_and(|a| a.stale));
-            if stale && rebuilt < REBUILDS {
-                rebuilt += 1;
-                if let Some(next) = self.rebased(latest, &recipe, checked).await {
-                    let _ = std::fs::remove_file(&written);
-                    (base, edits) = next;
-                    continue;
-                }
-            }
-            // A window that answered no holds its plate as before; one gone holds nothing.
-            let refused = answer
-                .as_ref()
-                .is_some_and(|a| a.as_ref().is_some_and(|a| !a.applied));
-            let window = answer.map(|answer| match answer {
-                Some(_) if stale => ApplyReply::refused(GAVE_UP),
-                Some(answer) => answer,
-                None => ApplyReply::refused("the window did not answer"),
-            });
-            if refused {
-                let _ = std::fs::remove_file(&written);
-                return Ok(not_taken(latest, &json!(window)));
-            }
-            let kept = (edits.as_slice(), written.as_path(), window);
-            let reply = self.keep_on_plate((latest, recipe, note), kept, &outcome);
-            // Kept, the plate was moved into the job; anything left here was not.
+        let (outcome, written) = self
+            .check_edits(&base, &edits, &recipe, against, ctx)
+            .await?;
+        if !outcome.reported() {
             let _ = std::fs::remove_file(&written);
-            return reply;
+            return Ok(not_applied(Some(latest), &outcome));
         }
-    }
-
-    /// The window's plate as it now stands and `recipe`'s edits built again on it.
-    async fn rebased(
-        &self,
-        latest: &Revision,
-        recipe: &Recipe,
-        checked: Checked,
-    ) -> Option<(Base, Vec<Edit>)> {
-        let plate = self.window.plate(&latest.job).await?;
-        let object = plate.job_object?;
-        let edits = asked_after_check(recipe, &latest.recipe, object, checked)?;
-        let base = Base {
-            path: plate.path,
-            version: Some(plate.version),
-            object,
-        };
-        Some((base, edits))
+        let kept = self.keep_on_plate((latest, recipe, note), (&edits, &written), &outcome);
+        // Kept, the plate was moved into the job; anything left here was not.
+        let _ = std::fs::remove_file(&written);
+        let (revision, mut reply) = kept?;
+        self.tell_untold(&revision.job, &mut reply);
+        if let Some(version) = base.version {
+            self.apply_aside(&revision, edits, version);
+            reply.body["window"] = pending();
+        }
+        Ok(reply)
     }
 
     /// A check of `edits` on `base`, and the plate it leaves.
@@ -228,30 +147,20 @@ impl Server {
         Ok((outcome?, written))
     }
 
-    /// Keeps the revision checked as its plate and edits, with what the window said of them.
+    /// Keeps the revision checked as its plate and edits.
     fn keep_on_plate(
         &self,
         (latest, recipe, note): Asked<'_>,
-        (edits, written, window): (&[Edit], &std::path::Path, Option<ApplyReply>),
+        (edits, written): (&[Edit], &std::path::Path),
         outcome: &Outcome,
-    ) -> Result<Reply> {
+    ) -> Result<(Revision, Reply)> {
         let revision = self
             .jobs
             .commit(&latest.job, (recipe, None), &outcome.report)?;
         let (job, number) = (&revision.job, revision.number);
         unkept("the edits", self.jobs.keep_edits(job, number, edits));
         unkept("the plate", self.jobs.keep_plate(job, number, written));
-        let landed = window.as_ref().is_some_and(|answer| answer.applied);
-        if let Some(cut) = cut_object(edits).filter(|_| landed) {
-            unkept(
-                "the window's cut",
-                self.jobs.keep_window_cut(job, number, cut),
-            );
-        }
-        let mut reply = revised(&revision, outcome, note);
-        if let Some(window) = window {
-            reply.body["window"] = json!(window);
-        }
-        Ok(reply)
+        let reply = revised(&revision, outcome, note);
+        Ok((revision, reply))
     }
 }

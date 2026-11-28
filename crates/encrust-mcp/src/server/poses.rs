@@ -1,7 +1,7 @@
 //! The search's best ways to stand a model laid side by side, each with what it prints and
 //! drawn, for a client to choose by what the model is (ADR 0460).
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Result, bail};
 use rmcp::model::{CallToolResult, ContentBlock};
 use serde_json::{Value, json};
 
@@ -9,6 +9,30 @@ use super::{Context, Server};
 use crate::jobs::Revision;
 use crate::params::{ComparePoses, View};
 use crate::recipe::{Goal, Pose, Recipe, Supports};
+
+/// How a client takes one of the ways compared.
+const TAKE_ONE: &str = "set_pose with this pose and `pick` for every object, or `picks` naming \
+    each object's own way by its number in that object's `choices`";
+
+/// Each object the search stood, with the ways it ranked for it.
+fn ways_of(report: &Value) -> Vec<Value> {
+    let models = report["models"].as_array().map_or(&[][..], Vec::as_slice);
+    (models.iter())
+        .filter(|model| model["oriented"]["choices"].is_array())
+        .map(|model| json!({"object": model["id"], "choices": model["oriented"]["choices"]}))
+        .collect()
+}
+
+/// `--orient-pick` for the `pick`th picture: that way for every object, its last for one that
+/// has fewer.
+fn picked_at(objects: &[Value], pick: u64) -> String {
+    let fewer = objects.iter().filter_map(|object| {
+        let ways = object["choices"].as_array()?.len() as u64;
+        let id = object["object"].as_u64()?;
+        (ways < pick && ways > 0).then(|| format!(",{id}:{ways}"))
+    });
+    std::iter::once(pick.to_string()).chain(fewer).collect()
+}
 
 /// How many ways are compared when the client names no count.
 const COUNT: u16 = 4;
@@ -64,8 +88,9 @@ impl Server {
             },
         };
         let mut pose = pose.unstood();
-        if let Pose::Search { pick, .. } = &mut pose {
+        if let Pose::Search { pick, picks, .. } = &mut pose {
             *pick = None;
+            picks.clear();
         }
         self.seat_keep_clear(&mut pose, &latest)?;
         let mut recipe = latest.recipe.clone();
@@ -76,34 +101,44 @@ impl Server {
         let count = compare.count.unwrap_or(COUNT).clamp(2, 8);
         // The search runs in the first run, before any step naming some objects (ADR 0458).
         let flags = recipe.runs()?.swap_remove(0);
-        let mut args = vec!["estimate".to_owned()];
+        let mut args = vec!["estimate".to_owned(), "--stage-only".to_owned()];
         args.extend(flags.iter().cloned());
         args.push(format!("--orient-choices={count}"));
         let outcome = self.watched(&args, ctx).await?;
-        let choices = outcome.report["models"][0]["oriented"]["choices"].clone();
-        let Some(listed) = choices.as_array().filter(|listed| !listed.is_empty()) else {
+        let objects = ways_of(&outcome.report);
+        let most = (objects.iter())
+            .filter_map(|object| object["choices"].as_array().map(Vec::len))
+            .max()
+            .unwrap_or(0);
+        if most == 0 {
             bail!(
                 "the search offered no way to stand the model: {}",
                 outcome.report
             );
-        };
+        }
         let mut content = vec![ContentBlock::text(
             json!({
                 "job": latest.job,
                 "seen_on_revision": latest.number,
                 "pose": pose,
-                "choices": choices,
-                "take_one": "set_pose with this pose and `pick` set to the choice's number",
-                "pictures": "each choice's views in turn, choices in order",
+                "objects": objects,
+                "take_one": TAKE_ONE,
+                "pictures": "for each number in turn, every object stood its way of that number, or its last",
             })
             .to_string(),
         )];
         if compare.pictures.unwrap_or(true) {
             let views = compare.views.unwrap_or_else(|| vec![View::Iso]);
-            for choice in listed {
-                let pick = choice["pick"].as_u64().context("a choice has its number")?;
+            for pick in 1..=most as u64 {
+                let picked = picked_at(&objects, pick);
                 let drawn = self
-                    .drawn_pick(&flags, (&latest, pick), &views, compare.size_px, ctx)
+                    .drawn_pick(
+                        &flags,
+                        (&latest, pick, &picked),
+                        &views,
+                        compare.size_px,
+                        ctx,
+                    )
                     .await?;
                 content.extend(drawn);
             }
@@ -111,11 +146,11 @@ impl Server {
         Ok(CallToolResult::success(content))
     }
 
-    /// The pictures of the `pick`th way, as `render` draws a revision.
+    /// The pictures of the `pick`th way, stood as `picked` asks, as `render` draws a revision.
     async fn drawn_pick(
         &self,
         flags: &[String],
-        (latest, pick): (&Revision, u64),
+        (latest, pick, picked): (&Revision, u64, &str),
         views: &[View],
         size_px: Option<u32>,
         ctx: &Context,
@@ -124,7 +159,7 @@ impl Server {
         let names: Vec<&str> = views.iter().map(|view| view.name()).collect();
         let mut args = vec!["render".to_owned()];
         args.extend(flags.iter().cloned());
-        args.push(format!("--orient-pick={pick}"));
+        args.push(format!("--orient-pick={picked}"));
         args.push(format!("--view={}", names.join(",")));
         args.push(format!(
             "--size={}",
@@ -195,6 +230,16 @@ mod tests {
             },
             steps: None,
         }
+    }
+
+    #[test]
+    fn an_object_with_fewer_ways_is_drawn_in_its_last() {
+        let objects = [
+            json!({"object": 2, "choices": [1, 2]}),
+            json!({"object": 3, "choices": [1, 2, 3, 4]}),
+        ];
+        assert_eq!(picked_at(&objects, 2), "2");
+        assert_eq!(picked_at(&objects, 3), "3,2:2", "object 2 has two ways");
     }
 
     #[test]

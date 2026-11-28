@@ -3,6 +3,9 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use core_geometry::{Mesh, Vec3, cuboid};
 use rmcp::ServiceExt;
@@ -604,7 +607,14 @@ async fn the_ways_to_stand_a_model_are_compared_drawn_and_one_is_taken() {
         ContentBlock::Text(text) => serde_json::from_str::<Value>(&text.text).expect("JSON"),
         other => panic!("the answer opens with its list, found {other:?}"),
     };
-    let choices = first["choices"].as_array().expect("the choices are listed");
+    let objects = first["objects"]
+        .as_array()
+        .expect("each object's ways are listed");
+    assert_eq!(objects.len(), 1, "one cube, one object: {first}");
+    assert_eq!(objects[0]["object"], 1, "{first}");
+    let choices = objects[0]["choices"]
+        .as_array()
+        .expect("the cube's ways are listed");
     assert!(!choices.is_empty() && choices.len() <= 2, "{first}");
     let pictures = compared
         .content
@@ -628,6 +638,14 @@ async fn an_edit_is_set_against_the_revision_before_and_the_autopilot() {
     let dir = scratch("against");
     let (model, client) = cube_and_server(&dir).await;
     let job = start(&client, &model).await;
+    let autopilot = dir.join("jobs").join(&job).join("autopilot.json");
+    for _ in 0..600 {
+        if autopilot.is_file() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(autopilot.is_file(), "the autopilot's check is kept aside");
     let supported = json!({"job": job, "supports": {"profile": "medium"}});
     let edited = answer(&call(&client, "set_supports", supported).await);
     let compared = &edited["compared"];
@@ -726,7 +744,12 @@ async fn each_revision_keeps_the_plate_its_check_wrote_and_hands_it_to_the_open_
         json!({"job": job, "recipe": "miniatures"}),
     )
     .await;
-    assert_eq!(answer(&edited)["window"], json!({"shown": true}));
+    assert_eq!(
+        answer(&edited)["window"]["shown"],
+        "pending",
+        "the answer does not wait for the window"
+    );
+    let lines = window.await.expect("the window's task ends");
     client.cancel().await.expect("the server stops");
 
     let kept = jobs.join(&job).join("2.encrust");
@@ -734,7 +757,6 @@ async fn each_revision_keeps_the_plate_its_check_wrote_and_hands_it_to_the_open_
         kept.is_file(),
         "the revision keeps the plate its recipe prepared"
     );
-    let lines = window.await.expect("the window's task ends");
     assert_eq!(
         (lines[1]["schema"].as_u64(), lines[1]["revision"].as_u64()),
         (Some(4), Some(2))
@@ -748,7 +770,14 @@ async fn each_revision_keeps_the_plate_its_check_wrote_and_hands_it_to_the_open_
 
 /// A window answering `lines` connections by kind: shown, the job's latest plate at version 5
 /// with its model object 1, edits applied; it hands back the lines read.
-async fn plate_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
+async fn plate_window(
+    dir: &Path,
+    lines: usize,
+) -> (
+    PathBuf,
+    tokio::task::JoinHandle<Vec<Value>>,
+    Arc<AtomicUsize>,
+) {
     plate_window_moving(dir, lines, 0).await
 }
 
@@ -758,7 +787,11 @@ async fn plate_window_moving(
     dir: &Path,
     lines: usize,
     moves: u64,
-) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
+) -> (
+    PathBuf,
+    tokio::task::JoinHandle<Vec<Value>>,
+    Arc<AtomicUsize>,
+) {
     window_answering(dir, lines, moves, true).await
 }
 
@@ -768,7 +801,11 @@ async fn window_answering(
     lines: usize,
     moves: u64,
     landed: bool,
-) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
+) -> (
+    PathBuf,
+    tokio::task::JoinHandle<Vec<Value>>,
+    Arc<AtomicUsize>,
+) {
     use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -782,6 +819,8 @@ async fn window_answering(
     )
     .expect("writable");
     let jobs = dir.join("jobs");
+    let count = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&count);
     let window = tokio::spawn(async move {
         let mut read = Vec::new();
         let mut moved = 0;
@@ -810,10 +849,20 @@ async fn window_answering(
                 .await
                 .expect("answered");
             read.push(line);
+            counted.fetch_add(1, Ordering::SeqCst);
         }
         read
     });
-    (file, window)
+    (file, window, count)
+}
+
+/// Once the window has read `lines` lines, and a moment more for the server to take the last
+/// answer: what is handed to it goes after the tool has answered (ADR 0467).
+async fn until_read(read: &AtomicUsize, lines: usize) {
+    while read.load(Ordering::SeqCst) < lines {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(200)).await;
 }
 
 /// The plate a job's latest revision left, `N.encrust` with the highest N.
@@ -832,11 +881,12 @@ async fn a_cut_reaches_the_window_as_an_edit_and_an_undo_there_reaches_the_next_
     let dir = scratch("window-cut");
     let model = dir.join("cube.stl");
     write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
-    // The revision shown, the plate and the cut, then the plate and the next revision shown.
-    let (file, window) = plate_window(&dir, 5).await;
+    // The revision shown; the plate and the cut; the plate, for an undo, and the next shown.
+    let (file, window, read) = plate_window(&dir, 5).await;
     let jobs = dir.join("jobs");
     let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
     let job = start(&client, &model).await;
+    until_read(&read, 1).await;
 
     let cut = call(
         &client,
@@ -845,11 +895,12 @@ async fn a_cut_reaches_the_window_as_an_edit_and_an_undo_there_reaches_the_next_
     )
     .await;
     assert_eq!(
-        answer(&cut)["window"],
-        json!({"applied": true}),
+        answer(&cut)["window"]["shown"],
+        "pending",
         "{}",
         answer(&cut)
     );
+    until_read(&read, 3).await;
     // The fake window still has object 1, the model whole: the user undid the cut there.
     let hollowed = call(
         &client,
@@ -857,9 +908,9 @@ async fn a_cut_reaches_the_window_as_an_edit_and_an_undo_there_reaches_the_next_
         json!({"job": job, "hollow": {"wall_mm": 2.0}}),
     )
     .await;
+    let lines = window.await.expect("the window's task ends");
     client.cancel().await.expect("the server stops");
 
-    let lines = window.await.expect("the window's task ends");
     let applied = &lines[2];
     assert_eq!(applied["base_version"], 5);
     assert_eq!(
@@ -961,76 +1012,91 @@ async fn the_exposure_check_is_written_and_prepared_like_any_model() {
 }
 
 #[tokio::test]
-async fn edits_on_a_plate_that_moved_on_are_built_and_checked_again_on_it() {
+async fn edits_on_a_plate_that_moved_on_leave_the_revision_shown_by_its_plate() {
     let dir = scratch("window-stale");
     let model = dir.join("cube.stl");
     write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
-    // The revision shown, then the plate, a stale answer, the plate again and the edits landed.
-    let (file, window) = plate_window_moving(&dir, 5, 1).await;
+    // The revision shown; the plate and a stale answer, then revision 2's plate shown; the
+    // plate and the next edits, which land.
+    let (file, window, read) = plate_window_moving(&dir, 6, 1).await;
     let jobs = dir.join("jobs");
     let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
     let job = start(&client, &model).await;
+    until_read(&read, 1).await;
     let hollowed = call(
         &client,
         "set_hollow",
         json!({"job": job, "hollow": {"wall_mm": 2.0}}),
     )
     .await;
+    assert!(!failed(&hollowed), "{}", answer(&hollowed));
+    assert_eq!(answer(&hollowed)["window"]["shown"], "pending");
+    until_read(&read, 4).await;
+    let thicker = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 3.0}}),
+    )
+    .await;
+    let lines = window.await.expect("the window's task ends");
     client.cancel().await.expect("the server stops");
 
+    assert_eq!(lines[2]["base_version"], 5, "on the plate handed over");
+    assert_eq!(lines[3]["revision"], 2, "then revision 2's plate is shown");
     assert_eq!(
-        answer(&hollowed)["window"],
-        json!({"applied": true}),
-        "{}",
-        answer(&hollowed)
+        lines[5]["base_version"], 6,
+        "the next on the plate as it moved on"
     );
-    let lines = window.await.expect("the window's task ends");
+    assert!(
+        !jobs.join(&job).join("2.edits.json").exists(),
+        "the edits not taken are forgotten"
+    );
+    let told = &answer(&thicker)["window_before"];
+    assert_eq!(told["revision"], 2, "{}", answer(&thicker));
+    assert_eq!(told["window"]["stale"], true, "{told}");
     assert_eq!(
-        lines[2]["base_version"], 5,
-        "first on the plate handed over"
+        told["window"]["then_shown"],
+        json!({"shown": true}),
+        "{told}"
     );
-    assert_eq!(lines[3]["want"], "plate", "the plate asked for again");
-    assert_eq!(
-        lines[4]["base_version"], 6,
-        "then on the plate as it moved on"
-    );
-    let revisions = fs::read_dir(jobs.join(&job))
-        .expect("the job's folder reads")
-        .flatten();
-    let kept = revisions.filter(|entry| {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        name.strip_suffix(".toml")
-            .is_some_and(|number| number.parse::<u32>().is_ok())
-    });
-    assert_eq!(kept.count(), 2, "the stale try kept no revision of its own");
 }
 
 #[tokio::test]
-async fn edits_the_window_takes_back_keep_no_revision() {
+async fn edits_the_window_takes_back_keep_the_revision_and_are_told_with_the_next_answer() {
     let dir = scratch("window-refused");
     let model = dir.join("cube.stl");
     write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
-    // The revision shown, then the plate and the edits refused.
-    let (file, window) = window_answering(&dir, 3, 0, false).await;
+    // The revision shown; the plate, the edits refused and revision 2 shown; the plate and the
+    // next edits, refused too, then revision 3 shown.
+    let (file, window, read) = window_answering(&dir, 7, 0, false).await;
     let jobs = dir.join("jobs");
     let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
     let job = start(&client, &model).await;
+    until_read(&read, 1).await;
     let hollowed = call(
         &client,
         "set_hollow",
         json!({"job": job, "hollow": {"wall_mm": 2.0}}),
     )
     .await;
-    client.cancel().await.expect("the server stops");
+    until_read(&read, 4).await;
+    let thicker = call(
+        &client,
+        "set_hollow",
+        json!({"job": job, "hollow": {"wall_mm": 3.0}}),
+    )
+    .await;
     window.await.expect("the window's task ends");
+    client.cancel().await.expect("the server stops");
 
-    assert!(failed(&hollowed), "{}", answer(&hollowed));
-    assert_eq!(answer(&hollowed)["latest_revision"], 1);
-    assert_eq!(answer(&hollowed)["window"]["why_not"], "a tool failed");
+    assert!(!failed(&hollowed), "{}", answer(&hollowed));
     assert!(
-        !jobs.join(&job).join("2.toml").exists(),
-        "no revision kept that the window does not hold"
+        jobs.join(&job).join("2.toml").exists(),
+        "the check stands whatever the window does"
     );
+    let told = &answer(&thicker)["window_before"];
+    assert_eq!(told["revision"], 2, "{}", answer(&thicker));
+    assert_eq!(told["window"]["why_not"], "a tool failed", "{told}");
 }
 
 #[tokio::test]
@@ -1038,20 +1104,19 @@ async fn a_checked_revision_whose_edits_the_window_takes_back_is_shown_by_its_pl
     let dir = scratch("window-refused-shown");
     let model = dir.join("cube.stl");
     write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
-    // The revision shown; the turn checked by the flags, its edit refused, then its plate shown.
-    let (file, window) = window_answering(&dir, 4, 0, false).await;
+    // The revision shown; the turn's plate, its edit refused, then its plate shown.
+    let (file, window, read) = window_answering(&dir, 4, 0, false).await;
     let jobs = dir.join("jobs");
     let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
     let job = start(&client, &model).await;
+    until_read(&read, 1).await;
     let pose = json!({"by": "search", "goal": "auto"});
     let posed = call(&client, "set_pose", json!({"job": job, "pose": pose})).await;
-    client.cancel().await.expect("the server stops");
     let lines = window.await.expect("the window's task ends");
+    client.cancel().await.expect("the server stops");
 
     assert!(!failed(&posed), "{}", answer(&posed));
-    let told = &answer(&posed)["window"];
-    assert_eq!(told["applied"], false, "{told}");
-    assert_eq!(told["then_shown"], json!({"shown": true}), "{told}");
+    assert_eq!(answer(&posed)["window"]["shown"], "pending");
     assert_eq!(
         lines[3]["revision"], 2,
         "the window is shown revision 2's plate"
@@ -1109,7 +1174,7 @@ async fn a_job_on_the_standard_machine_is_written_only_on_the_machine_the_user_n
 }
 
 #[tokio::test]
-async fn with_no_window_a_revision_is_built_on_the_plate_the_last_one_kept() {
+async fn with_no_window_a_revision_is_staged_by_its_flags_and_keeps_its_plate() {
     let dir = scratch("kept-base");
     let model = dir.join("cube.stl");
     write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
@@ -1124,8 +1189,8 @@ async fn with_no_window_a_revision_is_built_on_the_plate_the_last_one_kept() {
     assert!(!failed(&hollowed), "{}", answer(&hollowed));
     let kept = dir.join("jobs").join(&job);
     assert!(
-        kept.join("2.edits.json").is_file() && kept.join("2.encrust").is_file(),
-        "revision 2 is plate 1 and its edits"
+        !kept.join("2.edits.json").is_file() && kept.join("2.encrust").is_file(),
+        "revision 2 is staged by its flags, the plate it left kept"
     );
     let output = dir.join("cube.goo");
     let written = call(
@@ -1140,7 +1205,7 @@ async fn with_no_window_a_revision_is_built_on_the_plate_the_last_one_kept() {
 }
 
 #[tokio::test]
-async fn with_no_window_a_cut_models_pieces_are_finished_on_the_plate_the_cut_kept() {
+async fn with_no_window_a_cut_models_pieces_are_finished_by_the_flags() {
     let dir = scratch("kept-pieces");
     let model = dir.join("cube.stl");
     write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
@@ -1167,8 +1232,8 @@ async fn with_no_window_a_cut_models_pieces_are_finished_on_the_plate_the_cut_ke
         assert!(!failed(reply), "{}", answer(reply));
         let kept = dir.join("jobs").join(&job);
         assert!(
-            kept.join(format!("{number}.edits.json")).is_file(),
-            "revision {number} is the plate before it and its edits, not the cut staged anew"
+            kept.join(format!("{number}.encrust")).is_file(),
+            "revision {number} keeps the plate its flags left"
         );
     }
     let models = answer(&supported)["report"]["models"].clone();
@@ -1651,7 +1716,14 @@ async fn a_job_moves_to_another_printer_and_resin_and_is_checked_there() {
 
 /// A window whose plate holds the job's model, object 1, until a cut lands, then its halves,
 /// 2 and 3; it answers `lines` connections by their kind and returns the lines read.
-async fn cut_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHandle<Vec<Value>>) {
+async fn cut_window(
+    dir: &Path,
+    lines: usize,
+) -> (
+    PathBuf,
+    tokio::task::JoinHandle<Vec<Value>>,
+    Arc<AtomicUsize>,
+) {
     use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader};
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -1665,6 +1737,8 @@ async fn cut_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHand
     )
     .expect("writable");
     let jobs = dir.join("jobs");
+    let count = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&count);
     let window = tokio::spawn(async move {
         let (mut read, mut cut) = (Vec::new(), false);
         for _ in 0..lines {
@@ -1690,10 +1764,11 @@ async fn cut_window(dir: &Path, lines: usize) -> (PathBuf, tokio::task::JoinHand
             let reply = format!("{reply}\n");
             (reader.get_mut().write_all(reply.as_bytes()).await).expect("answered");
             read.push(line);
+            counted.fetch_add(1, Ordering::SeqCst);
         }
         read
     });
-    (file, window)
+    (file, window, count)
 }
 
 #[tokio::test]
@@ -1703,10 +1778,11 @@ async fn supports_asked_after_a_cut_the_window_holds_reach_it_as_the_plate_check
     write_stl(&cuboid(Vec3::ZERO, Vec3::splat(20.0)), &model);
     // The first revision shown; the plate and the cut; then the plate, for an undo, and the
     // plate of pieces the supports were added on, shown.
-    let (file, window) = cut_window(&dir, 5).await;
+    let (file, window, read) = cut_window(&dir, 5).await;
     let jobs = dir.join("jobs");
     let client = serve_with(&encrust(), &jobs, &["--window".as_ref(), file.as_os_str()]).await;
     let job = start(&client, &model).await;
+    until_read(&read, 1).await;
     let cut = json!({"axis": "z", "at_mm": 10.0});
     call(
         &client,
@@ -1714,6 +1790,7 @@ async fn supports_asked_after_a_cut_the_window_holds_reach_it_as_the_plate_check
         json!({"job": job, "modelling": {"cut": cut, "arrange": true}}),
     )
     .await;
+    until_read(&read, 3).await;
 
     let supported = call(
         &client,
@@ -1721,15 +1798,15 @@ async fn supports_asked_after_a_cut_the_window_holds_reach_it_as_the_plate_check
         json!({"job": job, "supports": {"profile": "auto"}}),
     )
     .await;
+    let lines = window.await.expect("the window's task ends");
     client.cancel().await.expect("the server stops");
 
     assert_eq!(
-        answer(&supported)["window"],
-        json!({"shown": true}),
+        answer(&supported)["window"]["shown"],
+        "pending",
         "{}",
         answer(&supported)
     );
-    let lines = window.await.expect("the window's task ends");
     assert_eq!(
         lines[4]["revision"].as_u64(),
         Some(3),

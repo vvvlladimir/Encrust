@@ -232,3 +232,45 @@ fn an_auto_drain_into_a_thin_cavity_leaves_the_top_whole() {
         );
     }
 }
+
+#[test]
+fn auto_drains_of_a_cut_are_reported_where_its_spread_halves_stand() {
+    let model = write_box_stl("auto-drains-cut", 30.0, 12, 0);
+    let output = encrust(&[
+        "estimate",
+        model.to_str().unwrap(),
+        "--standard-machine",
+        "--cut",
+        "x:15",
+        "--arrange",
+        "--hollow",
+        "2",
+        "--drain-at",
+        "auto",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let report = json(&output);
+    let halves = report["models"].as_array().expect("a model a half");
+    assert_eq!(halves.len(), 2, "{report}");
+    for half in halves {
+        let bounds = &half["fit"]["bounds_mm"];
+        let pockets = half["auto_drains"]["pockets"]
+            .as_array()
+            .unwrap_or_else(|| panic!("a hollow half has its pockets: {half}"));
+        assert!(!pockets.is_empty(), "{half}");
+        for pocket in pockets {
+            for axis in 0..2 {
+                let at = pocket["at_mm"][axis].as_f64().expect("a pocket's point");
+                let (low, high) = (bounds[0][axis].as_f64(), bounds[1][axis].as_f64());
+                let within = low
+                    .zip(high)
+                    .is_some_and(|(low, high)| (low..=high).contains(&at));
+                assert!(
+                    within,
+                    "pocket at {at} on axis {axis} lies in its half, {bounds}"
+                );
+            }
+        }
+    }
+}

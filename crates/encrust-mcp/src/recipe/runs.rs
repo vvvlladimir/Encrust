@@ -10,9 +10,11 @@ use super::Recipe;
 pub const PREVIOUS: &str = "{previous plate}";
 
 impl Recipe {
-    /// Whether a step names some of the job's objects rather than every one.
+    /// Whether it runs as several runs: a step names some of the job's objects rather than
+    /// every one, or Check's answers follow a modelling that makes pieces, which no recipe takes.
     pub fn scoped(&self) -> bool {
         let named = |objects: &[u64]| !objects.is_empty();
+        let answered = self.fixes.as_ref().is_some_and(super::Fixes::asked);
         self.modelling.as_ref().is_some_and(|m| named(&m.objects))
             || self.hollow.as_ref().is_some_and(|h| named(&h.objects))
             || self.drains.as_ref().is_some_and(|d| named(&d.objects))
@@ -22,6 +24,7 @@ impl Recipe {
             || !self.more_drains.is_empty()
             || !self.more_supports.is_empty()
             || self.fixes.as_ref().is_some_and(|f| named(&f.objects))
+            || answered && self.makes_pieces()
     }
 
     /// The runs that stage this recipe, each its flags after the subcommand: one where every

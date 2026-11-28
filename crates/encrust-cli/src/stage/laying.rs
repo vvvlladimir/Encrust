@@ -2,6 +2,7 @@
 //! finished by the edits its flags fold to, then arranged (ADR 0458).
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use core_document::Report;
@@ -9,13 +10,14 @@ use core_edit::{Edit, ObjectId};
 use core_geometry::{Scalar, list_shells};
 use printer_profiles::PrinterProfile;
 
-use super::document::{Named, Staging, said};
+use super::document::{Named, Seed, Staging, said};
 use super::finished;
-use super::{Found, Laid, Shaping, imported, modelled, placed, repaired};
+use super::{Found, Laid, Shaping, asked_of, imported, modelled, placed, repaired};
 use crate::args::{JobArgs, ProfileArgs};
 use crate::pipeline::{Watch, read_again};
 use crate::plate_edits::{EditArgs, each_edit};
 use crate::profiles::Chosen;
+use crate::steps::Key;
 
 /// Each entry imported, then mended, repaired, placed, pressed and modelled by the edits its
 /// flags fold to; `by_recipe` leaves the orientation search and the repair to the recipe.
@@ -88,7 +90,8 @@ pub(crate) fn placed_by_edits(
     let pieces = meshes.into_iter().map(|mesh| vec![mesh]).collect();
     let named = catalogue_ids(profile);
     let trial = named.0.clone();
-    let mut staging = Staging::of(pieces, &found, (entries, named));
+    let seed = seed_of(entries, (&named, chosen), watch);
+    let mut staging = Staging::of(pieces, &found, (entries, named), seed);
     let printer = chosen.printer.as_ref();
     repaired::repaired(&mut staging, &mut found, entries, watch)?;
     let placing = (trial.as_deref(), printer);
@@ -96,6 +99,28 @@ pub(crate) fn placed_by_edits(
     repaired::pressed(&mut staging, entries, watch)?;
     read_again_where_reshaped(&staging, &mut found, entries, printer)?;
     Ok((staging, found))
+}
+
+/// The key of the plate `entries` stage, from each file's bytes, what its import asks and the
+/// shapes its supports hold; `None` without a server's steps or a file that cannot be read.
+fn seed_of(
+    entries: &[(PathBuf, Shaping)],
+    (named, chosen): (&Named, &Chosen),
+    watch: &Watch,
+) -> Seed {
+    let steps = watch.steps.as_ref()?;
+    let machine = format!("{named:?} {:?}", chosen.printer);
+    let mut key = Key::of(&[b"models", machine.as_bytes()]);
+    for (path, shaping) in entries {
+        let asked = format!(
+            "{} {:?} {:?}",
+            path.display(),
+            asked_of(&shaping.import),
+            shaping.supports.as_ref().map(|plan| &plan.shapes)
+        );
+        key = key.with(steps.file_key(path).ok()?).then(asked.as_bytes());
+    }
+    Some((Arc::clone(steps), key))
 }
 
 /// The printer and resin the run names by catalogue id, which a project written keeps; none
@@ -154,7 +179,9 @@ pub(super) fn laid(
         Ok(())
     })?;
     let out = edits.project_out.as_deref();
-    staging.laid((found, finished), (entries, out), held.0, watch.talk)
+    crate::spent::timed("stage:laid", || {
+        staging.laid((found, finished), (entries, out), held.0, watch.talk)
+    })
 }
 
 /// `--arrange`: every object spread over the usable plate with its supports, as the window's

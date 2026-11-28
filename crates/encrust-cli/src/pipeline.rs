@@ -2,6 +2,7 @@
 //! The single run, the batch and a multi-model plate share it; `stage` assembles a plate.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use core_analysis::Measured;
@@ -21,6 +22,7 @@ use crate::report::ImportReport;
 use crate::slice_report::SliceReport;
 use crate::sliced_file::{asked_revision, format_of, write_plate};
 use crate::stage::{self, Part, Staged};
+use crate::steps::Steps;
 
 mod checked;
 mod inspect;
@@ -44,6 +46,8 @@ pub struct Watch<'a> {
     pub stop: &'a Stop,
     /// Whether a recipe's save steps write their file, which `estimate` turns off.
     pub writes: bool,
+    /// What a server keeps between runs, for this run to reuse and add to; none for one run.
+    pub steps: Option<Arc<Steps>>,
 }
 
 impl<'a> Watch<'a> {
@@ -54,6 +58,7 @@ impl<'a> Watch<'a> {
             progress: false,
             stop,
             writes: true,
+            steps: None,
         }
     }
 }
@@ -104,14 +109,19 @@ pub fn import(
 ) -> Result<(Mesh, ImportReport)> {
     let talk = watch.talk;
     let profile = chosen.printer.as_ref();
-    let loaded = load(input)?;
+    let loaded = crate::spent::timed("import:read", || match &watch.steps {
+        Some(steps) => steps.loaded(input, || load(input)),
+        None => load(input).map(Arc::new),
+    })?;
     if talk {
         talk_mapping(&loaded);
     }
-    let welded = weld(&loaded.mesh, args.weld_tolerance);
+    let welded = crate::spent::timed("import:weld", || weld(&loaded.mesh, args.weld_tolerance));
     // Before the orientation fix, which rewinds the faces the file's texture map is indexed by.
     let mut mesh = press_relief(welded.mesh.clone(), &welded, &loaded, args, talk)?;
-    let import = checked(&mut mesh, (input, welded), args, profile)?;
+    let import = crate::spent::timed("import:check", || {
+        checked(&mut mesh, (input, welded), args, profile)
+    })?;
     Ok((mesh, import))
 }
 

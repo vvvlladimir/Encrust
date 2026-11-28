@@ -7,16 +7,16 @@ use std::time::Instant;
 use anyhow::{Context, Result, anyhow, bail};
 use core_document::{ApplyError, Report};
 use core_edit::{AUTO, Edit, ObjectId};
+use core_engine::SupportPlan;
 use core_engine::project::HollowState;
-use core_engine::{Drained, SupportPlan};
 use core_geometry::{Scalar, Vec3};
 use core_supports::Unstood;
 use core_volume::HoleKind;
 use printer_profiles::PrinterProfile;
 
-use super::Shaping;
 use super::document::{Staging, said};
-use crate::hollowing::{AutoReport, HollowArgs, HollowReport};
+use super::{Searched, Shaping};
+use crate::hollowing::{AutoReport, DrainAt, HollowArgs, HollowReport};
 use crate::pipeline::Watch;
 use crate::supports::SupportReport;
 
@@ -24,7 +24,7 @@ use crate::supports::SupportReport;
 #[derive(Default)]
 pub(crate) struct Finished {
     pub hollow: Option<HollowReport>,
-    pub drains: Option<Drained>,
+    pub drains: Option<Searched>,
     pub supports: Option<SupportReport>,
 }
 
@@ -66,7 +66,7 @@ fn finish(
     (printer, drift_mm): (Option<&PrinterProfile>, Scalar),
     watch: &Watch,
 ) -> Result<Finished> {
-    let hollow = &shaping.hollow;
+    let hollow = &placed_hollow(staging, id, shaping);
     let mut done = Finished {
         hollow: hollowed(staging, id, (hollow, shaping.import.precision), watch)?,
         ..Finished::default()
@@ -74,12 +74,45 @@ fn finish(
     drilled(staging, id, hollow, watch)?;
     done.drains = searched(staging, id, hollow, watch)?;
     plugged(staging, id, (path, hollow), (printer, drift_mm), watch)?;
-    if let Some(plan) = &shaping.supports {
+    if let Some(plan) = &placed_plan(staging, id, shaping) {
         done.supports = Some(supported(staging, id, plan, watch)?);
         merged(staging, id, plan, watch)?;
     }
     rafted(staging, id, hollow, watch)?;
     Ok(done)
+}
+
+/// `shaping`'s hollow and holes, their points on the plate as object `id` stands now: as
+/// given, or carried from its own frame where `--points-in-object` asks.
+fn placed_hollow(staging: &Staging, id: ObjectId, shaping: &Shaping) -> HollowArgs {
+    let mut hollow = shaping.hollow.clone();
+    if shaping.points_in_object {
+        let on = |points: &mut Vec<Vec3>| *points = staging.carried(id, points);
+        for at in &mut hollow.drain_at {
+            if let DrainAt::Point(point) = at {
+                *point = staging.carried(id, &[*point])[0];
+            }
+        }
+        on(&mut hollow.drain_support_at);
+        hollow.channels.iter_mut().for_each(on);
+        hollow.keep_solid.runs.iter_mut().for_each(on);
+    }
+    hollow
+}
+
+/// `shaping`'s supports, their points on the plate as object `id` stands when they are stood.
+fn placed_plan(staging: &Staging, id: ObjectId, shaping: &Shaping) -> Option<SupportPlan> {
+    let mut plan = shaping.supports.clone()?;
+    if shaping.points_in_object {
+        plan.by_hand.at_mm = staging.carried(id, &plan.by_hand.at_mm);
+        plan.merges
+            .iter_mut()
+            .for_each(|near| *near = staging.carried(id, near));
+        for shown in &mut plan.shown_at {
+            shown.at_mm = staging.carried(id, &[shown.at_mm])[0];
+        }
+    }
+    Some(plan)
 }
 
 /// The first flag given that names a point on one model, which several cannot share.
@@ -223,7 +256,7 @@ fn searched(
     id: ObjectId,
     args: &HollowArgs,
     watch: &Watch,
-) -> Result<Option<Drained>> {
+) -> Result<Option<Searched>> {
     if !args.auto() {
         return Ok(None);
     }
@@ -251,7 +284,8 @@ fn searched(
     {
         print!("{}", AutoReport(drained, 0.0));
     }
-    Ok(searched)
+    let stood = staging.transform(id);
+    Ok(searched.map(|drained| Searched { drained, stood }))
 }
 
 fn plugged(

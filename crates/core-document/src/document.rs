@@ -132,7 +132,7 @@ impl Document {
     }
 
     /// Every object of the active plate that is not hidden, in plate order.
-    pub(crate) fn printable(&self) -> Vec<ObjectId> {
+    pub fn printable(&self) -> Vec<ObjectId> {
         let active = self.project.manifest.active_plate;
         (self.project.manifest.objects.iter())
             .filter(|object| object.visible && object.plate == active)
@@ -241,7 +241,7 @@ impl Document {
     }
 
     /// The support tool's groups and what the plate's supports stand on, as the file keeps them.
-    pub(crate) fn support_state(&self) -> &SupportState {
+    pub fn support_state(&self) -> &SupportState {
         &self.project.manifest.supports
     }
 
